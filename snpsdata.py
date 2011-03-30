@@ -10,6 +10,8 @@ import sys, warnings
 import pdb
 import env
 from itertools import *
+from bisect import bisect
+
 try:
 	import scipy as sp
 except Exception, err_str:
@@ -2748,21 +2750,29 @@ class SNPsDataSet:
 		"""
 		Deletes accessions which are not common, and sorts the accessions, removes monomorphic SNPs, etc.
 		"""
-		#import bisect
+#		import bisect
 		print "Coordinating SNP and Phenotype data."
 		ets = phend.phen_dict[pid]['ecotypes']
 		#Checking which accessions to keep and which to remove.
-		#common_ets = list(set(self.accessions).union(set(ets)))
-		#common_ets.sort()
+#		common_ets = list(set(self.accessions + ets))
+#		common_ets.sort()
 
 		sd_indices_to_keep = set()#[]
 		pd_indices_to_keep = []
 
 		for i, acc in enumerate(self.accessions):
 			for j, et in enumerate(ets):
-				if acc == et:
+				if et == acc:
 					sd_indices_to_keep.add(i)
 					pd_indices_to_keep.append(j)
+
+#
+#		for i, acc in enumerate(self.accessions):
+#			if common_ets[bisect.bisect(common_ets, acc) - 1] == acc:
+#					sd_indices_to_keep.add(i)
+#		for j, et in enumerate(ets):
+#			if common_ets[bisect.bisect(common_ets, et) - 1] == et:
+#					pd_indices_to_keep.append(j)
 		sd_indices_to_keep = list(sd_indices_to_keep)
 		sd_indices_to_keep.sort()
 
@@ -2770,6 +2780,7 @@ class SNPsDataSet:
 
 		#Filter accessions which do not have phenotype values (from the genotype data).
 		print "Filtering genotype data"
+		#if len(sd_indices_to_keep) != len(self.accessions):
 		self.filter_accessions_indices(sd_indices_to_keep)
 		if coord_phen:
 			num_values = len(phend.phen_dict[pid]['ecotypes'])
@@ -2799,20 +2810,27 @@ class SNPsDataSet:
 
 
 
-	def get_ibs_kinship_matrix(self, debug_filter=1, num_dots=100, dtype='single'):
+	def get_ibs_kinship_matrix(self, debug_filter=1, num_dots=1000, snp_dtype='int8', dtype='single', type='binary'):
+		"""
+		
+		"""
 		print 'Starting kinship calculation, it prints %d dots.' % num_dots
 		snps = self.getSnps(debug_filter)
-		snps_array = sp.array(snps)
+		print 'Constructing a SNP array'
+		snps_array = sp.array(snps, dtype=snp_dtype)
+		print 'Transposing the SNP array'
 		snps_array = snps_array.T
 		num_lines = len(self.accessions)
 		num_snps = float(len(snps))
+		print 'Allocating K matrix'
 		k_mat = sp.ones((num_lines, num_lines), dtype=dtype)
 		num_comp = num_lines * (num_lines - 1) / 2
 		comp_i = 0
+		print 'Starting calculation'
 		for i in range(num_lines):
 			for j in range(i):
 				comp_i += 1
-				k_mat[i, j] = sp.sum(snps_array[i] == snps_array[j]) / num_snps
+				k_mat[i, j] = sp.sum(sp.absolute(snps_array[i] - snps_array[j])) / num_snps
 				k_mat[j, i] = k_mat[i, j]
 				if num_comp >= num_dots and (comp_i + 1) % (num_comp / num_dots) == 0: #Print dots
 					sys.stdout.write('.')
@@ -3628,7 +3646,7 @@ def get_AW_common_dataset():
 
 
 def write_out_01_dataset():
-	sd_t75 = dataParsers.parse_snp_data(env.env['data_dir']+'250K_t75.csv',format='binary')
+	sd_t75 = dataParsers.parse_snp_data(env.env['data_dir'] + '250K_t75.csv', format='binary')
 	file_name = '/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t75.csv.binary'
 	sd_t54.writeToFile(file_name)
 

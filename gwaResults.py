@@ -160,6 +160,9 @@ class Result(object):
 	"""
 	Contains information on the result.  (The old object is renamed Result_old, for now..)  Poised to cause problems?
 	"""
+	pickle_attributes = ['snp_results', 'keys', 'orders', 'ranks', 'phen_id', 'result_type', 'name',
+				'accessions', 'chromosome_ends']
+
 	def __init__(self, result_file=None, snp_results=None, scores=None, snps_data=None, accessions=None, name=None,
 		     result_type=None, phen_id=None, positions=None, chromosomes=None, mafs=None, macs=None,
 		     snps=None, auto_pickling_on=True, keys=None, **snp_results_info):
@@ -185,8 +188,6 @@ class Result(object):
 		self.orders = None
 		self.ranks = None
 		self.auto_pickling_on = auto_pickling_on
-		pickle_attributes = ['snp_results', 'keys', 'orders', 'ranks', 'phen_id',
-				'result_type', 'name', 'accessions', 'chromosome_ends']
 
 
 		if result_file:
@@ -195,7 +196,7 @@ class Result(object):
 				try:
 					with open(pickle_file) as f:
 						d = cPickle.load(f)
-					for attr in pickle_attributes:
+					for attr in self.pickle_attributes:
 						setattr(self, attr, d[attr])
 					pickle_failed = False
 				except Exception, err_str:
@@ -243,7 +244,7 @@ class Result(object):
 		if result_file and self.auto_pickling_on:
 			if not os.path.isfile(pickle_file) or pickle_failed:
 				d = {}
-				for attr in pickle_attributes:
+				for attr in self.pickle_attributes:
 					d[attr] = getattr(self, attr)
 				with open(pickle_file, 'wb') as f:
 					cPickle.dump(d, f)
@@ -716,7 +717,8 @@ class Result(object):
 
 	def plot_manhattan(self, pdf_file=None, png_file=None, min_score=None, max_score=None, percentile=90,
 			type="pvals", ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False, b_threshold=None,
-			cand_genes=None, threshold=0, highlight_markers=None, tair_file=None, plot_genes=True):
+			cand_genes=None, threshold=0, highlight_markers=None, tair_file=None, plot_genes=True,
+			plot_xaxis=True):
 
 		"""
 		Plots a 'Manhattan' style GWAs plot.
@@ -812,17 +814,16 @@ class Result(object):
 					plt.axvspan(offset + cg.startPos, offset + cg.endPos, facecolor='#FF9900', alpha=0.6)
 
 			oldOffset = offset
-			textPos.append(offset + chromosome_end / 2 - 2000000)
+#			textPos.append(offset + chromosome_end / 2 - 2000000)
 			offset += chromosome_end
-			for j in range(oldOffset, offset, 2000000):
-				ticksList1.append(j)
-			#pdb.set_trace()
-			for j in range(0, chromosome_end, 2000000):
-				if j % 4000000 == 0 and j < chromosome_end - 2000000 :
-					ticksList2.append(j / 1000000)
-				else:
-					ticksList2.append("")
-			#pdb.set_trace()
+			if plot_xaxis:
+				for j in range(oldOffset, offset, 2000000):
+					ticksList1.append(j)
+				for j in range(0, chromosome_end, 2000000):
+					if j % 4000000 == 0 and j < chromosome_end - 2000000 :
+						ticksList2.append(j / 1000000)
+					else:
+						ticksList2.append("")
 
 
 
@@ -866,7 +867,8 @@ class Result(object):
 
 		x_range = sum(result.chromosome_ends)
 		plt.axis([-x_range * 0.01, x_range * 1.01, min_score - 0.05 * scoreRange, max_score + 0.05 * scoreRange])
-		plt.xticks(ticksList1, ticksList2, fontsize='x-small')
+		if plot_xaxis:
+			plt.xticks(ticksList1, ticksList2, fontsize='x-small')
 		#pdb.set_trace()
 		if not ylab:
 			if type == "pvals":
@@ -1269,6 +1271,44 @@ class Result(object):
 		return regions
 
 
+	def count_nearby(self, chrom_pos_list, radius):
+		"""
+		Counts how many of the chrom_pos tuples are within a radius of a SNP in the result.
+		"""
+		cpl = self.get_chr_pos_list()
+		count = 0
+		for (chrom1, pos1) in chrom_pos_list:
+			for (chrom2, pos2) in cpl:
+				if chrom1 == chrom2 and abs(pos1 - pos2) <= radius:
+					count += 1
+					break
+		return count
+
+
+	def get_power_analysis(self, caus_chrom_pos_list, window_sizes=[0]):
+		"""
+		Calculate Power and FDR..
+		"""
+		for window_size in __window_sizes:
+			cpl = self.get_chr_pos_list()
+			num_caus_found = 0
+			num_false_found = 0
+			for (chrom1, pos1) in caus_chrom_pos_list:
+				caus_found = False
+				for (chrom2, pos2) in cpl:
+					if chrom1 == chrom2 and abs(pos1 - pos2) <= radius:
+						caus_found = True
+					else:
+						num_false_found += 1
+				if caus_found:
+					num_caus_found += 1
+			tprs.append(float(num_caus_found) / len(caus_chrom_pos_list))
+			fdrs.append(float(num_false_found) / len(cpl))
+
+		return tprs, fdrs
+
+
+
 	def get_region_result(self, chromosome, start_pos, end_pos, buffer=0):
 		"""
 		returns a result object with only the SNPs, etc. within the given boundary.
@@ -1390,27 +1430,39 @@ class Result(object):
 	def num_scores(self):
 		return len(self.snp_results['scores'])
 
-	def write_to_file(self, filename, additional_columns=None):
+	def write_to_file(self, filename, additional_columns=None, auto_pickling_on=True, only_pickled=False):
 		columns = ['chromosomes', 'positions', 'scores', 'mafs', 'macs']
 		if additional_columns:
 			for info in additional_columns:
 				if info in self.snp_results:
 					columns.append(info)
-		try:
-			f = open(filename, "w")
+#		try:
+		if not only_pickled:
+			with open(filename, "w") as f:
+				f.write(','.join(columns) + "\n")
+				for i in range(len(self.snp_results[columns[0]])):
+					l = [self.snp_results[c][i] for c in columns]
+					l = map(str, l)
+					f.write(",".join(l) + "\n")
+		if auto_pickling_on or only_pickled:
+			pickle_file = filename + '.pickled'
+			d = {}
+			for attr in self.pickle_attributes:
+				if attr == 'snp_results':
+					snp_results = getattr(self, attr)
+					d = {}
+					for k in snp_results:
+						if k != 'snps':
+							d[k] = snp_results[k]
+					d[attr] = d
+				else:
+					d[attr] = getattr(self, attr)
+			with open(pickle_file, 'wb') as f:
+				cPickle.dump(d, f)
 
-			f.write(','.join(columns) + "\n")
-
-			for i in range(len(self.snp_results[columns[0]])):
-				l = []
-				for c in columns:
-					l.append(self.snp_results[c][i])
-				l = map(str, l)
-				f.write(",".join(l) + "\n")
-			f.close()
-		except Exception, err_str:
-			print 'Failed writing the resultfile:', err_str
-			print 'Make sure the given path is correct, and you have write rights.'
+#		except Exception, err_str:
+#			print 'Failed writing the resultfile:', err_str
+#			print 'Make sure the given path is correct, and you have write rights.'
 
 
 class SNP(object):
