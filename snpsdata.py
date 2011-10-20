@@ -7,13 +7,14 @@ Bjarni Vilhjalmsson, bvilhjal@usc.edu
 """
 
 import sys, warnings
-import pdb
 import env
 from itertools import *
 from bisect import bisect
-
+import h5py
+import os
 try:
 	import scipy as sp
+	sp.seterr(divide='raise')
 except Exception, err_str:
 	print 'scipy is missing:', err_str
 
@@ -47,64 +48,8 @@ def get_haplotypes(snps, num_accessions, count_haplotypes=False):
 		return new_haplotypes
 
 
-
-#def coordinateSnpsAndPhenotypeData(phed, p_i, sd, onlyBinarySNPs=True, data_format='binary'):
-#	"""
-#	1. Remove accessions which are not represented in either of the two datasets
-#	2. Order the data in same way.
-#	3. Remove monomorphic SNPs
-#	"""
-#	import bisect
-#	print "Coordinating SNP and Phenotype data."
-#	ets = phed.phen_dict[p_i]['ecotypes']
-#	#Checking which accessions to keep and which to remove.
-#	common_ets = list(set(sd.accessions).union(set(ets)))
-#	common_ets.sort()
-#
-#	sd_indices_to_keep = []
-#	for i, acc in enumerate(sd.accessions):
-#		b_i = bisect.bisect_left(common_ets, acc)
-#		if b_i < len(common_ets) and common_ets[b_i] == acc:
-#			sd_indices_to_keep.append(i)
-#	pd_indices_to_keep = []
-#	for i, acc in enumerate(ets):
-#		b_i = bisect.bisect_left(common_ets, acc)
-#		if b_i < len(common_ets) and common_ets[b_i] == acc:
-#			pd_indices_to_keep.append(i)
-#
-#
-#	#Filter accessions which do not have the phenotype value (from the genotype data).
-#	self.filter_accessions_indices()
-#	print ""
-#	print numAcc - len(accIndicesToKeep), "accessions removed from genotype data, leaving", \
-#		len(accIndicesToKeep), "accessions in all."
-#
-#
-#	print "Filtering phenotype data."
-#	phed.removeAccessions(phenAccIndicesToKeep) #Removing accessions that don't have genotypes or phenotype values
-#
-#	#Ordering accessions according to the order of accessions in the genotype file
-#	accessionMapping = []
-#	i = 0
-#	for acc in snpsds[0].accessions:
-#		if acc in phed.accessions:
-#			accessionMapping.append((phed.accessions.index(acc), i))
-#			i += 1
-#	phed.orderAccessions(accessionMapping)
-#
-#
-#	if data_format == 'binary':
-#		total_num = 0
-#		removed_num = 0
-#		for snpsd in snpsds:
-#			total_num += len(snpsd.snps)
-#			removed_num += snpsd.onlyBinarySnps()
-#		print 'Removed %d non-binary SNPs out of %d SNPs' % (removed_num, total_num)
-
-
 class _SnpsData_(object):
 	"""
-	05/11/2008 yh. add chromosome
 	An abstract superclass.
 	"""
 	def __init__(self, snps, positions, baseScale=None, accessions=None, arrayIds=None, chromosome=None,
@@ -523,7 +468,6 @@ class _SnpsData_(object):
 							t_count += 1
 					if t_count > 0 and error_count / float(t_count) < error_threshold:
 						#print "Merge error is %f"%(error_count/float(t_count))
-						new_snp = []
 						for (ai1, ai2) in acc_map:
 							if ai1 != -1 and ai2 != -1:
 								if snp1[ai1] != self.missingVal:
@@ -538,7 +482,6 @@ class _SnpsData_(object):
 						indices_to_skip.add(j)
 					elif t_count > 0:
 						print "Not merging since error is %f." % (error_count / float(t_count))
-						new_snp = []
 						for (ai1, ai2) in acc_map:
 							if ai1 != -1:
 								new_snp.append(snp1[ai1])
@@ -751,10 +694,14 @@ class _SnpsData_(object):
 		"""
 		Discards SNPs, leaving a random fraction of them untouched.
 		"""
-		import random
-		snp_pos_list = random.sample(zip(self.positions, self.snps), int(random_fraction * len(self.snps)))
-		snp_pos_list.sort()
-		(self.positions, self.snps) = map(list, zip(*snp_pos_list))
+		rs = sp.random.random(len(self.snps))
+		new_positions = []
+		new_snps = []
+		for i in range(len(self.snps)):
+			if rs[i] < random_fraction:
+				new_positions.append(self.positions[i])
+				new_snps.append(self.snps[i])
+		self.positions, self.snps = new_positions, new_snps
 
 
 	def scalePositions(self, baseScale):
@@ -1143,9 +1090,6 @@ class _SnpsData_(object):
 		f.close()
 
 
-
-
-
 class Marker():
 	"""
 	A class for marker info. 
@@ -1172,8 +1116,6 @@ class Marker():
 			print "The corresponding allele was not found in the marker data."
 
 
-
-
 class MarkerData(_SnpsData_):
 	"""
 	A class to encompass general marker data, as well as handle 
@@ -1185,9 +1127,6 @@ class MarkerData(_SnpsData_):
 		_SnpsData_.__init__(self, *args, **kwargs) #Calling the parent's init fun.
 
 
-
-
-
 class RawDecoder(dict):
 	def __missing__(self, key):
 		return 'NA'
@@ -1196,7 +1135,6 @@ class RawDecoder(dict):
 			self[letter] = letter
 		for letter in initdict:
 			self[letter] = initdict[letter]
-
 
 
 class RawSnpsData(_SnpsData_):
@@ -1483,7 +1421,17 @@ class RawSnpsData(_SnpsData_):
 
 		return [commonSnpsPos, snpErrorRate, commonAccessions, accessionErrorRate, accessionCallRates, arrayIds, accessionCounts, snpCallRate, [naCounts1, naCounts2], [totalCounts, totalFails]]
 
-	def getSnpsData(self, missingVal= -1, reference_ecotype='6909', only_non_binary=True):
+
+
+	def convert_to_binary(self):
+		"""
+		An updated and version of the getSnpsData.. uses scipy.  
+		"""
+		raise NotImplementedError
+
+
+
+	def getSnpsData(self, missingVal= -1, reference_ecotype='6909', only_binary=True, verbose=True):
 		"""
 		Returns a SnpsData object correspoding to this RawSnpsData object.
 
@@ -1492,68 +1440,47 @@ class RawSnpsData(_SnpsData_):
 		Reference ecotype is set to be the 0 allele. 
 		"""
 		decoder = {self.missingVal:missingVal} #Might cause errors somewhere???!!!
+		coding_fun = sp.vectorize(lambda x: decoder[x], otypes=['int8'])
 
 		if reference_ecotype in self.accessions:
 			ref_i = self.accessions.index(reference_ecotype)
 		else:
 			ref_i = 0
 			import warnings
-			warnings.warn("Given reference ecotype %s wasn't found, using %s as 0-reference." % (reference_ecotype, self.accessions[ref_i]))
+			warnings.warn("Given reference ecotype %s wasn't found, using %s as 0-reference." % \
+					(reference_ecotype, self.accessions[ref_i]))
 		snps = []
 		positions = []
 		num_lines = len(self.accessions)
-		for i, snp in enumerate(self.snps):
-			alphabet = self.alphabet[:]
-
-			if snp[ref_i] != 'NA':
-				decoder[snp[ref_i]] = 0
-				alphabet.remove(snp[ref_i])
-				k = 1
-			else:
-				k = 0
-			for nt in alphabet:
-				if nt in snp:
-					decoder[nt] = k
-					k = k + 1
-			if only_non_binary:
-				if k == 2:
-					positions.append(self.positions[i])
-					new_snp = sp.zeros(num_lines, dtype='int8')
-					for j, nt in enumerate(snp):
-						new_snp[j] = decoder[nt]
-					snps.append(new_snp)
+		for snp_i, (snp, pos) in enumerate(izip(self.snps, self.positions)):
+			if verbose and snp_i % 100000 == 0:
+				print 'Converted %d SNPs.' % snp_i
+			unique_nts = sp.unique(snp).tolist()
+			if self.missingVal in unique_nts:
+				if len(unique_nts) != 3:
+					continue #Skipping non-binary SNP
 				else:
-					continue
+					unique_nts.remove(self.missingVal)
 			else:
-				if k > 2:
-					max1 = 0
-					maxnt1 = ''
-					max2 = 0
-					maxnt2 = ''
-					for nt in alphabet:
-						c = snp.count(nt)
-						if c > max1:
-							max1 = c
-							maxnt1 = nt
-						elif c > max2:
-							max2 = c
-							maxnt2 = nt
-						decoder[nt] = missingVal
-					decoder[maxnt1] = 0
-					decoder[maxnt2] = 1
-				new_snp = []
-				for nt in snp:
-					new_snp.append(decoder[nt])
-				snps.append(new_snp)
+				if len(unique_nts) != 2:
+					continue #Skipping non-binary SNP
+			if snp[ref_i] != self.missingVal:
+				col0_nt = snp[ref_i]
+				decoder[col0_nt] = 0
+				unique_nts.remove(col0_nt)
+				decoder[unique_nts[0]] = 1
+			else:
+				decoder[unique_nts[0]] = 0
+				decoder[unique_nts[1]] = 1
+			snps.append(coding_fun(snp))
+			positions.append(pos)
 
-		if only_non_binary:
-			print 'Removed %d non-binary SNPs out of %d, when converting to binary SNPs.'\
-				% (len(self.positions) - len(positions), len(self.positions))
-		else:
-			positions = self.positions
+		print 'Removed %d non-binary SNPs out of %d, when converting to binary SNPs.'\
+			% (len(self.positions) - len(positions), len(self.positions))
 
 		assert len(snps) == len(positions), 'Somthing odd with the lengths.'
 		return SNPsData(snps, positions, accessions=self.accessions, marker_types=self.marker_types, missing_val=missingVal)
+
 
 
 	def filterBadSnps(self, snpsd, maxNumError=0):
@@ -1790,9 +1717,8 @@ class RawSnpsData(_SnpsData_):
 
 class SNPsData(_SnpsData_):
 	"""
-	Efficient genotype data, using the numpy class.
+	An alternative to the old SnpsData class, where this uses scipy to speed things up when possible.
 	
-	An alternative to the old SnpsData class.
 	"""
 	alphabet = [-1, 0, 1, 2, 3]  #Here -1 is thought to be missing data value.
 	def __init__(self, snps, positions, accessions=None, arrayIds=None, chromosome=None,
@@ -1854,6 +1780,23 @@ class SNPsData(_SnpsData_):
 		return num_removed
 
 
+	def remove_monomorphic_snps(self):
+		"""
+		Removes all fixed SNPs.  (I.e. monomorphic.)
+		"""
+		new_positions = []
+		new_snps = []
+		for i, (snp, pos) in enumerate(izip(self.snps, self.positions)):
+			if len(sp.unique(snp)) > 1:
+				new_snps.append(snp)
+				new_positions.append(pos)
+		num_removed = len(self.positions) - len(new_positions)
+		self.snps = new_snps
+		self.positions = new_positions
+		#print "Removed %d non-binary SNPs, leaving %d SNPs in total." % (num_removed, len(self.snps))
+		return num_removed
+
+
 	def haplotize(self, snp_window=None, base_window=None):
 
 		if snp_window:
@@ -1882,20 +1825,17 @@ class SNPsData(_SnpsData_):
 			raise Exception('Window size missing')
 
 
-	def get_mafs(self, w_missing=False, binary=True):
+	def get_mafs(self, w_missing=False, type='binary'):
 		"""
 		Returns MAFs and MARFs
 		
 		(Uses numpy.bincount)
+		
+		types supported: classes (e.g. binary data), diploid_ints, ..
 		"""
 
-#		def _get_maf_(snp):
-#			l = sp.bincount(sp.unique(snp, False, True)[1])
-#			maf = min(l)
-#			return maf
 
-
-		def _get_maf_(snp):
+		def _get_maf_(snp): #For missing data coded as -1s
 			l = sp.bincount(snp)
 			maf = max(l)
 			for m in l[1:]:
@@ -1924,46 +1864,63 @@ class SNPsData(_SnpsData_):
 					mafs.append(maf)
 					marfs.append(maf / float(num_nts))
 		else:
-			if binary:
+			if type in ['binary', 'int']:
 				for snp in self.snps:
 					l = sp.bincount(snp)
 					maf = min(l)
 					mafs.append(maf)
 					marfs.append(maf / float(num_nts))
-			else:
+			elif type == 'diploid_int':
 				for snp in self.snps:
-					maf = _get_maf_(snp)
+					bin_counts = sp.bincount(snp)
+					l = sp.array([bin_counts[0], bin_counts[2]]) + bin_counts[1] / 2.0
+					maf = l.min()
 					mafs.append(maf)
 					marfs.append(maf / float(num_nts))
+			else:
+				raise NotImplementedError
 
 		return {"mafs":mafs, "marfs":marfs}
 
 
 
 
-	def filter_mac(self, min_mac=15, w_missing=False):
+
+
+	def filter_mac(self, min_mac=15, w_missing=False, data_format='binary'):
        		"""
        		Filter minor allele count SNPs.
        		"""
+       		print 'Filtering SNPs with MAC<%d, assuming %s data format' % (min_mac, data_format)
        		new_snps = []
        		new_positions = []
 		if w_missing and self.missingVal in snp:
-			for snp, pos in izip(self.snps, self.positions):
-				missing_count = list(snp).count(self.missingVal)
-				num_nts = len(snp) - missing_count
-				nts = set(snp)
-				nts.remove(self.missingVal)
-				mac = list(snp).count(nts.pop())
-				if mac > num_nts * 0.5: mac = num_nts - mac
-
-				if mac >= min_mac:
-					new_snps.append(snp)
-					new_positions.append(pos)
+			raise NotImplementedError()
+#			for snp, pos in izip(self.snps, self.positions):
+#				missing_count = list(snp).count(self.missingVal)
+#				num_nts = len(snp) - missing_count
+#				nts = set(snp)
+#				nts.remove(self.missingVal)
+#				mac = list(snp).count(nts.pop())
+#				if mac > num_nts * 0.5: mac = num_nts - mac
+#
+#				if mac >= min_mac:
+#					new_snps.append(snp)
+#					new_positions.append(pos)
 		else:
-			for snp, pos in izip(self.snps, self.positions):
-				if min(sp.bincount(snp)) >= min_mac:
-					new_snps.append(snp)
-					new_positions.append(pos)
+			if data_format in ['binary', 'int']:
+				for snp, pos in izip(self.snps, self.positions):
+					if min(sp.bincount(snp)) >= min_mac:
+						new_snps.append(snp)
+						new_positions.append(pos)
+			elif data_format == 'diploid_int':
+				for snp, pos in izip(self.snps, self.positions):
+					bin_counts = sp.bincount(snp)
+					l = sp.array([bin_counts[0], bin_counts[2]]) + bin_counts[1] / 2.0
+					if l.min() >= min_mac:
+						new_snps.append(snp)
+						new_positions.append(pos)
+
 
 		print 'Removed %d SNPs out of %d, leaving %d SNPs.' % (len(self.positions) - len(new_positions),
 								len(self.positions), len(new_positions))
@@ -1972,6 +1929,139 @@ class SNPsData(_SnpsData_):
 
 
 
+
+	def merge_data(self, sd, acc_merge_type='intersection', error_threshold=0.1, discard_error_threshold=0.1):
+		"""
+		Merges data, possibly allowing multiple markers at a position. (E.g. deletions and SNPs.)
+		However it merges markers which overlap to a significant degree (error_threshold).
+		
+		(Uses scipy SNPs)
+		"""
+		perc_overlap = len(set(self.accessions).intersection(set(sd.accessions))) \
+				/ float(len(set(self.accessions).union(set(sd.accessions))))
+		print "Percentage of overlapping accessions %s" % perc_overlap
+		if acc_merge_type == 'union':
+			new_accessions = list(set(self.accessions).union(set(sd.accessions)))
+		elif acc_merge_type == 'intersection':
+			new_accessions = list(set(self.accessions).intersection(set(sd.accessions)))
+		else:
+			new_accessions = self.accessions
+		acc_map = []
+		for acc in new_accessions:
+			try:
+				ai1 = self.accessions.index(acc)
+			except:
+				ai1 = -1
+			try:
+				ai2 = sd.accessions.index(acc)
+			except:
+				ai2 = -1
+			acc_map.append((ai1, ai2))
+
+		num_accessions = len(new_accessions)
+		missing_val_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
+
+		#To handle multiple markers at the same position
+		index_dict = {}
+		j = 0
+		last_pos = sd.positions[j]
+		for i, pos in enumerate(self.positions):
+			curr_pos = last_pos
+			while j < len(sd.positions) and curr_pos < pos:
+				j += 1
+				if j < len(sd.positions):
+					curr_pos = sd.positions[j]
+			last_pos = curr_pos
+			index_list = []
+			while j < len(sd.positions) and curr_pos == pos:
+				index_list.append(j)
+				j += 1
+				if j < len(sd.positions):
+					curr_pos = sd.positions[j]
+			if index_list:
+				index_dict[i] = index_list
+
+
+		indices_to_skip = set() #Markers which are merged in the second SNPsData
+		new_snps = []
+		new_positions = []
+		merge_count = 0
+		for i, snp1 in enumerate(self.snps):
+			new_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
+			if i in index_dict: #If there are markers at the same position.
+				index_list = index_dict[i]
+				for j in index_list:
+					error_count = 0
+					t_count = 0 #total count
+					snp2 = sd.snps[j]
+					for (ai1, ai2) in acc_map:
+						if ai1 != -1 and ai2 != -1:
+							if snp1[ai1] != snp2[ai2] and snp1[ai1] != self.missingVal\
+										and snp2[ai2] != self.missingVal:
+								error_count += 1
+							t_count += 1
+					merge_error = error_count / float(t_count) if t_count > 0 else 1
+					if merge_error <= error_threshold or merge_error > discard_error_threshold:
+						indices_to_skip.add(j)
+
+						if merge_error <= error_threshold:
+							print "Merge error is %f" % merge_error
+							for ni, (ai1, ai2) in enumerate(acc_map):
+								if ai1 != -1 and ai2 != -1:
+									if snp1[ai1] != self.missingVal:
+										new_snp[ni] = snp1[ai1]
+									else:
+										new_snp[ni] = snp2[ai2]
+								elif ai1 == -1:
+									new_snp[ni] = snp2[ai2]
+								else:
+									new_snp[ni] = snp1[ai1]
+							merge_count += 1
+						else:
+							print 'Removing SNP at position %d since they have an error of %f'\
+								 % (self.positions[i], merge_error)
+
+					elif t_count > 0:
+						print "Not merging since error is %f" % merge_error
+						for ni, (ai1, ai2) in enumerate(acc_map):
+							if ai1 != -1:
+								new_snp[ni] = snp1[ai1]
+
+			else: #There were no markers at this position in the other snps data.
+				for ni, (ai1, ai2) in enumerate(acc_map):
+					if ai1 != -1:
+						new_snp[ni] = snp1[ai1]
+
+
+			if sp.any(new_snp != missing_val_snp):#Some are not are missing
+				new_snps.append(new_snp)
+				new_positions.append(self.positions[i])
+
+		print 'Inserting %d non-overlapping SNPs into the self snps data.' % len(sd.snps)
+		for j in range(len(sd.snps)):
+			if not j in indices_to_skip:#There were no markers at this position in the other snps data.
+				snp2 = sd.snps[j]
+				new_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
+				for ni, (ai1, ai2) in enumerate(acc_map):
+					if ai2 != -1:
+						new_snp[ni] = snp2[ai2]
+				if new_snp == []:
+					raise Exception
+				new_snps.append(new_snp)
+				new_positions.append(sd.positions[j])
+
+
+		print 'Sorting SNPs by positions..'
+		pos_snp_list = zip(new_positions, range(len(new_positions)))
+		pos_snp_list.sort()
+		r = map(list, zip(*pos_snp_list))
+		self.positions = r[0]
+		self.snps = [new_snps[i] for i in r[1]]
+		self.accessions = new_accessions
+		if len(self.snps) != len(self.positions):
+			raise Exception
+		print "Merged %d SNPs!" % (merge_count)
+		print "Resulting in %d SNPs in total" % len(self.snps)
 
 
 
@@ -2280,7 +2370,7 @@ class SnpsData(_SnpsData_):
 		return snpsDatas
 
 
-	def snpsFilterMAF(self, mafs):
+	def snpsFilterMAF(self, mafs, type='classes'):
 		"""
 		Filters all snps with MAF not in the interval out of dataset.
 		"""
@@ -2427,6 +2517,437 @@ class SnpsData(_SnpsData_):
 
 
 
+class snps_data_set:
+	"""
+	A class which uses HDF5 to store SNPs, but otherwise implements a 
+	similar interface as the the older SNPsDataSet.
+	
+	"""
+	def __init__(self, hdf5_file_name, sd=None, chunk_size=10000):
+		self.hdf5_file_name = hdf5_file_name
+		self.h5file = h5py.File(hdf5_file_name)
+		if len(self.h5file.items()) == 0:
+			if sd != None:
+				#Fill file
+				print 'Filling file'
+				self.h5file.create_dataset('indiv_ids', data=sd.accessions) #i.e. ecotypes
+				self.h5file.create_dataset('num_indivs', data=len(sd.accessions))
+				self.h5file.create_dataset('chromosomes', data=sd.get_chr_list(), compression='gzip')
+				self.h5file.create_dataset('positions', data=sd.get_positions(), compression='gzip')
+				self.h5file.create_dataset('num_snps', data=sd.num_snps())
+				self.h5file.create_dataset('data_format', data=sp.array(sd.data_format))
+				if sd.data_format in ['binary', 'diploid_int']:
+					self.h5file.create_dataset('snps', shape=(sd.num_snps(), len(sd.accessions)),
+									dtype='int8', compression='gzip')
+					offset = 0
+					for j, snpsd in enumerate(sd.snpsDataList):
+						print offset
+						n_snps = len(snpsd.snps)
+
+						for i in range(0, n_snps, chunk_size):
+							sys.stdout.write('\b\b\b\b\b%.2f' % ((float(i * (1 + j))) / \
+										(n_snps * len(sd.snpsDataList))))
+							stop_i = min(i + chunk_size, n_snps)
+							snps_chunk = sp.array(snpsd.snps[i:stop_i], dtype='int8')
+							self.h5file['snps'][offset + i: offset + stop_i ] = snps_chunk
+						offset += n_snps
+				self.h5file.create_group('filters')
+			else:
+				raise NotImplementedError
+		self.data_format = str(self.h5file['data_format'][...])
+		self.indiv_filter = None
+		self.snps_filter = None
+		self.cached_snps == None
+
+
+	def num_individs(self):
+		if self.indiv_filter == None:
+			return int(self.h5file['num_indivs'][...])
+		else:
+			return len(self.indiv_filter)
+
+
+	def num_snps(self):
+		if self.snps_filter == None:
+			return int(self.h5file['num_snps'][...])
+		else:
+			return sp.sum(self.snps_filter)
+
+	def _get_cached_group_(self):
+
+		if self.indiv_filter == None:
+			cache_tuple = 'full_data'
+		else:
+			cache_tuple = str(tuple(self.h5file['indiv_ids'][self.indiv_filter]))
+		if cache_tuple in self.h5file['filters'].keys():
+			g = self.h5file['filters'][cache_tuple]
+			return g, True
+		else:
+			g = self.h5file['filters'].create_group(cache_tuple)
+			return g, False
+
+
+
+	def _update_macs_(self, g, chunk_size=1024):
+		temp_filter = self.snps_filter
+		self.snps_filter = None
+		n_snps = self.num_snps()
+		g.create_dataset('macs', shape=(n_snps,), compression='gzip')
+		print 'Calculating MACs'
+		offset = 0
+		for chunk_i, snps_chunk in enumerate(self.snps_chunks(chunk_size)):
+			a = sp.empty(len(snps_chunk))
+			if self.data_format == 'binary':
+				for j, snp in enumerate(snps_chunk):
+					bc = sp.bincount(snp)
+					a[j] = 0 if len(bc) < 2 else bc.min()
+			else:
+				for j, snp in enumerate(snps_chunk):
+					bc = sp.bincount(snp)
+					if len(bc) < 2:
+						a[j] = 0
+					else:
+						l = sp.array([bc[0], bc[2]]) + bc[1] / 2.0
+						a[j] = l.min()
+			g['macs'][offset:offset + len(snps_chunk)] = a
+			offset += len(snps_chunk)
+			sys.stdout.write('\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, \
+									((chunk_i + 1.0) * chunk_size) / n_snps))))
+			sys.stdout.flush()
+		self.snps_filter = temp_filter
+		print '\nFinished calculating MACs'
+
+
+
+	def filter_mac(self, min_mac=15):
+		"""
+		Sets a mac filter which is applied at runtime.
+		"""
+		#Check wether cached! otherwise..
+		g, already_exists = self._get_cached_group_()
+		if not already_exists:
+			self._update_macs_(g)
+		if self.snps_filter != None:
+			self.snps_filter = self.snps_filter * (g['macs'][...] >= min_mac)
+		else:
+			self.snps_filter = g['macs'][...] >= min_mac
+
+
+
+	def coordinate_w_phenotype_data(self, phend, pid, coord_phen=True):
+
+		"""
+		Deletes accessions which are not common, and sorts the accessions, removes monomorphic SNPs, etc.
+		"""
+#		import bisect
+		print "Coordinating SNP and Phenotype data."
+		ets = phend.phen_dict[pid]['ecotypes']
+
+		#Checking which accessions to keep and which to remove.
+		sd_indices_to_keep = set()#[]
+		pd_indices_to_keep = []
+
+		for i, iid in enumerate(self.h5file['indiv_ids']):
+			for j, et in enumerate(ets):
+				if et == iid:
+					sd_indices_to_keep.add(i)
+					pd_indices_to_keep.append(j)
+
+		sd_indices_to_keep = list(sd_indices_to_keep)
+		sd_indices_to_keep.sort()
+
+
+		#Filter accessions which do not have phenotype values (from the genotype data).
+		print "Filtering genotype data"
+		#if len(sd_indices_to_keep) != len(self.accessions):
+		self.indiv_filter = sd_indices_to_keep
+		if coord_phen:
+			num_values = len(phend.phen_dict[pid]['ecotypes'])
+			print "Filtering phenotype data."
+			phend.filter_ecotypes(pd_indices_to_keep, pids=[pid]) #Removing accessions that don't have genotypes or phenotype values
+			ets = phend.phen_dict[pid]['ecotypes']
+			print "Out of %d, leaving %d values." % (num_values, len(ets))
+
+		self.filter_mac(1)
+
+
+	def get_snps(self, chunk_size=1000):
+		n_snps = self.num_snps()
+		n_indivs = self.num_individs()
+		if self.snps_filter == None and self.indiv_filter == None:
+			snps = self.h5file['snps'][...]
+		else:
+			if self.data_format in ['binary', 'diploid_int']:
+				print 'Allocating memory'
+				snps = sp.empty((n_snps, n_indivs), dtype='int8')
+				print 'done allocating.'
+			else:
+				raise NotImplementedError
+			offset = 0
+			print 'Extracting the SNPs'
+			for chunk_i, snps_chunk in enumerate(self.snps_chunks(chunk_size)):
+				snps[offset:offset + len(snps_chunk)] = snps_chunk
+				offset += len(snps_chunk)
+				sys.stdout.write('\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, \
+									((chunk_i + 1.0) * chunk_size) / n_snps))))
+				sys.stdout.flush()
+
+			print '\nDone extracting the SNPs.'
+		return snps
+
+
+
+	def get_positions(self):
+		if self.snps_filter == None:
+			return self.h5file['positions'][...]
+		else:
+			return self.h5file['positions'][self.snps_filter]
+
+
+	def get_chromosomes(self):
+		if self.snps_filter == None:
+			return self.h5file['chromosomes'][...]
+		else:
+			return self.h5file['chromosomes'][self.snps_filter]
+
+
+	def get_chr_pos_list(self):
+	 	return zip(self.get_chromosomes(), self.get_positions())
+
+	def get_macs(self):
+		g, already_exists = self._get_cached_group_()
+		if not already_exists:
+			self._update_macs_(g)
+		if self.snps_filter == None:
+			return g['macs'][...]
+		else:
+			return g['macs'][self.snps_filter]
+
+
+	def get_mafs(self):
+		return self.get_macs() / self.num_individs()
+
+	def get_old_snps_data_set(self):
+		"""
+		"""
+		raise NotImplementedError
+
+	def close(self):
+		self.h5file.close()
+
+
+	def snps_chunks(self, chunk_size=10000):
+		"""
+		An generator/iterator for SNP chunks.
+		"""
+		n_snps = self.num_snps()
+		if self.snps_filter == None:
+			if self.indiv_filter == None:
+				for i in range(0, n_snps, chunk_size):
+					stop_i = min(i + chunk_size, n_snps)
+					yield self.h5file['snps'][i:stop_i]
+			else:
+				for i in range(0, n_snps, chunk_size):
+					stop_i = min(i + chunk_size, n_snps)
+					yield self.h5file['snps'][i:stop_i, self.indiv_filter]
+		else:
+			if self.indiv_filter == None:
+				for i in range(0, n_snps, chunk_size):
+					stop_i = min(i + chunk_size, n_snps)
+					filter_chunk = self.snps_filter[i:stop_i]
+					snps_chunk = self.h5file['snps'][i:stop_i]
+					yield snps_chunk[filter_chunk]
+			else:
+				for i in range(0, n_snps, chunk_size):
+					stop_i = min(i + chunk_size, n_snps)
+					filter_chunk = self.snps_filter[i:stop_i]
+					snps_chunk = self.h5file['snps'][i:stop_i, self.indiv_filter]
+					yield snps_chunk[filter_chunk]
+
+
+	def snps(self, chunk_size=10000):
+		"""
+		An generator/iterator for the SNPs.
+		"""
+		for snps_chunk in self.snps_chunks(chunk_size):
+			for snp in snps_chunk:
+				yield snp
+
+
+	def _calc_ibd_kinship_(self, num_dots=10, dtype='single', chunk_size=None):
+		n_snps = self.num_snps()
+		n_indivs = self.num_individs()
+		if chunk_size == None:
+			chunk_size = n_indivs
+		k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
+		num_splits = n_snps / float(chunk_size)
+		for chunk_i, snps_chunk in enumerate(self.snps_chunks(chunk_size)):
+			snps_array = snps_chunk.T
+			norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
+			x = sp.mat(norm_snps_array.T)
+			k_mat += x.T * x
+			sys.stdout.write('\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * chunk_size) / n_snps))))
+			sys.stdout.flush()
+		k_mat = k_mat / float(n_snps)
+		return k_mat
+
+
+	def _calc_ibd_kinship_2_(self, snps, num_dots=10, dtype='single'):
+		n_indivs = self.num_individs()
+		chunk_size = n_indivs
+		k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
+		num_snps = len(snps)
+		num_splits = num_snps / chunk_size
+		for chunk_i, i in enumerate(range(0, num_snps, chunk_size)):
+			snps_array = sp.array(snps[i:i + chunk_size])
+			snps_array = snps_array.T
+			norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
+			x = sp.mat(norm_snps_array.T)
+			k_mat += x.T * x
+			if num_dots and num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+				sys.stdout.write('.')
+				sys.stdout.flush()
+		k_mat = k_mat / float(num_snps)
+		return k_mat
+
+
+	def _calc_ibs_kinship_(self, num_dots=10, dtype='single', chunk_size=None):
+		n_snps = self.num_snps()
+		n_indivs = self.num_individs()
+		if chunk_size == None:
+			chunk_size = n_indivs
+		num_splits = n_snps / chunk_size
+		#print 'Allocating K matrix'
+		k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
+		#print 'Starting calculation'
+		for chunk_i, snps_chunk in enumerate(self.snps_chunks(chunk_size)): #FINISH!!!
+			snps_array = snps_chunk.T
+			if self.data_format == 'diploid_int':
+				for i in range(n_indivs):
+					for j in range(i):
+						bin_counts = sp.bincount(sp.absolute(snps_array[j] - snps_array[i]))
+						if len(bin_counts) > 1:
+							k_mat[i, j] += (bin_counts[0] + 0.5 * bin_counts[1])
+						else:
+							k_mat[i, j] += bin_counts[0]
+						k_mat[j, i] = k_mat[i, j]
+			elif self.data_format == 'binary':
+				sm = sp.mat(snps_array * 2.0 - 1.0)
+				k_mat = k_mat + sm * sm.T
+			sys.stdout.write('\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * chunk_size) / n_snps))))
+			sys.stdout.flush()
+		if self.data_format == 'diploid_int':
+			k_mat = k_mat / float(n_snps) + sp.eye(n_indivs)
+		elif self.data_format == 'binary':
+			k_mat = k_mat / (2 * float(n_snps)) + 0.5
+		return k_mat
+
+
+
+	def _calc_ibs_kinship_2_(self, snps, num_dots=10, snp_dtype='int8', dtype='single'):
+		n_indivs = self.num_individs()
+		chunk_size = n_indivs
+		num_snps = len(snps)
+		num_splits = num_snps / chunk_size
+		#print 'Allocating K matrix'
+		k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
+		#print 'Starting calculation'
+		chunk_i = 0
+		for snp_i in range(0, num_snps, chunk_size): #FINISH!!!
+			chunk_i += 1
+			snps_array = sp.array(snps[snp_i:snp_i + chunk_size], dtype=snp_dtype)
+			snps_array = snps_array.T
+			if self.data_format == 'diploid_int':
+				for i in range(n_indivs):
+					for j in range(i):
+						bin_counts = sp.bincount(sp.absolute(snps_array[j] - snps_array[i]))
+						if len(bin_counts) > 1:
+							k_mat[i, j] += (bin_counts[0] + 0.5 * bin_counts[1])
+						else:
+							k_mat[i, j] += bin_counts[0]
+						k_mat[j, i] = k_mat[i, j]
+			elif self.data_format == 'binary':
+				sm = sp.mat(snps_array * 2.0 - 1.0)
+				k_mat = k_mat + sm * sm.T
+			if num_dots and num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+				sys.stdout.write('.')
+				sys.stdout.flush()
+		if self.data_format == 'diploid_int':
+			k_mat = k_mat / float(num_snps) + sp.eye(num_lines)
+		elif self.data_format == 'binary':
+			k_mat = k_mat / (2 * float(num_snps)) + 0.5
+		return k_mat
+
+
+	def get_kinship(self, method='ibs', num_dots=10, dtype='single', chunk_size=1024):
+		"""
+		Returns kinship
+		"""
+		print method
+		if method == 'ibd':
+			print 'Starting IBD calculation'
+			k_mat = self._calc_ibd_kinship_(num_dots=num_dots, dtype=dtype, chunk_size=chunk_size)
+			print '\nFinished calculating IBD kinship matrix'
+			return k_mat
+		elif method == 'ibs':
+			print 'Starting IBS calculation'
+			k_mat = self._calc_ibd_kinship_(num_dots=num_dots, dtype=dtype, chunk_size=chunk_size)
+			print '\nFinished calculating IBS kinship matrix'
+			return k_mat
+
+
+
+
+	def get_region_split_snps(self, chrom, start_pos, stop_pos):
+		"""
+		Returns two SNP sets, one with the SNPs within the given region, 
+		and the other with the remaining SNPs.
+		"""
+		import bisect
+		chr_pos_l = self.get_chr_pos_list()
+		start_i = bisect.bisect(chr_pos_l, (chrom, start_pos))
+		stop_i = bisect.bisect(chr_pos_l, (chrom, end_pos))
+		if self.cached_snps == None:
+			self.cached_snps = self.get_snps()
+		snps = self.cached_snps
+		local_snps = snps[start_i:stop_i]
+		global_snps = snps[:start_i] + snps[stop_i:]
+		return local_snps, global_snps
+
+
+	def get_local_n_global_kinships(self, focal_chrom_pos=None, window_size=25000, chrom=None, start_pos=None,
+					stop_pos=None, kinship_method='ibd', global_kinship=None, verbose=False):
+		"""
+		Returns local and global kinship matrices.
+		"""
+		if focal_chrom_pos != None:
+			chrom, pos = focal_chrom_pos
+			start_pos = pos - window_size
+			stop_pos = pos + window_size
+
+		local_snps, global_snps = self.get_region_split_snps(chrom, start_pos, stop_pos)
+		if verbose:
+			print 'Found %d local SNPs' % len(local_snps)
+			print 'and %d global SNPs' % len(global_snps)
+		if kinship_method == 'ibd':
+			local_k = self._calc_ibd_kinship_2_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibd_kinship_2_(global_snps, num_dots=0) if len(global_snps) else None
+		elif kinship_method == 'ibs':
+			local_k = self._calc_ibs_kinship_2_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibs_kinship_2_(global_snps, num_dots=0) if len(global_snps) else None
+		else:
+			raise NotImplementedError
+		if global_kinship != None:
+			global_k = (global_kinship * self.num_snps() - local_k * len(local_snps)) / len(global_snps)
+		return {'local_k':local_k, 'global_k':global_k, 'num_local_snps':len(local_snps),
+			'num_global_snps':len(global_snps)}
+
+
+
+
+
 class SNPsDataSet:
 	"""
 	A class that encompasses multiple _SnpsData_ chromosomes objects (chromosomes), and can deal with them as a whole.
@@ -2437,25 +2958,21 @@ class SNPsDataSet:
 	chromosomes = None
 	accessions = None
 
-	def __init__(self, snpsds, chromosomes, id=None, is_binary=None, call_method=None, data_format=None):
+	def __init__(self, snpsds, chromosomes, id=None, call_method=None, data_format=None):
 		self.snpsDataList = snpsds
 		self.chromosomes = chromosomes
 		self.accessions = self.snpsDataList[0].accessions
 		self.array_ids = self.snpsDataList[0].arrayIds
 		self.id = id
-		self.is_binary = is_binary
 		self.missing_val = snpsds[0].missingVal
 		self.call_method = call_method
-		self.data_format = data_format
+		self.data_format = data_format # binary, diploid_ints, floats, int
 		if not id and snpsds[0].id:
 				self.id = id
 		for i in range(1, len(self.chromosomes)):
 			if self.accessions != self.snpsDataList[i].accessions:
 				raise Exception("Accessions (or order) are different between SNPs datas")
-		if not is_binary:
-			self.is_binary = list(snpsds[0].snps[0]).count(0) or list(snpsds[0].snps[0]).count(1)
-		else:
-			self.is_binary = is_binary
+		self.is_binary = list(snpsds[0].snps[0]).count(0) or list(snpsds[0].snps[0]).count(1)
 
 
 
@@ -2610,7 +3127,7 @@ class SNPsDataSet:
 
 
 
-	def writeToFile(self, filename, delimiter=", ", missingVal="NA", accDecoder=None,
+	def writeToFile(self, filename, delimiter=",", missingVal="NA", accDecoder=None,
 			withArrayIds=False, decoder=None, callProbFile=None, binary_format=False):
 		"""
 		Writes data to a file. 
@@ -2806,47 +3323,292 @@ class SNPsDataSet:
 				total_num += len(snpsd.snps)
 				removed_num += snpsd.onlyBinarySnps()
 			print 'Removed %d non-binary SNPs out of %d SNPs' % (removed_num, total_num)
+		elif self.data_format in ['int', 'diploid_int']:
+			print 'Filtering monomorhpic SNPs'
+			total_num = 0
+			removed_num = 0
+			for snpsd in self.snpsDataList:
+				total_num += len(snpsd.snps)
+				removed_num += snpsd.remove_monomorphic_snps()
+			print 'Removed %d monomorphic SNPs out of %d SNPs' % (removed_num, total_num)
 		return pd_indices_to_keep
 
 
 
-	def get_ibs_kinship_matrix(self, debug_filter=1, num_dots=1000, snp_dtype='int8', dtype='single', type='binary'):
+	def get_ibs_kinship_matrix(self, debug_filter=1, num_dots=10, snp_dtype='int8', dtype='single'):
 		"""
-		
+		Calculate the IBS kinship matrix. 
+		(un-scaled)
 		"""
 		print 'Starting kinship calculation, it prints %d dots.' % num_dots
 		snps = self.getSnps(debug_filter)
-		print 'Constructing a SNP array'
-		snps_array = sp.array(snps, dtype=snp_dtype)
-		print 'Transposing the SNP array'
-		snps_array = snps_array.T
+		return self._calc_ibs_kinship_(snps, num_dots=num_dots, snp_dtype=snp_dtype, dtype=dtype)
+
+
+	def _calc_ibs_kinship_(self, snps, num_dots=10, snp_dtype='int8', dtype='single'):
 		num_lines = len(self.accessions)
-		num_snps = float(len(snps))
-		print 'Allocating K matrix'
-		k_mat = sp.ones((num_lines, num_lines), dtype=dtype)
-		num_comp = num_lines * (num_lines - 1) / 2
-		comp_i = 0
-		print 'Starting calculation'
-		for i in range(num_lines):
-			for j in range(i):
-				comp_i += 1
-				k_mat[i, j] = sp.sum(sp.absolute(snps_array[i] - snps_array[j])) / num_snps
-				k_mat[j, i] = k_mat[i, j]
-				if num_comp >= num_dots and (comp_i + 1) % (num_comp / num_dots) == 0: #Print dots
-					sys.stdout.write('.')
-					sys.stdout.flush()
+		chunk_size = num_lines
+		num_snps = len(snps)
+		num_splits = num_snps / chunk_size
+		#print 'Allocating K matrix'
+		k_mat = sp.zeros((num_lines, num_lines), dtype=dtype)
+		#print 'Starting calculation'
+		chunk_i = 0
+		for snp_i in range(0, num_snps, chunk_size): #FINISH!!!
+			chunk_i += 1
+			snps_array = sp.array(snps[snp_i:snp_i + chunk_size], dtype=snp_dtype)
+			snps_array = snps_array.T
+			if self.data_format == 'diploid_int':
+				for i in range(num_lines):
+					for j in range(i):
+						bin_counts = sp.bincount(sp.absolute(snps_array[j] - snps_array[i]))
+						if len(bin_counts) > 1:
+							k_mat[i, j] += (bin_counts[0] + 0.5 * bin_counts[1])
+						else:
+							k_mat[i, j] += bin_counts[0]
+						k_mat[j, i] = k_mat[i, j]
+			elif self.data_format == 'binary':
+				sm = sp.mat(snps_array * 2.0 - 1.0)
+				k_mat = k_mat + sm * sm.T
+                        else:
+                                raise NotImplementedError
+			if num_dots and num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+				sys.stdout.write('.')
+				sys.stdout.flush()
+		if self.data_format == 'diploid_int':
+			k_mat = k_mat / float(num_snps) + sp.eye(num_lines)
+		elif self.data_format == 'binary':
+			k_mat = k_mat / (2 * float(num_snps)) + 0.5
 		return k_mat
 
 
-	def get_snp_cov_matrix(self, debug_filter=1, num_dots=100, dtype='single'):
+
+	def get_local_n_global_kinships(self, focal_chrom_pos=None, window_size=25000, chrom=None, start_pos=None,
+					stop_pos=None, kinship_method='ibd', global_kinship=None, verbose=False):
+		"""
+		Returns local and global kinship matrices.
+		"""
+		if focal_chrom_pos != None:
+			chrom, pos = focal_chrom_pos
+			start_pos = pos - window_size
+			stop_pos = pos + window_size
+
+		local_snps, global_snps = self.get_region_split_snps(chrom, start_pos, stop_pos)
+		if verbose:
+			print 'Found %d local SNPs' % len(local_snps)
+			print 'and %d global SNPs' % len(global_snps)
+		if kinship_method == 'ibd':
+			local_k = self._calc_ibd_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibd_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+		elif kinship_method == 'ibs':
+			local_k = self._calc_ibs_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibs_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+		else:
+			raise NotImplementedError
+		if global_kinship != None:
+			if len(local_snps):
+				global_k = (global_kinship * self.num_snps() - local_k * len(local_snps)) / len(global_snps)
+			else:
+				local_k = None
+				global_k = global_kinship
+		return {'local_k':local_k, 'global_k':global_k, 'num_local_snps':len(local_snps),
+			'num_global_snps':len(global_snps)}
+
+
+
+	def get_chrom_vs_rest_kinships(self, chrom=None, kinship_method='ibd', global_kinship=None, verbose=False):
+		"""
+		Returns local and global kinship matrices.
+		"""
+		local_snps, global_snps = self.get_chrom_split_snps(chrom)
+		if verbose:
+			print 'Found %d SNPs on chromosome %d' % (len(local_snps), chrom)
+			print 'and %d SNPs on other chromosomes' % len(global_snps)
+		if kinship_method == 'ibd':
+			local_k = self._calc_ibd_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibd_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+		elif kinship_method == 'ibs':
+			local_k = self._calc_ibs_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+			if global_kinship == None:
+				global_k = self._calc_ibs_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+		else:
+			raise NotImplementedError
+		if global_kinship != None:
+			if len(local_snps):
+				global_k = (global_kinship * self.num_snps() - local_k * len(local_snps)) / len(global_snps)
+			else:
+				local_k = None
+				global_k = global_kinship
+		return {'local_k':local_k, 'global_k':global_k, 'num_local_snps':len(local_snps),
+			'num_global_snps':len(global_snps)}
+
+
+
+
+
+
+	def get_region_split_snps(self, chrom, start_pos, end_pos):
+		"""
+		Returns two SNP sets, one with the SNPs within the given region, 
+		and the other with the remaining SNPs.
+		"""
+		import bisect
+		global_snps = []
+		local_snps = []
+		chr_pos_l = self.get_chr_pos_list(cache_list=True)
+		start_i = bisect.bisect(chr_pos_l, (chrom, start_pos))
+		stop_i = bisect.bisect(chr_pos_l, (chrom, end_pos))
+		snps = self.get_snps(cache=True)
+		local_snps = snps[start_i:stop_i]
+		global_snps = snps[:start_i] + snps[stop_i:]
+		return local_snps, global_snps
+
+	def get_chrom_split_snps(self, chrom):
+		c_ends = self.get_chromosome_ends()
+		ci = self.chromosomes.index(chrom)
+		return self.get_region_split_snps(chrom, 0, c_ends[ci] + 1)
+
+
+	def get_region_split_kinships(self, chrom_pos_list, kinship_method='ibd', global_kinship=None, verbose=False):
+		"""
+		Returns local and global kinship matrices.
+		"""
+		region_snps = self.get_regions_split_snps(chrom_pos_list)
+		num_snps_found = len(region_snps)
+		if verbose:
+			print 'Found %d SNPs in the regions' % num_snps_found
+		if kinship_method == 'ibd':
+			regional_k = self._calc_ibd_kinship_(region_snps, num_dots=0) if num_snps_found else None
+		elif kinship_method == 'ibs':
+			regional_k = self._calc_ibs_kinship_(region_snps, num_dots=0) if num_snps_found else None
+		else:
+			raise NotImplementedError
+		if global_kinship != None and regional_k != None:
+			global_k = (global_kinship * self.num_snps() - regional_k * num_snps_found) \
+					/ (self.num_snps() - num_snps_found)
+		else:
+			global_k = None
+		return {'regional_k':regional_k, 'global_k':global_k, 'num_snps_found':num_snps_found}
+
+
+
+	def get_regions_split_snps(self, chrom_pos_list):
+		"""
+		Returns the SNP sets, wherethe SNPs are in multiple regions, 
+		and the other is the remaining set. 
+		"""
+		import bisect
+		chr_pos_l = self.get_chr_pos_list()
+		snps = self.get_snps()
+		region_snps = []
+		for chrom, start_pos, end_pos in chrom_pos_list:
+			start_i = bisect.bisect(chr_pos_l, (chrom, start_pos))
+			stop_i = bisect.bisect(chr_pos_l, (chrom, end_pos))
+			region_snps.extend(snps[start_i:stop_i])
+		return region_snps
+
+#	def get_ibd_kinship_matrix_old(self, debug_filter=1, num_dots=10000, with_correction=True,
+#				snp_dtype='int8', dtype='single'):
+#		"""
+#		Calculate the IBD kinship matrix, as described in (Yang et al., Nat. Genetics, 2010) 
+#		(un-scaled)
+#		"""
+#		if self.data_format != 'binary':
+#			raise NotImplementedError
+#		print 'Starting IBD kinship calculation, it prints %d dots.' % num_dots
+#		snps = self.getSnps(debug_filter)
+#		num_snps = len(snps)
+#		num_lines = len(self.accessions)
+#		print 'Allocating K matrix'
+#		k_mat = sp.zeros((num_lines, num_lines), dtype=dtype)
+#
+#		print 'Calculating IBD kinship... one SNP at a time'
+#		#Do one SNP at a time to save memory...
+#		for snp_i, snp in enumerate(snps):
+#			p = sp.mean(snp)
+#			norm_snp = sp.mat((snp - p) / sp.std(snp))
+#			M = norm_snp.T * norm_snp
+#			if with_correction:
+#				c = p * (1 - p * (4 - 6 * p + 3 * p * p))
+#				cor_norm_snp = (snp - p) / sp.sqrt(c)
+#				for i in range(0, num_lines):
+#					M[i, i] = cor_norm_snp[i] ** 2
+#			k_mat += M#norm_snp.T * norm_snp
+#			if num_snps >= num_dots and (snp_i + 1) % (num_snps / num_dots) == 0: #Print dots
+#				sys.stdout.write('.')
+#				sys.stdout.flush()
+#		k_mat = k_mat / len(snps)
+#		return k_mat
+
+
+	def _calc_ibd_kinship_(self, snps, num_dots=10):
+		num_lines = len(self.accessions)
+		chunk_size = num_lines
+		cov_mat = sp.zeros((num_lines, num_lines))
+		num_snps = len(snps)
+		num_splits = num_snps / chunk_size
+		for chunk_i, i in enumerate(range(0, num_snps, chunk_size)):
+			snps_array = sp.array(snps[i:i + chunk_size])
+			snps_array = snps_array.T
+			norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
+			x = sp.mat(norm_snps_array.T)
+			cov_mat += x.T * x
+			if num_dots and num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+				sys.stdout.write('.')
+				sys.stdout.flush()
+		cov_mat = cov_mat / float(num_snps)
+		return cov_mat
+
+
+	def get_ibd_kinship_matrix(self, debug_filter=1, num_dots=10, snp_dtype='int8', dtype='single'):
+		print 'Starting IBD calculation'
+		snps = self.getSnps(debug_filter)
+		cov_mat = self._calc_ibd_kinship_(snps, num_dots=num_dots)
+		print 'Finished calculating IBD kinship matrix'
+		return cov_mat
+
+
+	def get_snp_cov_matrix(self, debug_filter=1, num_dots=10, dtype='single'):
+		print 'Initializing'
+		num_lines = len(self.accessions)
+		chunk_size = num_lines
+		num_snps = self.num_snps()
+		num_splits = num_snps / chunk_size
+		cov_mat = sp.zeros((num_lines, num_lines))
+		snps = self.getSnps(debug_filter)
+
+		print 'Estimating the accession means'
+		accession_sums = sp.zeros(num_lines)
+		for chunk_i, i in enumerate(range(0, self.num_snps(), chunk_size)):
+			snps_array = sp.array(snps[i:i + chunk_size])
+			snps_array = snps_array.T
+			norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
+			accession_sums += sp.sum(norm_snps_array, 1)
+		accession_means = accession_sums / num_snps
+		print accession_means
+
 		print 'Starting covariance calculation'
-		#Normalizing
-		norm_snps_array = self.get_normalized_snps(debug_filter=debug_filter, dtype=dtype)
-		accession_means = sp.mean(norm_snps_array, 1)
-		x = sp.mat(norm_snps_array.T - accession_means)
-		cov_mat = x.T * x / (len(snps) - 1)
+		for chunk_i, i in enumerate(range(0, self.num_snps(), chunk_size)):
+			snps_array = sp.array(snps[i:i + chunk_size])
+			snps_array = snps_array.T
+			norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
+			x = sp.mat(norm_snps_array.T - accession_means) #The only difference from the IBD matrix is that we subtract the accession means.
+			cov_mat += x.T * x
+			if num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+				sys.stdout.write('.')
+				sys.stdout.flush()
+		cov_mat = cov_mat / self.num_snps()
 		print 'Finished calculating covariance matrix'
 		return cov_mat
+
+
+
+	def get_macs(self):
+		r = self.get_mafs()
+		return r['mafs']
 
 
 
@@ -2855,27 +3617,30 @@ class SNPsDataSet:
 		snps = self.getSnps(debug_filter)
 		snps_array = sp.array(snps)
 		snps_array = snps_array.T
-		#Normalizing
+		#Normalizing (subtracting by)
 		norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
 		print 'Finished normalizing them'
 		return norm_snps_array
 
 
 
-	def convert_2_binary(self):
+	def convert_data_format(self, target_data_format='binary'):
 		"""
 		Converts the underlying raw data format to a binary one, i.e. A,C,G,T,NA,etc. are converted to 0,1,-1
 		"""
-		if self.data_format == 'binary':
+		if self.data_format == target_data_format:
 			import warnings
-			warnings.warn("Data appears to be already in binary format!")
+			warnings.warn("Data appears to be already in %s format!" % target_data_format)
 		else:
-			snpsd_list = []
-			for snpsd in self.snpsDataList:
-				snpsd_list.append(snpsd.getSnpsData())
-			self.snpsDataList = snpsd_list
-			self.data_format = 'binary'
-		self.missing_val = self.snpsDataList[0].missingVal
+			if self.data_format == 'nucleotides' and target_data_format == 'binary':
+				snpsd_list = []
+				for snpsd in self.snpsDataList:
+					snpsd_list.append(snpsd.getSnpsData())
+				self.snpsDataList = snpsd_list
+				self.data_format = 'binary'
+				self.missing_val = self.snpsDataList[0].missingVal
+			else:
+				raise NotImplementedError
 
 
 	def haplotize(self, snp_window=None, base_window=None):
@@ -2899,8 +3664,13 @@ class SNPsDataSet:
 
 
 
-	def getSnps(self, random_fraction=None):
-		snplist = []
+	def get_snps(self, random_fraction=None, cache=False):
+		if cache:
+                        try:
+                                return self.snps
+                        except Exception:
+                                pass
+                snplist = []
 		if random_fraction:
 			import random
 			for snpsd in self.snpsDataList:
@@ -2909,8 +3679,14 @@ class SNPsDataSet:
 						snplist.append(snp)
 		else:
 			for snpsd in self.snpsDataList:
-				snplist += snpsd.snps
+				snplist.extend(snpsd.snps)
+                if cache:
+                        self.snps = snplist
 		return snplist
+
+
+	def getSnps(self, random_fraction=None):
+		return self.get_snps(random_fraction=None)
 
 
 	def num_snps(self):
@@ -2918,6 +3694,128 @@ class SNPsDataSet:
 		for snpsd in self.snpsDataList:
 			num_snps += len(snpsd.snps)
 		return num_snps
+
+
+	def plot_tree(self, tree_file, verbose=True, kinship_method='ibs'):
+
+		if verbose:
+			print "Calculating kinship matrix"
+		if kinship_method == 'ibs':
+			K = self.get_ibs_kinship_matrix()
+		if kinship_method == 'ibd':
+			K = self.get_ibd_kinship_matrix()
+                plot_tree(K, tree_file, self.accessions, verbose=verbose)
+
+
+	def plot_snp_map(self, chromosome, position, pdf_file=None, png_file=None, map_type='global',
+			color_by=None, cmap=None, title=''):
+		"""
+		Plot accessions on a map.
+		
+		'color_by' is by default set to be the phenotype values.
+		"""
+		import phenotypeData as pd
+		import matplotlib
+		matplotlib.use("Agg")
+		import matplotlib.pyplot as plt
+		#matplotlib.rcParams['backend'] = 'GTKAgg'
+		eid = pd.get_ecotype_id_info_dict()
+		lats = []
+		lons = []
+		acc_names = []
+		for e in self.accessions:
+			r = eid[int(e)]
+			acc_names.append(r[0])
+			try:
+				latitude = float(r[2])
+				longitude = float(r[3])
+#				r = eid[str(e)]
+#				latitude = float(r[5])
+#				longitude = float(r[6])
+
+			except Exception, err_str:
+				print "Latitude and Longitude, not found?:", err_str
+				print 'Placing them in the Atlantic.'
+				latitude = 40
+				longitude = -20
+
+			lats.append(latitude)
+			lons.append(longitude)
+
+		from mpl_toolkits.basemap import Basemap
+		import numpy as np
+		from pylab import cm
+		if map_type == "global2":
+			plt.figure(figsize=(14, 12))
+			m = Basemap(width=21.e6, height=21.e6, projection='gnom', lat_0=76, lon_0=15)
+			m.drawparallels(np.arange(20, 90, 20))
+			m.drawmeridians(np.arange(-180, 180, 30))
+		elif map_type == 'global':
+
+			plt.figure(figsize=(16, 4))
+			plt.axes([0.02, 0.02, 0.96, 0.96])
+ 			m = Basemap(projection='cyl', llcrnrlat=10, urcrnrlat=80,
+				    llcrnrlon= -130, urcrnrlon=150, lat_ts=20, resolution='c')
+			m.drawparallels(np.arange(20, 90, 20))
+			m.drawmeridians(np.arange(-180, 180, 30))
+		elif map_type == 'europe':
+
+			plt.figure(figsize=(8, 6))
+			plt.axes([0.02, 0.02, 0.96, 0.96])
+			m = Basemap(projection='cyl', llcrnrlat=35, urcrnrlat=70,
+				    llcrnrlon= -15, urcrnrlon=40, lat_ts=20, resolution='h')
+			m.drawparallels(np.arange(30, 80, 10))
+			m.drawmeridians(np.arange(-20, 100, 10))
+			#m.bluemarble()
+		elif map_type == 'sweden':
+
+			plt.figure(figsize=(2.4, 4))
+			plt.axes([0.02, 0.02, 0.96, 0.96])
+			m = Basemap(projection='merc', llcrnrlat=55, urcrnrlat=67,
+				    llcrnrlon=10, urcrnrlon=25, lat_ts=10, resolution='i')
+			m.drawparallels(np.arange(45, 75, 5))
+			m.drawmeridians(np.arange(5, 30, 5))
+			#m.bluemarble()
+		else:
+			raise Exception("map_type is invalid")
+
+		#m.drawmapboundary(fill_color='aqua')
+		m.drawcoastlines()
+		m.fillcontinents()
+		m.drawcountries()
+		#m.fillcontinents(color='green', lake_color='blue')
+
+		xs = []
+		ys = []
+		for lon, lat in zip(lons, lats):
+			x, y = m(*np.meshgrid([lon], [lat]))
+			xs.append(float(x))
+			ys.append(float(y))
+
+		if not color_by:
+			color_vals = self.get_snp_at(chromosome, position)
+		else:
+			color_vals = color_by
+		assert len(color_vals) == len(self.accessions), "accessions and color_by_vals values don't match ! "
+		if not cmap:
+			num_colors = len(set(color_vals))
+			if num_colors <= 10:
+				cmap = cm.get_cmap('jet', num_colors)
+			else:
+				cmap = cm.get_cmap('jet')
+		lws = [0] * len(xs)
+		plt.scatter(xs, ys, s=10, linewidths=lws, c=color_vals, cmap=cmap, alpha=0.7, zorder=2)
+		#plt.plot(xs, ys, 'o', color='r', alpha=0.5, zorder=2,)
+		if title:
+			plt.title(title)
+		if pdf_file:
+			plt.savefig(pdf_file, format="pdf", dpi=400)
+		if png_file:
+			plt.savefig(png_file, format="png", dpi=400)
+		if not pdf_file and not png_file:
+			plt.show()
+
+		return self.accessions, lats, lons
 
 
 #	def get_snps(self, random_fraction=None, region=None):
@@ -2964,13 +3862,15 @@ class SNPsDataSet:
 			return None
 
 
-	def getPositions(self):
+	def get_positions(self):
 		poslist = []
 		for snpsd in self.snpsDataList:
 			for pos in snpsd.positions:
 				poslist.append(pos)
 		return poslist
 
+	def getPositions(self):
+		return self.get_positions()
 
 	def get_top_correlated_snp(self, snp, r2_threshold=0.5):
 		sample_snp_chr_pos_marf = []
@@ -3005,14 +3905,25 @@ class SNPsDataSet:
 		return sample_snp_chr_pos_marf
 
 
-	def getChrPosList(self):
+	def get_chr_pos_list(self, cache_list=False):
+		if cache_list:
+			try:
+				chr_pos_list = self.chr_pos_list
+				if len(chr_pos_list) > 0:
+					return chr_pos_list
+				else:
+					raise Exception
+			except Exception:
+				pass
 		chr_pos_list = []
-		for i in range(0, len(self.snpsDataList)):
-			snpsd = self.snpsDataList[i]
-			chr = i + 1
-			for pos in snpsd.positions:
-				chr_pos_list.append((chr, pos))
+		for chrom, snpsd in izip(self.chromosomes, self.snpsDataList):
+			chr_pos_list += zip([chrom] * len(snpsd.positions), snpsd.positions)
+		if cache_list:
+			self.chr_pos_list = chr_pos_list
 		return chr_pos_list
+
+	def getChrPosList(self):
+		return self.get_chr_pos_list()
 
 	def get_chr_list(self):
 		chr_list = []
@@ -3021,28 +3932,33 @@ class SNPsDataSet:
 		return chr_list
 
 
+	def get_chromosome_ends(self):
+		chr_ends = []
+		for snpsd in self.snpsDataList:
+			chr_ends.append(snpsd.positions[-1])
+		return chr_ends
+
+
+	def get_genome_length(self):
+		return sum(self.get_chromosome_ends())
+
 	def get_mafs(self):
 		"""
 		Returns the mafs and marfs as a dictionary.
+		
+		types: classes, diploid_ints
 		"""
-		if not self.data_format:
-			binary = True
-		else:
-			if  self.data_format == 'binary':
-				binary = True
-			else:
-				binary = False
-
 		maf_list = []
 		marf_list = []
 		for snpsd in self.snpsDataList:
-			r = snpsd.get_mafs(binary=binary)
+			r = snpsd.get_mafs(type=self.data_format)
 			maf_list.extend(r["mafs"])
 			marf_list.extend(r["marfs"])
 		print "Finished calculating MAFs."
 		return {"mafs":maf_list, "marfs":marf_list}
 
-	def getChrPosSNPList(self):
+
+	def get_chr_pos_snp_list(self):
 		chr_pos_snp_list = []
 		for i in range(0, len(self.snpsDataList)):
 			snpsd = self.snpsDataList[i]
@@ -3052,6 +3968,10 @@ class SNPsDataSet:
 				snp = snpsd.snps[j]
 				chr_pos_snp_list.append((chr, pos, snp))
 		return chr_pos_snp_list
+
+	def getChrPosSNPList(self):
+		return self.get_chr_pos_snp_list()
+
 
 
 	def get_region_pos_snp_dict(self, chromosome, start_pos=None, end_pos=None):
@@ -3076,6 +3996,120 @@ class SNPsDataSet:
 			positions = snpsd.positions[i:]
 			snps = snpsd.snps[i:]
 		return {'positions':positions, 'snps':snps}
+
+
+
+	def get_cand_genes_snp_priors(self, cand_genes, radius=10000, num_exp_causal=1.0, cg_prior_fold_incr=50,
+					method_type='sum_all_priors'):
+		"""
+		Returns SNP priors
+		"""
+		import bisect
+		chr_pos_list = self.getChrPosList()
+		num_snps = len(chr_pos_list)
+		i = 0
+		gene_chr_pos_list = sorted([(gene.chromosome, gene.startPos, gene.endPos) for gene in cand_genes])
+		num_cgs = len(gene_chr_pos_list)
+		cg_snp_indices = []
+		for gene_chr, gene_start_pos, gene_end_pos in gene_chr_pos_list:
+			start_i = bisect.bisect(chr_pos_list, (gene_chr, gene_start_pos - radius - 1))
+			stop_i = bisect.bisect(chr_pos_list, (gene_chr, gene_end_pos + radius + 1))
+			cg_snp_indices.extend(range(start_i, stop_i))
+		cg_snp_indices = sorted(list(set(cg_snp_indices)))
+		if method_type == 'sum_all_priors':
+			pi_0 = num_exp_causal / num_snps #Basis prior
+			pi_1 = pi_0 * cg_prior_fold_incr #Cand. gene prior
+		elif method_type == 'sum_base_priors':
+			pi_0 = num_exp_causal / (num_snps - num_cgs + cg_prior_fold_incr * num_cgs) #Basis prior
+			pi_1 = pi_0 * cg_prior_fold_incr #Cand. gene prior
+		else:
+			raise NotImplementedError
+		snp_priors = sp.repeat(pi_0, num_snps)
+		for i in cg_snp_indices:
+			snp_priors[i] = pi_1
+		return snp_priors.tolist()
+
+
+
+
+	def get_snp_priors(self, cpp_list, cand_genes=None, radius=25000, num_exp_causal=10.0, cg_prior_fold_incr=10):
+		"""
+		Takes a list of SNPs/markers with some priors, and extrapolates that to the SNPs in the data.
+		"""
+		import bisect
+		cpp_list.sort()
+		l = map(list, zip(*cpp_list))
+		priors = l[2]
+		cp_list = self.getChrPosList()
+		snp_priors = []
+		snp_i = 0
+		p_i = 0
+
+
+		#Do chromosome by chromosome..
+		for chrom in [1, 2, 3, 4, 5]:
+			p_i = bisect.bisect(cpp_list, (chrom, 0, 0))
+			snp_i = 0
+			positions = self.snpsDataList[chrom - 1].positions
+			num_snps = len(positions)
+			pos = positions[snp_i]
+			chrom_1, pos_1, prior_1 = cpp_list[p_i]
+			chrom_2, pos_2, prior_2 = cpp_list[p_i + 1]
+			while snp_i < num_snps and p_i < len(cpp_list) - 2 and chrom_2 == chrom:
+				chrom_1, pos_1, prior_1 = cpp_list[p_i]
+				chrom_2, pos_2, prior_2 = cpp_list[p_i + 1]
+				if chrom_2 == chrom:
+					while snp_i < num_snps - 1 and pos <= pos_1:
+						snp_priors.append(prior_1)
+						snp_i += 1
+						pos = positions[snp_i]
+
+					while snp_i < num_snps - 1 and pos_1 < pos <= pos_2:
+						d = pos_2 - pos_1
+						s = (pos - pos_1) / float(d)
+						snp_priors.append(prior_1 * (1 - s) + prior_2 * s)
+						snp_i += 1
+						pos = positions[snp_i]
+
+
+				p_i += 1
+				chrom_1, pos_1, prior_1 = cpp_list[p_i]
+				chrom_2, pos_2, prior_2 = cpp_list[p_i + 1]
+
+			if chrom_2 != chrom: #The chromosome is ending
+				while snp_i < num_snps:
+					snp_priors.append(prior_1)
+					snp_i += 1
+
+			elif p_i >= len(cpp_list) - 2: #It's finishing
+				while snp_i < num_snps:
+					snp_priors.append(prior_2)
+					snp_i += 1
+
+
+		snp_priors = sp.array(snp_priors)
+
+		snp_priors = 1000 * (snp_priors - snp_priors.min()) / (snp_priors.max() - snp_priors.min()) + 1
+		if cand_genes:
+			print 'Now for candidate genes'
+			chr_pos_list = self.getChrPosList()
+			num_snps = len(chr_pos_list)
+			i = 0
+			gene_chr_pos_list = sorted([(int(gene.chromosome), gene.startPos, gene.endPos) for gene in cand_genes])
+			num_cgs = len(gene_chr_pos_list)
+			cg_snp_indices = []
+			for gene_chr, gene_start_pos, gene_end_pos in gene_chr_pos_list:
+				start_i = bisect.bisect(chr_pos_list, (gene_chr, gene_start_pos - radius - 1))
+				stop_i = bisect.bisect(chr_pos_list, (gene_chr, gene_end_pos + radius + 1))
+				cg_snp_indices.extend(range(start_i, stop_i))
+			cg_snp_indices = sorted(list(set(cg_snp_indices)))
+			snp_priors[cg_snp_indices] = snp_priors[cg_snp_indices] * cg_prior_fold_incr
+
+		snp_priors = (num_exp_causal * snp_priors / sum(snp_priors)).tolist()
+		print max(snp_priors), min(snp_priors)
+
+		return snp_priors
+
 
 
 
@@ -3191,12 +4225,12 @@ class SNPsDataSet:
 
 	def filter_maf_snps(self, maf, maf_ub=1):
 		for snpsd in self.snpsDataList:
-			snpsd.snpsFilterMAF([maf, maf_ub])
+			snpsd.snpsFilterMAF([maf, maf_ub], type=self.data_format)
 
 
 	def filter_mac_snps(self, mac_threshold=15):
 		for snpsd in self.snpsDataList:
-			snpsd.filter_mac(mac_threshold)
+			snpsd.filter_mac(mac_threshold, data_format=self.data_format)
 
 
 	def filter_monomorphic_snps(self):
@@ -3205,6 +4239,9 @@ class SNPsDataSet:
 
 
 	def filter_accessions(self, accessions_to_keep, use_accession_names=False):
+		"""
+		Filter accessions, leaving the remaining accession in the given order.
+		"""
 		assert len(accessions_to_keep) != 0, "Can't remove all ecotypes."
 		if use_accession_names:
 			import phenotypeData as pd
@@ -3285,7 +4322,7 @@ class SNPsDataSet:
 			snpsd.snps = new_snps
 		return snpsd
 
-	def merge_snps_data(self, sd):
+	def merge_snps_data(self, sd, acc_merge_type='intersection', error_threshold=0.1, discard_error_threshold=0.1):
 		"""
 		Merges data using _SnpsData_.merge_data
 		"""
@@ -3295,7 +4332,8 @@ class SNPsDataSet:
 			self.new_snps_data_list = []
 			for sd1, sd2, chromosome in zip(self.snpsDataList, sd.snpsDataList, self.chromosomes):
 				print "Merging data on chromosome %s." % (str(chromosome))
-				sd1.merge_data(sd2)
+				sd1.merge_data(sd2, acc_merge_type=acc_merge_type, error_threshold=error_threshold,
+						discard_error_threshold=discard_error_threshold)
 				self.new_snps_data_list.append(sd1)
 			self.accessions = self.new_snps_data_list[0].accessions
 			self.snpsDataList = self.new_snps_data_list
@@ -3444,7 +4482,7 @@ def r2(freqs):
 	if divisor != 0:
 		return D * D / divisor
 	else:
-		return - 1
+		return -1
 
 
 
@@ -3674,8 +4712,140 @@ def get_bergelssons_region_datasets():
 #	cm_id = sd_t54.add_to_db('cm54_only_non_UK',method_description='',data_description='',comment='')
 #	sd_t54.writeToFile('/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t'+str(cm_id)+'.csv')
 
+def test_ibd_kinship():
+	import dataParsers as dp
+	import linear_models as lm
+	sd = dp.load_250K_snps()
+	ibd_k = sd.get_ibd_kinship_matrix()
+	lm.save_kinship_to_file(env.env['data_dir'] + 'ibd_2_kinship_matrix_cm75.pickled', ibd_k, sd.accessions)
+
+
+
+
+def _merge_imputed_and_250K_data_():
+	import  dataParsers as dp
+	import tair_converter as tc
+	sd_72 = dp.load_snps_call_method(72, 'binary')
+	sd_76 = dp.load_snps_call_method(76, 'binary')
+	sd_72.merge_snps_data(sd_76)
+	sd_72.writeToFile('/tmp/test_merged_data.csv')
+
+
+
+def _test_prior_():
+	cpp_list = []
+	with open('/Users/bjarni.vilhjalmsson/Projects/Data/DTF1.scan.tsv') as f:
+		print f.next()
+		for l in f:
+			line = l.split()
+			cpp_list.append((int(line[1]), int(line[2]), float(line[4])))
+	import dataParsers as dp
+	sd = dp.load_snps_call_method()
+	return sd.get_snp_priors(cpp_list)
+
+
+def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
+        import scipy.cluster.hierarchy as hc
+        import pylab
+        import phenotypeData
+        e_dict = phenotypeData.get_ecotype_id_info_dict()
+        #print e_dict
+        labels = []
+        for et_i, et in enumerate(ets):
+                try:
+                        s1 = unicode(e_dict[int(et)][0], 'iso-8859-1')
+                        if label_values != None:
+                                s2 = unicode(' %s' % str(label_values[et_i]))
+                        else:
+                                s2 = unicode('(%0.1f,%0.1f)' % (e_dict[int(et)][2], e_dict[int(et)][3]))
+                        s = s1 + s2
+                except Exception, err_s:
+                        print err_s
+                        s = str(et)
+                labels.append(s)
+        if verbose:
+                print "Plotting tree for SNPs:"
+        Z = hc.average(K)
+        pylab.figure(figsize=(24, 15))
+        pylab.axes([0.03, 0.08, 0.96, 0.91])
+        dend_dict = hc.dendrogram(Z, leaf_font_size=7, labels=labels)
+        xmin, xmax = pylab.xlim()
+        xrange = xmax - xmin
+        ymin, ymax = pylab.ylim()
+        yrange = ymax - ymin
+        pylab.axis([xmin - 0.01 * xrange, xmax + 0.01 * xrange, ymin - 0.02 * yrange, ymax + 0.02 * yrange])
+        pylab.savefig(tree_file, format='pdf')
+        pylab.clf()
+        if verbose:
+                print "Done plotting tree, saved in file:", tree_file, "\n"
+
+
+
+def _plot_sweep_trees_():
+        import dataParsers as dp
+	with open('/home/GMI/bjarni.vilhjalmsson/Projects/data/sweepPosNorth.csv') as f:
+		print f.next()
+		for l in f:
+			line = map(str.strip, l.split(','))
+			chrom = int(line[1])
+			start_pos = float(line[2])
+			end_pos = float(line[3])
+			sd = dp.load_snps_call_method(78)
+			sd = SNPsDataSet(snpsds=[sd.get_region_snpsd(chrom, start_pos=start_pos, end_pos=end_pos)],
+						chromosomes=[chrom], data_format='binary')
+			sd.plot_tree('%stree_chr%d_%f_%f.pdf' % (env.env['results_dir'], chrom, start_pos, end_pos))
+
+
+def _plot_interesting_snps_():
+	import dataParsers as dp
+	sd = dp.load_snps_call_method(78)
+	with open(env.env['phen_dir'] + 'swe_pair_mac15_coverage_filter2.csv', 'r') as f:
+		print f.next()
+		for l in f:
+			line = map(str.strip, l.split(','))
+			cps = line[0].split(':')
+                        cp1 = map(int, cps[0].split('_'))
+			png_file_1 = env.env['results_dir'] + 'weird_snp_geographical_plot_%d_%d.png' % (cp1[0], cp1[1])
+                        cp2 = map(int, cps[1].split('_'))
+			png_file_2 = env.env['results_dir'] + 'weird_snp_geographical_plot_%d_%d.png' % (cp2[0], cp2[1])
+			try:
+				sd.plot_snp_map(cp1[0], cp1[1], png_file=png_file_1, map_type='sweden')
+			except Exception, err_str:
+				print 'failed for:', cp1
+			try:
+				sd.plot_snp_map(cp2[0], cp2[1], png_file=png_file_2, map_type='sweden')
+			except Exception, err_str:
+				print 'failed for:', cp2
+
+
+
+
 if __name__ == "__main__":
-	import dataParsers
+        _plot_interesting_snps_()
+#	sd = dp.load_snps_call_method(78)
+#        sd.plot_tree(env.env['results_dir'] + 'tree_full.pdf')
+#        sd_chr1 = SNPsDataSet(snpsds=[sd.snpsDataList[0]], chromosomes=[1], data_format='binary')
+#        sd_chr1.plot_tree(env.env['results_dir'] + 'tree_chr1.pdf')
+#        sd_0_19 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=0, end_pos=19000000)], chromosomes=[1], data_format='binary')
+#        sd_0_19.plot_tree(env.env['results_dir'] + 'tree_chr1_0_19.pdf')
+#        sd = dp.load_snps_call_method(78)
+#        sd_19_20 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=19000000, end_pos=20000000)], chromosomes=[1], data_format='binary')
+#        sd_19_20.plot_tree(env.env['results_dir'] + 'tree_chr1_19_20.pdf')
+#        sd = dp.load_snps_call_method(78)
+#        sd_20_21 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=20000000, end_pos=21000000)], chromosomes=[1], data_format='binary')
+#        sd_20_21.plot_tree(env.env['results_dir'] + 'tree_chr1_20_21.pdf')
+#        sd = dp.load_snps_call_method(78)
+#        sd_21_22 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=21000000, end_pos=22000000)], chromosomes=[1], data_format='binary')
+#        sd_21_22.plot_tree(env.env['results_dir'] + 'tree_chr1_21_22.pdf')
+#        sd = dp.load_snps_call_method(78)
+#        sd_22_23 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=22000000, end_pos=23000000)], chromosomes=[1], data_format='binary')
+#        sd_22_23.plot_tree(env.env['results_dir'] + 'tree_chr1_22_23.pdf')
+#        sd = dp.load_snps_call_method(78)
+#        sd_21_31 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=21000000, end_pos=31000000)], chromosomes=[1], data_format='binary')
+#        sd_21_31.plot_tree(env.env['results_dir'] + 'tree_chr1_21_31.pdf')
+
+	#_test_prior_()
+#	import dataParsers
 #	d2010_file = "/Users/bjarnivilhjalmsson/Projects/Data/2010/2010_073009.csv"
 #	d2010_sd = dataParsers.parse_snp_data(d2010_file,id="2010_data")
 #	d250k_file = "/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t43_192.csv"
@@ -3684,7 +4854,6 @@ if __name__ == "__main__":
 #	d2010_sd.writeToFile("/tmp/test.csv")
 #       get_AW_common_dataset()
 #	write_out_01_dataset()
-	get_bergelssons_region_datasets()
 
 
 

@@ -3,6 +3,19 @@ Various useful functions.
 """
 import numpy as np
 
+def parse_ids(arg_str):
+	t_ids = arg_str.split(',')
+	ids = []
+	for s in t_ids:
+		if '-' in s:
+			id_range = map(int, s.split('-'))
+		        for id in range(id_range[0], id_range[1] + 1):
+		        	ids.append(id)
+		else:
+			ids.append(int(s))
+	return ids
+
+
 def getRanks(values, withTies=True):
 	"""
 	returns ranks (large values w. large ranks)
