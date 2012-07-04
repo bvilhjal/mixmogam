@@ -2280,12 +2280,9 @@ def lin_reg_step(phen_vals, sd, cof_chr_pos_list, progress_file_writer=None, plo
 
 
 
-def emmax_step(phen_vals, sd, K, cof_chr_pos_list, eig_L=None, eig_R=None, progress_file_writer=None, plot_prefix=None,
+def mm_step(phen_vals, sd, K, cof_chr_pos_list, eig_L=None, eig_R=None, progress_file_writer=None, plot_prefix=None,
         emma_num=100):
     """
-    EMMAX single SNPs
-    
-    Returns various stats useful for stepwise regression.
     """
 
     import gwaResults as gr
@@ -2408,12 +2405,12 @@ def emmax_step(phen_vals, sd, K, cof_chr_pos_list, eig_L=None, eig_R=None, progr
 
 
 
-def emmax_step_wise(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwards=True,
+def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwards=True,
         local=False, cand_gene_list=None, plot_xaxis=True, with_qq_plots=True, sign_threshold=None,
         log_qq_max_val=5, highlight_loci=None, save_pvals=False, pval_file_prefix=None, snp_priors=None,
         K2=None, snp_choose_criteria='pval', emma_num=0, markersize=3, chrom_col_map=None, **kwargs):
     """
-    Run step-wise EMMAX forward-backward.
+    Run step-wise linare mixed model forward-backward.
     """
     import gwaResults as gr
     if local:

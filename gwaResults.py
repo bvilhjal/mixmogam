@@ -1256,7 +1256,7 @@ class Result(object):
         p_med = agr.calc_median(self.snp_results['scores'], exp_median=exp_median)
         stat_text = 'D=%0.8f,  M=%0.8f' % (ks_stat['D'], p_med)
         quantiles = agr.get_quantiles(self.snp_results['scores'])
-        agr.simple_qqplot([quantiles], file_prefix + '_png', text=stat_text)
+        agr.simple_qqplot([quantiles], file_prefix + '.png', text=stat_text)
         log_quantiles = agr.get_log_quantiles(self.snp_results['scores'])
         agr.simple_log_qqplot([log_quantiles], file_prefix + '_log.png', text=stat_text)
 

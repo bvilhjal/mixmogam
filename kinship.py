@@ -9,7 +9,7 @@ import h5py
 import itertools as it
 
 def calc_ibs_kinship(snps, snps_data_format='binary', snp_dtype='int8', dtype='single',
-                     chunk_size=None):
+                     chunk_size=None, scaled=True):
     """
     Calculates IBS kinship
     
@@ -43,14 +43,17 @@ def calc_ibs_kinship(snps, snps_data_format='binary', snp_dtype='int8', dtype='s
             raise NotImplementedError
         sys.stdout.write('\b\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * chunk_size) / num_snps))))
         sys.stdout.flush()
+    print ''
     if snps_data_format == 'diploid_int':
         k_mat = k_mat / float(num_snps) + sp.eye(num_lines)
     elif snps_data_format == 'binary':
         k_mat = k_mat / (2 * float(num_snps)) + 0.5
+    if scaled:
+        k_mat = scale_k(k_mat)
     return k_mat
 
 
-def calc_ibd_kinship(snps, dtype='single'):
+def calc_ibd_kinship(snps, dtype='single',scaled=True):
     num_snps = len(snps)
     n_indivs = len(snps[0])
     k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
@@ -63,6 +66,8 @@ def calc_ibd_kinship(snps, dtype='single'):
         sys.stdout.write('\b\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * n_indivs) / num_snps))))
         sys.stdout.flush()
     k_mat = k_mat / float(num_snps)
+    if scaled:
+        k_mat = scale_k(k_mat)
     return k_mat
 
 
