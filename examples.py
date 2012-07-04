@@ -1,5 +1,7 @@
 """
 Examples for how to perform GWAS using mixed models, and stepwise mixed models.
+
+To be finished
 """
 
 def load_athalina_genotypes():
