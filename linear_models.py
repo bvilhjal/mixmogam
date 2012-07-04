@@ -3271,14 +3271,5 @@ def local_vs_global_gene_mm_scan(y, sd, file_prefix='/tmp/temp', radius=20000, k
 
 
 if __name__ == "__main__":
-#    import env
-#    kinship_file_name = env.env['data_dir'] + 'kinship_matrix_cm75.pickled'
-#    k, k_accessions = cPickle.load(open(kinship_file_name))
-#    save_kinship_in_text_format(env.env['data_dir'] + 'kinship_matrix_cm75.csv', k, k_accessions)
-    #_emmax_local_global_kinship_test_(5)
-    #for i in range(1, 12):
-    #    perform_human_emmax(i)
-    #_test_joint_analysis_()
-    #_test_phyB_snps_()
-    #test_mtmm_rna_seq()
+
     pass
