@@ -1901,56 +1901,6 @@ class Result(object):
                     d[attr] = getattr(self, attr)
             with open(pickle_file, 'wb') as f:
                 cPickle.dump(d, f)
-#        if auto_hdf5_on or only_hdf5:
-#            pass
-
-#        except Exception, err_str:
-#            print 'Failed writing the resultfile:', err_str
-#            print 'Make sure the given path is correct, and you have write rights.'
-
-
-#class SNP(object):
-#    """
-#    A class to represent a SNP. 
-#
-#    It's used only when analysing a SNP.
-#    """
-#
-#    def __init__(self, position, chromosome, accessions=None, alleles=None, snpsds=None, score=None, rank=None, regionRank=None):
-#        self.position = position
-#        self.chromosome = chromosome
-#
-#        self.alleles = None
-#        self.accessions = None
-#        self.score = None
-#        self.rank = None
-#        self.regionRank = None
-#
-#        if not alleles and snpsds:
-#            self._getAllele_(snpsds)
-#        else:
-#            self.alleles = alleles
-#        if accessions:
-#            self.accessions = accessions
-#        if score:
-#            self.score = score
-#        if rank:
-#            self.rank = rank
-#        if regionRank:
-#            self.regionRank = regionRank
-#
-#    def _getAllele_(self, snpsds):
-#        chr = self.chromosome - 1
-#        snpsd = snpsds[chr]
-#        self.snpsdIndex = -1
-#        self.alleles = None
-#        for i in range(0, len(snpsd.positions)):
-#            if snpsd.position == snpsd.positions[i]:
-#                self.alleles = snpsd.snps[i]
-#                self.snpsdIndex = i
-#                break
-#        if not self.alleles:
-#            print "The corresponding allele was not found in the data."
 
 
 
