@@ -82,7 +82,7 @@ def mixed_model_gwas(phenotype_id=5, pvalue_file = 'mm_results.pvals',
     #Calculate kinship (IBS)
     K = kinship.calc_ibs_kinship(sd.get_snps())
     
-    #Perform linear regression GWAS
+    #Perform mixed model GWAS
     mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
     
     #Construct a results object
@@ -120,7 +120,7 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix = 'mlmm_re
     #Calculate kinship (IBS)
     K = kinship.calc_ibs_kinship(sd.get_snps())
     
-    #Perform linear regression GWAS
+    #Perform multiple loci mixed model GWAS
     mlmm_results = lm.mlmm(phend.get_values(phenotype_id), K, sd=sd, 
                          num_steps=max_num_steps, file_prefix=result_files_prefix,
                          save_pvals=True,pval_file_prefix=result_files_prefix,)
