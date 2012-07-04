@@ -144,7 +144,7 @@ def parse_raw_snps_data(datafile, target_format='nucleotides', deliminator=",", 
     chromosomes = sorted(pos_snps_dict.keys())
     for chrom in chromosomes:
         snps_data_list.append(RawSnpsData(accessions=accessions, positions=pos_snps_dict[chrom]['positions'], \
-                snps=pos_snps_dict[chrom]['snps'], chromosome=chrom, arrayIds=array_ids, id=id))
+                snps=pos_snps_dict[chrom]['snps'], chromosome=chrom, arrayIds=array_ids))
 
     if target_format == 'binary':
         print "Converting raw SNPs data to binary SNPs."
@@ -312,18 +312,18 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
 
 
 
-def parse_snp_data(data_file, delimiter=",", missingVal='NA', format='nucleotides', filter=1, 
+def parse_snp_data(data_file, delimiter=",", missingVal='NA', data_format='binary', filter=1, 
                    useDecoder=True, look_for_binary=True, filter_accessions=None,
                    use_pickle=True):
     """
     Load snps data..
     """
-    if format == 'binary' and look_for_binary:
+    if data_format == 'binary' and look_for_binary:
         print 'Looking for binary SNPs'
         if os.path.isfile(data_file) or os.path.isfile(data_file + '.pickled'):
             sd = parse_numerical_snp_data(data_file, delimiter=delimiter, missing_val=missingVal,
                         filter=filter, filter_accessions=filter_accessions,
-                        use_pickle=use_pickle, dtype='int8', data_format=format)
+                        use_pickle=use_pickle, dtype='int8', data_format=data_format)
         else: #Try nucleotide format
             sd = parse_snp_data(data_file , format='nucleotides', delimiter=delimiter,
                           missingVal=missingVal, filter=filter, look_for_binary=False,
@@ -337,19 +337,19 @@ def parse_snp_data(data_file, delimiter=",", missingVal='NA', format='nucleotide
 #                f = open(pickle_file, 'wb')
 #                cPickle.dump(sd, f, protocol=2)
 #                f.close()
-    elif format in ['int', 'diploid_int']:
+    elif data_format in ['int', 'diploid_int']:
         sd = parse_numerical_snp_data(data_file, delimiter=delimiter, missing_val=missingVal,
                     filter=filter, filter_accessions=filter_accessions,
-                    use_pickle=use_pickle, dtype='int8', data_format=format)
-    elif format == 'float':
+                    use_pickle=use_pickle, dtype='int8', data_format=data_format)
+    elif data_format == 'float':
         sd = parse_numerical_snp_data(data_file, delimiter=delimiter, missing_val=missingVal,
                     filter=filter, filter_accessions=filter_accessions,
-                    use_pickle=use_pickle, dtype='float32', data_format=format)
-    elif format == 'nucleotides':
+                    use_pickle=use_pickle, dtype='float32', data_format=data_format)
+    elif data_format == 'nucleotides':
         print 'Looking for nucleotide SNPs'
         (snpsds, chromosomes) = parse_raw_snps_data(data_file, deliminator=delimiter, missing_val=missingVal,
-                                debug_filter=filter, id=id, return_chromosomes=True)
-        sd = SNPsDataSet(snpsds, chromosomes, data_format=format)
+                                debug_filter=filter, return_chromosomes=True)
+        sd = SNPsDataSet(snpsds, chromosomes, data_format=data_format)
     else:
         print "Unknown file format!"
         raise Exception()
@@ -647,7 +647,7 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
 #    if os.path.isfile(nt_data_file):
 #        print 'Found data file, loading and then attempting to convert to %s format' % data_format
 #        (snpsds, chromosomes) = parse_raw_snps_data(nt_data_file, deliminator=',', missing_val='',
-#                            debug_filter=debug_filter, id=id, return_chromosomes=True)
+#                            debug_filter=debug_filter, return_chromosomes=True)
 #        sd = SNPsDataSet(snpsds, chromosomes, data_format='nucleotides')
 #        sd.convert_data_format(data_format)
 #        data_file = file_prefix + 'all_chromosomes_%s.csv' % data_format
@@ -663,7 +663,7 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
 #                nt_data_file = file_prefix + 'chr_%d_nucleotides_mac0.csv' % chrom
 #                (snpsds, chromosomes) = parse_raw_snps_data(nt_data_file, deliminator=',',
 #                                    missing_val='N', debug_filter=debug_filter,
-#                                    id=id, return_chromosomes=True)
+#                                    return_chromosomes=True)
 #                sd = SNPsDataSet(snpsds, chromosomes, data_format='nucleotides')
 #                sd.convert_data_format(data_format)
 #                data_file = file_prefix + 'chr_%d_%s_mac0.csv' % (chrom, data_format)

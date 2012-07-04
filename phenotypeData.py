@@ -1,4 +1,3 @@
-from env import *
 import itertools as it
 import sys
 try:
