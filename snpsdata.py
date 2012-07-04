@@ -7,7 +7,6 @@ Bjarni Vilhjalmsson, bvilhjal@usc.edu
 """
 
 import sys, warnings
-import env
 from itertools import *
 import bisect
 import h5py
@@ -270,20 +269,6 @@ class _SnpsData_(object):
         self.positions.append(position)
 
 
-    def _convert_to_tg_ecotypes_(self):
-        import phenotypeData as pd
-        e_dict = pd._getEcotype2TgEcotypeDict_()
-        new_ecotypes = []
-        conversion_count = 0
-        for et in self.accessions:
-            if int(et) != e_dict[int(et)]:
-                conversion_count += 1
-            new_ecotypes.append(str(e_dict[int(et)]))
-        self.accessions = new_ecotypes
-        if conversion_count:
-            print conversion_count, "ecotypes were converted to tg_ecotypes."
-
-
     def removeAccessions(self, accessions, arrayIds=None):
         """
         Removes accessions from the data.
@@ -317,29 +302,6 @@ class _SnpsData_(object):
             self.arrayIds = newArrayIds
 
 
-    def remove_accessions(self, accessions_to_keep, use_accession_names=False):
-        """
-        Uses accession names!
-        """
-
-        if use_accession_names:
-            import phenotypeData as pd
-            ad = pd._getAccessionToEcotypeIdDict_(accessions_to_keep)
-            ecotypes = []
-            for acc in accessions_to_keep:
-                ecotypes.append(ad[acc])
-        else:
-            ecotypes = accessions_to_keep
-
-        indices_to_keep = []
-        str_accessions = map(str, self.accessions)
-        for e in ecotypes:
-            try:
-                indices_to_keep.append(str_accessions.index(str(e)))
-            except:
-                pass
-
-        self.removeAccessionIndices(indices_to_keep)
 
 
     def removeAccessionIndices(self, indicesToKeep):
@@ -708,85 +670,84 @@ class RawSnpsData(_SnpsData_):
 
 
 
-    def impute_data_region(self, reference_snpsd, window_count=100, window_size=None, verbose=False, **kwargs):
-        """
-        Impute any NA SNPs.
-        """
-        import ImputeSNPs as imp
-        import tempfile, copy
-        if window_size:
-            start_pos = max(0, self.positions[0] - window_size)
-            end_pos = self.positions[-1] + window_size
-            snpsd = reference_snpsd.get_region_snpsd(start_pos, end_pos)
-        else:
-            snpsd = copy.deepcopy(reference_snpsd)
-        if (not window_count) and window_size:
-            i = 0
-            while i < len(snpsd.positions) and snpsd.positions[i] < self.positions[0]:
-                i += 1
-            suffix_count = i
-            i = 1
-            while i >= len(snpsd.positions) and snpsd.positions[len(snpsd.positions) - i] > self.positions[-1]:
-                i += 1
-            window_count = max(suffix_count + 1, i)
-
-        snpsd.mergeDataUnion(self, priority=2, unionType=3, verbose=verbose)
-        snpsd.na_ambigious_calls()
-        snpsd.onlyBinarySnps()
-        print snpsd.snps
-        print snpsd.accessions
-        print len(snpsd.accessions), len(set(snpsd.accessions))
-        tmpFile1 = tempfile.mkstemp()
-        os.close(tmpFile1[0])
-        tmpFile2 = tempfile.mkstemp()
-        os.close(tmpFile2[0])
-
-        if verbose:
-            print "Preparing data in", tmpFile1[1]
-        imp.writeAsNputeFile(snpsd, tmpFile1[1])
-        imp.checkNputeFile(tmpFile1[1])
-        nputeCmd = "python " + imp.path_NPUTE + "NPUTE.py -m 0 -w " + str(window_count) + " -i " + str(tmpFile1[1]) + " -o " + str(tmpFile2[1])
-        if verbose:
-            print "Imputing data..."
-            print nputeCmd
-        os.system(nputeCmd)
-        if verbose:
-            print "Imputation done!"
-
-        snpsd = imp.readNputeFile(tmpFile2[1], snpsd.accessions, snpsd.positions)
-        self.mergeDataUnion(snpsd, priority=2)
-        os.remove(tmpFile1[1])
-        os.remove(tmpFile2[1])
-
-
-
-    def impute_data(self, verbose=True):
-        """
-        Impute any NAs in the data.
-        """
-        import ImputeSNPs as imp
-        import tempfile
-        tmpFile1 = tempfile.mkstemp()
-        os.close(tmpFile1[0])
-        tmpFile2 = tempfile.mkstemp()
-        os.close(tmpFile2[0])
-
-        if verbose:
-            print "Preparing data in", tmpFile1[1]
-        imp.writeAsNputeFile(self, tmpFile1[1])
-        imp.checkNputeFile(tmpFile1[1])
-        nputeCmd = "python " + imp.path_NPUTE + "NPUTE.py -m 0 -w 30 -i " + str(tmpFile1[1]) + " -o " + str(tmpFile2[1])
-        if verbose:
-            print "Imputing data..."
-            print nputeCmd
-        os.system(nputeCmd)
-        if verbose:
-            print "Imputation done!"
-#        pdb.set_trace()
-        snpsd = imp.readNputeFile(tmpFile2[1], self.accessions, self.positions)
-        self.snps = snpsd.snps
-        os.remove(tmpFile1[1])
-        os.remove(tmpFile2[1])
+#    def impute_data_region(self, reference_snpsd, window_count=100, window_size=None, verbose=False, **kwargs):
+#        """
+#        Impute any NA SNPs.
+#        """
+#        import ImputeSNPs as imp
+#        import tempfile, copy
+#        if window_size:
+#            start_pos = max(0, self.positions[0] - window_size)
+#            end_pos = self.positions[-1] + window_size
+#            snpsd = reference_snpsd.get_region_snpsd(start_pos, end_pos)
+#        else:
+#            snpsd = copy.deepcopy(reference_snpsd)
+#        if (not window_count) and window_size:
+#            i = 0
+#            while i < len(snpsd.positions) and snpsd.positions[i] < self.positions[0]:
+#                i += 1
+#            suffix_count = i
+#            i = 1
+#            while i >= len(snpsd.positions) and snpsd.positions[len(snpsd.positions) - i] > self.positions[-1]:
+#                i += 1
+#            window_count = max(suffix_count + 1, i)
+#
+#        snpsd.mergeDataUnion(self, priority=2, unionType=3, verbose=verbose)
+#        snpsd.na_ambigious_calls()
+#        snpsd.onlyBinarySnps()
+#        print snpsd.snps
+#        print snpsd.accessions
+#        print len(snpsd.accessions), len(set(snpsd.accessions))
+#        tmpFile1 = tempfile.mkstemp()
+#        os.close(tmpFile1[0])
+#        tmpFile2 = tempfile.mkstemp()
+#        os.close(tmpFile2[0])
+#
+#        if verbose:
+#            print "Preparing data in", tmpFile1[1]
+#        imp.writeAsNputeFile(snpsd, tmpFile1[1])
+#        imp.checkNputeFile(tmpFile1[1])
+#        nputeCmd = "python " + imp.path_NPUTE + "NPUTE.py -m 0 -w " + str(window_count) + " -i " + str(tmpFile1[1]) + " -o " + str(tmpFile2[1])
+#        if verbose:
+#            print "Imputing data..."
+#            print nputeCmd
+#        os.system(nputeCmd)
+#        if verbose:
+#            print "Imputation done!"
+#
+#        snpsd = imp.readNputeFile(tmpFile2[1], snpsd.accessions, snpsd.positions)
+#        self.mergeDataUnion(snpsd, priority=2)
+#        os.remove(tmpFile1[1])
+#        os.remove(tmpFile2[1])
+#
+#
+#    def impute_data(self, verbose=True):
+#        """
+#        Impute any NAs in the data.
+#        """
+#        import ImputeSNPs as imp
+#        import tempfile
+#        tmpFile1 = tempfile.mkstemp()
+#        os.close(tmpFile1[0])
+#        tmpFile2 = tempfile.mkstemp()
+#        os.close(tmpFile2[0])
+#
+#        if verbose:
+#            print "Preparing data in", tmpFile1[1]
+#        imp.writeAsNputeFile(self, tmpFile1[1])
+#        imp.checkNputeFile(tmpFile1[1])
+#        nputeCmd = "python " + imp.path_NPUTE + "NPUTE.py -m 0 -w 30 -i " + str(tmpFile1[1]) + " -o " + str(tmpFile2[1])
+#        if verbose:
+#            print "Imputing data..."
+#            print nputeCmd
+#        os.system(nputeCmd)
+#        if verbose:
+#            print "Imputation done!"
+##        pdb.set_trace()
+#        snpsd = imp.readNputeFile(tmpFile2[1], self.accessions, self.positions)
+#        self.snps = snpsd.snps
+#        os.remove(tmpFile1[1])
+#        os.remove(tmpFile2[1])
 
 
     def compareWith(self, snpsd, withArrayIds=0, verbose=True, heterozygous2NA=False):
@@ -1974,152 +1935,150 @@ class SNPsDataSet:
 
 
 
-    def add_to_db(self, short_name, method_description='', data_description='', comment='', **kwargs):
-        """
-        Other possible keyword args are parent_id, accession_set_id ,imputed ,unique_ecotype 
-        """
-        import dbutils
-        conn = dbutils.connect_to_papaya()
-        cursor = conn.cursor()
-
-
-        #Checking whether data is already inserted...
-        sql_statement = "SELECT id FROM stock_250k.call_method WHERE short_name='%s';" % (short_name)
-        print sql_statement
-        cursor.execute(sql_statement)
-        row = cursor.fetchone()
-        print row
-        if row:
-            print "Data is already inserted in DB.  File will however be updated."
-            call_method_id = int(row[0])
-            filename = '/Network/Data/250k/db/dataset/call_method_%d.tsv' % call_method_id
-        else:
-
-            #Inserting data
-            sql_statement = "INSERT INTO stock_250k.call_method (short_name,method_description,data_description,comment"
-            for k in kwargs:
-                sql_statement += ',%s' % k
-            sql_statement += ") VALUES ('%s','%s','%s','%s'" % (short_name, method_description, data_description, comment)
-            for k in kwargs:
-                sql_statement += ',%s' % str(kwargs[k])
-            sql_statement += ');'
-            print sql_statement
-            cursor.execute(sql_statement)
-
-            #Getting method_id
-            sql_statement = "SELECT id FROM stock_250k.call_method WHERE short_name='%s';" % (short_name)
-            print sql_statement
-            cursor.execute(sql_statement)
-            row = cursor.fetchone()
-            call_method_id = int(row[0])
-            filename = '/Network/Data/250k/db/dataset/call_method_%d.tsv' % call_method_id
-
-            #Updating the filename
-            sql_statement = "UPDATE stock_250k.call_method SET filename='%s' WHERE id=%d" % (filename, call_method_id)
-            print sql_statement
-            cursor.execute(sql_statement)
-
-            print "Committing transaction (making changes permanent)."
-            conn.commit()
-
-        print "Call method id is %d" % call_method_id
-        #Generating Yu's file...
-        self.write_to_file_yu_format(filename)
-
-
-
-        #Generate DB call files...
-        self._generate_db_call_files_(call_method=call_method_id, cursor=cursor, conn=conn)
-
-        #Add SNPs to DB?
-
-
-        cursor.close()
-        conn.close()
-
-        return call_method_id
-
-
-
-
-    def _generate_db_call_files_(self, call_method=None, array_ids=None, file_dir='/Network/Data/250k/db/calls/', cursor=None, conn=None):
-        import os
-        import warnings
-
-        if not array_ids:
-            if not self.array_ids:
-                raise Exception('Array IDs are missing.')
-            else:
-                array_ids = self.array_ids
-        if not call_method:
-            raise Exception("Call method is missing!!")
-        chr_pos_snp_list = self.getChrPosSNPList()
-
-        #Create the call method directory
-        file_dir = file_dir + 'method_' + str(call_method) + '/'
-        if not os.path.lexists(file_dir):
-            os.mkdir(file_dir)
-        else:
-            warnings.warn('Directory already exists: %s' % file_dir)
-
-        #Connect to DB, if needed
-        if not cursor:
-            import dbutils
-            conn = dbutils.connect_to_papaya()
-            cursor = conn.cursor()
-
-        for i, aid in enumerate(array_ids):
-            print "Inserting genotype files into DB."
-            #Checking if it is already in the DB.
-            sql_statement = "SELECT id FROM stock_250k.call_info WHERE array_id=%s AND method_id=%d;"\
-                    % (aid, call_method)
-            print sql_statement
-            cursor.execute(sql_statement)
-            row = cursor.fetchone()
-            if row:
-                'Already in DB. File will be updated.'
-                call_info_id = int(row[0])
-            else:
-                #Insert info
-                sql_statement = "INSERT INTO stock_250k.call_info (array_id, method_id) VALUES (%s,%d);"\
-                        % (aid, call_method)
-                print sql_statement
-                cursor.execute(sql_statement)
-
-                sql_statement = "SELECT id FROM stock_250k.call_info WHERE array_id=%s AND method_id=%d;"\
-                        % (aid, call_method)
-                print sql_statement
-                cursor.execute(sql_statement)
-                row = cursor.fetchone()
-                if row:
-                    call_info_id = int(row[0])
-                print "Committing transaction (making changes permanent)."
-                conn.commit()
-
-            try:
-                #Write to a designated place.
-                file_name = file_dir + str(call_info_id) + "_call.tsv"
-                sql_statement = "UPDATE stock_250k.call_info \
-                         SET filename='%s'\
-                         WHERE id=%d" % (file_name, call_info_id)
-                print sql_statement
-                cursor.execute(sql_statement)
-
-                #Generate file in the right place
-                f = open(file_name, 'w')
-                f.write('SNP_ID\t%s\n' % aid)
-                for (c, p, s) in chr_pos_snp_list:
-                    f.write('%d_%d\t%s\n' % (c, p, s[i]))
-                f.close()
-            except Exception, err_str:
-                print "Couldn't generate call info file, error message:%s" % err_str
-        print "Closing connection."
-        #Close connection
-        if not cursor:
-            cursor.close()
-            conn.close()
-        print "Remember to copy files to papaya, i.e. everything in directory: %s" % file_dir
-
+#    def add_to_db(self, short_name, method_description='', data_description='', comment='', **kwargs):
+#        """
+#        Other possible keyword args are parent_id, accession_set_id ,imputed ,unique_ecotype 
+#        """
+#        conn = dbutils.connect_to_papaya()
+#        cursor = conn.cursor()
+#
+#
+#        #Checking whether data is already inserted...
+#        sql_statement = "SELECT id FROM stock_250k.call_method WHERE short_name='%s';" % (short_name)
+#        print sql_statement
+#        cursor.execute(sql_statement)
+#        row = cursor.fetchone()
+#        print row
+#        if row:
+#            print "Data is already inserted in DB.  File will however be updated."
+#            call_method_id = int(row[0])
+#            filename = '/Network/Data/250k/db/dataset/call_method_%d.tsv' % call_method_id
+#        else:
+#
+#            #Inserting data
+#            sql_statement = "INSERT INTO stock_250k.call_method (short_name,method_description,data_description,comment"
+#            for k in kwargs:
+#                sql_statement += ',%s' % k
+#            sql_statement += ") VALUES ('%s','%s','%s','%s'" % (short_name, method_description, data_description, comment)
+#            for k in kwargs:
+#                sql_statement += ',%s' % str(kwargs[k])
+#            sql_statement += ');'
+#            print sql_statement
+#            cursor.execute(sql_statement)
+#
+#            #Getting method_id
+#            sql_statement = "SELECT id FROM stock_250k.call_method WHERE short_name='%s';" % (short_name)
+#            print sql_statement
+#            cursor.execute(sql_statement)
+#            row = cursor.fetchone()
+#            call_method_id = int(row[0])
+#            filename = '/Network/Data/250k/db/dataset/call_method_%d.tsv' % call_method_id
+#
+#            #Updating the filename
+#            sql_statement = "UPDATE stock_250k.call_method SET filename='%s' WHERE id=%d" % (filename, call_method_id)
+#            print sql_statement
+#            cursor.execute(sql_statement)
+#
+#            print "Committing transaction (making changes permanent)."
+#            conn.commit()
+#
+#        print "Call method id is %d" % call_method_id
+#        #Generating Yu's file...
+#        self.write_to_file_yu_format(filename)
+#
+#
+#
+#        #Generate DB call files...
+#        self._generate_db_call_files_(call_method=call_method_id, cursor=cursor, conn=conn)
+#
+#        #Add SNPs to DB?
+#
+#
+#        cursor.close()
+#        conn.close()
+#
+#        return call_method_id
+#
+#
+#
+#
+#    def _generate_db_call_files_(self, call_method=None, array_ids=None, file_dir='/Network/Data/250k/db/calls/', cursor=None, conn=None):
+#        import os
+#        import warnings
+#
+#        if not array_ids:
+#            if not self.array_ids:
+#                raise Exception('Array IDs are missing.')
+#            else:
+#                array_ids = self.array_ids
+#        if not call_method:
+#            raise Exception("Call method is missing!!")
+#        chr_pos_snp_list = self.getChrPosSNPList()
+#
+#        #Create the call method directory
+#        file_dir = file_dir + 'method_' + str(call_method) + '/'
+#        if not os.path.lexists(file_dir):
+#            os.mkdir(file_dir)
+#        else:
+#            warnings.warn('Directory already exists: %s' % file_dir)
+#
+#        #Connect to DB, if needed
+#        if not cursor:
+#            import dbutils
+#            conn = dbutils.connect_to_papaya()
+#            cursor = conn.cursor()
+#
+#        for i, aid in enumerate(array_ids):
+#            print "Inserting genotype files into DB."
+#            #Checking if it is already in the DB.
+#            sql_statement = "SELECT id FROM stock_250k.call_info WHERE array_id=%s AND method_id=%d;"\
+#                    % (aid, call_method)
+#            print sql_statement
+#            cursor.execute(sql_statement)
+#            row = cursor.fetchone()
+#            if row:
+#                'Already in DB. File will be updated.'
+#                call_info_id = int(row[0])
+#            else:
+#                #Insert info
+#                sql_statement = "INSERT INTO stock_250k.call_info (array_id, method_id) VALUES (%s,%d);"\
+#                        % (aid, call_method)
+#                print sql_statement
+#                cursor.execute(sql_statement)
+#
+#                sql_statement = "SELECT id FROM stock_250k.call_info WHERE array_id=%s AND method_id=%d;"\
+#                        % (aid, call_method)
+#                print sql_statement
+#                cursor.execute(sql_statement)
+#                row = cursor.fetchone()
+#                if row:
+#                    call_info_id = int(row[0])
+#                print "Committing transaction (making changes permanent)."
+#                conn.commit()
+#
+#            try:
+#                #Write to a designated place.
+#                file_name = file_dir + str(call_info_id) + "_call.tsv"
+#                sql_statement = "UPDATE stock_250k.call_info \
+#                         SET filename='%s'\
+#                         WHERE id=%d" % (file_name, call_info_id)
+#                print sql_statement
+#                cursor.execute(sql_statement)
+#
+#                #Generate file in the right place
+#                f = open(file_name, 'w')
+#                f.write('SNP_ID\t%s\n' % aid)
+#                for (c, p, s) in chr_pos_snp_list:
+#                    f.write('%d_%d\t%s\n' % (c, p, s[i]))
+#                f.close()
+#            except Exception, err_str:
+#                print "Couldn't generate call info file, error message:%s" % err_str
+#        print "Closing connection."
+#        #Close connection
+#        if not cursor:
+#            cursor.close()
+#            conn.close()
+#        print "Remember to copy files to papaya, i.e. everything in directory: %s" % file_dir
 
 
 
@@ -2221,41 +2180,40 @@ class SNPsDataSet:
             f.close()
 
 
-
-    def write_to_file_yu_format(self, filename):
-        """
-        Writes data to a file in Yu's format. (Requires array IDs)
-        
-        Only works with raw sequence data.. (IUPAC nucleotides)
-        """
-        import yu_snp_key as yk
-        print "transposing chr_pos_snp_list"
-        chr_pos_snp_list = map(list, zip(*self.getChrPosSNPList()))
-        chrs = chr_pos_snp_list[0]
-        positions = chr_pos_snp_list[1]
-        snps = chr_pos_snp_list[2]
-        assert len(snps) == len(chrs) == len(positions), "SNPs, chromosomes, and positions not with same lenght"
-
-        print "transposing SNPs"
-        snps = map(list, zip(*snps))
-
-        array_ids = self.array_ids
-        ecotypes = self.accessions
-        assert len(snps) == len(array_ids) == len(ecotypes), "SNP, array IDs, and ecotype IDs not with same lenght"
-
-        print "len(array_ids) len(ecotypes):", len(array_ids), len(ecotypes)
-
-        print "Writing data to file:", filename
-        f = open(filename, "w")
-        str_list = ['ecotype_id', 'array_id']
-        str_list.extend([str(c) + "_" + str(p) for (c, p) in zip(chrs, positions)])
-        f.write('\t'.join(str_list) + '\n')
-        for ei, ai, nts in zip(ecotypes, array_ids, snps):
-            str_list = [str(ei), str(ai)]
-            str_list.extend([str(yk.nt_2_number[nt]) for nt in nts])
-            f.write('\t'.join(str_list) + '\n')
-        f.close()
-
+#
+#    def write_to_file_yu_format(self, filename):
+#        """
+#        Writes data to a file in Yu's format. (Requires array IDs)
+#        
+#        Only works with raw sequence data.. (IUPAC nucleotides)
+#        """
+#        import yu_snp_key as yk
+#        print "transposing chr_pos_snp_list"
+#        chr_pos_snp_list = map(list, zip(*self.getChrPosSNPList()))
+#        chrs = chr_pos_snp_list[0]
+#        positions = chr_pos_snp_list[1]
+#        snps = chr_pos_snp_list[2]
+#        assert len(snps) == len(chrs) == len(positions), "SNPs, chromosomes, and positions not with same lenght"
+#
+#        print "transposing SNPs"
+#        snps = map(list, zip(*snps))
+#
+#        array_ids = self.array_ids
+#        ecotypes = self.accessions
+#        assert len(snps) == len(array_ids) == len(ecotypes), "SNP, array IDs, and ecotype IDs not with same lenght"
+#
+#        print "len(array_ids) len(ecotypes):", len(array_ids), len(ecotypes)
+#
+#        print "Writing data to file:", filename
+#        f = open(filename, "w")
+#        str_list = ['ecotype_id', 'array_id']
+#        str_list.extend([str(c) + "_" + str(p) for (c, p) in zip(chrs, positions)])
+#        f.write('\t'.join(str_list) + '\n')
+#        for ei, ai, nts in zip(ecotypes, array_ids, snps):
+#            str_list = [str(ei), str(ai)]
+#            str_list.extend([str(yk.nt_2_number[nt]) for nt in nts])
+#            f.write('\t'.join(str_list) + '\n')
+#        f.close()
 
 
     def coordinate_w_phenotype_data(self, phend, pid, coord_phen=True, verbose=False):
@@ -3207,20 +3165,12 @@ class SNPsDataSet:
    
         
         
-    def filter_accessions(self, accessions_to_keep, use_accession_names=False):
+    def filter_accessions(self, accessions_to_keep):
         """
         Filter accessions, leaving the remaining accession in the given order.
         """
         assert len(accessions_to_keep) != 0, "Can't remove all ecotypes."
-        if use_accession_names:
-            import phenotypeData as pd
-            ad = pd._getAccessionToEcotypeIdDict_(accessions_to_keep)
-            ecotypes = []
-            for acc in accessions_to_keep:
-                ecotypes.append(str(ad[acc]))
-        else:
-            ecotypes = accessions_to_keep
-        num_accessions = len(self.accessions)
+        ecotypes = accessions_to_keep
         acc_indices_to_keep = []
         for et in ecotypes:
             try:
@@ -3312,119 +3262,6 @@ class SNPsDataSet:
 
 
 
-def readSNPsDataSetAccessions(datafile, delim=","):
-    f = open(datafile, 'r')
-    line = f.readline().split(delim)
-    arrayIDs = []
-    if line[0] != "Chromosome":
-        for aID in line[2:]:
-            arrayIDs.append(aID.strip())
-        line = f.readline().split(delim)
-    f.close()
-    accessions = []
-    for acc in line[2:]:
-        accessions.append(acc.strip())
-    return (accessions, arrayIDs)
-
-
-
-
-
-def getMAF(snp, alphabet=[0, 1]):
-    counts = []
-    for letter in alphabet:
-        counts.append(snp.count(letter))
-    maf = min(counts)
-    marf = maf / float(sum(counts))
-    return (marf, maf)
-
-def estimateRecomb(snpsdList, baseNum, filterProb, id):
-    rho = 0
-    npairs = 0
-    for i in range(0, len(snpsdList)):
-        snpsd = snpsdList[i]
-        tmp1 = "tmp" + id + "1"
-        tmp2 = "tmp" + id + "2"
-        (rho2, npairs2) = snpsd.estimateRecomb(baseNum, filterProb, tmp1, tmp2)
-        rho = rho + rho2 * npairs2
-        npairs = npairs + npairs2
-    rho = rho / float(npairs)
-    print "rho: " + str(rho) + ", npairs: " + str(npairs)
-    return rho
-
-
-
-#def write_accessions_info_file(filename, file_250k_data="/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t43_192.csv"):
-#    import dataParsers
-#    snps_accessions = dataParsers.parseCSVDataAccessions("/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_data_t43_081009.csv")
-#    print len(snps_accessions)
-#    import phenotypeData
-#    e_dict = phenotypeData._getEcotypeIdToStockParentDict_()
-#    f = open(filename, "w")
-#    f.write("ecotype_id, accession_name, stock_parent\n")
-#    for e_id in snps_accessions:
-#        try:
-#            (acc, sp) = e_dict[int(e_id)]
-#            acc = unicode(acc, "latin-1")
-#            #print acc
-#            f.write(e_id + ", " + acc + ", " + sp + "\n")
-#        except Exception, err_str:
-#            print err_str, e_id
-#            #acc = unicode(acc,"utf-16")
-#            f.write(e_id + ", " + repr(acc) + ", " + sp + "\n")
-#
-#    f.close()
-
-
-
-def get_call_method_dataset_file(call_method_id, binary_format=False):
-    if binary_format:
-        return env.env['data_dir'] + '250K_t' + str(call_method_id) + '.csv.binary'
-    else:
-        return env.env['data_dir'] + '250K_t' + str(call_method_id) + '.csv'
-
-def get_call_method_kinship_file(call_method_id):
-    return env.env['data_dir'] + 'kinship_matrix_cm' + str(call_method_id) + '.pickled'
-
-
-#def get_bergelssons_region_datasets():
-#    import phenotypeData as pd
-#    first_192 = pd._getFirst192Ecotypes_()
-#    print first_192
-#    print len(first_192)
-#    sd_t54 = dataParsers.parse_snp_data('/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t54.csv')    
-#    sd_t54.filter_for_countries(['UK'],complement=True)
-#    cm_id = sd_t54.add_to_db('cm54_only_non_UK',method_description='',data_description='',comment='')
-#    sd_t54.writeToFile('/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t'+str(cm_id)+'.csv')
-
-#def test_ibd_kinship():
-#    import dataParsers as dp
-#    import linear_models as lm
-#    sd = dp.load_250K_snps()
-#    ibd_k = sd.get_ibd_kinship_matrix()
-#    lm.save_kinship_to_file(env.env['data_dir'] + 'ibd_2_kinship_matrix_cm75.pickled', ibd_k, sd.accessions)
-
-
-
-#def _merge_imputed_and_250K_data_():
-#    import  dataParsers as dp
-#    import tair_converter as tc
-#    sd_72 = dp.load_snps_call_method(72, 'binary')
-#    sd_76 = dp.load_snps_call_method(76, 'binary')
-#    sd_72.merge_snps_data(sd_76)
-#    sd_72.writeToFile('/tmp/test_merged_data.csv')
-
-
-#def _test_prior_():
-#    cpp_list = []
-#    with open('/Users/bjarni.vilhjalmsson/Projects/Data/DTF1.scan.tsv') as f:
-#        print f.next()
-#        for l in f:
-#            line = l.split()
-#            cpp_list.append((int(line[1]), int(line[2]), float(line[4])))
-#    import dataParsers as dp
-#    sd = dp.load_snps_call_method()
-#    return sd.get_snp_priors(cpp_list)
 
 
 def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
@@ -3464,46 +3301,6 @@ def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
 
 
 
-def _plot_sweep_trees_():
-    import dataParsers as dp
-    with open('/home/GMI/bjarni.vilhjalmsson/Projects/data/sweepPosNorth.csv') as f:
-        print f.next()
-        for l in f:
-            line = map(str.strip, l.split(','))
-            chrom = int(line[1])
-            start_pos = float(line[2])
-            end_pos = float(line[3])
-            sd = dp.load_snps_call_method(78)
-            sd = SNPsDataSet(snpsds=[sd.get_region_snpsd(chrom, start_pos=start_pos, end_pos=end_pos)],
-                        chromosomes=[chrom], data_format='binary')
-            sd.plot_tree('%stree_chr%d_%f_%f.pdf' % (env.env['results_dir'], chrom, start_pos, end_pos))
-
-
-def _plot_interesting_snps_():
-    import dataParsers as dp
-    import phenotypeData as pd
-    import gc
-    sd = dp.load_snps_call_method(78)
-    eid = pd.get_ecotype_id_info_dict()
-    with open(env.env['phen_dir'] + 'swe_pair_mac15_coverage_filter2.csv', 'r') as f:
-        print f.next()
-        snps = set()
-        for l in f:
-            line = map(str.strip, l.split(','))
-            cps = line[0].split(':')
-            cp1 = map(int, cps[0].split('_'))
-            cp2 = map(int, cps[1].split('_'))
-            snps.add((cp1[0], cp1[1]))
-            snps.add((cp2[0], cp2[1]))
-
-        for snp in snps:
-            png_file = env.env['results_dir'] + 'weird_snp_geographical_plot_%d_%d.png' % (snp[0], snp[1])
-            try:
-                sd.plot_snp_map(snp[0], snp[1], png_file=png_file, map_type='sweden', eid=eid)
-            except Exception, err_str:
-                print 'failed for:', snp
-            gc.collect()
-
 
 def construct_snps_data_set(snps, positions, chromosomes, accessions, data_format='binary'):
     """
@@ -3525,39 +3322,5 @@ def construct_snps_data_set(snps, positions, chromosomes, accessions, data_forma
 
 
 if __name__ == "__main__":
-        _plot_interesting_snps_()
-#    sd = dp.load_snps_call_method(78)
-#        sd.plot_tree(env.env['results_dir'] + 'tree_full.pdf')
-#        sd_chr1 = SNPsDataSet(snpsds=[sd.snpsDataList[0]], chromosomes=[1], data_format='binary')
-#        sd_chr1.plot_tree(env.env['results_dir'] + 'tree_chr1.pdf')
-#        sd_0_19 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=0, end_pos=19000000)], chromosomes=[1], data_format='binary')
-#        sd_0_19.plot_tree(env.env['results_dir'] + 'tree_chr1_0_19.pdf')
-#        sd = dp.load_snps_call_method(78)
-#        sd_19_20 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=19000000, end_pos=20000000)], chromosomes=[1], data_format='binary')
-#        sd_19_20.plot_tree(env.env['results_dir'] + 'tree_chr1_19_20.pdf')
-#        sd = dp.load_snps_call_method(78)
-#        sd_20_21 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=20000000, end_pos=21000000)], chromosomes=[1], data_format='binary')
-#        sd_20_21.plot_tree(env.env['results_dir'] + 'tree_chr1_20_21.pdf')
-#        sd = dp.load_snps_call_method(78)
-#        sd_21_22 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=21000000, end_pos=22000000)], chromosomes=[1], data_format='binary')
-#        sd_21_22.plot_tree(env.env['results_dir'] + 'tree_chr1_21_22.pdf')
-#        sd = dp.load_snps_call_method(78)
-#        sd_22_23 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=22000000, end_pos=23000000)], chromosomes=[1], data_format='binary')
-#        sd_22_23.plot_tree(env.env['results_dir'] + 'tree_chr1_22_23.pdf')
-#        sd = dp.load_snps_call_method(78)
-#        sd_21_31 = SNPsDataSet(snpsds=[sd.get_region_snpsd(1, start_pos=21000000, end_pos=31000000)], chromosomes=[1], data_format='binary')
-#        sd_21_31.plot_tree(env.env['results_dir'] + 'tree_chr1_21_31.pdf')
-
-    #_test_prior_()
-#    import dataParsers
-#    d2010_file = "/Users/bjarnivilhjalmsson/Projects/Data/2010/2010_073009.csv"
-#    d2010_sd = dataParsers.parse_snp_data(d2010_file,id="2010_data")
-#    d250k_file = "/Users/bjarnivilhjalmsson/Projects/Data/250k/250K_t43_192.csv"
-#    d250k_sd = dataParsers.parse_snp_data(d250k_file)
-#    d2010_sd.impute_missing(d250k_sd)
-#    d2010_sd.writeToFile("/tmp/test.csv")
-#       get_AW_common_dataset()
-#    write_out_01_dataset()
-
-
+    pass
 

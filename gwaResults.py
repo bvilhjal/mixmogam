@@ -4,7 +4,6 @@ Contains classes to handle results of GWAS
 
 
 import pdb
-import dbutils
 import csv
 import math
 import itertools as it
@@ -15,8 +14,6 @@ except Exception, err_str:
     print 'scipy is missing:', err_str
 import os
 import cPickle
-import env
-import tair_converter as tc
 import bisect
 #A dictionary for loaded results.. to avoid reloading.
 #Use carefully to avoid memory leaks!
@@ -51,94 +48,6 @@ class ResultType(object):
     def __str__(self):
         return self.resultType + "_" + self.datasetName
 
-
-class Region(object):
-
-    def __init__(self, chromosome, startPos, endPos, snps=None, snpsd_indices=None, snpsInfo=None, name=""):
-        self.name = name
-        self.chromosome = chromosome
-        self.startPos = startPos
-        self.endPos = endPos
-        self.size = endPos - startPos
-        self.snps = []
-        if snps:
-            self.snps = snps
-        self.snpsd_indices = []  #Indicies in other data structures.
-        if snpsd_indices:
-            self.snpsd_indices = snpsd_indices
-        self.snpsInfo = {}       #E.g. a dictionary of information about the snps.  
-        if snpsInfo:
-            self.snpsInfo = snpsInfo
-
-    def __cmp__(self, other):
-        return cmp((self.chromosome, self.startPos), (other.chromosome, other.startPos))
-
-    def __str__(self):
-        return "Chr.:" + str(self.chromosome) + ", start pos.:" + str(self.startPos) + ", end pos.:" + str(self.endPos)
-
-    def get_chr_pos_str(self):
-        return str(self.chromosome) + "_" + str(self.startPos) + "_" + str(self.endPos)
-
-    def overlapping(self, region):
-        if self.chromosome != region.chromosome:
-            return False
-        else:
-            if self.startPos < region.startPos:
-                return self.endPos >= region.startPos
-            else:
-                return region.endPos >= self.startPos
-
-    def merge(self, region):
-        if not self.overlapping(region):
-            raise Exception
-        new_start = min(self.startPos, region.startPos)
-        new_stop = max(self.endPos, region.endPos)
-        self.startPos = new_start
-        self.endPos = new_stop
-        self.size = self.endPos - self.startPos
-
-
-def getRegions(regionSet, window=[25000, 25000]):
-    """
-    Converts a set of crh_pos into a list of regions objects.
-    """
-
-    res_ls = list(regionSet)
-    res_ls.sort()
-
-    oldPos = 0
-    countRegions = 0
-    chrom = -1
-    regions = []
-    curPosList = []
-    for i in range(0, len(res_ls)):
-        pos = res_ls[i][1]
-        if chrom != res_ls[i][0]:
-            if len(curPosList):
-                regions.append(curPosList)
-            curPosList = []
-            countRegions += 1
-            chrom = res_ls[i][0]
-        elif pos - oldPos > sum(window):
-            if len(curPosList):
-                regions.append(curPosList)
-            curPosList = []
-            countRegions += 1
-
-        curPosList.append((chrom, pos))
-        oldPos = pos
-
-    print countRegions, len(regions)
-
-    regionList = []
-    for region in regions:
-        chrom = region[0][0]
-        positions = []
-        for (chrom, pos) in region:
-            positions.append(pos)
-        regionList.append(Region(chrom, min(positions) - window[0], max(positions) + window[1]))
-    regionList.sort()
-    return regionList
 
 
 
@@ -357,173 +266,172 @@ class Result(object):
 
 
 
-    def candidate_gene_enrichments(self, cgl=None, cgl_file=None, pval_thresholds=[0.01], gene_radius=20000,
-                methods=['chi_square'], num_perm=500, file_prefix=None,
-                obs_genes_file=None, early_stop_threshold=25, all_genes=None, cand_gene_indices=None):
-        """
-        Performs CGR analysis on this results object.
-        
-        cgl is a list of genes.
-        cgl_file is a file with a list of genes.
-        
-        method: 
-            chi_square - statistics
-            multinomial - statistics
-            gene_perm - permute genes.
-            snps_perm - permute SNPs
-        """
-        import pylab
-        import analyze_gene_enrichment as genr
-
-        if not 'chi_square' in methods:
-            methods.append('chi_square')
-
-        chrom_ends = self.get_chromosome_ends()
-        print 'chrom_ends', chrom_ends
-
-        #Parse cgl file
-        if cgl_file:
-            cgl, cg_tair_ids = load_cand_genes_file(cgl_file)
-        for cg in cgl:
-            print str(cg)
-
-
-        if not all_genes:
-            #Load genes from DB.
-            print 'Fetching all genes'
-            all_genes = get_gene_list(include_intron_exons=False, verbose=False)
-            print 'Fetched %d genes.' % len(all_genes)
-            num_genes = len(all_genes)
-
-        if not cand_gene_indices:
-            #Pre-process cgl.
-            cand_gene_indices = []
-            for i, g in enumerate(all_genes):
-                for cg in cgl:
-                    if g.dbRef == cg.dbRef:
-                        #print g.dbRef, cg.dbRef
-                        cand_gene_indices.append(i)
-                        break
-            num_cand_genes = len(cand_gene_indices)
-            #print num_cand_genes, cand_gene_indices
-
-
-        method_res_dict = {}
-        for m in methods:
-            method_res_dict[m] = {'statistics':[], 'pvals':[]}
-
-        if obs_genes_file:
-            obs_gene_str = ''
-
-        pval_thresholds.sort()
-        last_thres = 1.0
-        log_enrichments = []
-        for pval_threshold in reversed(pval_thresholds):
-            print 'Using p-value threshold % f' % pval_threshold
-            thres = pval_threshold / last_thres
-            print 'Using corrected threshold % f' % thres
-            last_thres = pval_threshold
-
-            #Filter pvalue file
-            self.filter_percentile(1 - thres)
-
-            #pre-process pvalues
-            regions = self.get_regions(gene_radius=gene_radius)
-
-            #Calculate observed candidate gene enrichment. 
-            obs_enrichments = genr.calc_enrichment(all_genes, cand_gene_indices, regions)
-            r1 = obs_enrichments[0] / float(obs_enrichments[1])
-            r2 = (num_cand_genes / float(num_genes))
-            obs_stat = sp.log(r1 / r2)
-            print 'Observed statistics % f' % obs_stat
-            log_enrichments.append(obs_stat)
-
-            #What cand. genes overlap with regions?
-            obs_cg_indices = obs_enrichments[2]
-            if obs_cg_indices:
-                obs_gene_str += str(pval_threshold) + ','
-                tair_ids = [all_genes[cgi].tairID for cgi in obs_cg_indices]
-                obs_gene_str += ','.join(tair_ids)
-                obs_gene_str += '\n'
-
-
-
-            for method in methods:
-                if method == 'chi_square':
-                    chi_sq_pval, chi_sq_stat = genr.get_chi_square_pval(obs_enrichments[0],
-                                            obs_enrichments[1],
-                                            num_cand_genes, num_genes)
-                    method_res_dict[method]['statistics'].append(chi_sq_stat)
-                    method_res_dict[method]['pvals'].append(chi_sq_pval)
-
-                if method == 'multinomial':
-                    pass
-                if method == 'gene_perm':
-                    p_val, perm_stats = genr.get_gene_perm_pval(obs_stat, regions, all_genes,
-                                    cand_gene_indices, num_perm=num_perm,
-                                    early_stop_threshold=early_stop_threshold)
-                    method_res_dict[method]['statistics'].append(perm_stats)
-                    method_res_dict[method]['pvals'].append(p_val)
-
-                if method == 'snps_perm':
-                    p_val, perm_stats = genr.get_snps_perm_pval(obs_stat, regions, all_genes,
-                                    cand_gene_indices, chrom_ends,
-                                    num_perm=num_perm,
-                                    early_stop_threshold=early_stop_threshold)
-
-                    method_res_dict[method]['statistics'].append(perm_stats)
-                    method_res_dict[method]['pvals'].append(p_val)
-
-#                        h_res = pylab.hist(perm_stats)
-#                        pylab.vlines(obs_stat, 0, max(h_res[0]), colors='r')
-#                        pylab.savefig(env.env['tmp_dir'] + 'test.pdf', format='pdf')
-
-
-        if obs_genes_file:
-            with open(obs_genes_file, 'w') as f:
-                f.write(obs_gene_str)
-
-        #Now the plotting of the results.
-        method_name_dict = {'chi_square':'Chi-square test', 'gene_perm':'Candidate gene permutations',
-                    'snps_perm':'SNP positions permutation (chromosome rotation)' }
-
-
-        pval_thresholds.reverse()
-        pos_list = range(len(pval_thresholds))
-        for m in methods:
-            pylab.figure()
-            pvals = []
-            for p in method_res_dict[m]['pvals']:
-                if p != 0:
-                    pvals.append(p)
-                else:
-                    pvals.append(0.5 / num_perm)
-            neg_log_pvals = map(lambda x:-math.log10(x), pvals)
-            pylab.barh(pos_list, neg_log_pvals, align='center', color='g', alpha=0.6)
-            pylab.ylim((-1, len(pval_thresholds)))
-            pylab.yticks(pos_list, map(str, pval_thresholds))
-            pylab.xlabel('Enrichment -log(p-value)')
-            pylab.ylabel('p-value percentile threshold')
-            ymin, ymax = pylab.ylim()
-            xmin, xmax = pylab.xlim()
-            pylab.axvline(-math.log10(0.05), ymin=ymin, ymax=ymax, color='r')
-            pylab.xlim((0, max(-math.log10(0.05), max(neg_log_pvals)) * 1.05))
-            pylab.title(method_name_dict[m])
-            pylab.savefig(file_prefix + '_' + m + '.png', format='png')
-
-
-        pylab.figure()
-        pylab.barh(pos_list, log_enrichments, align='center', color='g', alpha=0.6)
-        pylab.ylim((-1, len(pval_thresholds)))
-        pylab.yticks(pos_list, map(str, pval_thresholds))
-        pylab.xlabel('Enrichment (log[ratio])')
-        pylab.ylabel('p-value percentile threshold')
-        pylab.savefig(file_prefix + '_enrichment_ratio.png', format='png')
-
-        return {'enr_stats':log_enrichments, 'method_res_dict':method_res_dict}
-
-
-
+#    def candidate_gene_enrichments(self, cgl=None, cgl_file=None, pval_thresholds=[0.01], gene_radius=20000,
+#                methods=['chi_square'], num_perm=500, file_prefix=None,
+#                obs_genes_file=None, early_stop_threshold=25, all_genes=None, cand_gene_indices=None):
+#        """
+#        Performs CGR analysis on this results object.
+#        
+#        cgl is a list of genes.
+#        cgl_file is a file with a list of genes.
+#        
+#        method: 
+#            chi_square - statistics
+#            multinomial - statistics
+#            gene_perm - permute genes.
+#            snps_perm - permute SNPs
+#        """
+#        import pylab
+#        import analyze_gene_enrichment as genr
+#
+#        if not 'chi_square' in methods:
+#            methods.append('chi_square')
+#
+#        chrom_ends = self.get_chromosome_ends()
+#        print 'chrom_ends', chrom_ends
+#
+#        #Parse cgl file
+#        if cgl_file:
+#            cgl, cg_tair_ids = load_cand_genes_file(cgl_file)
+#        for cg in cgl:
+#            print str(cg)
+#
+#
+#        if not all_genes:
+#            #Load genes from DB.
+#            print 'Fetching all genes'
+#            all_genes = get_gene_list(include_intron_exons=False, verbose=False)
+#            print 'Fetched %d genes.' % len(all_genes)
+#            num_genes = len(all_genes)
+#
+#        if not cand_gene_indices:
+#            #Pre-process cgl.
+#            cand_gene_indices = []
+#            for i, g in enumerate(all_genes):
+#                for cg in cgl:
+#                    if g.dbRef == cg.dbRef:
+#                        #print g.dbRef, cg.dbRef
+#                        cand_gene_indices.append(i)
+#                        break
+#            num_cand_genes = len(cand_gene_indices)
+#            #print num_cand_genes, cand_gene_indices
+#
+#
+#        method_res_dict = {}
+#        for m in methods:
+#            method_res_dict[m] = {'statistics':[], 'pvals':[]}
+#
+#        if obs_genes_file:
+#            obs_gene_str = ''
+#
+#        pval_thresholds.sort()
+#        last_thres = 1.0
+#        log_enrichments = []
+#        for pval_threshold in reversed(pval_thresholds):
+#            print 'Using p-value threshold % f' % pval_threshold
+#            thres = pval_threshold / last_thres
+#            print 'Using corrected threshold % f' % thres
+#            last_thres = pval_threshold
+#
+#            #Filter pvalue file
+#            self.filter_percentile(1 - thres)
+#
+#            #pre-process pvalues
+#            regions = self.get_regions(gene_radius=gene_radius)
+#
+#            #Calculate observed candidate gene enrichment. 
+#            obs_enrichments = genr.calc_enrichment(all_genes, cand_gene_indices, regions)
+#            r1 = obs_enrichments[0] / float(obs_enrichments[1])
+#            r2 = (num_cand_genes / float(num_genes))
+#            obs_stat = sp.log(r1 / r2)
+#            print 'Observed statistics % f' % obs_stat
+#            log_enrichments.append(obs_stat)
+#
+#            #What cand. genes overlap with regions?
+#            obs_cg_indices = obs_enrichments[2]
+#            if obs_cg_indices:
+#                obs_gene_str += str(pval_threshold) + ','
+#                tair_ids = [all_genes[cgi].tairID for cgi in obs_cg_indices]
+#                obs_gene_str += ','.join(tair_ids)
+#                obs_gene_str += '\n'
+#
+#
+#
+#            for method in methods:
+#                if method == 'chi_square':
+#                    chi_sq_pval, chi_sq_stat = genr.get_chi_square_pval(obs_enrichments[0],
+#                                            obs_enrichments[1],
+#                                            num_cand_genes, num_genes)
+#                    method_res_dict[method]['statistics'].append(chi_sq_stat)
+#                    method_res_dict[method]['pvals'].append(chi_sq_pval)
+#
+#                if method == 'multinomial':
+#                    pass
+#                if method == 'gene_perm':
+#                    p_val, perm_stats = genr.get_gene_perm_pval(obs_stat, regions, all_genes,
+#                                    cand_gene_indices, num_perm=num_perm,
+#                                    early_stop_threshold=early_stop_threshold)
+#                    method_res_dict[method]['statistics'].append(perm_stats)
+#                    method_res_dict[method]['pvals'].append(p_val)
+#
+#                if method == 'snps_perm':
+#                    p_val, perm_stats = genr.get_snps_perm_pval(obs_stat, regions, all_genes,
+#                                    cand_gene_indices, chrom_ends,
+#                                    num_perm=num_perm,
+#                                    early_stop_threshold=early_stop_threshold)
+#
+#                    method_res_dict[method]['statistics'].append(perm_stats)
+#                    method_res_dict[method]['pvals'].append(p_val)
+#
+##                        h_res = pylab.hist(perm_stats)
+##                        pylab.vlines(obs_stat, 0, max(h_res[0]), colors='r')
+##                        pylab.savefig(env.env['tmp_dir'] + 'test.pdf', format='pdf')
+#
+#
+#        if obs_genes_file:
+#            with open(obs_genes_file, 'w') as f:
+#                f.write(obs_gene_str)
+#
+#        #Now the plotting of the results.
+#        method_name_dict = {'chi_square':'Chi-square test', 'gene_perm':'Candidate gene permutations',
+#                    'snps_perm':'SNP positions permutation (chromosome rotation)' }
+#
+#
+#        pval_thresholds.reverse()
+#        pos_list = range(len(pval_thresholds))
+#        for m in methods:
+#            pylab.figure()
+#            pvals = []
+#            for p in method_res_dict[m]['pvals']:
+#                if p != 0:
+#                    pvals.append(p)
+#                else:
+#                    pvals.append(0.5 / num_perm)
+#            neg_log_pvals = map(lambda x:-math.log10(x), pvals)
+#            pylab.barh(pos_list, neg_log_pvals, align='center', color='g', alpha=0.6)
+#            pylab.ylim((-1, len(pval_thresholds)))
+#            pylab.yticks(pos_list, map(str, pval_thresholds))
+#            pylab.xlabel('Enrichment -log(p-value)')
+#            pylab.ylabel('p-value percentile threshold')
+#            ymin, ymax = pylab.ylim()
+#            xmin, xmax = pylab.xlim()
+#            pylab.axvline(-math.log10(0.05), ymin=ymin, ymax=ymax, color='r')
+#            pylab.xlim((0, max(-math.log10(0.05), max(neg_log_pvals)) * 1.05))
+#            pylab.title(method_name_dict[m])
+#            pylab.savefig(file_prefix + '_' + m + '.png', format='png')
+#
+#
+#        pylab.figure()
+#        pylab.barh(pos_list, log_enrichments, align='center', color='g', alpha=0.6)
+#        pylab.ylim((-1, len(pval_thresholds)))
+#        pylab.yticks(pos_list, map(str, pval_thresholds))
+#        pylab.xlabel('Enrichment (log[ratio])')
+#        pylab.ylabel('p-value percentile threshold')
+#        pylab.savefig(file_prefix + '_enrichment_ratio.png', format='png')
+#
+#        return {'enr_stats':log_enrichments, 'method_res_dict':method_res_dict}
+#
+#
 
     def _plot_small_manhattan_(self, pdf_file=None, png_file=None, min_score=0, max_score=None,
                 score_type="pvals", ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False,
@@ -655,17 +563,17 @@ class Result(object):
                         alpha=0.5, linewidth=0)
 
 
-        if highlight_markers:
-            ys = []
-            xs = []
-            for c, p, score in highlight_markers:
-                xs.append(p / displayed_unit)
-                if score > max_score:
-                    ax.text(x, max_score * 1.1, str(round(score, 2)), rotation=45, size="small")
-                    ys.append(max_score)
-                else:
-                    ys.append(score)
-            ax.plot(xs, ys, ".", color="#ff9944", markersize=markersize + 3, alpha=0.7)
+#        if highlight_markers:
+#            ys = []
+#            xs = []
+#            for c, p, score in highlight_markers:
+#                xs.append(p / displayed_unit)
+#                if score > max_score:
+#                    ax.text(x, max_score * 1.1, str(round(score, 2)), rotation=45, size="small")
+#                    ys.append(max_score)
+#                else:
+#                    ys.append(score)
+#            ax.plot(xs, ys, ".", color="#ff9944", markersize=markersize + 3, alpha=0.7)
 
         if len(starPoints[0]) > 0:
             ax.plot(starPoints[0], starPoints[1], ".", color="#ee9922", markersize=markersize + 1)
@@ -842,18 +750,18 @@ class Result(object):
 #                        alpha=0.5, linewidth=0)
 
 
-        if highlight_markers:
-            ys = []
-            xs = []
-            for c, p, score in highlight_markers:
-                xs.append(p / displayed_unit)
-                if score > max_score:
-                    plot_ax.text(x, max_score * 1.1, str(round(score, 2)), rotation=45, size="small")
-                    ys.append(max_score)
-                else:
-                    ys.append(score)
-            plot_ax.plot(xs, ys, ".", color="#ff9944", markersize=markersize + 3, alpha=0.7, mew=0,
-                mec="#ff9944")
+#        if highlight_markers:
+#            ys = []
+#            xs = []
+#            for c, p, score in highlight_markers:
+#                xs.append(p / displayed_unit)
+#                if score > max_score:
+#                    plot_ax.text(x, max_score * 1.1, str(round(score, 2)), rotation=45, size="small")
+#                    ys.append(max_score)
+#                else:
+#                    ys.append(score)
+#            plot_ax.plot(xs, ys, ".", color="#ff9944", markersize=markersize + 3, alpha=0.7, mew=0,
+#                mec="#ff9944")
 
         if len(starPoints[0]) > 0:
             plot_ax.plot(starPoints[0], starPoints[1], ".", color="#ee9922", markersize=markersize + 1)
@@ -1667,25 +1575,25 @@ class Result(object):
         return indices
 
 
-    def get_top_genes(self, n, window_size=5000, conn=None):
-        """
-        Returns a set of (chromosome, start_pos, end_pos), for genes found.
-        """
-        self._rank_scores_() #Making sure the ranks are updated
-        genes = set()
-        snp_ix = []
-        i = 0
-        while len(genes) < n:
-            snp_i = self.orders[i]
-            p = self.snp_results['positions'][snp_i]
-            c = self.snp_results['chromosomes'][snp_i]
-            c_genes = get_gene_list(p - window_size, p + window_size, c, include_intron_exons=False, conn=conn)
-            for g in c_genes:
-                genes.add((g.chromosome, g.startPos, g.endPos, g.tairID))
-            #print len(genes)
-            i += 1
-        print 'found % d genes' % len(genes)
-        return genes
+#    def get_top_genes(self, n, window_size=5000, conn=None):
+#        """
+#        Returns a set of (chromosome, start_pos, end_pos), for genes found.
+#        """
+#        self._rank_scores_() #Making sure the ranks are updated
+#        genes = set()
+#        snp_ix = []
+#        i = 0
+#        while len(genes) < n:
+#            snp_i = self.orders[i]
+#            p = self.snp_results['positions'][snp_i]
+#            c = self.snp_results['chromosomes'][snp_i]
+#            c_genes = get_gene_list(p - window_size, p + window_size, c, include_intron_exons=False, conn=conn)
+#            for g in c_genes:
+#                genes.add((g.chromosome, g.startPos, g.endPos, g.tairID))
+#            #print len(genes)
+#            i += 1
+#        print 'found % d genes' % len(genes)
+#        return genes
 
 
     def get_chr_pos_score_list(self):
@@ -2047,93 +1955,6 @@ class Result(object):
 
 
 
-class Gene(object):
-    """
-    A class which encompasses basic information about a gene.
-    """
-    def __init__(self, chromosome=None, startPos=None, endPos=None, name="", description=None, dbRef="", tairID=""):
-        self.chromosome = chromosome
-        self.startPos = startPos
-        self.endPos = endPos
-        self.exons = []
-        self.introns = []
-        self.tairID = tairID
-        self.dbRef = dbRef
-        self.name = name
-        self.description = description
-        self.functionDescriptions = []
-        self.shortDescriptions = []
-        self.direction = None
-        self.highlight = False
-
-
-    def __str__(self):
-        if not self.description:
-            return "Chromosome=" + str(self.chromosome) + ", position=(" + str(self.startPos) + "," + str(self.endPos) + "), tair ID=" + self.tairID + ", short descriptions=" + str(self.shortDescriptions) + ", function descriptions=" + str(self.functionDescriptions) + "."
-        else:
-            return "Chromosome=%d, position=(%d,%d), tdbRef=%s, name=%s, description=%s, TAIR_id=%s." % (self.chromosome, self.startPos, self.endPos, self.dbRef, str(self.name), self.description, self.tairID)
-
-
-    def _update_introns_(self):
-        """
-        updates the introns, given the exons.  It uses the Region object..
-        """
-        introns = []
-        for i in range(len(self.exons) - 1):
-            e1 = self.exons[i]
-            e2 = self.exons[i + 1]
-            intron = Region(self.chromosome, e1.endPos, e2.startPos)
-            introns.append(intron)
-        self.introns = introns
-
-
-
-
-def getCandidateGeneList(cgl_id, host="papaya.usc.edu", user="bvilhjal", passwd="bjazz32", db="stock_250k", tair9=True):
-    import MySQLdb
-    #Load cand. gene list.    
-    print "Connecting to db, host=" + host
-    if not user:
-        import sys
-        sys.stdout.write("Username: ")
-        user = sys.stdin.readline().rstrip()
-    if not passwd:
-        import getpass
-        passwd = getpass.getpass()
-    try:
-        conn = MySQLdb.connect (host=host, user=user, passwd=passwd, db=db)
-    except MySQLdb.Error, e:
-        print "Error %d: %s" % (e.args[0], e.args[1])
-        sys.exit (1)
-    cursor = conn.cursor ()
-    #Retrieve the filenames
-    print "Fetching data"
-
-    #select c.locustag, b.start, b.stop, a.comment from genome.gene_commentary a, genome.entrezgene_mapping b, genome.gene c where b.start > 25000 and b.stop < 75000 and b.chromosome=1 and b.gene_id = c.gene_id and c.gene_id = a.gene_id and a.gene_commentary_type_id = 8
-    #select distinct t8_fd.tair_id, t8.chromosome, t8.start, t8.end, t8_fd.type, t8_fd.short_description from T8_annotation_TH.t8_063008 t8, T8_annotation_TH.t8_func_desc t8_fd, stock_250k.candidate_gene_list cgl where t8.pub_locus+'.1' = t8_fd.tair_id and cgl.list_type_id=129  and cgl.original_name=t8.pub_locus and t8.chromosome =1 order by t8.chromosome, t8.start
-    #select distinct gm.chromosome, gm.start, gm.stop, g.locustag from genome.entrezgene_mapping gm, genome.gene g, stock_250k.candidate_gene_list cgl where cgl.list_type_id=129 and gm.gene_id = g.gene_id and cgl.gene_id=g.gene_id order by gm.chromosome, gm.start, gm.stop
-
-    numRows = int(cursor.execute("select distinct gm.chromosome, gm.start, gm.stop, g.locustag, g.gene_symbol, g.description, g.dbxrefs from genome.entrezgene_mapping gm, genome.gene g, stock_250k.candidate_gene_list cgl where cgl.list_type_id=" + str(cgl_id) + " and gm.gene_id = g.gene_id and cgl.gene_id=g.gene_id order by gm.chromosome, gm.start, gm.stop"))
-    if tair9:
-        t_map = tc.tair8_to_tair9_map()
-    candGenes = []
-    while(1):
-        row = cursor.fetchone()
-        if not row:
-            break;
-        if tair9:
-            start_pos = t_map.get_tair9_pos(int(row[1]))
-            end_pos = t_map.get_tair9_pos(int(row[2]))
-        else:
-            start_pos = int(row[1])
-            end_pos = int(row[2])
-        gene = Gene(int(row[0]), start_pos, end_pos, name=row[4], description=row[5], dbRef=row[6])
-        candGenes.append(gene)
-    cursor.close ()
-    conn.close ()
-    print "Candiate gene-lists fetched"
-    return candGenes
-
 
 
 def get_gene_dict(chrom=None, start_pos=None, end_pos=None, only_genes=False):
@@ -2142,125 +1963,6 @@ def get_gene_dict(chrom=None, start_pos=None, end_pos=None, only_genes=False):
 
 
 
-
-
-#def get_gene_list(start_pos=None, end_pos=None, chr=None, include_intron_exons=True, \
-#        verbose=True, conn=None):
-#    """
-#    Fetch genes (ignores TEs etc.) within a region or all genes from DB (TAIR 10).
-#    """
-#    import dbutils
-#    if not conn:
-#        new_conn = dbutils.connect_to_default_lookup('genome_tair10')
-#        cursor = new_conn.cursor()
-#    else:
-#        cursor = conn.cursor()
-#    #Retrieve the filenames
-#    #if verbose:
-#    #    print "Fetching data"  
-#    #print "Fetching data"  
-#
-#    #select c.locustag, b.start, b.stop, a.comment from genome.gene_commentary a, genome.entrezgene_mapping b, genome.gene c where b.start > 25000 and b.stop < 75000 and b.chromosome=1 and b.gene_id = c.gene_id and c.gene_id = a.gene_id and a.gene_commentary_type_id = 8
-#    #select distinct t8_fd.tair_id, t8.chromosome, t8.start, t8.end, t8_fd.type, t8_fd.short_description from T8_annotation_TH.t8_063008 t8, T8_annotation_TH.t8_func_desc t8_fd, stock_250k.candidate_gene_list cgl where t8.pub_locus+'.1' = t8_fd.tair_id and cgl.list_type_id=129  and cgl.original_name=t8.pub_locus and t8.chromosome =1 order by t8.chromosome, t8.start
-#    #select distinct gm.chromosome, gm.start, gm.stop, g.locustag from genome.entrezgene_mapping gm, genome.gene g, stock_250k.candidate_gene_list cgl where cgl.list_type_id=129 and gm.gene_id = g.gene_id and cgl.gene_id=g.gene_id order by gm.chromosome, gm.start, gm.stop
-#    if chr and start_pos != None and end_pos != None:
-##        sql_statement = "SELECT DISTINCT gm.chromosome, gm.start, gm.stop, g.locustag, \
-##            g.gene_symbol, g.description, g.dbxrefs FROM genome.entrezgene_mapping gm, genome.gene g WHERE \
-##            gm.gene_id = g.gene_id AND gm.chromosome=%d AND gm.stop>%d AND \
-##            gm.start<%d ORDER BY gm.chromosome, gm.start, gm.stop" % (chr, start_pos, end_pos)
-#        sql_statement = 'SELECT DISTINCT g.chromosome, g.start, g.stop, g.locustag, g.gene_symbol, \
-#                        g.description, g.dbxrefs FROM genome_tair10.gene g \
-#                    WHERE g.chromosome=%d AND g.stop>%d AND g.start<%d \
-#                    ORDER BY g.chromosome, g.start, g.stop' % (chr, start_pos, end_pos)
-#        print sql_statement
-#        numRows = int(cursor.execute(sql_statement))
-#    else:
-##        sql_statement = "select distinct gm.chromosome, gm.start, gm.stop, g.locustag, g.gene_symbol, \
-##            g.description, g.dbxrefs from genome.entrezgene_mapping gm, genome.gene g \
-##            where gm.gene_id = g.gene_id order by gm.chromosome, gm.start, gm.stop"
-#        sql_statement = 'SELECT DISTINCT g.chromosome, g.start, g.stop, g.locustag, g.gene_symbol, \
-#                        g.description, g.dbxrefs FROM genome_tair10.gene g \
-#                    WHERE g.start IS NOT NULL AND g.stop IS NOT NULL \
-#                    ORDER BY g.chromosome, g.start, g.stop'
-#        print sql_statement
-#        numRows = int(cursor.execute(sql_statement))
-#    if numRows == 0:
-#        pass
-#
-#    genes = []
-#    while(1):
-#        row = cursor.fetchone()
-#        if not row:
-#            break;
-#        if row[1] and  row[2] and row[0] in ['1', '2', '3', '4', '5']:
-#            chrom = int(row[0])
-#            start_pos = int(row[1])
-#            end_pos = int(row[2])
-#            db_ref = row[6]
-#            if db_ref == None:
-#                continue
-#            tair_id = db_ref[5:]
-#            gene = Gene(int(row[0]), start_pos, end_pos, name=row[4], description=row[5], dbRef=row[6], tairID=tair_id)
-#            genes.append(gene)
-#
-#    if include_intron_exons:
-#        for g in genes:
-##            sql_stat = "SELECT distinct gs.start, gs.stop, g.dbxrefs \
-##                    FROM genome.entrezgene_mapping gm, genome.gene g, genome.gene_segment gs, \
-##                        genome.gene_commentary gc \
-##                    WHERE g.dbxrefs='%s' AND gm.gene_id = g.gene_id AND \
-##                        gs.gene_commentary_id=gc.id AND gc.gene_id=gm.gene_id \
-##                    ORDER BY gs.start, gs.stop" % (g.dbRef)
-#            sql_stat = "SELECT distinct gs.start, gs.stop, g.gene_symbol \
-#                    FROM genome_tair10.gene g, genome_tair10.gene_segment gs, \
-#                        genome_tair10.gene_commentary gc \
-#                    WHERE g.gene_symbol='%s' AND gs.gene_commentary_id=gc.id AND gc.gene_id=g.id \
-#                    ORDER BY gs.start, gs.stop" % (g.name)
-#            #print sql_stat
-#            numRows = int(cursor.execute(sql_stat))
-#            segments = []
-#            while(1):
-#                row = cursor.fetchone()
-#                if not row:
-#                    break;
-#                try:
-#                    start_pos = int(row[0])
-#                    end_pos = int(row[1])
-#                    segments.append(Region(g.chromosome, start_pos, end_pos))
-#                except Exception, err_str:
-#                    print err_str, ':'
-#                    print row
-#            exons = []
-#            i = 1
-#            #print "len(segments):",len(segments)
-#            while i < len(segments):
-#                curr_exon = segments[i - 1]
-#                while i < len(segments) and curr_exon.overlapping(segments[i]):
-#                    curr_exon.merge(segments[i])
-#                    i += 1
-#                exons.append(curr_exon)
-#                i += 1
-#            g.exons = exons
-#            g._update_introns_()
-#            #print "len(exons):",len(exons)
-#            #for e in g.exons:
-#            #    print e.startPos, e.endPos
-#            #print "len(g.introns):",len(g.introns)
-#            #for e in g.introns:
-#            #    print e.startPos, e.endPos
-#    cursor.close()
-#    if not conn:
-#        new_conn.close ()
-#    if verbose:
-#        print "Gene-lists fetched"
-#    return genes
-#
-#"""
-#select distinct gm.chromosome, gm.start, gm.stop, g.locustag, g.gene_symbol, g.description, g.dbxrefs, gs.start, gs.stop
-#from genome.entrezgene_mapping gm, genome.gene g, gene_segment gs, gene_commentary gc
-#where gm.gene_id = g.gene_id and gm.chromosome=5 and gm.stop>3173000 and gm.start<3181000 and gs.gene_commentary_id=gc.id and gc.gene_id=gm.gene_id 
-#order by gm.chromosome, gm.start, gm.stop, gs.start, gs.stop
-#"""
 
 
 def load_cand_genes_file(file_name, format=1):
@@ -2274,229 +1976,15 @@ def load_cand_genes_file(file_name, format=1):
     gene_names = []
     if format == 1:
         for row in reader:
-              tair_ids.append(row[0].upper())
-              if len(row) > 1:
-                  gene_names.append(row[1])
+            tair_ids.append(row[0].upper())
+            if len(row) > 1:
+                gene_names.append(row[1])
     f.close()
-    return get_genes_w_tair_id(tair_ids), tair_ids
-
-
-
-
-#def get_genes_w_tair_id(tair_ids):
-#    """
-#    Retrieves the genes with the given TAIR IDs.
-#    
-#    Uses TAIR 10.
-#    
-#    Only works for proper genes (not TEs etc.)
-#    """
-#
-#    conn = dbutils.connect_to_default_lookup("genome_tair10")
-#    cursor = conn.cursor()
-#    genes = []
-#    #print tair_ids
-#    tair_ids.sort()
-#    for tair_id in tair_ids:
-#        sql_statment = "SELECT DISTINCT g.chromosome, g.start, g.stop, g.locustag, g.gene_symbol, g.description, g.dbxrefs \
-#                FROM genome_tair10.gene g \
-#                WHERE g.dbxrefs='TAIR:%s' \
-#                ORDER BY g.chromosome, g.start, g.stop" % (tair_id.upper())
-#        numRows = int(cursor.execute(sql_statment))
-#        if numRows > 1:
-#            print "Found 2 copies:", sql_statment
-#        while(1):
-#            row = cursor.fetchone()
-#            if not row:
-#                break;
-#            try:
-#                if row[1] and  row[2]:
-#                    chrom = int(row[0])
-#                    start_pos = int(row[1])
-#                    end_pos = int(row[2])
-#                    #chr, start, stop, gene_symbol, description, dbref,  
-#                    gene = Gene(chrom, start_pos, end_pos, name=row[4], description=row[5], dbRef=row[6], tairID=row[3])
-#                    gene.tairID = row[6][5:]
-#                    genes.append(gene)
-#            except Exception, err_str:
-#                pass
-#                print err_str, ':'
-#                print row
-#
-#    cursor.close()
-#    conn.close()
-#    return genes
-
-
-
-def get_genes_w_tair_id(tair_ids):
-    """
-    Retrieves the genes with the given TAIR IDs.
-    
-    Uses TAIR 10.
-    
-    Only works for proper genes (not TEs etc.)
-    """
-
-    g_dict = get_gene_dict(only_genes=True)
-    genes = []
-    for tair_id in tair_ids:
-        g = g_dict[tair_id]
-        print tair_id
-        gene = Gene(g['chromosome'], g['start_pos'], g['end_pos'], name=g['name'],
-                dbRef=tair_id, tairID=tair_id)
-        genes.append(gene)
-
-    return genes
-
-
-def get_result_filename(cm_id, pm_id, am_id):
-    """
-    Retrieve the filename with the results.
-    
-    call method ID
-    pehnotype method ID
-    analysis method ID
-    """
-    conn = dbutils.connect_to_default_lookup('stock_250k')
-    cursor = conn.cursor ()
-
-    #Retrieve the filenames
-    print "Fetching data"
-    numRows = int(cursor.execute("select rm.filename from stock_250k.results_method rm \
-                where rm.call_method_id=%d and rm.phenotype_method_id=%d and analysis_method_id=%d " \
-                % (cm_id, pm_id, am_id)))
-    filenames = []
-    while(1):
-        row = cursor.fetchone()
-        if not row:
-            break;
-        filenames.append(row[0])
-    cursor.close ()
-    conn.close ()
-    return filenames
-
-
-
-
-def load_result_from_db(pid, aid, cmid=54, host='gmi-ara-devel-be', conn=None):
-    """
-    Imports a result object from the filesystem/DB.
-    """
-    import dbutils
-    if conn:
-        cursor = conn.cursor()
-    else:
-        new_conn = dbutils.connect_to_db(host, 'stock_250k')
-        cursor = new_conn.cursor()
-    sql_statement = "SELECT short_name, filename, id FROM stock_250k.results_method \
-             WHERE call_method_id=%d and phenotype_method_id=%d and analysis_method_id=%d"\
-             % (cmid, pid, aid)
-    #print sql_statement
-    numRows = int(cursor.execute(sql_statement))
-    row = cursor.fetchone()
-    r, r_id = None, None
-    if row:
-        fname = row[1]
-        r_id = int(row[2])
-        print "File for %s, found at:%s" % (row[0], fname)
-        r = Result(fname)
-
-    else:
-        print "Result not found with pid=%d, aid=%d, cmid=%d" % (pid, aid, cmid)
-
-    cursor.close ()
-    if not conn:
-        new_conn.close ()
-
-    return r, r_id
-
-
-class TairGO:
-    """
-    A class to encompass tair genes.
-    
-    This class is based on gff files. (not the DB)
-    """
-    def __init__(self):
-        #Parse the gff file
-        env.env['data']
-
-    def get_gene_list(self):
-        pass
-
-    def get_genes_w_tair_id(self, tair_ids):
-        pass
-
-
-#def loadResults(phenotypeIndices, resultTypes=None, phed=None, snpsds=None, filterPercentile=None, filterCutoffs=None, phenotypeFile="/Network/Data/250k/dataFreeze_080608/phenotypes_all_raw_111008.tsv", secondRun=False):
-#
-#    if not phed:
-#        phed = phenotypeData.readPhenotypeFile(phenotypeFile, delimiter='\t')
-#
-#    if not resultTypes:
-#        if secondRun:
-#            resultTypes = _getStandardSecondRunResultTypes_()
-#        else:
-#            resultTypes = _getStandardResultTypes4_()
-#
-#    results_map = {}
-#    for i in phenotypeIndices:
-#
-#        results = []
-#        for j in range(0, len(resultTypes)):
-#            resultType = resultTypes[j]
-#            phenName = phed.getPhenotypeName(i)
-#            if phenName:
-#                resultFile = resultType.getFileName(phed, i, secondRun=(secondRun and j % 2 == 1))  #Modify back to get old results 120708
-#                try:
-#                    print "Loading result file", resultFile
-#                    if snpsds:
-#                        result = SNPResult(resultFile, snpsds=snpsds, name=str(resultType) + "_" + phenName, resultType=resultType, phenotypeID=i)
-#                    else:
-#                        result = Result(resultFile, name=str(resultType) + "_" + phenName, resultType=resultType, phenotypeID=i)
-#                    if resultType.logTransform:
-#                        print "Log transformed the p-values"
-#                        result.negLogTransform()
-#
-#                    result.filterMARF(minMaf=resultType.mafCutoff)
-#                    #result.filterMAF(minMaf=resultType.mafCutoff)
-#                    if filterPercentile:
-#                        result.filterPercentile(filterPercentile)
-#                    elif filterCutoffs:
-#                        result.filterScoreCutoff(filterCutoffs[j])
-#
-#                    results.append(result)
-#                except Exception, e:
-#                    print e.message
-#                    print "Couldn't load", resultFile
-#
-#        results_map[i] = results
-#        gc.collect()  #Calling garbage collector, in an attempt to clean up memory..
-#    return results_map
-
-
-#def _add_results_to_db_():
-#    """
-#    TEST
-#    """
-#    host = 'gmi-ara-devel-be'
-#    for pid in range(1, 2):
-#        for aid in range(20):
-#            for cmid in range(60):
-#                try:
-#                    r, r_id = load_result_from_db(pid, aid, cmid, host=host)
-#                    if not r:
-#                        raise Exception
-#                    r.insert_into_db(r_id)
-#                        except Exception, err_str:
-#                            print "File not found, pid=%d, aid=%d, cmid=%d, err_str=%s" % (pid, aid, cmid, err_str)
+    return tair_ids
 
 
 
 
 
 if __name__ == "__main__":
-    #load_cand_genes_file("/Users/bjarnivilhjalmsson/Projects/Ales_Pecinka/UV_cand_genes_021710.csv")
-    #load_result_from_db(513,1)
-    _add_results_to_db_()
+    pass
