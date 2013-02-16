@@ -1653,11 +1653,11 @@ def emmax_w_two_env(snps, phenotypes, K, E, cofactors=None, Z=None, with_betas=F
         2. A test for the full model (i.e. a model with the genetic and environement X genetic terms) agains the null model.
         3. A test for the full model (i.e. a model with the genetic and environement X genetic terms) agains the genetic effect model.
         
-        snps:
-        phenotypes:
-        K: 
-        E:
-        
+        snps: [M X (N_1+N_2)] SNP matrix.
+        phenotypes: [(N_1+N_2) X 1] (column) phenotype vector.
+        K: [(N_1+N_2) X (N_1+N_2)] kinship.
+        E: [(N_1+N_2) X 1] 0-1 vector, differentiating between the two environments.
+        Z: 
     """
     lmm = LinearMixedModel(phenotypes)
     if Z != None:
