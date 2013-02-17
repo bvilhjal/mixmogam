@@ -1319,7 +1319,45 @@ class LinearMixedModel(LinearModel):
 
 
 
-    def _emmax_GxT_f_test_(self, snps, H_sqrt_inv, T, Z, snp_priors=None, verbose=True, **kwargs):
+    def emmax_GxT_f_test(self, snps, E, Z=None, with_betas=False, method='REML', eig_L=None, eig_R=None):
+        """
+        EMMAX implementation (in python)
+        Single SNPs
+        """
+        if not eig_L:
+            print 'Calculating the eigenvalues of K'
+            s0 = time.time()
+            eig_L = self._get_eigen_L_()
+            print 'Done.'
+            print 'Took %0.2f seconds' % (time.time() - s0)
+        if not eig_R:
+            print "Calculating the eigenvalues of S(K+I)S where S = I-X(X'X)^-1X'"
+            s0 = time.time()
+            eig_R = self._get_eigen_R_(X=self.X)
+            print 'Done'
+            print 'Took %0.2f seconds' % (time.time() - s0)
+
+        print 'Getting variance estimates'
+        s0 = time.time()
+        res = self.get_estimates(eig_L, method=method, eig_R=eig_R)  # Get the variance estimates..
+        print 'Done.'
+        print 'Took %0.2f seconds' % (time.time() - s0)
+        print 'pseudo_heritability:', res['pseudo_heritability']
+
+        s0 = time.time()
+        r = self._emmax_GxT_f_test_(snps, res['H_sqrt_inv'], E, Z, with_betas=with_betas, eig_L=eig_L)
+        print 'Took %0.2f seconds' % (time.time() - s0)
+        r['pseudo_heritability'] = res['pseudo_heritability']
+        r['ve'] = res['ve']
+        r['vg'] = res['vg']
+        r['max_ll'] = res['max_ll']
+
+        return r
+
+
+
+
+    def _emmax_GxT_f_test_(self, snps, H_sqrt_inv, T, Z, verbose=True, **kwargs):
         """
         EMMAX implementation (in python)
         Single SNPs
@@ -1332,6 +1370,8 @@ class LinearMixedModel(LinearModel):
         dtype = 'single'
         n = self.n
         num_snps = len(snps)
+        if Z == None:
+            Z = sp.eye(n)
 
         h0_X = sp.mat(H_sqrt_inv * self.X, dtype=dtype)
         Y = H_sqrt_inv * self.Y  # The transformed outputs.
@@ -1645,7 +1685,7 @@ def emma(snps, phenotypes, K, cofactors=None):
 
 
 
-def emmax_w_two_env(snps, phenotypes, K, E, cofactors=None, Z=None, with_betas=False, emma_num=0):
+def emmax_w_two_env(snps, phenotypes, K, E, cofactors=None, Z=None):
     """
     Run EMMAX with environmental variables
     This returns three p-values per SNP for the three following tests:
@@ -1657,7 +1697,9 @@ def emmax_w_two_env(snps, phenotypes, K, E, cofactors=None, Z=None, with_betas=F
         phenotypes: [(N_1+N_2) X 1] (column) phenotype vector.
         K: [(N_1+N_2) X (N_1+N_2)] kinship.
         E: [(N_1+N_2) X 1] 0-1 vector, differentiating between the two environments.
-        Z: 
+        Z: [T X (N_1+N_2)] Incidence matrix, in case there are replicates.  
+                           In which case the phenotype and the environment also have T dimensions (but not the kinship)
+                           
     """
     lmm = LinearMixedModel(phenotypes)
     if Z != None:
@@ -1671,9 +1713,9 @@ def emmax_w_two_env(snps, phenotypes, K, E, cofactors=None, Z=None, with_betas=F
             for cofactor in cofactors:
                 lmm.add_factor(cofactor)
 
-    print "Running EMMAX"
+    print "Running EMMAX w G and GxE tests"
     s1 = time.time()
-    res = lmm.emmax_f_test(snps, Z=Z, with_betas=with_betas, emma_num=emma_num)
+    res = lmm.emmax_GxT_f_test(snps, E=E, Z=Z)
     secs = time.time() - s1
     if secs > 60:
         mins = int(secs) / 60
