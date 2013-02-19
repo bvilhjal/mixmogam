@@ -1393,13 +1393,12 @@ class LinearMixedModel(LinearModel):
 
             for j, X_j, in enumerate(Xs):
                 GT_j = GT[j]
-                (betas_g, rss_g, p, sigma) = linalg.lstsq(sp.hstack([h0_X, X_j.T]), Y, overwrite_a=True)
+                (betas_g, rss_g, p, sigma) = linalg.lstsq(sp.hstack([h0_X, X_j.T]), Y)
                 if rss_g:
                     betas_g_list[i + j] = map(float, list(betas_g))
                     rss_g_list[i + j] = rss_g[0]
 
-                    (betas_gt, rss_gt, p, sigma) = linalg.lstsq(sp.hstack([h0_X, X_j.T, GT_j.T]), Y,
-                                        overwrite_a=True)
+                    (betas_gt, rss_gt, p, sigma) = linalg.lstsq(sp.hstack([h0_X, X_j.T, GT_j.T]), Y)
                     if rss_gt:
                         betas_gt_list[i + j] = map(float, list(betas_gt))
                         rss_gt_list[i + j] = rss_gt[0]
@@ -1455,174 +1454,174 @@ class LinearMixedModel(LinearModel):
 
 
 
-    def emmax_two_snps(self, snps, verbose=True):
-        """
-        Every pair of SNPs, Vincent's results.
-        """
-        K = self.random_effects[1][1]
-        eig_L = self._get_eigen_L_(K)
-        num_snps = len(snps)
-
-        res = self.get_expedited_REMLE(eig_L=eig_L)  # Get the variance estimates..
-        delta = res['delta']
-        pseudo_her = 1.0 / (1 + delta)
-        H_sqrt = res['H_sqrt']
-        H_sqrt_inv = H_sqrt.I
-        emmax_res = self._emmax_f_test_(snps, H_sqrt, verbose=False, return_transformed_snps=True)
-        t_snps = emmax_res['t_snps']
-        full_rss = emmax_res['h0_rss']
-        h0_X = H_sqrt_inv * self.X
-        Y = H_sqrt_inv * self.Y  # The transformed outputs.
-
-        # Contructing result containers        
-        p3_f_stat_array = sp.zeros((num_snps, num_snps))
-        p3_p_val_array = sp.ones((num_snps, num_snps))
-        p4_f_stat_array = sp.zeros((num_snps, num_snps))
-        p4_p_val_array = sp.ones((num_snps, num_snps))
-        f_stat_array = sp.zeros((num_snps, num_snps))
-        p_val_array = sp.ones((num_snps, num_snps))
-        rss_array = sp.repeat(full_rss, num_snps * num_snps)
-        rss_array.shape = (num_snps, num_snps)
-        var_perc_array = sp.zeros((num_snps, num_snps))
-        haplotype_counts = [[{} for j in range(i + 1)] for i in range(num_snps)]
-
-        # Fill the diagonals with the single SNP emmax
-        for i, snp in enumerate(snps):
-            hap_set, hap_counts, haplotypes = snpsdata.get_haplotypes([snp], self.n,
-                                        count_haplotypes=True)
-            d = {'num_haps':hap_counts}
-            for hap, hap_c in zip(hap_set, hap_counts):
-                d[hap] = hap_c
-            haplotype_counts[i][i] = d
-            p_val_array[i, i] = emmax_res['ps'][i]
-            p3_p_val_array[i, i] = p_val_array[i, i]
-            p4_p_val_array[i, i] = p_val_array[i, i]
-            f_stat_array[i, i] = emmax_res['f_stats'][i]
-            p3_f_stat_array[i, i] = f_stat_array[i, i]
-            p4_f_stat_array[i, i] = f_stat_array[i, i]
-            rss_array[i, i] = emmax_res['rss'][i]
-            var_perc_array[i, i] = emmax_res['var_perc'][i]
-
-
-        identical_snp_count = 0
-        no_interaction_count = 0
-#        p = len(self.X.T) + q + 1 #Adding one SNP as a cofactor.
-#        n_p = self.n - p
-        for i, snp1 in enumerate(snps):
-            snp1 = snps[i]
-            for j in range(i):
-                snp2 = snps[j]
-                if i == j: continue  # Skip diagonals..
-
-                # Haplotype counts 
-                hap_set, hap_counts, haplotypes = snpsdata.get_haplotypes([snp1, snp2], self.n,
-                                            count_haplotypes=True)
-                groups = set(haplotypes)
-                d = {'num_haps':len(hap_counts)}
-                for hap, hap_c in zip(hap_set, hap_counts):
-                    d[hap] = hap_c
-                haplotype_counts[i][j] = d
-
-                # Fill the upper right part with more powerful of two tests.
-
-                if emmax_res['ps'][i] < emmax_res['ps'][j]:
-                    rss_array[j, i] = emmax_res['rss'][i]
-                    max_i = i
-                else:
-                    rss_array[j, i] = emmax_res['rss'][j]
-                    max_i = j
-
-                if d['num_haps'] == 2:
-                    identical_snp_count += 1
-                    continue
-                elif d['num_haps'] == 3:
-                    n_p = self.n - 3
-                    no_interaction_count += 1
-                    # Do ANOVA
-                    l = []
-                    for g in groups:
-                        l.append(sp.int8(haplotypes == g))
-                    X = sp.mat(l) * (H_sqrt_inv.T)
-                    (betas, rss, p, sigma) = linalg.lstsq(X.T, Y)
-                    rss_array[i, j] = rss[0]
-                    var_perc_array[i, j] = 1 - rss / full_rss
-                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # FINISH
-                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
-                    p3_f_stat_array[j, i] = f_stat
-                    p3_f_stat_array[i, j] = f_stat
-                    p3_p_val_array[j, i] = p_val
-                    p3_p_val_array[i, j] = p_val
-
-                    f_stat = ((full_rss - rss) / 2) / (rss / n_p)
-                    f_stat_array[j, i] = f_stat
-                    p_val_array[j, i] = stats.f.sf([f_stat], 2, n_p)[0]
-
-
-                elif d['num_haps'] == 4:  # With interaction
-                    n_p = self.n - 3
-                    # Do additive model
-                    # snp_mat = H_sqrt_inv * sp.mat([snp1, snp2]).T #Transformed inputs
-                    snp_mat = sp.mat([t_snps[i], t_snps[j]]).T  # Transformed inputs
-                    X = sp.hstack([h0_X, snp_mat])
-                    (betas, rss, rank, s) = linalg.lstsq(X, Y)
-                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # Compared to only one SNP
-                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
-                    rss_array[i, j] = rss
-                    p3_f_stat_array[j, i] = f_stat
-                    p3_p_val_array[j, i] = p_val
-
-#                    v_f_stat_array[j, i] = f_stat
-#                    v_p_val_array[j, i] = stats.f.sf([f_stat], 1, n_p)[0]
-
-                    f_stat = ((full_rss - rss) / 2) / (rss / n_p)  # Compared to only the intercept
-                    f_stat_array[j, i] = f_stat
-                    p_val_array[j, i] = stats.f.sf([f_stat], 2, n_p)[0]
-
-                    # Generate the interaction, and test it.
-                    i_snp = snp1 & snp2
-                    snp_mat = H_sqrt_inv * sp.mat([i_snp]).T
-                    X = sp.hstack([h0_X, sp.mat([t_snps[max_i]]).T, snp_mat])
-                    (betas, rss, rank, s) = linalg.lstsq(X, Y)
-                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # Compared to only one SNP
-                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
-                    p3_f_stat_array[i, j] = f_stat
-                    p3_p_val_array[i, j] = p_val
-
-
-                    # full model p-value
-                    n_p = self.n - 4
-                    l = []
-                    for g in groups:
-                        l.append(sp.int8(haplotypes == g))
-                    X = sp.mat(l) * (H_sqrt_inv.T)
-                    (betas, rss, p, sigma) = linalg.lstsq(X.T, Y)
-
-                    f_stat = ((rss_array[j, i] - rss) / 2) / (rss / n_p)  # Compared to only one SNP
-                    p_val = stats.f.sf([f_stat], 2, n_p)[0]
-                    p4_f_stat_array[j, i] = f_stat
-                    p4_p_val_array[j, i] = p_val
-
-                    f_stat = (rss_array[i, j] / rss - 1) * n_p  # Compared to two SNPs
-                    p4_f_stat_array[i, j] = f_stat
-                    p4_p_val_array[i, j] = stats.f.sf([f_stat], 1, n_p)[0]
-
-                    f_stat = ((full_rss - rss) / 3) / (rss / n_p)  # Compared to only intercept
-                    f_stat_array[i, j] = f_stat
-                    p_val_array[i, j] = stats.f.sf([f_stat], 3, n_p)[0]
-                    rss_array[j, i] = rss
-
-            if num_snps >= 10 and (i + 1) % (num_snps / 10) == 0:  # Print dots
-                sys.stdout.write('.')
-                sys.stdout.flush()
-
-        print no_interaction_count, identical_snp_count
-
-        #FINISH res dict!!!
-        res_dict = {'p3_ps':p3_p_val_array, 'p3_f_stats':p3_f_stat_array, 'p4_ps':p4_p_val_array,
-            'p4_f_stats':p4_f_stat_array, 'rss':rss_array, 'var_perc':var_perc_array,
-            'pseudo_heritability': pseudo_her, 'haplotype_counts':haplotype_counts,
-            'f_stats':f_stat_array, 'ps':p_val_array}
-        return res_dict
+#    def emmax_two_snps(self, snps, verbose=True):
+#        """
+#        Every pair of SNPs, Vincent's results.
+#        """
+#        K = self.random_effects[1][1]
+#        eig_L = self._get_eigen_L_(K)
+#        num_snps = len(snps)
+#
+#        res = self.get_expedited_REMLE(eig_L=eig_L)  # Get the variance estimates..
+#        delta = res['delta']
+#        pseudo_her = 1.0 / (1 + delta)
+#        H_sqrt = res['H_sqrt']
+#        H_sqrt_inv = H_sqrt.I
+#        emmax_res = self._emmax_f_test_(snps, H_sqrt, verbose=False, return_transformed_snps=True)
+#        t_snps = emmax_res['t_snps']
+#        full_rss = emmax_res['h0_rss']
+#        h0_X = H_sqrt_inv * self.X
+#        Y = H_sqrt_inv * self.Y  # The transformed outputs.
+#
+#        # Contructing result containers        
+#        p3_f_stat_array = sp.zeros((num_snps, num_snps))
+#        p3_p_val_array = sp.ones((num_snps, num_snps))
+#        p4_f_stat_array = sp.zeros((num_snps, num_snps))
+#        p4_p_val_array = sp.ones((num_snps, num_snps))
+#        f_stat_array = sp.zeros((num_snps, num_snps))
+#        p_val_array = sp.ones((num_snps, num_snps))
+#        rss_array = sp.repeat(full_rss, num_snps * num_snps)
+#        rss_array.shape = (num_snps, num_snps)
+#        var_perc_array = sp.zeros((num_snps, num_snps))
+#        haplotype_counts = [[{} for j in range(i + 1)] for i in range(num_snps)]
+#
+#        # Fill the diagonals with the single SNP emmax
+#        for i, snp in enumerate(snps):
+#            hap_set, hap_counts, haplotypes = snpsdata.get_haplotypes([snp], self.n,
+#                                        count_haplotypes=True)
+#            d = {'num_haps':hap_counts}
+#            for hap, hap_c in zip(hap_set, hap_counts):
+#                d[hap] = hap_c
+#            haplotype_counts[i][i] = d
+#            p_val_array[i, i] = emmax_res['ps'][i]
+#            p3_p_val_array[i, i] = p_val_array[i, i]
+#            p4_p_val_array[i, i] = p_val_array[i, i]
+#            f_stat_array[i, i] = emmax_res['f_stats'][i]
+#            p3_f_stat_array[i, i] = f_stat_array[i, i]
+#            p4_f_stat_array[i, i] = f_stat_array[i, i]
+#            rss_array[i, i] = emmax_res['rss'][i]
+#            var_perc_array[i, i] = emmax_res['var_perc'][i]
+#
+#
+#        identical_snp_count = 0
+#        no_interaction_count = 0
+# #        p = len(self.X.T) + q + 1 #Adding one SNP as a cofactor.
+# #        n_p = self.n - p
+#        for i, snp1 in enumerate(snps):
+#            snp1 = snps[i]
+#            for j in range(i):
+#                snp2 = snps[j]
+#                if i == j: continue  # Skip diagonals..
+#
+#                # Haplotype counts 
+#                hap_set, hap_counts, haplotypes = snpsdata.get_haplotypes([snp1, snp2], self.n,
+#                                            count_haplotypes=True)
+#                groups = set(haplotypes)
+#                d = {'num_haps':len(hap_counts)}
+#                for hap, hap_c in zip(hap_set, hap_counts):
+#                    d[hap] = hap_c
+#                haplotype_counts[i][j] = d
+#
+#                # Fill the upper right part with more powerful of two tests.
+#
+#                if emmax_res['ps'][i] < emmax_res['ps'][j]:
+#                    rss_array[j, i] = emmax_res['rss'][i]
+#                    max_i = i
+#                else:
+#                    rss_array[j, i] = emmax_res['rss'][j]
+#                    max_i = j
+#
+#                if d['num_haps'] == 2:
+#                    identical_snp_count += 1
+#                    continue
+#                elif d['num_haps'] == 3:
+#                    n_p = self.n - 3
+#                    no_interaction_count += 1
+#                    # Do ANOVA
+#                    l = []
+#                    for g in groups:
+#                        l.append(sp.int8(haplotypes == g))
+#                    X = sp.mat(l) * (H_sqrt_inv.T)
+#                    (betas, rss, p, sigma) = linalg.lstsq(X.T, Y)
+#                    rss_array[i, j] = rss[0]
+#                    var_perc_array[i, j] = 1 - rss / full_rss
+#                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # FINISH
+#                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
+#                    p3_f_stat_array[j, i] = f_stat
+#                    p3_f_stat_array[i, j] = f_stat
+#                    p3_p_val_array[j, i] = p_val
+#                    p3_p_val_array[i, j] = p_val
+#
+#                    f_stat = ((full_rss - rss) / 2) / (rss / n_p)
+#                    f_stat_array[j, i] = f_stat
+#                    p_val_array[j, i] = stats.f.sf([f_stat], 2, n_p)[0]
+#
+#
+#                elif d['num_haps'] == 4:  # With interaction
+#                    n_p = self.n - 3
+#                    # Do additive model
+#                    # snp_mat = H_sqrt_inv * sp.mat([snp1, snp2]).T #Transformed inputs
+#                    snp_mat = sp.mat([t_snps[i], t_snps[j]]).T  # Transformed inputs
+#                    X = sp.hstack([h0_X, snp_mat])
+#                    (betas, rss, rank, s) = linalg.lstsq(X, Y)
+#                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # Compared to only one SNP
+#                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
+#                    rss_array[i, j] = rss
+#                    p3_f_stat_array[j, i] = f_stat
+#                    p3_p_val_array[j, i] = p_val
+#
+# #                    v_f_stat_array[j, i] = f_stat
+# #                    v_p_val_array[j, i] = stats.f.sf([f_stat], 1, n_p)[0]
+#
+#                    f_stat = ((full_rss - rss) / 2) / (rss / n_p)  # Compared to only the intercept
+#                    f_stat_array[j, i] = f_stat
+#                    p_val_array[j, i] = stats.f.sf([f_stat], 2, n_p)[0]
+#
+#                    # Generate the interaction, and test it.
+#                    i_snp = snp1 & snp2
+#                    snp_mat = H_sqrt_inv * sp.mat([i_snp]).T
+#                    X = sp.hstack([h0_X, sp.mat([t_snps[max_i]]).T, snp_mat])
+#                    (betas, rss, rank, s) = linalg.lstsq(X, Y)
+#                    f_stat = (rss_array[j, i] / rss - 1) * n_p  # Compared to only one SNP
+#                    p_val = stats.f.sf([f_stat], 1, n_p)[0]
+#                    p3_f_stat_array[i, j] = f_stat
+#                    p3_p_val_array[i, j] = p_val
+#
+#
+#                    # full model p-value
+#                    n_p = self.n - 4
+#                    l = []
+#                    for g in groups:
+#                        l.append(sp.int8(haplotypes == g))
+#                    X = sp.mat(l) * (H_sqrt_inv.T)
+#                    (betas, rss, p, sigma) = linalg.lstsq(X.T, Y)
+#
+#                    f_stat = ((rss_array[j, i] - rss) / 2) / (rss / n_p)  # Compared to only one SNP
+#                    p_val = stats.f.sf([f_stat], 2, n_p)[0]
+#                    p4_f_stat_array[j, i] = f_stat
+#                    p4_p_val_array[j, i] = p_val
+#
+#                    f_stat = (rss_array[i, j] / rss - 1) * n_p  # Compared to two SNPs
+#                    p4_f_stat_array[i, j] = f_stat
+#                    p4_p_val_array[i, j] = stats.f.sf([f_stat], 1, n_p)[0]
+#
+#                    f_stat = ((full_rss - rss) / 3) / (rss / n_p)  # Compared to only intercept
+#                    f_stat_array[i, j] = f_stat
+#                    p_val_array[i, j] = stats.f.sf([f_stat], 3, n_p)[0]
+#                    rss_array[j, i] = rss
+#
+#            if num_snps >= 10 and (i + 1) % (num_snps / 10) == 0:  # Print dots
+#                sys.stdout.write('.')
+#                sys.stdout.flush()
+#
+#        print no_interaction_count, identical_snp_count
+#
+#        #FINISH res dict!!!
+#        res_dict = {'p3_ps':p3_p_val_array, 'p3_f_stats':p3_f_stat_array, 'p4_ps':p4_p_val_array,
+#            'p4_f_stats':p4_f_stat_array, 'rss':rss_array, 'var_perc':var_perc_array,
+#            'pseudo_heritability': pseudo_her, 'haplotype_counts':haplotype_counts,
+#            'f_stats':f_stat_array, 'ps':p_val_array}
+#        return res_dict
 
 
 
