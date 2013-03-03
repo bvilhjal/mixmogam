@@ -135,6 +135,8 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
                                plot_prefix='/Users/bjarnivilhjalmsson/tmp/test'):
     """
     Test for the multiple environment mixed model
+    
+    Simulates correlated trait pairs with exponentially distributed effects. 
     """
     
     import simulations
@@ -145,7 +147,8 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
     num_trait_pairs = 10
     num_indivs = 200
     num_snps = 100000
-    num_causals = 20
+    num_causals = 10  # Number of causal SNPs per trait (in total there may be up to twice that, depending on genetic correlation)
+    
     # Simulating (unlinked) genotypes and phenotype pairs w. random positive correlation
     d = simulations.get_simulated_data(num_indivs=num_indivs, num_snps=num_snps,
                                        num_trait_pairs=num_trait_pairs, num_causals=num_causals)
