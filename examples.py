@@ -150,8 +150,8 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
     
     for i in range(num_trait_pairs):
         # The two different phenotypes.
-        phen1 = d['trait_pairs'][0][0]
-        phen2 = d['trait_pairs'][0][1]
+        phen1 = d['trait_pairs'][i][0]
+        phen2 = d['trait_pairs'][i][1]
         # Stacking up the two phenotypes into one vector.
         Y = sp.hstack([phen1, phen2])
         
