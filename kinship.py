@@ -1,5 +1,8 @@
 """
 A collection of useful functions for manipulating and calculating kinship matrices.
+
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
 """
 import scipy as sp
 import sys
@@ -16,14 +19,14 @@ def calc_ibs_kinship(snps, snps_data_format='binary', snp_dtype='int8', dtype='s
     data_format: two are currently supported, 'binary', and 'diploid_int'
     """
     num_snps = len(snps)
-    #print 'Allocating K matrix'
+    # print 'Allocating K matrix'
     num_lines = len(snps[0])
     if chunk_size == None:
         chunk_size = num_lines
     k_mat = sp.zeros((num_lines, num_lines), dtype=dtype)
-    #print 'Starting calculation'
+    # print 'Starting calculation'
     chunk_i = 0
-    for snp_i in range(0, num_snps, chunk_size): #FINISH!!!
+    for snp_i in range(0, num_snps, chunk_size):  #FINISH!!!
         chunk_i += 1
         snps_array = sp.array(snps[snp_i:snp_i + chunk_size], dtype=snp_dtype)
         snps_array = snps_array.T
@@ -53,7 +56,7 @@ def calc_ibs_kinship(snps, snps_data_format='binary', snp_dtype='int8', dtype='s
     return k_mat
 
 
-def calc_ibd_kinship(snps, dtype='single',scaled=True):
+def calc_ibd_kinship(snps, dtype='single', scaled=True):
     num_snps = len(snps)
     n_indivs = len(snps[0])
     k_mat = sp.zeros((n_indivs, n_indivs), dtype=dtype)
@@ -98,7 +101,7 @@ def scale_k(k, verbose=False):
 def update_kinship(self, removed_snps, full_kinship, full_indivs, full_num_snps, retained_indivs, kinship_type='ibs',
                    snps_data_format='binary', snp_dtype='int8', dtype='single'):
     assert kinship_type == 'ibs', 'Only IBS kinships can be updated at the moment'
-    #Cut full kinship
+    # Cut full kinship
     cut_kinship = prepare_k(full_kinship, full_indivs, retained_indivs)
     num_lines = cut_kinship.shape[0]
     k_mat = sp.zeros((num_lines, num_lines), dtype=dtype)
@@ -140,8 +143,8 @@ def update_k_monomorphic(n_removed_snps, full_kinship, full_indivs, full_num_snp
 
 def load_kinship_from_file(kinship_file, accessions=None, scaled=True):
     assert os.path.isfile(kinship_file), 'File not found.'
-    #sys.stdout.write("Loading K.\n")
-    #sys.stdout.flush()
+    # sys.stdout.write("Loading K.\n")
+    # sys.stdout.flush()
     f = h5py.File(kinship_file)
     k = f['kinship'][...]
     k_accessions = list(f['accessions'][...])

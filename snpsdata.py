@@ -3,7 +3,8 @@ This python library aims to do two things.
 1. Offer general wrapper classes around SNPs datasets.
 2. Offer basic functions which can aid analysis of the SNPs.
 
-Bjarni Vilhjalmsson, bvilhjal@usc.edu
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
 """
 
 import sys, warnings
@@ -54,17 +55,17 @@ class _SnpsData_(object):
     """
     def __init__(self, snps, positions, baseScale=None, accessions=None, arrayIds=None, chromosome=None,
             alignment_positions=None, id=None, marker_types=None, alphabet=None, associated_positions=None):
-        self.snps = snps #list[position_index][accession_index]
-        self.positions = positions #list[position_index]
+        self.snps = snps  # list[position_index][accession_index]
+        self.positions = positions  # list[position_index]
         if accessions:
-            self.accessions = accessions #list[accession_index]
-            #self._convert_to_tg_ecotypes_()
+            self.accessions = accessions  # list[accession_index]
+            # self._convert_to_tg_ecotypes_()
         if arrayIds:
-            self.arrayIds = arrayIds #list[accession_index]
+            self.arrayIds = arrayIds  # list[accession_index]
         self.chromosome = chromosome
         self.alignment_positions = alignment_positions
         self.id = id
-        self.marker_types = marker_types #Where do these markers come frome, what type are they?  Useful for later analysis.
+        self.marker_types = marker_types  # Where do these markers come frome, what type are they?  Useful for later analysis.
         self.alphabet = None
         self.missingVal = None
         self.associated_positions = associated_positions
@@ -92,8 +93,8 @@ class _SnpsData_(object):
             except:
                 ai2 = -1
             acc_map.append((ai1, ai2))
-        #print acc_map
-        #pdb.set_trace()
+        # print acc_map
+        # pdb.set_trace()
         index_dict = {}
         j = 0
         last_pos = sd.positions[j]
@@ -132,7 +133,7 @@ class _SnpsData_(object):
                                 error_count += 1
                             t_count += 1
                     if t_count > 0 and error_count / float(t_count) < error_threshold:
-                        #print "Merge error is %f"%(error_count/float(t_count))
+                        # print "Merge error is %f"%(error_count/float(t_count))
                         for (ai1, ai2) in acc_map:
                             if ai1 != -1 and ai2 != -1:
                                 if snp1[ai1] != self.missingVal:
@@ -159,7 +160,7 @@ class _SnpsData_(object):
                         new_snp.append(snp1[ai1])
                     else:
                         new_snp.append(self.missingVal)
-                #print snp1,new_snp
+                # print snp1,new_snp
             if new_snp == []:
                 raise Exception
             new_snps.append(new_snp)
@@ -322,11 +323,11 @@ class _SnpsData_(object):
             self.snps[i] = newSnp
         self.accessions = newAccessions
         if self.arrayIds:
-            #print "removeAccessionIndices: has array IDs: self.arrayIds =",self.arrayIds
+            # print "removeAccessionIndices: has array IDs: self.arrayIds =",self.arrayIds
             self.arrayIds = newArrayIds
-            #print "len(self.arrayIds):",len(self.arrayIds)
-        #pdb.set_trace()
-        #print "len(self.accessions):",len(self.accessions)
+            # print "len(self.arrayIds):",len(self.arrayIds)
+        # pdb.set_trace()
+        # print "len(self.accessions):",len(self.accessions)
 
 
     def filterMonoMorphicSnps(self):
@@ -421,7 +422,7 @@ class _SnpsData_(object):
         Constructs and returns a new object based on the prev. using SNPs only in the given region.
         """
         import copy
-        snpsd = copy.deepcopy(self) #Clone
+        snpsd = copy.deepcopy(self)  # Clone
         i = 0
         while i < len(self.snps) and self.positions[i] < start_pos:
             i += 1
@@ -450,7 +451,7 @@ class _SnpsData_(object):
 #        print self.accessions
 #        print len(phen_vals),len(phen_data.accessions)
         acc_set = list(set(self.accessions).intersection(set(phen_data.accessions)))
-        acc_set.sort() #Not really necessary...
+        acc_set.sort()  # Not really necessary...
         new_snp = []
         new_phen_vals = []
         for acc in acc_set:
@@ -624,8 +625,8 @@ class RawSnpsData(_SnpsData_):
     Alphabet: A,C,G,T, and NA
 
     """
-    #alphabet = ['A','C','G','T']
-    #alphabet = ['A','C','G','T','-']
+    # alphabet = ['A','C','G','T']
+    # alphabet = ['A','C','G','T','-']
 
 
 
@@ -636,17 +637,17 @@ class RawSnpsData(_SnpsData_):
         self.snps = snps
         self.positions = positions
         self.accessions = accessions
-        #if accessions:
+        # if accessions:
         #    self._convert_to_tg_ecotypes_()
 
         self.arrayIds = arrayIds
-        self.callProbabilities = []  #list[position_index][accession_index]
+        self.callProbabilities = []  # list[position_index][accession_index]
         if callProbabilities:
             self.callProbabilities = callProbabilities
         self.alignment_positions = alignment_positions
         self.missingVal = missing_val
         self.alphabet = IUPAC_alphabet
-        self.marker_types = marker_types #Where do these markers come frome, what type are they?  Useful for later analysis.
+        self.marker_types = marker_types  # Where do these markers come frome, what type are they?  Useful for later analysis.
         self.id = id
         self.chromosome = chromosome
 
@@ -743,7 +744,7 @@ class RawSnpsData(_SnpsData_):
 #        os.system(nputeCmd)
 #        if verbose:
 #            print "Imputation done!"
-##        pdb.set_trace()
+# #        pdb.set_trace()
 #        snpsd = imp.readNputeFile(tmpFile2[1], self.accessions, self.positions)
 #        self.snps = snpsd.snps
 #        os.remove(tmpFile1[1])
@@ -862,7 +863,7 @@ class RawSnpsData(_SnpsData_):
             if accessionCounts[i] > 0:
                 accessionErrorRate[i] = accessionErrorRate[i] / float(accessionCounts[i])
             no_of_common_snps_pos = len(commonSnpsPos)
-            if no_of_common_snps_pos > 0:    #05/08/10 yh
+            if no_of_common_snps_pos > 0:  # 05/08/10 yh
                 accessionCallRates[0][i] = accessionCallRates[0][i] / float(no_of_common_snps_pos)
                 accessionCallRates[1][i] = accessionCallRates[1][i] / float(no_of_common_snps_pos)
             else:
@@ -916,7 +917,7 @@ class RawSnpsData(_SnpsData_):
 
         Reference ecotype is set to be the 0 allele. 
         """
-        decoder = {self.missingVal:missingVal} #Might cause errors somewhere???!!!
+        decoder = {self.missingVal:missingVal}  #Might cause errors somewhere???!!!
         coding_fun = sp.vectorize(lambda x: decoder[x], otypes=['int8'])
 
         if reference_ecotype in self.accessions:
@@ -935,12 +936,12 @@ class RawSnpsData(_SnpsData_):
             unique_nts = sp.unique(snp).tolist()
             if self.missingVal in unique_nts:
                 if len(unique_nts) != 3:
-                    continue #Skipping non-binary SNP
+                    continue  # Skipping non-binary SNP
                 else:
                     unique_nts.remove(self.missingVal)
             else:
                 if len(unique_nts) != 2:
-                    continue #Skipping non-binary SNP
+                    continue  # Skipping non-binary SNP
             if snp[ref_i] != self.missingVal:
                 col0_nt = snp[ref_i]
                 decoder[col0_nt] = 0
@@ -1197,7 +1198,7 @@ class SNPsData(_SnpsData_):
     An alternative to the old SnpsData class, where this uses scipy to speed things up when possible.
     
     """
-    alphabet = [-1, 0, 1, 2, 3]  #Here -1 is thought to be missing data value.
+    alphabet = [-1, 0, 1, 2, 3]  # Here -1 is thought to be missing data value.
     def __init__(self, snps, positions, accessions=None, arrayIds=None, chromosome=None,
             alignment_positions=None, id=None, marker_types=None, missing_val= -1):
         self.snps = snps
@@ -1206,7 +1207,7 @@ class SNPsData(_SnpsData_):
         self.arrayIds = arrayIds
         self.chromosome = chromosome
         self.alignment_positions = alignment_positions
-        self.marker_types = marker_types #Where do these markers come frome, what type are they?  Useful for later analysis.
+        self.marker_types = marker_types  # Where do these markers come frome, what type are they?  Useful for later analysis.
         self.id = id
         self.missingVal = missing_val
 
@@ -1232,11 +1233,11 @@ class SNPsData(_SnpsData_):
 #            self.snps[i] = newSnp
         self.accessions = newAccessions
         if self.arrayIds:
-            #print "removeAccessionIndices: has array IDs: self.arrayIds =",self.arrayIds
+            # print "removeAccessionIndices: has array IDs: self.arrayIds =",self.arrayIds
             self.arrayIds = newArrayIds
-            #print "len(self.arrayIds):",len(self.arrayIds)
-        #pdb.set_trace()
-        #print "len(self.accessions):",len(self.accessions)
+            # print "len(self.arrayIds):",len(self.arrayIds)
+        # pdb.set_trace()
+        # print "len(self.accessions):",len(self.accessions)
 
 
     def onlyBinarySnps(self):
@@ -1253,7 +1254,7 @@ class SNPsData(_SnpsData_):
         self.no_of_nonbinary_snps_removed = num_removed
         self.snps = new_snps
         self.positions = new_positions
-        #print "Removed %d non-binary SNPs, leaving %d SNPs in total." % (num_removed, len(self.snps))
+        # print "Removed %d non-binary SNPs, leaving %d SNPs in total." % (num_removed, len(self.snps))
         return num_removed
 
 
@@ -1270,7 +1271,7 @@ class SNPsData(_SnpsData_):
         num_removed = len(self.positions) - len(new_positions)
         self.snps = new_snps
         self.positions = new_positions
-        #print "Removed %d non-binary SNPs, leaving %d SNPs in total." % (num_removed, len(self.snps))
+        # print "Removed %d non-binary SNPs, leaving %d SNPs in total." % (num_removed, len(self.snps))
         return num_removed
 
 
@@ -1312,7 +1313,7 @@ class SNPsData(_SnpsData_):
         """
 
 
-        def _get_maf_(snp): #For missing data coded as -1s
+        def _get_maf_(snp):  # For missing data coded as -1s
             l = sp.bincount(snp)
             maf = max(l)
             for m in l[1:]:
@@ -1426,7 +1427,7 @@ class SNPsData(_SnpsData_):
         num_accessions = len(new_accessions)
         missing_val_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
 
-        #To handle multiple markers at the same position
+        # To handle multiple markers at the same position
         index_dict = {}
         j = 0
         last_pos = sd.positions[j]
@@ -1447,17 +1448,17 @@ class SNPsData(_SnpsData_):
                 index_dict[i] = index_list
 
 
-        indices_to_skip = set() #Markers which are merged in the second SNPsData
+        indices_to_skip = set()  # Markers which are merged in the second SNPsData
         new_snps = []
         new_positions = []
         merge_count = 0
         for i, snp1 in enumerate(self.snps):
             new_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
-            if i in index_dict: #If there are markers at the same position.
+            if i in index_dict:  # If there are markers at the same position.
                 index_list = index_dict[i]
                 for j in index_list:
                     error_count = 0
-                    t_count = 0 #total count
+                    t_count = 0  # total count
                     snp2 = sd.snps[j]
                     for (ai1, ai2) in acc_map:
                         if ai1 != -1 and ai2 != -1:
@@ -1492,19 +1493,19 @@ class SNPsData(_SnpsData_):
                             if ai1 != -1:
                                 new_snp[ni] = snp1[ai1]
 
-            else: #There were no markers at this position in the other snps data.
+            else:  # There were no markers at this position in the other snps data.
                 for ni, (ai1, ai2) in enumerate(acc_map):
                     if ai1 != -1:
                         new_snp[ni] = snp1[ai1]
 
 
-            if sp.any(new_snp != missing_val_snp):#Some are not are missing
+            if sp.any(new_snp != missing_val_snp):  # Some are not are missing
                 new_snps.append(new_snp)
                 new_positions.append(self.positions[i])
 
         print 'Inserting %d non-overlapping SNPs into the self snps data.' % len(sd.snps)
         for j in range(len(sd.snps)):
-            if not j in indices_to_skip:#There were no markers at this position in the other snps data.
+            if not j in indices_to_skip:  # There were no markers at this position in the other snps data.
                 snp2 = sd.snps[j]
                 new_snp = sp.array(sp.repeat(self.missingVal, num_accessions), dtype='int8')
                 for ni, (ai1, ai2) in enumerate(acc_map):
@@ -1540,8 +1541,8 @@ class SnpsData(_SnpsData_):
 
     Contains various functions that aid the analysis of the data.
     """
-    #freqs = [] #list[position_index1][position_index2-position_index1+1] Linkage frequencies. 
-    #baseScale = 1 #Scaling for positions
+    # freqs = [] #list[position_index1][position_index2-position_index1+1] Linkage frequencies. 
+    # baseScale = 1 #Scaling for positions
     alphabet = [0, 1, 2, 3]
     def __init__(self, snps, positions, baseScale=None, accessions=None, arrayIds=None, chromosome=None,
             alignment_positions=None, id=None, marker_types=None, missing_val= -1):
@@ -1553,7 +1554,7 @@ class SnpsData(_SnpsData_):
         self.arrayIds = arrayIds
         self.chromosome = chromosome
         self.alignment_positions = alignment_positions
-        self.marker_types = marker_types #Where do these markers come frome, what type are they?  Useful for later analysis.
+        self.marker_types = marker_types  # Where do these markers come frome, what type are they?  Useful for later analysis.
         self.id = id
         self.missingVal = missing_val
 
@@ -1622,7 +1623,7 @@ class SnpsData(_SnpsData_):
             while j < len(self.snps) and (self.positions[j] - self.positions[i]) < innerWindowSize :
                 j = j + 1
             while j < len(self.snps) and (self.positions[j] - self.positions[i]) <= windowSize:
-                jfreqs = [0.0] * 4   #The frequencies, of a pair of alleles.
+                jfreqs = [0.0] * 4  # The frequencies, of a pair of alleles.
                 snp1 = self.snps[i]
                 snp2 = self.snps[j]
                 count = 0
@@ -1644,7 +1645,7 @@ class SnpsData(_SnpsData_):
             for i, snp1 in enumerate(self.snps):
                 l = []
                 for j in range(i):
-                    jfreqs = [0.0] * 4   #The frequencies, of a pair of alleles.
+                    jfreqs = [0.0] * 4  # The frequencies, of a pair of alleles.
                     snp2 = self.snps[j]
                     count = 0.0
                     for nt1, nt2 in zip(snp1, snp2):
@@ -1664,7 +1665,7 @@ class SnpsData(_SnpsData_):
             for i, snp1 in enumerate(self.snps):
                 l = []
                 for j in range(i):
-                    jfreqs = [0.0] * 4   #The frequencies, of a pair of alleles.
+                    jfreqs = [0.0] * 4  # The frequencies, of a pair of alleles.
                     snp2 = self.snps[j]
                     for k in range(len(snp1)):
                         val = snp1[k] * 2 + snp2[k]
@@ -1674,11 +1675,11 @@ class SnpsData(_SnpsData_):
 
             return freqs
 
-    def calcFreqsUnbiased(self, windowSize, innerWindowSize=0): # Returns a list of two loci comparison frequencies with in a window.
+    def calcFreqsUnbiased(self, windowSize, innerWindowSize=0):  # Returns a list of two loci comparison frequencies with in a window.
         """ 
         Uses a distribution of frequencies that is not dependent on the lenght of the sequence.  (Alot of data is disregarded.)
         """
-        numPairs = 0  #Counts the number of pairs
+        numPairs = 0  # Counts the number of pairs
         freqs = []
         delta = 0
         if len(self.snps) > 0:
@@ -1705,7 +1706,7 @@ class SnpsData(_SnpsData_):
                 break
         self.freqs = freqs
         return self.freqs
-        #return numPairs
+        # return numPairs
 
 
     def calcFreqsSimple(self):
@@ -1759,7 +1760,7 @@ class SnpsData(_SnpsData_):
         """
         newsnps = []
         newpos = []
-        #print self.snps
+        # print self.snps
         l = len(self.snps[0])
         if l == 0:
             print self.snps
@@ -1783,7 +1784,7 @@ class SnpsData(_SnpsData_):
         """Filters all snps with MAF of less than threshold out of dataset."""
         newsnps = []
         newpos = []
-        #print self.snps
+        # print self.snps
         l = len(self.snps[0])
         if l == 0:
             print self.snps
@@ -1795,8 +1796,8 @@ class SnpsData(_SnpsData_):
             if c > threshold:
                 newsnps.append(snp)
                 newpos.append(self.positions[j])
-        #if len(newsnps)==0:  
-            #print "Filtered out all snps from",len(self.snps)," what to do what to do?"
+        # if len(newsnps)==0:  
+            # print "Filtered out all snps from",len(self.snps)," what to do what to do?"
         del self.snps
         self.snps = newsnps
         del self.positions
@@ -1804,7 +1805,7 @@ class SnpsData(_SnpsData_):
 
 
     def _genRecombFile(self, filename, windowSize, maxNumPairs):
-        n = len(self.snps[0]) #number of individuals/accessions
+        n = len(self.snps[0])  # number of individuals/accessions
         numPairs = self.calcFreqsUnbiased(windowSize)
         if numPairs != 0:
             filterProb = float(maxNumPairs) / numPairs
@@ -1923,7 +1924,7 @@ class SNPsDataSet:
         self.id = id
         self.missing_val = snpsds[0].missingVal
         self.call_method = call_method
-        self.data_format = data_format # binary, diploid_ints, floats, int
+        self.data_format = data_format  # binary, diploid_ints, floats, int
         if not id and snpsds[0].id:
                 self.id = id
         for i in range(1, len(self.chromosomes)):
@@ -2096,7 +2097,7 @@ class SNPsDataSet:
             numSnps += len(self.snpsDataList[i].positions)
 
 
-        #outStr = "NumSnps: "+str(numSnps)+", NumAcc: "+str(len(accessions))+"\n"
+        # outStr = "NumSnps: "+str(numSnps)+", NumAcc: "+str(len(accessions))+"\n"
         if withArrayIds:
             outStr = ", ".join(["-", "-"] + self.snpsDataList[0].arrayIds) + "\n"
         else:
@@ -2223,11 +2224,11 @@ class SNPsDataSet:
         """
         print "Coordinating SNP and Phenotype data."
         ets = phend.phen_dict[pid]['ecotypes']
-        #Checking which accessions to keep and which to remove.
+        # Checking which accessions to keep and which to remove.
 #        common_ets = list(set(self.accessions + ets))
 #        common_ets.sort()
 
-        sd_indices_to_keep = set()#[]
+        sd_indices_to_keep = set()  # []
         pd_indices_to_keep = []
 
         for i, acc in enumerate(self.accessions):
@@ -2256,17 +2257,17 @@ class SNPsDataSet:
 
 
 
-        #Filter accessions which do not have phenotype values (from the genotype data).
+        # Filter accessions that do not have phenotype values (from the genotype data).
         print "Filtering genotype data"
-        #if len(sd_indices_to_keep) != len(self.accessions):
+        # if len(sd_indices_to_keep) != len(self.accessions):
         self.filter_accessions_indices(sd_indices_to_keep)
         if coord_phen:
             num_values = len(phend.phen_dict[pid]['ecotypes'])
             print "Filtering phenotype data."
-            phend.filter_ecotypes(pd_indices_to_keep, pids=[pid]) #Removing accessions that don't have genotypes or phenotype values
+            phend.filter_ecotypes(pd_indices_to_keep, pids=[pid])  # Removing accessions that don't have genotypes or phenotype values
             ets = phend.phen_dict[pid]['ecotypes']
             print "Out of %d, leaving %d values." % (num_values, len(ets))
-        #Ordering accessions according to the order of accessions in the genotype file
+        # Ordering accessions according to the order of accessions in the genotype file
 
 #        if ets != self.accessions:
 #            l = zip(ets, range(len(ets)))
@@ -2505,9 +2506,9 @@ class SNPsDataSet:
             snps_array = sp.array(snps[i:i + chunk_size])
             snps_array = snps_array.T
             norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
-            x = sp.mat(norm_snps_array.T - accession_means) #The only difference from the IBD matrix is that we subtract the accession means.
+            x = sp.mat(norm_snps_array.T - accession_means)  # The only difference from the IBD matrix is that we subtract the accession means.
             cov_mat += x.T * x
-            if num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0: #Print dots
+            if num_splits >= num_dots and (chunk_i + 1) % int(num_splits / num_dots) == 0:  # Print dots
                 sys.stdout.write('.')
                 sys.stdout.flush()
         cov_mat = cov_mat / self.num_snps()
@@ -2527,7 +2528,7 @@ class SNPsDataSet:
         snps = self.getSnps(debug_filter)
         snps_array = sp.array(snps)
         snps_array = snps_array.T
-        #Normalizing (subtracting by)
+        # Normalizing (subtracting by)
         norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
         print 'Finished normalizing them'
         return norm_snps_array
@@ -2628,7 +2629,7 @@ class SNPsDataSet:
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
-        #matplotlib.rcParams['backend'] = 'GTKAgg'
+        # matplotlib.rcParams['backend'] = 'GTKAgg'
         if eid == None:
             eid = pd.get_ecotype_id_info_dict()
         lats = []
@@ -2677,7 +2678,7 @@ class SNPsDataSet:
                     llcrnrlon= -15, urcrnrlon=40, lat_ts=20, resolution='h')
             m.drawparallels(np.arange(30, 80, 10))
             m.drawmeridians(np.arange(-20, 100, 10))
-            #m.bluemarble()
+            # m.bluemarble()
         elif map_type == 'sweden':
 
             plt.figure(figsize=(2.4, 4))
@@ -2686,15 +2687,15 @@ class SNPsDataSet:
                     llcrnrlon=10, urcrnrlon=25, lat_ts=10, resolution='i')
             m.drawparallels(np.arange(45, 75, 5))
             m.drawmeridians(np.arange(5, 30, 5))
-            #m.bluemarble()
+            # m.bluemarble()
         else:
             raise Exception("map_type is invalid")
 
-        #m.drawmapboundary(fill_color='aqua')
+        # m.drawmapboundary(fill_color='aqua')
         m.drawcoastlines()
         m.fillcontinents()
         m.drawcountries()
-        #m.fillcontinents(color='green', lake_color='blue')
+        # m.fillcontinents(color='green', lake_color='blue')
 
         xs = []
         ys = []
@@ -2716,7 +2717,7 @@ class SNPsDataSet:
                 cmap = cm.get_cmap('jet')
         lws = [0] * len(xs)
         plt.scatter(xs, ys, s=10, linewidths=lws, c=color_vals, cmap=cmap, alpha=0.7, zorder=2)
-        #plt.plot(xs, ys, 'o', color='r', alpha=0.5, zorder=2,)
+        # plt.plot(xs, ys, 'o', color='r', alpha=0.5, zorder=2,)
         if title:
             plt.title(title)
         if pdf_file:
@@ -2927,11 +2928,11 @@ class SNPsDataSet:
             cg_snp_indices.extend(range(start_i, stop_i))
         cg_snp_indices = sorted(list(set(cg_snp_indices)))
         if method_type == 'sum_all_priors':
-            pi_0 = num_exp_causal / num_snps #Basis prior
-            pi_1 = pi_0 * cg_prior_fold_incr #Cand. gene prior
+            pi_0 = num_exp_causal / num_snps  # Basis prior
+            pi_1 = pi_0 * cg_prior_fold_incr  # Cand. gene prior
         elif method_type == 'sum_base_priors':
-            pi_0 = num_exp_causal / (num_snps - num_cgs + cg_prior_fold_incr * num_cgs) #Basis prior
-            pi_1 = pi_0 * cg_prior_fold_incr #Cand. gene prior
+            pi_0 = num_exp_causal / (num_snps - num_cgs + cg_prior_fold_incr * num_cgs)  # Basis prior
+            pi_1 = pi_0 * cg_prior_fold_incr  # Cand. gene prior
         else:
             raise NotImplementedError
         snp_priors = sp.repeat(pi_0, num_snps)
@@ -2957,7 +2958,7 @@ class SNPsDataSet:
 
 
         if cpp_list != None:
-            #Do chromosome by chromosome..
+            # Do chromosome by chromosome..
             for chrom in [1, 2, 3, 4, 5]:
                 p_i = bisect.bisect(cpp_list, (chrom, 0, 0))
                 snp_i = 0
@@ -2986,12 +2987,12 @@ class SNPsDataSet:
                     chrom_1, pos_1, prior_1 = cpp_list[p_i]
                     chrom_2, pos_2, prior_2 = cpp_list[p_i + 1]
 
-                if chrom_2 != chrom: #The chromosome is ending
+                if chrom_2 != chrom:  # The chromosome is ending
                     while snp_i < num_snps:
                         snp_priors.append(prior_1)
                         snp_i += 1
 
-                elif p_i >= len(cpp_list) - 2: #It's finishing
+                elif p_i >= len(cpp_list) - 2:  # It's finishing
                     while snp_i < num_snps:
                         snp_priors.append(prior_2)
                         snp_i += 1
@@ -3064,7 +3065,7 @@ class SNPsDataSet:
         """
         c_i = 0
         i = 0
-        rl_i = 0 #region list index
+        rl_i = 0  # region list index
         while c_i < len(self.chromosomes) and rl_i < len(regionList):
             region = regionList[rl_i]
             snpsd = self.snpsDataList[c_i]
@@ -3123,12 +3124,12 @@ class SNPsDataSet:
                 accessions_na_counts[i] += c
             total_snps += float(len(snpsd.snps))
         accessions_na_counts = [accessions_na_counts[i] / total_snps for i in range(len(accessions_na_counts))]
-        #print accessions_na_counts
+        # print accessions_na_counts
         acc_to_keep = []
         for i, na_rate in enumerate(accessions_na_counts):
             if na_rate <= max_na_rate:
                 acc_to_keep.append(self.accessions[i])
-        #print len(acc_to_keep)
+        # print len(acc_to_keep)
         self.filter_accessions(acc_to_keep)
 
 
@@ -3178,15 +3179,15 @@ class SNPsDataSet:
                 acc_indices_to_keep.append(i)
             except:
                 continue
-        #pdb.set_trace()
-        #acc_indices_to_keep.sort()
+        # pdb.set_trace()
+        # acc_indices_to_keep.sort()
         self.filter_accessions_indices(acc_indices_to_keep)
 
 
     def filter_accessions_indices(self, acc_indices_to_keep):
         num_accessions = len(self.accessions)
         for i, snpsd in enumerate(self.snpsDataList):
-            #print i, len(snpsd.accessions)
+            # print i, len(snpsd.accessions)
             snpsd.removeAccessionIndices(acc_indices_to_keep)
         self.accessions = self.snpsDataList[0].accessions
         self.array_ids = self.snpsDataList[0].arrayIds
@@ -3269,7 +3270,7 @@ def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
         import pylab
         import phenotypeData
         e_dict = phenotypeData.get_ecotype_id_info_dict()
-        #print e_dict
+        # print e_dict
         labels = []
         for et_i, et in enumerate(ets):
                 try:
@@ -3302,7 +3303,7 @@ def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
 
 
 
-def construct_snps_data_set(snps, positions, chromosomes, accessions, data_format='binary'):
+def construct_snps_data_set(snps, positions, chromosomes, indiv_ids, data_format='binary'):
     """
     Assumes the SNPs are sorted by chromosome and position.
     """
@@ -3313,10 +3314,11 @@ def construct_snps_data_set(snps, positions, chromosomes, accessions, data_forma
     for chrom in chrom_list[:-1]:
         i = bisect.bisect(chromosomes, chrom)
         snpsds.append(SNPsData(snps=snps[last_i:i], positions=positions[last_i:i],
-                    chromosome=chrom, accessions=accessions))
+                    chromosome=chrom, accessions=indiv_ids))
         last_i = i
+    assert snps.dtype == sp.dtype('int8'), "Type doesn't match the data format."
     snpsds.append(SNPsData(snps=snps[last_i:], positions=positions[last_i:],
-                chromosome=chrom_list[-1], accessions=accessions))
+                chromosome=chrom_list[-1], accessions=indiv_ids))
     return SNPsDataSet(snpsds, chrom_list, data_format=data_format)
 
 

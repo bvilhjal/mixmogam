@@ -1,5 +1,9 @@
 """
 A container for functions which aim to analyze or process gwas results, for some aim.
+
+
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
 """
 
 import scipy as sp

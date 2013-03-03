@@ -1,7 +1,8 @@
 """ 
 This library offers functions to parse different types of SNPs data from multiple formats into a snpsData objects.
 
-Bjarni Vilhjalmsson, bvilhjal@usc.edu
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
 """
 import time, random
 import cPickle

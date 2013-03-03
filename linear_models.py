@@ -1,8 +1,9 @@
 """
 Contains functions to perform various linear regression schemes, such as simple linear regression, and mixed models.
 
-author: Bjarni Vilhjalmsson
-email: bjarni.vilhjalmsson@gmail.com 
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
+
 """
 try:
     import scipy as sp

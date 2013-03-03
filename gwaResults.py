@@ -1,5 +1,8 @@
 """
 Contains classes to handle results of GWAS
+
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
 """
 
 
@@ -436,7 +439,7 @@ class Result(object):
     def _plot_small_manhattan_(self, pdf_file=None, png_file=None, min_score=0, max_score=None,
                 score_type="pvals", ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False,
                 cand_genes=None, threshold=0, highlight_markers=None, chromosome=None,
-                tair_file=None, plot_genes=True, color_map=None, markersize=3, fig_size=(8, 5)):
+                tair_file=None, plot_genes=False, color_map=None, markersize=3, fig_size=(8, 5)):
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
@@ -1034,7 +1037,7 @@ class Result(object):
 
     def plot_manhattan(self, pdf_file=None, png_file=None, min_score=None, max_score=None, percentile=80,
             type="pvals", ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False, b_threshold=None,
-            cand_genes=None, threshold=0, highlight_markers=None, tair_file=None, plot_genes=True,
+            cand_genes=None, threshold=0, highlight_markers=None, tair_file=None, plot_genes=False,
             plot_xaxis=True, highlight_loci=None, neg_log_transform=False, markersize=3,
             chrom_col_map=None):
 

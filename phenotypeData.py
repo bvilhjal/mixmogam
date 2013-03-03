@@ -1,3 +1,9 @@
+"""
+A class and functions useful for handling phenotype data.
+
+Author: Bjarni J. Vilhjalmsson
+Email: bjarni.vilhjalmsson@gmail.com
+"""
 import itertools as it
 import sys
 try:
