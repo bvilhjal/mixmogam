@@ -170,6 +170,21 @@ def plot_simple_qqplots(png_file_prefix, results, result_labels=None, line_color
     simple_log_qqplot(log_qs, png_file_prefix + '_log_qq.png', quantile_labels=result_labels,
                 line_colors=line_colors, num_dots=num_dots, title=title, max_val=max_neg_log_val)
 
+def plot_simple_qqplots_pvals(png_file_prefix, pvals_list, result_labels=None, line_colors=None,
+            num_dots=1000, title=None, max_neg_log_val=5):
+    """
+    Plots both log QQ-plots and normal QQ plots.
+    """
+    qs = []
+    log_qs = []
+    for pvals in pvals_list:
+        qs.append(get_quantiles(pvals, num_dots))
+        log_qs.append(get_log_quantiles(pvals, num_dots, max_neg_log_val))
+    simple_qqplot(qs, png_file_prefix + '_qq.png', quantile_labels=result_labels,
+                line_colors=line_colors, num_dots=num_dots, title=title)
+    simple_log_qqplot(log_qs, png_file_prefix + '_log_qq.png', quantile_labels=result_labels,
+                line_colors=line_colors, num_dots=num_dots, title=title, max_val=max_neg_log_val)
+
 
 
 
