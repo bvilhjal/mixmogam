@@ -694,7 +694,7 @@ class LinearMixedModel(LinearModel):
             betas = map(float, list(betas))
             n = Y_t.shape[0]
             ll = -0.5 * (n * sp.log(2 * sp.pi) + sp.sum(sp.log(evals)) + mahalanobis_rss)
-            assert mahalanobis_rss != [], 'WTF?'
+            assert len(mahalanobis_rss) > 0, 'WTF?'
             res = {'ll': ll, 'rss':rss, 'mahalanobis_rss':mahalanobis_rss} 
         return res
 
