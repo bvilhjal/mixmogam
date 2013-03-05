@@ -91,7 +91,7 @@ class LinearModel(object):
         """
         self.n = len(Y)
         self.Y = sp.matrix(Y).T
-        self.X = sp.mat(sp.repeat(1, self.n)).T  # The intercept
+        self.X = sp.ones((self.n, 1))  # The intercept
         self.p = 1
         self.beta_est = None
         self.cofactors = []
@@ -103,11 +103,13 @@ class LinearModel(object):
         Adds an explanatory variable to the X matrix.
         """
         # Checking whether this new cofactor in linearly independent.
-        new_x = sp.matrix(x).T
+        new_x = sp.array(x)
+        new_x.shape = len(x)
         (beta, rss, rank, sigma) = linalg.lstsq(self.X, new_x)
         if float(rss) < lin_depend_thres:
             warnings.warn('A factor was found to be linearly dependent on the factors already in the X matrix.  Hence skipping it!')
             return False
+        new_x.shape = (self.n, 1)
         self.X = sp.hstack([self.X, new_x])
         self.cofactors.append(x)
         self.p += 1
@@ -191,7 +193,7 @@ class LinearModel(object):
         """
         if not rss:
             rss = self.get_rss(dtype)
-        return (-self.n / 2) * (1 + sp.log(2 * sp.pi) + sp.log(rss / self.n))
+        return (-self.n / 2) * (1 + sp.log(2 * sp.pi) + rss / self.n)
 
 
     def fast_f_test(self, snps, verbose=True, Z=None, with_betas=False):
@@ -562,8 +564,11 @@ class LinearMixedModel(LinearModel):
         """
         self.n = len(Y)
         self.y_var = sp.var(Y, ddof=1, dtype=dtype)
-        self.Y = sp.matrix([[y] for y in Y], dtype=dtype)
-        self.X = sp.matrix([[1] for y in Y], dtype=dtype)  # The intercept
+#        self.Y = sp.matrix([[y] for y in Y], dtype=dtype)
+#        self.X = sp.matrix([[1] for y in Y], dtype=dtype)  # The intercept
+        self.Y = sp.matrix(Y, dtype=dtype)
+        self.Y.shape = (self.n, 1) 
+        self.X = sp.matrix(sp.ones((self.n, 1), dtype=dtype))  # The intercept
         self.p = 1
         self.beta_est = None
         self.cofactors = []
