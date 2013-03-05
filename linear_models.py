@@ -672,18 +672,31 @@ class LinearMixedModel(LinearModel):
 
 
 
-    def get_ML(self, ngrids=100, llim= -10, ulim=10, esp=1e-6, eig_L=None, eig_R=None):
+    def get_ML(self, ngrids=100, llim= -10, ulim=10, esp=1e-6, eig_L=None, eig_R=None, H=None, H_inv=None, H_sqrt_inv=None, dtype='single'):
         """
-        Get REML estimates for the effect sizes, as well as the random effect contributions.
+        Get ML estimates for the effect sizes, as well as the random effect contributions.
         
-        This is EMMA
+        H is the (full) covariance matrix, which speeds up calculations if it's available.
         """
-        if not eig_L:
-            K = self.random_effects[1][1]
-            eig_L = self._get_eigen_L_(K)
-        # Get the variance estimates..
-        return self.get_estimates(eig_L, ngrids=ngrids, llim=llim, ulim=ulim, esp=esp, method='ML',
+        if H == None:
+            if not eig_L:
+                K = self.random_effects[1][1]
+                eig_L = self._get_eigen_L_(K)
+            res = self.get_estimates(eig_L, ngrids=ngrids, llim=llim, ulim=ulim, esp=esp, method='ML',
                     eig_R=eig_R)
+        else:
+            # If the variance matrix is given, then we calculate the likelihood using that.
+            evals, evecs = linalg.eigh(H)
+            X_t = sp.mat(H_sqrt_inv * self.X, dtype=dtype)
+            Y_t = H_sqrt_inv * self.Y  # The transformed outputs.
+            (betas, mahalanobis_rss, rank, hs) = linalg.lstsq(X_t, Y_t)
+            rss = sp.sum(sp.array(self.Y - sp.dot(self.X, betas)) ** 2)
+            betas = map(float, list(betas))
+            n = Y_t.shape[0]
+            ll = -0.5 * (n * sp.log(2 * sp.pi) + sp.sum(sp.log(evals)) + mahalanobis_rss)
+            assert mahalanobis_rss != [], 'WTF?'
+            res = {'ll': ll, 'rss':rss, 'mahalanobis_rss':mahalanobis_rss} 
+        return res
 
 
     def get_estimates_3(self, xs=None, ngrids=[5, 5, 5, 5, 5], llim= -3, ulim=3, method='REML',
