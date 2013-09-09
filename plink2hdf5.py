@@ -1,11 +1,13 @@
 """
 A basic parser for tped plink formated files to a more convenient HDF5 format.
 """
+import time
+import h5py
+import scipy as sp
 
-def convert_plink_files(in_file_prefix='plink_file_prefix',
-                         out_file_prefix='hdf5_file_prefix',
-                         impute_type='mode',
-                         filter_monomorphic_snps=True,
+def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
+                         out_file_prefix='/home/bv25/data/Ls154/Ls154_12',
+                         impute_type='mode', filter_monomorphic_snps=True,
                          missing_val_thr=0.1):
     """
     Parses plink tped format to a HDF5 format.  It requires the h5py and scipy package.
@@ -17,15 +19,13 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
         Assumes the files are in diploid format!
     
     """
-    import time
-    import h5py
-    import scipy as sp
-    
-    
+     
     print 'Starting to parse genotypes'
     genotype_data = {}
     h5py_file = h5py.File(out_file_prefix + '.hdf5')
     genotype_data['hdf5p_file'] = h5py_file
+    genot_group = h5py_file.create_group('genot_data')
+    indiv_group = h5py_file.create_group('indiv_data')
             
             
     tot_num_snps = 0
@@ -51,7 +51,14 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
             indiv_ids.append(iid)
             sex.append(int(l[4]))
             phenotypes.append(float(l[5]))
-    tot_num_indiv = len(indiv_ids)
+    tot_num_indiv = len(indiv_ids) 
+    
+    print 'Storing individual data in individ. group'
+    indiv_group.create_dataset('indiv_ids', data=indiv_ids)
+    indiv_group.create_dataset('sex', data=sex)
+    indiv_group.create_dataset('phenotypes', data=phenotypes)
+    
+    
             
     num_indiv = len(indiv_ids)
     print 'Found %d Individuals' % (num_indiv)
@@ -100,10 +107,7 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
             print 'Number of SNPs retained: %d' % len(positions)
             print 'Number of individuals: %d' % num_indiv
             snps = sp.array(snps_mat, dtype='int8')
-            h5py_chrom_group = h5py_file.create_group('chrom_%d' % curr_chrom)
-            h5py_chrom_group.create_dataset('indiv_ids', data=indiv_ids)
-            h5py_chrom_group.create_dataset('sex', data=sex)
-            h5py_chrom_group.create_dataset('phenotypes', data=phenotypes)
+            h5py_chrom_group = genot_group.create_group('chrom_%d' % curr_chrom)
             h5py_chrom_group.create_dataset('raw_snps', compression='lzf', data=snps)
             h5py_chrom_group.create_dataset('positions', compression='lzf', data=positions)
             h5py_chrom_group.create_dataset('nts', compression='lzf', data=nts_list)
@@ -131,6 +135,7 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
             missing_counts = []
             freqs = []
             num_missing_removed = 0
+            num_ambiguous = 0
             num_monomorphic_removed = 0
             num_ambiguous_loc_removed = 0
                
@@ -206,10 +211,7 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
     print 'Number of SNPs retained: %d' % len(positions)
     print 'Number of individuals: %d' % num_indiv
     snps = sp.array(snps_mat, dtype='int8')
-    h5py_chrom_group = h5py_file.create_group('chrom_%d' % chrom)
-    h5py_chrom_group.create_dataset('indiv_ids', data=indiv_ids)
-    h5py_chrom_group.create_dataset('sex', data=sex)
-    h5py_chrom_group.create_dataset('phenotypes', data=phenotypes)
+    h5py_chrom_group = genot_group.create_group('chrom_%d' % chrom)
     h5py_chrom_group.create_dataset('raw_snps', compression='lzf', data=snps)
     h5py_chrom_group.create_dataset('positions', compression='lzf', data=positions)
     h5py_chrom_group.create_dataset('nts', compression='lzf', data=nts_list)
@@ -234,5 +236,4 @@ def convert_plink_files(in_file_prefix='plink_file_prefix',
     h5py_file.close()
     
     print 'Done parsing genotypes.'
-    
-    
+

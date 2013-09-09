@@ -132,6 +132,12 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_resu
             
 
 
+
+
+
+
+
+
 def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=10,
                                plot_prefix='/Users/bjarnivilhjalmsson/tmp/test'):
     """
