@@ -20,6 +20,7 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     if overwrite or not 'kinship' in h5f.keys():
         if 'kinship' in h5f.keys():
             print 'Overwriting kinship.'
+            del h5f['kinship']
         print 'Calculating kinship.'
         k_mat = sp.zeros((n_indivs, n_indivs), dtype='single')
         
@@ -58,4 +59,20 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         h5f.create_dataset('kinship', data=k)
     else:
         print 'kinship already there.'
+    
+
+
+def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5'):
+    h5f = h5py.File(hdf5_filename)
+    n_indivs = len(h5f['indiv_data']['indiv_ids'][...])
+    assert 'kinship' in h5f.keys(), 'Kinship is missing.  Please calculate that first!'
+    k = h5f['kinship']
+    gg = h5f['genot_data']
+
+    for chrom in gg.keys():
+        snps = gg[chrom]['raw_snps'][...]
+        
+        # Now run EMMAX
+        
+        
     
