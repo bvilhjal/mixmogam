@@ -5,7 +5,7 @@ import time
 import h5py
 import scipy as sp
 
-def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
+def parse_single_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
                          out_file_prefix='/home/bv25/data/Ls154/Ls154_12',
                          impute_type='mode', filter_monomorphic_snps=True,
                          missing_val_thr=0.1):
@@ -76,7 +76,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
                 curr_chrom = chrom
             nt_map[l[1]] = (l[4], l[5]) 
     assert len(chromsomoes) == len(set(chromsomoes)), 'Chromosomes need to be in order.'
-    
+    curr_chrom = chromsomoes[0]
         
     position = -1
     # Initializing containers.
@@ -98,7 +98,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
 #        if random.random() > 0.01:
 #            continue
         gl = g_line.split()
-        chrom = int(gl[0])
+        chrom = gl[0]
         if chrom != curr_chrom:
             
             # Store everything and reset.
@@ -108,7 +108,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
             print 'Number of SNPs retained: %d' % len(positions)
             print 'Number of individuals: %d' % num_indiv
             snps = sp.array(snps_mat, dtype='int8')
-            h5py_chrom_group = genot_group.create_group('chrom_%d' % curr_chrom)
+            h5py_chrom_group = genot_group.create_group('chrom_%s' % curr_chrom)
             h5py_chrom_group.create_dataset('raw_snps', compression='lzf', data=snps)
             h5py_chrom_group.create_dataset('positions', compression='lzf', data=positions)
             h5py_chrom_group.create_dataset('nts', compression='lzf', data=nts_list)
@@ -122,7 +122,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
             h5py_file.flush()         
             t1 = time.time()
             t = t1 - t0
-            print 'It took %d minutes and %0.2f seconds to parse Chromosome %d.' % (t / 60, t % 60, curr_chrom)
+            print 'It took %d minutes and %0.2f seconds to parse Chromosome %s.' % (t / 60, t % 60, curr_chrom)
             t0 = time.time()
 
             
@@ -212,7 +212,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
     print 'Number of SNPs retained: %d' % len(positions)
     print 'Number of individuals: %d' % num_indiv
     snps = sp.array(snps_mat, dtype='int8')
-    h5py_chrom_group = genot_group.create_group('chrom_%d' % chrom)
+    h5py_chrom_group = genot_group.create_group('chrom_%s' % chrom)
     h5py_chrom_group.create_dataset('raw_snps', compression='lzf', data=snps)
     h5py_chrom_group.create_dataset('positions', compression='lzf', data=positions)
     h5py_chrom_group.create_dataset('nts', compression='lzf', data=nts_list)
@@ -226,7 +226,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
     h5py_file.flush()         
     t1 = time.time()
     t = t1 - t0
-    print 'It took %d minutes and %0.2f seconds to parse chromosome %d.' % (t / 60, t % 60, chrom)
+    print 'It took %d minutes and %0.2f seconds to parse chromosome %s.' % (t / 60, t % 60, chrom)
 
     
     gf.close()
