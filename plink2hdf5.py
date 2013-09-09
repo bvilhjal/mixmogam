@@ -10,7 +10,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
                          impute_type='mode', filter_monomorphic_snps=True,
                          missing_val_thr=0.1):
     """
-    Parses plink tped format to a HDF5 format.  It requires the h5py and scipy package.
+    Parses plink 12 formatted tped  file and stores it in a HDF5 file.  It requires the h5py and scipy package.
     
     Ideally the genotypes are imputed apriory, otherwise a rough imputation 
     (the most common genotype) is used for missing genotypes.
@@ -73,6 +73,7 @@ def parse_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
             chrom = l[0]
             if chrom != curr_chrom:
                 chromsomoes.append(chrom)
+                curr_chrom = chrom
             nt_map[l[1]] = (l[4], l[5]) 
     assert len(chromsomoes) == len(set(chromsomoes)), 'Chromosomes need to be in order.'
     
