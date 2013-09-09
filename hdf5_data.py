@@ -25,12 +25,12 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         
         gg = h5f['genot_data']
         chromosomes = gg.keys()
+        n_snps = 0
         for chrom in chromosomes:
             print 'Working on Chromosome %s' % chrom
             cg = gg[chrom]
             num_snps = len(cg['raw_snps'])
             normalized = 'snps' in cg.keys()                
-            n_snps = 0
             
             for chunk_i, i in enumerate(range(0, num_snps, chunk_size)):
     #            if chunk_i % 2 != 0:
