@@ -1181,8 +1181,6 @@ class LinearMixedModel(LinearModel):
         max_f_stats = ((h0_rss / min_rss_list) - 1.0) * n_p / float(q)
         min_pvals = (stats.f.sf(max_f_stats, q, n_p))
 
-
-
         res_d = {'min_ps':min_pvals, 'max_f_stats':max_f_stats}
         return res_d
 

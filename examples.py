@@ -4,7 +4,8 @@ Examples for how to perform GWAS using mixed models, and stepwise mixed models.
 Author: Bjarni J. Vilhjalmsson
 Email: bjarni.vilhjalmsson@gmail.com
 
-"""    
+"""
+
 
 def load_a_thaliana_genotypes():
     """
@@ -196,7 +197,7 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         # Plotting stuff
         res = gr.Result(scores=gtres['ps'], snps_data=sd)
         res.plot_manhattan(png_file='%s_%d_gtres_manhattan.png' % (plot_prefix , i),
-                           percentile=50,highlight_loci=highlight_loci,
+                           percentile=50, highlight_loci=highlight_loci,
                            plot_bonferroni=True,
                            neg_log_transform=True)
         res.plot_qq('%s_%d_gtres_qq.png' % (plot_prefix , i))
@@ -215,21 +216,7 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         
         
         
-        
-        
-def load_plink_genotypes():
-    """
-    Loads genotypes in plink format.
-    """
-    raise NotImplementedError
-
-
-def load_eigenstrat_genotypes():
-    """
-    Loads genotypes in eigenstrat format.
-    """
-    raise NotImplementedError
-
+  
 
 
 if __name__ == '__main__':
