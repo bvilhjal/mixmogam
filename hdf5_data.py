@@ -49,7 +49,6 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
                 sys.stdout.write('\b\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * chunk_size) / num_snps))))
                 sys.stdout.flush()
             sys.stdout.write('\b\b\b\b\b\b\b100.00%\n')
-            assert n_snps == num_snps, 'WTF?'
         k_mat = k_mat / float(n_snps)
         c = sp.sum((sp.eye(len(k_mat)) - (1.0 / len(k_mat)) * sp.ones(k_mat.shape)) * sp.array(k_mat))
         scalar = (len(k_mat) - 1) / c
