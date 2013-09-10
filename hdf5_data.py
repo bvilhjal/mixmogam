@@ -106,10 +106,10 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     oh5f = h5py.File(out_file)
     
     # Store phenotype_data
-    oh5f.create('pseudo_heritability', data=sp.array(res['pseudo_heritability']))
-    oh5f.create('ve', data=sp.array(res['ve']))
-    oh5f.create('vg', data=sp.array(res['vg']))
-    oh5f.create('max_ll', data=sp.array(res['max_ll']))
+    oh5f.create_dataset('pseudo_heritability', data=sp.array(res['pseudo_heritability']))
+    oh5f.create_dataset('ve', data=sp.array(res['ve']))
+    oh5f.create_dataset('vg', data=sp.array(res['vg']))
+    oh5f.create_dataset('max_ll', data=sp.array(res['max_ll']))
     
     # Construct results data containers
     chrom_res_group = oh5f.create_group('chrom_results')
