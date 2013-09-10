@@ -223,6 +223,7 @@ def parse_single_12tped_to_hdf5(in_file_prefix='/home/bv25/data/Ls154/Ls154_12',
     tot_num_snps += len(positions)
     tot_num_missing_val_snps_removed += num_missing_removed
     tot_num_ambiguous_loc_removed += num_ambiguous_loc_removed
+    h5py_file.create_dataset('num_snps', data=sp.array(tot_num_snps))
     h5py_file.flush()         
     t1 = time.time()
     t = t1 - t0

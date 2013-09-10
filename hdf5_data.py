@@ -6,7 +6,8 @@ Container for functions that work with HDF5 genotype/phenotype datasets.
 import h5py
 import scipy as sp
 import sys
-
+import linear_models as lm
+import time
 
 
 def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
@@ -62,17 +63,48 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     
 
 
-def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5'):
-    h5f = h5py.File(hdf5_filename)
-    n_indivs = len(h5f['indiv_data']['indiv_ids'][...])
-    assert 'kinship' in h5f.keys(), 'Kinship is missing.  Please calculate that first!'
-    k = h5f['kinship']
-    gg = h5f['genot_data']
-
+def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
+              out_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
+    """
+    Apply the EMMAX algorithm to the hdf5 formated genotype data 
+    """
+    
+    ih5f = h5py.File(hdf5_filename)
+    n_indivs = len(ih5f['indiv_data']['indiv_ids'][...])
+    assert 'kinship' in ih5f.keys(), 'Kinship is missing.  Please calculate that first!'
+    k = ih5f['kinship']
+    gg = ih5f['genot_data']
+    ig = ih5f['indiv_data']
+    
+    # Get the phenotypes
+    phenotypes = ig['phenotypes'][...]
+    num_snps = ih5f['num_snps'][...]
+    pvals = sp.empty(num_snps)
+    i = 0
     for chrom in gg.keys():
+        # Get the SNPs
         snps = gg[chrom]['raw_snps'][...]
+        n = len(snps)
         
         # Now run EMMAX
+        lmm = lm.LinearMixedModel(phenotypes)
+        lmm.add_random_effect(k)
+        
+        print "Running EMMAX"
+        s1 = time.time()
+        res = lmm.emmax_f_test(snps, with_betas=False, emma_num=0)
+        secs = time.time() - s1
+        if secs > 60:
+            mins = int(secs) / 60
+            secs = secs % 60
+            print 'Took %d mins and %0.1f seconds.' % (mins, secs)
+        else:
+            print 'Took %0.1f seconds.' % (secs)
+        pvals[i: i + n] = res['ps']
+        i += n
+    return pvals
+        
+        
         
         
     
