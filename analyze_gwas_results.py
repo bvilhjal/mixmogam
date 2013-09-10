@@ -8,6 +8,7 @@ Email: bjarni.vilhjalmsson@gmail.com
 
 import scipy as sp
 import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import warnings
 import itertools as it
