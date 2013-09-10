@@ -1125,7 +1125,60 @@ class LinearMixedModel(LinearModel):
             'var_perc':var_perc, 'dfs':dfs}
 
 
+    def _emmax_permutations_(self, snps, K, H_sqrt_inv, num_perm):
+        """
+        EMMAX permutation test
+        Single SNPs
+        
+        Returns the list of max_pvals and max_fstats 
+        """
+        # s = time.time()
+        # print 'Took % .6f secs.' % (time.time() - s)
+        # print 'pseudo_heritability:', res['pseudo_heritability']
+        q = 1  # Single SNP is being tested
+        p = len(self.X.T) + q
+        n = self.n
+        n_p = n - p
+        Y = H_sqrt_inv * self.Y  # The transformed outputs.
+        h0_X = H_sqrt_inv * self.X
+        (h0_betas, h0_rss, h0_rank, h0_s) = linalg.lstsq(h0_X, Y)
+        Y = Y - h0_X * h0_betas
+        num_snps = len(snps)
+        chunk_size = len(Y)
+        Ys = sp.mat(sp.zeros((chunk_size, num_perm)))
+        for perm_i in range(num_perm):
+            # print 'Permutation nr. % d' % perm_i
+            sp.random.shuffle(Y)
+            Ys[:, perm_i] = Y
 
+        min_rss_list = sp.repeat(h0_rss, num_perm)
+        for i in range(0, num_snps, chunk_size):  # Do the dot-product in chuncks!
+            snps_chunk = sp.matrix(snps[i:i + chunk_size])
+            Xs = snps_chunk * (H_sqrt_inv.T)
+            Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
+            for j in range(len(Xs)):
+                (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
+                for k, rss in enumerate(rss_list):
+                    if not rss:
+                        print 'No predictability in the marker, moving on...'
+                        continue
+                    if min_rss_list[k] > rss:
+                        min_rss_list[k] = rss
+                if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
+                    sys.stdout.write('.')
+                    sys.stdout.flush()
+
+        if num_snps >= 10:
+            sys.stdout.write('\n')
+        max_f_stats = ((h0_rss / min_rss_list) - 1.0) * n_p / float(q)
+        min_pvals = (stats.f.sf(max_f_stats, q, n_p))
+
+        res_d = {'min_ps':min_pvals, 'max_f_stats':max_f_stats}
+        return res_d
+
+
+ 
+    
     def emmax_permutations(self, snps, num_perm, method='REML'):
         """
         EMMAX permutation test
