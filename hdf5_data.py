@@ -305,7 +305,15 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         i += n
         
     print 'Starting permutation test for detecting the genome-wide significance threshold' 
+    s1 = time.time()    
     perm_res = lmm._emmax_permutations_(all_snps, k, res['H_sqrt_inv'], num_perm=num_perm)
+    secs = time.time() - s1
+    if secs > 60:
+        mins = int(secs) / 60
+        secs = secs % 60
+        print 'Took %d mins and %0.1f seconds.' % (mins, secs)
+    else:
+        print 'Took %0.1f seconds.' % (secs)
     
     oh5f.create_dataset('perm_min_ps', data=perm_res['min_ps'])
     oh5f.create_dataset('perm_max_f_stats', data=perm_res['max_f_stats'])
