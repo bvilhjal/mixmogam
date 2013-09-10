@@ -128,9 +128,9 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         maf_filter = mafs > min_maf
         print 'Filtered out %d SNPs with MAF<%0.2f.' % (len(maf_filter) - sum(maf_filter), min_maf)
         snps = gg[chrom]['raw_snps'][...]
-        snps = [maf_filter]
+        snps = snps[maf_filter]
         positions = gg[chrom]['positions'][...]
-        positions[maf_filter]
+        positions = positions[maf_filter]
         
         # Now run EMMAX
         print "Running EMMAX"
