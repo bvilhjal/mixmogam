@@ -189,7 +189,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
       
 
 def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
-              out_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
+              out_file='/home/bv25/data/Ls154/Ls154_results_perm.hdf5',
               min_maf=0.1, recalculate_kinship=True, chunk_size=1000,
               num_perm=1000):
     """
