@@ -225,10 +225,10 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
             plt.plot(plot_positions, log_ps, ".", markersize=markersize, alpha=0.7, color=color, mew=0)
 
         chrom_end = chrom_res_dict[chrom]['chrom_end']
-        for j in range(offset, offset + chrom_end, 5000000):
+        for j in range(offset, offset + chrom_end, 4000000):
             tick_positions.append(j)
             pos = (j - offset)
-            if  pos % 10000000 == 0 and pos < chrom_end - 5000000 :
+            if  pos % 8000000 == 0 and pos < chrom_end - 4000000 :
                 tick_strings.append(pos / 1000000)
             else:
                 tick_strings.append('')
