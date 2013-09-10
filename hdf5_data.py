@@ -162,7 +162,7 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     qq_plot_png_filename = png_file_prefix+'_qq.png'
     qq_log_plot_png_filename = png_file_prefix+'_qq_log.png'
     agr.simple_qqplot([quantiles], png_file=qq_plot_png_filename)
-    agr.simple_log_qqplot([log_quantiles], png_file=qq_log_plot_png_filename)
+    agr.simple_log_qqplot([log_quantiles], png_file=qq_log_plot_png_filename, max_val=7)
     
 
 
