@@ -272,7 +272,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     
     # Construct results data containers
     chrom_res_group = oh5f.create_group('chrom_results')
-    all_snps = sp.empty(n_snps, n_indivs)
+    all_snps = sp.empty((n_snps, n_indivs))
     i = 0
     for chrom in gg.keys():
         crg = chrom_res_group.create_group(chrom)
