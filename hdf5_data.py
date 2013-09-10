@@ -228,9 +228,9 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
         for j in range(offset, offset + chrom_end, 10000000):
             tick_positions.append(j)
             if  j % 20000000 == 0 and j < offset + chrom_end - 5000000 :
-                tick_strings.append(j / 1000000)
+                tick_strings.append(str(j / 1000000))
             else:
-                tick_strings.append("")
+                tick_strings.append('')
 
         offset += chrom_end + 1  # one Mb buffer
 
