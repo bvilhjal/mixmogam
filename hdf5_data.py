@@ -122,10 +122,15 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         crg = chrom_res_group.create_group(chrom)
         # Get the SNPs
         print 'Working on Chromosome: %s' % chrom
+        freqs = gg[chrom]['freqs'][...]
+        mafs = sp.minimum(freqs, 1 - freqs)
+        maf_filter = mafs > 0.1
         snps = gg[chrom]['raw_snps'][...]
+        snps = [maf_filter]
+        positions = gg[chrom]['positions'][...]
+        positions[maf_filter]
         
         # Now run EMMAX
-        
         print "Running EMMAX"
         s1 = time.time()
         r = lmm._emmax_f_test_(snps, res['H_sqrt_inv'], with_betas=False, emma_num=0, eig_L=eig_L)
@@ -137,7 +142,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         else:
             print 'Took %0.1f seconds.' % (secs)
         crg.create_dataset('ps', data=r['ps'])
-        crg.create_dataset('positions', data=gg[chrom]['positions'])
+        crg.create_dataset('positions', data=positions)
         oh5f.flush()
 
     ih5f.close()   
