@@ -66,7 +66,7 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
 def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
               out_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
     """
-    Apply the EMMAX algorithm to the hdf5 formated genotype data 
+    Apply the EMMAX algorithm to hdf5 formated genotype/phenotype data 
     """
     
     ih5f = h5py.File(hdf5_filename)
@@ -79,20 +79,52 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     # Get the phenotypes
     phenotypes = ig['phenotypes'][...]
     num_snps = ih5f['num_snps'][...]
-    pvals = sp.empty(num_snps)
-    i = 0
+
+    # Initialize the mixed model
+    lmm = lm.LinearMixedModel(phenotypes)
+    lmm.add_random_effect(k)
+    # Calculate pseudo-heritability, etc.
+    print 'Calculating the eigenvalues of K'
+    s0 = time.time()
+    eig_L = lmm._get_eigen_L_()
+    print 'Done.'
+    print 'Took %0.2f seconds' % (time.time() - s0)
+    print "Calculating the eigenvalues of S(K+I)S where S = I-X(X'X)^-1X'"
+    s0 = time.time()
+    eig_R = lmm._get_eigen_R_(X=lmm.X)
+    print 'Done'
+    print 'Took %0.2f seconds' % (time.time() - s0)
+
+    print 'Getting variance estimates'
+    s0 = time.time()
+    res = lmm.get_estimates(eig_L, method='REML', eig_R=eig_R)  # Get the variance estimates..
+    print 'Done.'
+    print 'Took %0.2f seconds' % (time.time() - s0)
+    print 'pseudo_heritability:', res['pseudo_heritability']
+
+    # Initialize results file
+    oh5f = h5py.File(out_file)
+    
+    # Store phenotype_data
+    oh5f.create('pseudo_heritability', data=sp.array(res['pseudo_heritability']))
+    oh5f.create('ve', data=sp.array(res['ve']))
+    oh5f.create('vg', data=sp.array(res['vg']))
+    oh5f.create('max_ll', data=sp.array(res['max_ll']))
+    
+    # Construct results data containers
+    chrom_res_group = oh5f.create_group('chrom_results')
+    
     for chrom in gg.keys():
+        crg = chrom_res_group.create_group(chrom)
         # Get the SNPs
+        print 'Working on Chromosome: %s' % chrom
         snps = gg[chrom]['raw_snps'][...]
-        n = len(snps)
         
         # Now run EMMAX
-        lmm = lm.LinearMixedModel(phenotypes)
-        lmm.add_random_effect(k)
         
         print "Running EMMAX"
         s1 = time.time()
-        res = lmm.emmax_f_test(snps, with_betas=False, emma_num=0)
+        r = lmm._emmax_f_test_(snps, res['H_sqrt_inv'], with_betas=False, emma_num=0, eig_L=eig_L)
         secs = time.time() - s1
         if secs > 60:
             mins = int(secs) / 60
@@ -100,10 +132,12 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
             print 'Took %d mins and %0.1f seconds.' % (mins, secs)
         else:
             print 'Took %0.1f seconds.' % (secs)
-        pvals[i: i + n] = res['ps']
-        i += n
-    return pvals
-        
+        crg.create_dataset('ps', data=res['ps'])
+        crg.create_dataset('positions', data=gg[chrom]['positions'])
+        crg.flush()
+
+    ih5f.close()   
+    oh5f.close()
         
         
         
