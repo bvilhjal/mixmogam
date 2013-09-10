@@ -1125,7 +1125,7 @@ class LinearMixedModel(LinearModel):
             'var_perc':var_perc, 'dfs':dfs}
 
 
-    def _emmax_permutations_(self, snps, K, H_sqrt_inv, num_perm):
+    def _emmax_permutations_(self, snps, K, H_sqrt_inv, num_perm=100):
         """
         EMMAX permutation test
         Single SNPs
@@ -1139,9 +1139,13 @@ class LinearMixedModel(LinearModel):
         p = len(self.X.T) + q
         n = self.n
         n_p = n - p
+        
+        h0_X = sp.mat(H_sqrt_inv * self.X, dtype='single')
         Y = H_sqrt_inv * self.Y  # The transformed outputs.
-        h0_X = H_sqrt_inv * self.X
         (h0_betas, h0_rss, h0_rank, h0_s) = linalg.lstsq(h0_X, Y)
+        Y = sp.mat(Y - h0_X * h0_betas, dtype='single')
+        h0_betas = map(float, list(h0_betas))
+
         Y = Y - h0_X * h0_betas
         num_snps = len(snps)
         chunk_size = len(Y)
@@ -1158,12 +1162,7 @@ class LinearMixedModel(LinearModel):
             Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
-                for k, rss in enumerate(rss_list):
-                    if not rss:
-                        print 'No predictability in the marker, moving on...'
-                        continue
-                    if min_rss_list[k] > rss:
-                        min_rss_list[k] = rss
+                min_rss_list[i + j] = rss_list.min()
                 if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
                     sys.stdout.write('.')
                     sys.stdout.flush()
