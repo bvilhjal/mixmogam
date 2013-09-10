@@ -7,6 +7,7 @@ import h5py
 import scipy as sp
 import sys
 import linear_models as lm
+import analyze_gwas_results as agr
 import time
 
 
@@ -78,7 +79,6 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     
     # Get the phenotypes
     phenotypes = ig['phenotypes'][...]
-    num_snps = ih5f['num_snps'][...]
 
     # Initialize the mixed model
     lmm = lm.LinearMixedModel(phenotypes)
@@ -110,6 +110,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     oh5f.create_dataset('ve', data=sp.array(res['ve']))
     oh5f.create_dataset('vg', data=sp.array(res['vg']))
     oh5f.create_dataset('max_ll', data=sp.array(res['max_ll']))
+    oh5f.create_dataset('num_snps', data=ih5f['num_snps'])
     
     # Construct results data containers
     chrom_res_group = oh5f.create_group('chrom_results')
@@ -142,13 +143,27 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         
 
 
-def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
+def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
+            png_file_prefix='/home/bv25/data/Ls154/Ls154_results'):
     h5f = h5py.File(hdf5_results_file)
-    for chrom in gg.keys():
+    chrom_res_group = h5f['chrom_results']
+    pvals = sp.empty(h5f['num_snps'][...])
+    i = 0
+    for chrom in chrom_res_group.keys():
+        crg = chrom_res_group[chrom]
+        n = len(crg['ps'])
+        pvals[i:i+n]=crg['ps'][...]
+        i += n
     
-
+    quantiles = agr.get_quantiles(pvals)
+    log_quantiles = agr.get_log_quantiles(pvals,max_val=7)
+    qq_plot_png_filename = png_file_prefix+'_qq.png'
+    qq_log_plot_png_filename = png_file_prefix+'_qq_log.png'
+    agr.simple_qqplot([quantiles], png_file=qq_plot_png_filename)
+    agr.simple_log_qqplot([log_quantiles], png_file=qq_log_plot_png_filename)
+    
 
 
 def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
         
-    
+    pass
