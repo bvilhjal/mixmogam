@@ -135,7 +135,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
             print 'Took %0.1f seconds.' % (secs)
         crg.create_dataset('ps', data=r['ps'])
         crg.create_dataset('positions', data=gg[chrom]['positions'])
-        crg.flush()
+        oh5f.flush()
 
     ih5f.close()   
     oh5f.close()
