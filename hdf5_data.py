@@ -68,7 +68,8 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
 
 
 def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
-              out_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
+              out_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
+              min_maf=0.1):
     """
     Apply the EMMAX algorithm to hdf5 formated genotype/phenotype data 
     """
@@ -124,7 +125,8 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         print 'Working on Chromosome: %s' % chrom
         freqs = gg[chrom]['freqs'][...]
         mafs = sp.minimum(freqs, 1 - freqs)
-        maf_filter = mafs > 0.1
+        maf_filter = mafs > min_maf
+        print 'Filtered out %d SNPs with MAF<%0.2f.' % (len(maf_filter) - sum(maf_filter), min_maf)
         snps = gg[chrom]['raw_snps'][...]
         snps = [maf_filter]
         positions = gg[chrom]['positions'][...]
