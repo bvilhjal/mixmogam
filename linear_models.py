@@ -1218,7 +1218,7 @@ class LinearMixedModel(LinearModel):
             Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
-                min_rss_list.append(rss_list.min())
+                min_rss_list[i + j] = rss_list.min()
                 if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
                     sys.stdout.write('.')
                     sys.stdout.flush()
