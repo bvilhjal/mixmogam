@@ -11,6 +11,7 @@ import analyze_gwas_results as agr
 import time
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 
 
 def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
@@ -147,6 +148,9 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
 
 def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
             png_file_prefix='/home/bv25/data/Ls154/Ls154_results'):
+    """
+    Plot QQ-plot for a single HDF5 result
+    """
     h5f = h5py.File(hdf5_results_file)
     chrom_res_group = h5f['chrom_results']
     pvals = sp.empty(h5f['num_snps'][...])
@@ -154,18 +158,103 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     for chrom in chrom_res_group.keys():
         crg = chrom_res_group[chrom]
         n = len(crg['ps'])
-        pvals[i:i+n]=crg['ps'][...]
+        pvals[i:i + n] = crg['ps'][...]
         i += n
     
     quantiles = agr.get_quantiles(pvals)
-    log_quantiles = agr.get_log_quantiles(pvals,max_val=7)
-    qq_plot_png_filename = png_file_prefix+'_qq.png'
-    qq_log_plot_png_filename = png_file_prefix+'_qq_log.png'
+    log_quantiles = agr.get_log_quantiles(pvals, max_val=7)
+    qq_plot_png_filename = png_file_prefix + '_qq.png'
+    qq_log_plot_png_filename = png_file_prefix + '_qq_log.png'
     agr.simple_qqplot([quantiles], png_file=qq_plot_png_filename)
     agr.simple_log_qqplot([log_quantiles], png_file=qq_log_plot_png_filename, max_val=7)
     
 
 
-def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
+def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5', png_file=None, max_log_pval=None,
+                   filter_pval=0.02, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False, b_threshold=None,
+                   markersize=3, chrom_col_map=None):
+    """
+    Plot a Manhattan plot for a single HDF5 result
+    """
+
+    chrom_res_dict = {}
+    h5f = h5py.File(hdf5_results_file)
+    chrom_res_group = h5f['chrom_results']
+    num_snps = h5f['num_snps'][...]
+    for chrom in chrom_res_group.keys():
+        crg = chrom_res_group[chrom]
+        n = len(crg['ps'])
+        ps = crg['ps'][...],
+        positions = crg['positions'][...]
+        ps_filter = ps < filter_pval
+        chrom_end = positions[-1]
+        chrom_res_dict[chrom] = {'log_ps':-sp.log10(ps[ps_filter]), 'positions': positions[ps_filter], 'chrom_end':chrom_end}
         
-    pass
+    h5f.close()
+
+    chromosomes = chrom_res_dict.keys()
+    chromosomes.sort()
+
+    if not max_log_pval:
+        max_log_pvals = []
+        for chrom in chromosomes:
+            max_log_pvals.append(chrom_res_dict[chrom]['log_ps'].max())
+        max_log_pval = max(max_log_pvals)
+
+
+    offset = 0
+    tick_positions = []
+    tick_strings = []
+    plt.figure(figsize=(11, 2.8))
+    plt.axes([0.045, 0.15, 0.95, 0.71])
+    chr_offsets = []
+    for chrom in chromosomes:
+        chr_offsets.append(offset)
+        log_ps = chrom_res_dict[chrom]['log_ps']
+        positions = chrom_res_dict[chrom]['positions'] / 1000000.0
+        plot_positions = offset + positions 
+
+        pval_truc_filter = log_ps > max_log_pval
+        if sum(pval_truc_filter) > 0:
+            print '%d -log p-values were truncated at %0.f.' % max_log_pval
+            log_ps[pval_truc_filter] = max_log_pval
+
+        if not chrom_col_map:
+            plt.plot(plot_positions, log_ps, ".", markersize=markersize, alpha=0.7, mew=0)
+        else:
+            color = chrom_col_map[chrom]
+            plt.plot(plot_positions, log_ps, ".", markersize=markersize, alpha=0.7, color=color, mew=0)
+
+        chrom_end = chrom_res_dict[chrom]['chrom_end'] / 1000000.0
+        for j in range(offset, offset + chrom_end, 10):
+            tick_positions.append(j)
+            if  j % 20 == 0 and j < chrom_end - 10 :
+                tick_strings.append(j)
+            else:
+                tick_strings.append("")
+
+        offset += chrom_end + 1  # one Mb buffer
+
+    if plot_bonferroni:
+        if not b_threshold:
+            b_threshold = -sp.log10(1.0 / (num_snps * 20.0))
+        else:
+            plt.plot([0, offset], [b_threshold, b_threshold], color='#000000', linestyle="-.")
+
+    x_range = offset
+    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_log_pval, 1.05 * max_log_pval])
+    plt.xticks(tick_positions, tick_strings, fontsize='x-small')
+    plt.ylabel('$ - log(p - $value$)$')
+
+#    plt.xlabel("Chromosome")
+#        else:
+    plt.xlabel("Mb")
+
+
+    if png_file:
+        plt.savefig(png_file, format="png", dpi=300, bbox_inches='tight')
+
+    plt.clf()
+    plt.close()
+
+    
