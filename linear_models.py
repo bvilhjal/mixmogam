@@ -1146,6 +1146,7 @@ class LinearMixedModel(LinearModel):
         Y = sp.mat(Y - h0_X * h0_betas, dtype='single')
         h0_betas = map(float, list(h0_betas))
 
+        
         Y = Y - h0_X * h0_betas
         num_snps = len(snps)
         chunk_size = len(Y)
@@ -1162,7 +1163,7 @@ class LinearMixedModel(LinearModel):
             Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
-                min_rss_list[i + j] = rss_list.min()
+                min_rss_list = sp.minimum(min_rss_list, rss_list)
                 if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
                     sys.stdout.write('.')
                     sys.stdout.flush()
