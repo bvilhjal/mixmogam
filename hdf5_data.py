@@ -241,8 +241,9 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
         else:
             plt.plot([0, offset], [b_threshold, b_threshold], color='#000000', linestyle="-.")
 
+    max_y = max(b_threshold, max_log_pval)
     x_range = offset
-    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_log_pval, 1.05 * max_log_pval])
+    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.05 * max_y])
     plt.xticks(tick_positions, tick_strings, fontsize='x-small')
     plt.ylabel('$ - log(p - $value$)$')
 
