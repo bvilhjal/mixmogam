@@ -170,9 +170,9 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     
 
 
-def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5', png_file=None, max_log_pval=None,
-                   filter_pval=0.02, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False, b_threshold=None,
-                   markersize=3, chrom_col_map=None):
+def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5', png_file='/home/bv25/data/Ls154/Ls154_results_manhattan.png',
+                   max_log_pval=None, filter_pval=0.02, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False,
+                   b_threshold=None, markersize=3, chrom_col_map=None):
     """
     Plot a Manhattan plot for a single HDF5 result
     """
@@ -183,8 +183,7 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     num_snps = h5f['num_snps'][...]
     for chrom in chrom_res_group.keys():
         crg = chrom_res_group[chrom]
-        n = len(crg['ps'])
-        ps = crg['ps'][...],
+        ps = crg['ps'][...]
         positions = crg['positions'][...]
         ps_filter = ps < filter_pval
         chrom_end = positions[-1]
