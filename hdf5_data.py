@@ -346,7 +346,8 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     
 
 
-def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5', png_file='/home/bv25/data/Ls154/Ls154_results_manhattan.png',
+def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.hdf5',
+                   png_file='/home/bv25/data/Ls154/Ls154_results_manhattan.png',
                    max_log_pval=None, filter_pval=0.10, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=True,
                    b_threshold=None, markersize=3, chrom_col_map=None):
     """
@@ -356,11 +357,12 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     chrom_res_dict = {}
     h5f = h5py.File(hdf5_results_file)
     chrom_res_group = h5f['chrom_results']
-    num_snps = h5f['num_snps'][...]
+    num_snps = 0
     for chrom in chrom_res_group.keys():
         crg = chrom_res_group[chrom]
         ps = crg['ps'][...]
         positions = crg['positions'][...]
+        num_snps += len(positions)
         ps_filter = ps < filter_pval
         chrom_end = positions[-1]
         chrom_res_dict[chrom] = {'log_ps':-sp.log10(ps[ps_filter]), 'positions': positions[ps_filter], 'chrom_end':chrom_end}
