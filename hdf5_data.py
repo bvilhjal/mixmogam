@@ -210,7 +210,7 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     for chrom in chromosomes:
         chr_offsets.append(offset)
         log_ps = chrom_res_dict[chrom]['log_ps']
-        positions = chrom_res_dict[chrom]['positions'] / 1000000.0
+        positions = chrom_res_dict[chrom]['positions']
         plot_positions = offset + positions 
 
         pval_truc_filter = log_ps > max_log_pval
@@ -224,11 +224,11 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
             color = chrom_col_map[chrom]
             plt.plot(plot_positions, log_ps, ".", markersize=markersize, alpha=0.7, color=color, mew=0)
 
-        chrom_end = chrom_res_dict[chrom]['chrom_end'] / 1000000.0
-        for j in sp.arange(offset, offset + chrom_end, 10):
+        chrom_end = chrom_res_dict[chrom]['chrom_end']
+        for j in range(offset, offset + chrom_end, 10000000):
             tick_positions.append(j)
-            if  j % 20 == 0 and j < chrom_end - 10 :
-                tick_strings.append(j)
+            if  j % 20000000 == 0 and j < chrom_end - 10000000 :
+                tick_strings.append(j / 1000000)
             else:
                 tick_strings.append("")
 
