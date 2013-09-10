@@ -191,7 +191,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
 def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
               out_file='/home/bv25/data/Ls154/Ls154_results_perm.hdf5',
               min_maf=0.1, recalculate_kinship=True, chunk_size=1000,
-              num_perm=1000):
+              num_perm=20):
     """
     Apply the EMMAX algorithm to hdf5 formated genotype/phenotype data 
     """
@@ -304,8 +304,11 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         oh5f.flush()
         i += n
         
-    # Now perform permutation test!
-    print lmm._emmax_permutations_(all_snps, k, res['H_sqrt_inv'], num_perm=num_perm)
+    print 'Starting permutation test for detecting the genome-wide significance threshold' 
+    perm_res = lmm._emmax_permutations_(all_snps, k, res['H_sqrt_inv'], num_perm=num_perm)
+    
+    oh5f.create_dataset('perm_min_ps', data=perm_res['min_ps'])
+    oh5f.create_dataset('perm_max_f_stats', data=perm_res['max_f_stats'])
 
     ih5f.close()   
     oh5f.close()  
