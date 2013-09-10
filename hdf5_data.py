@@ -69,17 +69,53 @@ def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
 
 def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
               out_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
-              min_maf=0.1):
+              min_maf=0.1, recalculate_kinship=True, chunk_size=1000):
     """
     Apply the EMMAX algorithm to hdf5 formated genotype/phenotype data 
     """
     
     ih5f = h5py.File(hdf5_filename)
-    n_indivs = len(ih5f['indiv_data']['indiv_ids'][...])
-    assert 'kinship' in ih5f.keys(), 'Kinship is missing.  Please calculate that first!'
-    k = ih5f['kinship']
     gg = ih5f['genot_data']
     ig = ih5f['indiv_data']
+    n_indivs = len(ig['indiv_ids'][...])
+
+    if recalculate_kinship:
+        print 'Calculating kinship.'
+        k_mat = sp.zeros((n_indivs, n_indivs), dtype='single')
+        
+        chromosomes = gg.keys()
+        n_snps = 0
+        for chrom in chromosomes:
+            print 'Working on Chromosome %s' % chrom
+            cg = gg[chrom]
+            freqs = cg['freqs'][...]
+            mafs = sp.minimum(freqs, 1 - freqs)
+            maf_filter = mafs > min_maf
+            print 'Filtered out %d SNPs with MAF<%0.2f.' % (len(maf_filter) - sum(maf_filter), min_maf)
+            snps = cg['raw_snps'][...]
+            snps = snps[maf_filter]
+            num_snps = len(snps)
+            
+            for chunk_i, i in enumerate(range(0, num_snps, chunk_size)):
+                end_i = min(i + chunk_size, num_snps)
+                x = snps[i:end_i]
+                x = x.T
+                x = (x - sp.mean(x, 0)) / sp.std(x, 0)
+                x = x.T           
+                n_snps += len(x)
+                k_mat += sp.dot(x.T, x)
+                del x
+                sys.stdout.write('\b\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * chunk_size) / num_snps))))
+                sys.stdout.flush()
+            sys.stdout.write('\b\b\b\b\b\b\b100.00%\n')
+        k_mat = k_mat / float(n_snps)
+        c = sp.sum((sp.eye(len(k_mat)) - (1.0 / len(k_mat)) * sp.ones(k_mat.shape)) * sp.array(k_mat))
+        scalar = (len(k_mat) - 1) / c
+        print 'Kinship scaled by: %0.4f' % scalar
+        k = scalar * k_mat
+    else:
+        assert 'kinship' in ih5f.keys(), 'Kinship is missing.  Please calculate that first!'
+        k = ih5f['kinship']
     
     # Get the phenotypes
     phenotypes = ig['phenotypes'][...]
