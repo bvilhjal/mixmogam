@@ -238,8 +238,7 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     if plot_bonferroni:
         if not b_threshold:
             b_threshold = -sp.log10(1.0 / (num_snps * 20.0))
-        else:
-            plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.")
+        plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.")
 
     max_y = max(b_threshold, max_log_pval)
     x_range = offset
