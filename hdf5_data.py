@@ -9,6 +9,8 @@ import sys
 import linear_models as lm
 import analyze_gwas_results as agr
 import time
+import matplotlib
+matplotlib.use('Agg')
 
 
 def calculate_ibd_kinship(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
