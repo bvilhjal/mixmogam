@@ -1218,19 +1218,13 @@ class LinearMixedModel(LinearModel):
             Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
-                for k, rss in enumerate(rss_list):
-                    if not rss:
-                        print 'No predictability in the marker, moving on...'
-                        continue
-                    if min_rss_list[k] > rss:
-                        min_rss_list[k] = rss
+                min_rss_list.append(rss_list.min())
                 if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
                     sys.stdout.write('.')
                     sys.stdout.flush()
 
         if num_snps >= 10:
             sys.stdout.write('\n')
-        min_rss = min(rss_list)
         max_f_stats = ((h0_rss / min_rss_list) - 1.0) * n_p / float(q)
         min_pvals = (stats.f.sf(max_f_stats, q, n_p))
 
