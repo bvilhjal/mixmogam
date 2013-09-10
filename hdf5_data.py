@@ -140,9 +140,15 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     oh5f.close()
         
         
-def plot_manhattan_plot(hdf5_results_file = '/home/bv25/data/Ls154/Ls154_results.hdf5'):
-    """
+
+
+def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
+    h5f = h5py.File(hdf5_results_file)
+    for chrom in gg.keys():
     
-    """
+
+
+
+def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5'):
         
     
