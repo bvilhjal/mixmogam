@@ -132,7 +132,7 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
             print 'Took %d mins and %0.1f seconds.' % (mins, secs)
         else:
             print 'Took %0.1f seconds.' % (secs)
-        crg.create_dataset('ps', data=res['ps'])
+        crg.create_dataset('ps', data=r['ps'])
         crg.create_dataset('positions', data=gg[chrom]['positions'])
         crg.flush()
 
@@ -140,5 +140,9 @@ def run_emmax(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     oh5f.close()
         
         
+def plot_manhattan_plot(hdf5_results_file = '/home/bv25/data/Ls154/Ls154_results.hdf5'):
+    """
+    
+    """
         
     
