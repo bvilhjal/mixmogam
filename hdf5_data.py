@@ -171,7 +171,7 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
 
 
 def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5', png_file='/home/bv25/data/Ls154/Ls154_results_manhattan.png',
-                   max_log_pval=None, filter_pval=0.05, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False,
+                   max_log_pval=None, filter_pval=0.10, ylab="$-$log$_{10}(p-$value$)$", plot_bonferroni=False,
                    b_threshold=None, markersize=3, chrom_col_map=None):
     """
     Plot a Manhattan plot for a single HDF5 result
