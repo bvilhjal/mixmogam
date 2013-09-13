@@ -1140,7 +1140,6 @@ class LinearMixedModel(LinearModel):
         n = self.n
         n_p = n - p
         sp
-        self.X = self.X - sp.mean(self.X)
         self.Y = self.Y - sp.mean(self.Y)
         h0_X = sp.mat(H_sqrt_inv * self.X, dtype='single')
         Y = H_sqrt_inv * self.Y  # The transformed outputs.
