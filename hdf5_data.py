@@ -315,6 +315,11 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     else:
         print 'Took %0.1f seconds.' % (secs)
     
+    perm_res['min_ps'].sort()
+    perm_res['max_f_stats'].sort()
+    perm_res['max_f_stats'][::-1]  # reverse array
+    five_perc_i = int(num_perm / 20)
+    print "The 5% genome-wide significance threshold is %0.4e, and the corresponding statistic is %0.4e." % (perm_res['min_ps'][five_perc_i], perm_res['max_f_stats'][five_perc_i])
     oh5f.create_dataset('perm_min_ps', data=perm_res['min_ps'])
     oh5f.create_dataset('perm_max_f_stats', data=perm_res['max_f_stats'])
 
