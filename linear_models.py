@@ -1139,13 +1139,14 @@ class LinearMixedModel(LinearModel):
         p = len(self.X.T) + q
         n = self.n
         n_p = n - p
-        
+        sp
+        self.X = self.X - sp.mean(self.X)
+        self.Y = self.Y - sp.mean(self.Y)
         h0_X = sp.mat(H_sqrt_inv * self.X, dtype='single')
         Y = H_sqrt_inv * self.Y  # The transformed outputs.
         (h0_betas, h0_rss, h0_rank, h0_s) = linalg.lstsq(h0_X, Y)
         Y = sp.mat(Y - h0_X * h0_betas, dtype='single')
         h0_betas = map(float, list(h0_betas))
-
         
         Y = Y - h0_X * h0_betas
         num_snps = len(snps)
