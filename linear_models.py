@@ -1160,8 +1160,9 @@ class LinearMixedModel(LinearModel):
         min_rss_list = sp.repeat(h0_rss, num_perm)
         for i in range(0, num_snps, chunk_size):  # Do the dot-product in chuncks!
             snps_chunk = sp.matrix(snps[i:i + chunk_size])
+            snps_chunk = snps_chunk - sp.mat(sp.mean(snps_chunk, axis=1))
             Xs = snps_chunk * (H_sqrt_inv.T)
-            Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
+#            Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
                 min_rss_list = sp.minimum(min_rss_list, rss_list)
