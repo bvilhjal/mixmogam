@@ -3,7 +3,7 @@ Author:  Bjarni J. Vilhjalmsson (bjarni.vilhjalmsson@gmail.com)
 This package contains tools for performing mixed model association mapping, originally developed for Arabidopsis 
 thaliana, but can also be applied to other organisms, including Humans.  Suggestions and code contributions are welcomed.
 
-The current version is 0.1
+The current version is 1.0
 
 The main dependencies are:
 * scipy
@@ -12,21 +12,23 @@ The main dependencies are:
 
 
 There are 8 files
- - snpsdata.py: Datastructures for storing and manipulating genotype data.
- - dataParsers.py: Code for parsing genotype files into genotype data structures.
- - phenotypeData.py: Datastructures for storing and manipulating phenotype data.
- - liner_models.py: Code for linear regression and simple mixed models (for up to 3 covariance matrices).
- - kinship.py: Code for estimating kinships.
- - gwaResult.py: Code for manipulating GWAS results, including plotting Manhattan plots.
- - analyze_gwas_results.py: Code for plotting QQ-plots among other things.
- - examples.py:  Examples for how to perform GWAS using mixmogam.
- - simulations.py: Some basic code for simulating genotypes and traits, for testing purposes.
+ - snpsdata.py:			Datastructures for storing and manipulating genotype data.
+ - dataParsers.py: 		Code for parsing genotype files into genotype data structures.
+ - phenotypeData.py: 		Datastructures for storing and manipulating phenotype data.
+ - liner_models.py: 		Code for linear regression and simple mixed models (for up to 3 covariance matrices).
+ - kinship.py: 			Code for estimating kinships.
+ - gwaResult.py: 		Code for manipulating GWAS results, including plotting Manhattan plots.
+ - analyze_gwas_results.py: 	Code for plotting QQ-plots among other things.
+ - examples.py:  		Examples for how to perform GWAS using mixmogam.
+ - simulations.py: 		Some basic code for simulating genotypes and traits, for testing purposes.
+ - plink2hdf5.py: 		A parser for plink tped formatted files, to an internal HDF5 format.
+ - eigenstrat2hdf5.py: 		A parser for plink tped formatted files, to an internal HDF5 format.
+ - hdf55_data.py: 		File that contains functions that work on HDF5 formated data, including EMMAX, and EMMAX permutation test.
 
 There is A. thaliana data in the at_data/
 where there are three zipped files, which contain genotype  (Horton et al., 2012), phenotype (Atwell et al., 2010) 
 and gene annotation data (TAIR10) for Arabidopsis thalina.
 
-Due to obvious reasons, there are no real Human data examples.
 
 
 Thanks,
