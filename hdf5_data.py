@@ -236,6 +236,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     print 'Kinship scaled by: %0.4f' % scalar
     k = scalar * k_mat
     
+    chromosomes = gg.keys()
     num_tot_snps = 0
     num_12_chr_snps = 0
     for chrom in chromosomes:
