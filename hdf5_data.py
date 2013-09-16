@@ -372,7 +372,6 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
         chrom_end = positions[-1]
         chrom_res_dict[chrom] = {'log_ps':-sp.log10(ps[ps_filter]), 'positions': positions[ps_filter], 'chrom_end':chrom_end}
         
-    h5f.close()
 
     chromosomes = chrom_res_dict.keys()
     chromosomes.sort()
@@ -427,6 +426,7 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
         perm_min_ps = h5f['perm_min_ps'][...]
         perm_log_thres = -sp.log10(perm_min_ps)
         plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='k', linestyle=":")
+    h5f.close()
 
     max_y = max(b_threshold, max_log_pval)
     x_range = offset
