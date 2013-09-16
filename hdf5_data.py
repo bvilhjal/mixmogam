@@ -285,7 +285,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     
     # Construct results data containers
     chrom_res_group = oh5f.create_group('chrom_results')
-    all_snps = sp.empty((n_snps, n_indivs))
+#    all_snps = sp.empty((n_snps, n_indivs))
     chr12_snps = sp.empty((num_12_chr_snps, n_indivs))
     i = 0
     for chrom in gg.keys():
@@ -301,7 +301,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         positions = gg[chrom]['positions'][...]
         positions = positions[maf_filter]
         n = len(snps)
-        all_snps[i:i + n] = snps
+#        all_snps[i:i + n] = snps
         if chrom != chromosomes[-1]:
             chr12_snps[i:i + n] = snps
         # Now run EMMAX
