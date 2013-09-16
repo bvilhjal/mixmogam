@@ -322,6 +322,9 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     print "The 0.05 genome-wide significance threshold is %0.4e, and the corresponding statistic is %0.4e." % (perm_res['min_ps'][five_perc_i], perm_res['max_f_stats'][five_perc_i])
     oh5f.create_dataset('perm_min_ps', data=perm_res['min_ps'])
     oh5f.create_dataset('perm_max_f_stats', data=perm_res['max_f_stats'])
+    oh5f.create_dataset('five_perc_perm_min_ps', data=perm_res['min_ps'][five_perc_i])
+    oh5f.create_dataset('five_perc_perm_max_f_stats', data=perm_res['max_f_stats'][five_perc_i])
+    
 
     ih5f.close()   
     oh5f.close()  
@@ -422,13 +425,13 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
             b_threshold = -sp.log10(1.0 / (num_snps * 20.0))
         plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.")
 
-    if 'perm_min_ps' in h5f.keys():
-        perm_min_ps = h5f['perm_min_ps'][...]
+    if 'five_perc_perm_min_ps' in h5f.keys():
+        perm_min_ps = h5f['five_perc_perm_min_ps'][...]
         perm_log_thres = -sp.log10(perm_min_ps)
         plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='k', linestyle=":")
     h5f.close()
 
-    max_y = max(b_threshold, max_log_pval)
+    max_y = max(b_threshold, perm_log_thres, max_log_pval)
     x_range = offset
     plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.05 * max_y])
     plt.xticks(tick_positions, tick_strings, fontsize='x-small')
