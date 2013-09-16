@@ -354,15 +354,16 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     """
     h5f = h5py.File(hdf5_results_file)
     chrom_res_group = h5f['chrom_results']
-    pvals = sp.empty(h5f['num_snps'][...])
+    pvals = []  # sp.empty(h5f['num_snps'][...])
     i = 0
     for chrom in chrom_res_group.keys():
         if chrom !='chrom_5':
             crg = chrom_res_group[chrom]
             n = len(crg['ps'])
-            pvals[i:i + n] = crg['ps'][...]
+#            pvals[i:i + n] = crg['ps'][...]
+            pvals.extend(crg['ps'][...].tolist())
             i += n
-    
+    pvals = sp.array(pvals)
     quantiles = agr.get_quantiles(pvals)
     log_quantiles = agr.get_log_quantiles(pvals, max_val=7)
     qq_plot_png_filename = png_file_prefix + '_qq.png'
