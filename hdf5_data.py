@@ -447,10 +447,14 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
         perm_log_thres = -sp.log10(perm_min_ps)
         plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='b', linestyle="--", alpha=0.6, label='Permutation threshold')
         plt.legend()
+        max_y = max(b_threshold, perm_log_thres, max_log_pval)
+        x_range = offset
+        plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.2 * max_y])
+    else:
+        max_y = max(b_threshold, max_log_pval)
+        x_range = offset
+        plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.05 * max_y])
     h5f.close()
-    max_y = max(b_threshold, perm_log_thres, max_log_pval)
-    x_range = offset
-    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.2 * max_y])
     plt.xticks(tick_positions, tick_strings, fontsize='x-small')
     plt.ylabel('$ - log(p - $value$)$')
 
