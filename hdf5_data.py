@@ -357,10 +357,11 @@ def qq_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results.hdf5',
     pvals = sp.empty(h5f['num_snps'][...])
     i = 0
     for chrom in chrom_res_group.keys():
-        crg = chrom_res_group[chrom]
-        n = len(crg['ps'])
-        pvals[i:i + n] = crg['ps'][...]
-        i += n
+        if chrom !='chrom_5':
+            crg = chrom_res_group[chrom]
+            n = len(crg['ps'])
+            pvals[i:i + n] = crg['ps'][...]
+            i += n
     
     quantiles = agr.get_quantiles(pvals)
     log_quantiles = agr.get_log_quantiles(pvals, max_val=7)
