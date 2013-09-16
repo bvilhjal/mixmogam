@@ -423,6 +423,11 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
             b_threshold = -sp.log10(1.0 / (num_snps * 20.0))
         plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.")
 
+    if 'perm_min_ps' in h5f.keys():
+        perm_min_ps = h5f['perm_min_ps'][...]
+        perm_log_thres = -sp.log10(perm_min_ps)
+        plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='k', linestyle=":")
+
     max_y = max(b_threshold, max_log_pval)
     x_range = offset
     plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.05 * max_y])
