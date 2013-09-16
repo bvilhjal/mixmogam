@@ -423,17 +423,17 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
     if plot_bonferroni:
         if not b_threshold:
             b_threshold = -sp.log10(1.0 / (num_snps * 20.0))
-        plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.")
+        plt.plot([0, offset], [b_threshold, b_threshold], color='k', linestyle="-.", alpha=0.6, label='Bonferoni threshold')
 
     if 'five_perc_perm_min_ps' in h5f.keys():
         perm_min_ps = h5f['five_perc_perm_min_ps'][...]
         perm_log_thres = -sp.log10(perm_min_ps)
-        plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='k', linestyle=":")
+        plt.plot([0, offset], [perm_log_thres, perm_log_thres], color='b', linestyle="-.", alpha=0.6, label='Permutation threshold')
+        plt.legend()
     h5f.close()
-
     max_y = max(b_threshold, perm_log_thres, max_log_pval)
     x_range = offset
-    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.05 * max_y])
+    plt.axis([-x_range * 0.01, x_range * 1.01, -0.05 * max_y, 1.1 * max_y])
     plt.xticks(tick_positions, tick_strings, fontsize='x-small')
     plt.ylabel('$ - log(p - $value$)$')
 
