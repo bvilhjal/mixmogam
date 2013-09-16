@@ -205,6 +205,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     k_mat = sp.zeros((n_indivs, n_indivs), dtype='single')
     
     chromosomes = gg.keys()
+    chromosomes = chromosomes[-1:]
     n_snps = 0
     for chrom in chromosomes:
         print 'Working on Chromosome %s' % chrom
@@ -234,6 +235,18 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     scalar = (len(k_mat) - 1) / c
     print 'Kinship scaled by: %0.4f' % scalar
     k = scalar * k_mat
+    
+    num_tot_snps = 0
+    num_12_chr_snps = 0
+    for chrom in chromosomes:
+        cg = gg[chrom]
+        freqs = cg['freqs'][...]
+        mafs = sp.minimum(freqs, 1 - freqs)
+        maf_filter = mafs > min_maf
+        n_snps = sum(maf_filter)
+        num_tot_snps += n_snps
+        if chrom != chromosomes[-1]:
+            num_12_chr_snps += n_snps
     
     # Get the phenotypes
     phenotypes = ig['phenotypes'][...]
@@ -273,6 +286,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     # Construct results data containers
     chrom_res_group = oh5f.create_group('chrom_results')
     all_snps = sp.empty((n_snps, n_indivs))
+    chr12_snps = sp.empty((num_12_chr_snps, n_indivs))
     i = 0
     for chrom in gg.keys():
         crg = chrom_res_group.create_group(chrom)
@@ -288,6 +302,8 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         positions = positions[maf_filter]
         n = len(snps)
         all_snps[i:i + n] = snps
+        if chrom != chromosomes[-1]:
+            chr12_snps[i:i + n] = snps
         # Now run EMMAX
         print "Running EMMAX"
         s1 = time.time()
@@ -306,7 +322,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
         
     print 'Starting permutation test for detecting the genome-wide significance threshold' 
     s1 = time.time()    
-    perm_res = lmm._emmax_permutations_(all_snps, k, res['H_sqrt_inv'], num_perm=num_perm)
+    perm_res = lmm._emmax_permutations_(chr12_snps, k, res['H_sqrt_inv'], num_perm=num_perm)
     secs = time.time() - s1
     if secs > 60:
         mins = int(secs) / 60
