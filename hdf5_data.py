@@ -240,6 +240,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     # Initialize results file
     oh5f = h5py.File(out_file)
     oh5f.create_dataset('kinship', data=k)
+    oh5f.flush()
     
     chromosomes = gg.keys()
     num_tot_snps = 0
