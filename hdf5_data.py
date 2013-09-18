@@ -236,6 +236,11 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     print 'Kinship scaled by: %0.4f' % scalar
     k = scalar * k_mat
     
+    # Store the kinship
+    # Initialize results file
+    oh5f = h5py.File(out_file)
+    oh5f.create_dataset('kinship', data=k)
+    
     chromosomes = gg.keys()
     num_tot_snps = 0
     num_12_chr_snps = 0
@@ -274,8 +279,6 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     print 'Took %0.2f seconds' % (time.time() - s0)
     print 'pseudo_heritability:', res['pseudo_heritability']
 
-    # Initialize results file
-    oh5f = h5py.File(out_file)
     
     # Store phenotype_data
     oh5f.create_dataset('pseudo_heritability', data=sp.array(res['pseudo_heritability']))
