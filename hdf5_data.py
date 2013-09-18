@@ -205,7 +205,7 @@ def run_emmax_perm(hdf5_filename='/home/bv25/data/Ls154/Ls154_12.hdf5',
     k_mat = sp.zeros((n_indivs, n_indivs), dtype='single')
     
     chromosomes = gg.keys()
-#    chromosomes = chromosomes[-1:]
+    chromosomes = chromosomes[-1:]
     n_snps = 0
     for chrom in chromosomes:
         print 'Working on Chromosome %s' % chrom
