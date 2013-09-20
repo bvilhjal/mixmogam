@@ -89,7 +89,7 @@ def simple_log_qqplot(quantiles_list, png_file=None, pdf_file=None, quantile_lab
     ax.axis([-0.025 * max_x, 1.025 * max_x, -0.025 * max_y, 1.025 * max_y])
     if quantile_labels:
         fontProp = matplotlib.font_manager.FontProperties(size=10)
-        ax.legend(loc=2, numpoints=2, handlelen=0.05, markerscale=1, prop=fontProp, pad=0.018)
+        ax.legend(loc=2, numpoints=2, markerscale=1, prop=fontProp)#, handlelen=0.05, pad=0.018)
     y_min, y_max = plt.ylim()
     if text:
         f.text(0.05 * max_val, y_max * 0.9, text)
@@ -141,7 +141,7 @@ def simple_qqplot(quantiles_list, png_file=None, pdf_file=None, quantile_labels=
     ax.axis([-0.025, 1.025, -0.025, 1.025])
     if quantile_labels:
         fontProp = matplotlib.font_manager.FontProperties(size=10)
-        ax.legend(loc=2, numpoints=2, handlelen=0.05, markerscale=1, prop=fontProp, pad=0.018)
+        ax.legend(loc=2, numpoints=2, markerscale=1, prop=fontProp)#, handlelen=0.05, pad=0.018)
     if text:
         f.text(0.05, 0.9, text)
     if plot_label:
@@ -171,6 +171,7 @@ def plot_simple_qqplots(png_file_prefix, results, result_labels=None, line_color
     simple_log_qqplot(log_qs, png_file_prefix + '_log_qq.png', quantile_labels=result_labels,
                 line_colors=line_colors, num_dots=num_dots, title=title, max_val=max_neg_log_val)
 
+
 def plot_simple_qqplots_pvals(png_file_prefix, pvals_list, result_labels=None, line_colors=None,
             num_dots=1000, title=None, max_neg_log_val=5):
     """
@@ -185,6 +186,7 @@ def plot_simple_qqplots_pvals(png_file_prefix, pvals_list, result_labels=None, l
                 line_colors=line_colors, num_dots=num_dots, title=title)
     simple_log_qqplot(log_qs, png_file_prefix + '_log_qq.png', quantile_labels=result_labels,
                 line_colors=line_colors, num_dots=num_dots, title=title, max_val=max_neg_log_val)
+    
 
 
 
