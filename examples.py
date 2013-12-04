@@ -104,7 +104,7 @@ def mixed_model_gwas(phenotype_id=5, pvalue_file='mm_results.pvals',
 
 
 def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_results',
-                     result_files_prefix='mlmm_manhattan', max_num_steps=10):
+                     result_files_prefix='mlmm_manhattan', max_num_steps=10, snp_priors=None):
     """
     Perform multiple loci mixed model GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
@@ -128,7 +128,7 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_resu
     # Perform multiple loci mixed model GWAS
     mlmm_results = lm.mlmm(phend.get_values(phenotype_id), K, sd=sd,
                          num_steps=max_num_steps, file_prefix=result_files_prefix,
-                         save_pvals=True, pval_file_prefix=result_files_prefix,)
+                         save_pvals=True, pval_file_prefix=result_files_prefix,snp_priors=snp_priors)
             
 
 
