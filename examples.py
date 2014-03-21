@@ -129,13 +129,87 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_resu
     mlmm_results = lm.mlmm(phend.get_values(phenotype_id), K, sd=sd,
                          num_steps=max_num_steps, file_prefix=result_files_prefix,
                          save_pvals=True, pval_file_prefix=result_files_prefix,snp_priors=snp_priors)
+
+
+def perform_cegs_gwas(kinship_type='ibd'):
+    """
+    Perform a simple MLM GWAS for the 8 traits
+    """
+    import hdf5_data
+    import kinship
+    import linear_models as lm
+    import time
+    import scipy as sp
+    from matplotlib import pyplot as plt
+    phen_dict = hdf5_data.parse_cegs_drosophila_phenotypes()
+    
+    phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
+    envs= ['mated','virgin']
+    for phenotype in phenotypes:
+        for env in envs:
+            print phenotype, env
+            s1 = time.time()
+            d = hdf5_data.coordinate_cegs_genotype_phenotype(phen_dict,phenotype,env)
+            print 'Calculating kinship'
+            if kinship_type=='ibs':
+                K = kinship.calc_ibs_kinship(d['snps'])
+            elif kinship_type=='ibd':
+                K = kinship.calc_ibd_kinship(d['snps'])
+            else:
+                raise NotImplemented
             
+            lmm = lm.LinearMixedModel(d['Y_means'])
+            lmm.add_random_effect(K)
+        
+            print "Running EMMAX"
+            res = lmm.emmax_f_test(d['snps'], emma_num =0)
+            print 'Mean p-value:',sp.mean(res['ps'])
+
+            secs = time.time() - s1
+            if secs > 60:
+                mins = int(secs) / 60
+                secs = secs - mins * 60
+                print 'Took %d mins and %f seconds.' % (mins, secs)
+            else:
+                print 'Took %f seconds.' % (secs)
+            
+            
+            # Perform multiple loci mixed model GWAS
+            chromosomes = d['positions'][:,0]
+            positions = sp.array(d['positions'][:,1],'int32')
+            x_positions = []
+            y_log_pvals = []
+            colors = []
+            x_shift = 0
+            for i, chrom in enumerate(sp.unique(chromosomes)):
+                if chrom in ['2L', '2LHet', '3L', '3LHet', '4', 'X', 'XHet']:
+                    colors.append('c')
+                else: # chrom in ['2R', '2RHet', '3R', '3RHet', 'U', 'Uextra']
+                    colors.append('m')
+                chrom_filter = sp.in1d(chromosomes,chrom)
+                positions_slice = positions[chrom_filter]
+                x_positions.append(positions_slice+x_shift)
+                x_shift += positions_slice.max()
+                log_ps_slice = -sp.log10(res['ps'][chrom_filter])
+                y_log_pvals.append(log_ps_slice)
+                
+            m = len(positions)
+            log_bonf = -sp.log10(1 / (20.0 * m))
+            print m, log_bonf
+
+            # Plot manhattan plots?
+            plt.figure(figsize=(12, 4))
+            plt.axes([0.03, 0.1, 0.95, 0.8])
+            for i, chrom in enumerate(sp.unique(chromosomes)):
+                plt.plot(x_positions[i], y_log_pvals[i], c=colors[i], ls='', marker='.')
+            xmin, xmax = plt.xlim()
+            plt.hlines(log_bonf, xmin, xmax, colors='k', linestyles='--', alpha=0.5)
+            plt.title('%s, %s' % (phenotype, env))
+            plt.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_gwas_%s_%s_%s.png' % (kinship_type,phenotype, env))
 
 
-
-
-
-
+def leave_k_out_blup(k=10,genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/', ):
+    pass
 
 
 def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=10,
@@ -221,8 +295,6 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         res.plot_qq('%s_%d_gres_qq.png' % (plot_prefix , i))
         
         
-        
-  
 
 
 if __name__ == '__main__':

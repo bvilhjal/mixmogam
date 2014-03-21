@@ -474,5 +474,113 @@ def manhattan_plot(hdf5_results_file='/home/bv25/data/Ls154/Ls154_results_perm.h
 
     plt.clf()
     plt.close()
-
     
+    
+def parse_cegs_drosophila_phenotypes(phenotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/allphenotypes_5.0_cleaned.tab.reps.hdf5',):
+    """
+    Parser for CEGS Drosophila phenotype data
+    """
+    #Load phenotypes...
+    ph5f = h5py.File(phenotype_file)
+    #Now take the median and mean of all values for all individuals.
+    phen_dict = {}
+    for phen in ph5f.keys():
+        #First mated
+        Y_mated = ph5f[phen]['Y_mated'][...]
+        Z_mated = ph5f[phen]['Z_mated'][...]
+        sample_filter = sp.negative(sp.isnan(Y_mated))
+        Ys_sum = sp.dot(Y_mated[sample_filter], Z_mated[sample_filter])
+        rep_count = sp.dot(sp.ones(sum(sample_filter)), Z_mated[sample_filter])
+        Y_means = Ys_sum/rep_count
+        ind_filter = sp.negative(sp.isnan(Y_means))
+        
+        #
+        phen_dict[phen]={'mated':{'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter}}
+
+        #Then virgin
+        Y_virgin = ph5f[phen]['Y_virgin'][...]
+        Z_virgin = ph5f[phen]['Z_virgin'][...]
+        sample_filter = sp.negative(sp.isnan(Y_virgin))
+        Ys_sum = sp.dot(Y_virgin[sample_filter], Z_virgin[sample_filter])
+        rep_count = sp.dot(sp.ones(sum(sample_filter)), Z_virgin[sample_filter])
+        Y_means = Ys_sum/rep_count
+        ind_filter = sp.negative(sp.isnan(Y_means))
+        phen_dict[phen]['virgin']={'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter}
+    
+    return phen_dict
+    
+    
+def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated',ind_missing_thres=0.2, snp_missing_thres=0.05, maf_thres=0.1,
+                                       genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/CEGS.216.lines.NO_DPGP4.GATK.SNP.HETS.FILTERED.Filter.vcf.hdf5'):
+    """
+    Parse genotypes and coordinate with phenotype, and ready data for analysis.
+    """
+    gh5f = h5py.File(genotype_file)
+    p_dict = phen_dict[phenotype][env]
+    print 'Loading SNPs'
+    snps = sp.array(gh5f['gt'][...],dtype='single')
+    snps = snps[:,p_dict['ind_filter']]
+    positions = gh5f['pos'][...]
+    m,n = snps.shape
+    print 'Loaded %d SNPs for %d individuals'%(m,n)
+    print 'Filtering individuals with missing rates >%0.2f'%ind_missing_thres
+    missing_mat = sp.isnan(snps)
+    ind_missing_rates = sp.sum(missing_mat,0)/float(m)
+    ind_filter = ind_missing_rates<ind_missing_thres
+    snps = snps[:,ind_filter]
+    n = sp.sum(ind_filter)  
+    print 'Filtered %d individuals due to high missing rates'%sp.sum(sp.negative(ind_filter))
+    gt_ids = gh5f['gt_ids'][p_dict['ind_filter']]
+    gt_ids = gt_ids[ind_filter]
+    Y_means = p_dict['Y_means'][p_dict['ind_filter']]
+    Y_means = Y_means[ind_filter]
+    rep_count =  p_dict['rep_count'][p_dict['ind_filter']]
+    rep_count = rep_count[ind_filter]
+    
+    print 'Now removing "bad" genotypes.'
+    bad_genotypes = ['Raleigh_149','Raleigh_181','Raleigh_361','Raleigh_398','Raleigh_908']
+    ind_filter = sp.negative(sp.in1d(gt_ids,bad_genotypes))
+    gt_ids = gt_ids[ind_filter]
+    Y_means= Y_means[ind_filter]
+    rep_count= rep_count[ind_filter]    
+    snps = snps[:,ind_filter]
+    print 'Removed %d "bad" genotypes'%sp.sum(sp.negative(ind_filter))
+    
+    print 'Filtering SNPs with missing rate >%0.2f'%snp_missing_thres
+    missing_mat = sp.isnan(snps)
+    snp_missing_rates = sp.sum(missing_mat,1)/float(n)
+    snps_filter = snp_missing_rates<snp_missing_thres
+    snps = snps[snps_filter]
+    positions = positions[snps_filter]
+    m = sp.sum(snps_filter)
+    print 'Filtered %d SNPs due to high missing rate'%sp.sum(sp.negative(snps_filter))
+    
+    print 'Now imputing (w mean)'
+    missing_mat = sp.isnan(snps)
+    ok_counts = n-sp.sum(missing_mat,1)
+    snps[missing_mat]=0
+    snp_means = sp.sum(snps,1)/ok_counts
+    for i in range(len(snps)):
+        snps[i,missing_mat[i]]=snp_means[i]
+    
+    print 'And filtering SNPs with MAF<%0.2f'%maf_thres
+    snp_mafs = sp.minimum(snp_means,1-snp_means)
+    snps_filter = snp_mafs>maf_thres
+    snps = snps[snps_filter]
+    positions = positions[snps_filter]
+    print 'Filtered %d SNPs with low MAFs'%sp.sum(sp.negative(snps_filter))
+
+    print 'All filtering done.'
+    
+    m,n = snps.shape
+    print 'In all there are %d SNPs remaining, for %d individuals.'%(m,n)
+    
+    ret_dict = {'Y_means':Y_means, 'rep_count':rep_count, 'gt_ids':gt_ids, 'positions':positions, 'snps':snps}
+    
+    
+    
+    return ret_dict
+    
+
+
+

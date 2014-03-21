@@ -858,8 +858,8 @@ def parse_tair_gff_file(chrom=None, reg_start_pos=None, reg_end_pos=None, only_g
                 del gene_dict[tid]
 
 
-    return gene_dict
-
+    return gene_dict    
+    
 
 
 def _parse_map_file_():
