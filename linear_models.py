@@ -894,7 +894,7 @@ class LinearMixedModel(LinearModel):
             opt_ll = max_ll
 
         if verbose: print 'Finishing up.. calculating H_sqrt_inv.'
-        l = sq_etas / (eig_vals + opt_delta)
+        l = sq_etas / (eig_vals + opt_delta)   #BUG NEEDS TO BE FIXED HERE!!!
         opt_vg = sp.sum(l) / p  # vg   
         opt_ve = opt_vg * opt_delta  # ve
 

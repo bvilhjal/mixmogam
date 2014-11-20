@@ -480,6 +480,7 @@ def parse_cegs_drosophila_phenotypes(phenotype_file='/Users/bjarnivilhjalmsson/d
     """
     Parser for CEGS Drosophila phenotype data
     """
+    import pylab
     #Load phenotypes...
     ph5f = h5py.File(phenotype_file)
     #Now take the median and mean of all values for all individuals.
@@ -492,10 +493,33 @@ def parse_cegs_drosophila_phenotypes(phenotype_file='/Users/bjarnivilhjalmsson/d
         Ys_sum = sp.dot(Y_mated[sample_filter], Z_mated[sample_filter])
         rep_count = sp.dot(sp.ones(sum(sample_filter)), Z_mated[sample_filter])
         Y_means = Ys_sum/rep_count
+        #Now calculate medians by iteration.
+        phen_vals_list = [[] for i in range(216)]
+        for i in range(len(Y_mated)):
+            ind_i = sp.where(1==Z_mated[i])[0][0]
+            phen_vals_list[ind_i].append(Y_mated[i])
+        medians = sp.zeros(216)
+        for i, pl in enumerate(phen_vals_list):
+            if len(pl)>0:
+                medians[i] = sp.median(pl)
+            else:
+                medians[i] = sp.nan
         ind_filter = sp.negative(sp.isnan(Y_means))
+        if phen=='Triglyceride':
+            ind_filter = (Y_means>0)*ind_filter
         
-        #
-        phen_dict[phen]={'mated':{'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter}}
+        phen_dict[phen]={'mated':{'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter, 'Y_medians':medians}}
+        
+        print 'Plotting phenotype histograms for %s, %s'%(phen,'mated')
+        mated_filtered_means = Y_means[ind_filter]
+        pylab.hist(mated_filtered_means)
+        pylab.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_hist_%s_mated_means.png' % (phen))
+        pylab.clf()
+        mated_filtered_medians = medians[ind_filter]
+        pylab.hist(mated_filtered_medians)
+        pylab.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_hist_%s_mated_medians.png' % (phen))
+        pylab.clf()
+
 
         #Then virgin
         Y_virgin = ph5f[phen]['Y_virgin'][...]
@@ -504,14 +528,42 @@ def parse_cegs_drosophila_phenotypes(phenotype_file='/Users/bjarnivilhjalmsson/d
         Ys_sum = sp.dot(Y_virgin[sample_filter], Z_virgin[sample_filter])
         rep_count = sp.dot(sp.ones(sum(sample_filter)), Z_virgin[sample_filter])
         Y_means = Ys_sum/rep_count
+        #Now calculate medians by iteration.
+        phen_vals_list = [[] for i in range(216)]
+        for i in range(len(Y_virgin)):
+            ind_i = sp.where(1==Z_virgin[i])[0][0]
+            phen_vals_list[ind_i].append(Y_virgin[i])
+        medians = sp.zeros(216)
+        for i, pl in enumerate(phen_vals_list):
+            if len(pl)>0:
+                medians[i] = sp.median(pl)
+            else:
+                medians[i] = sp.nan
         ind_filter = sp.negative(sp.isnan(Y_means))
-        phen_dict[phen]['virgin']={'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter}
+        if phen=='Triglyceride':
+            ind_filter = (Y_means>0)*ind_filter
+
+        phen_dict[phen]['virgin']={'Y_means':Y_means, 'rep_count':rep_count, 'ind_filter':ind_filter, 'Y_medians':medians}
     
+        print 'Plotting phenotype histograms for %s, %s'%(phen,'virgin')
+        virgin_filtered_means = Y_means[ind_filter]
+        pylab.hist(virgin_filtered_means)
+        pylab.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_hist_%s_virgin_means.png' % (phen))
+        pylab.clf()
+        virgin_filtered_medians = medians[ind_filter]
+        pylab.hist(virgin_filtered_medians)
+        pylab.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_hist_%s_virgin_medians.png' % (phen))
+        pylab.clf()
+
+        means_corr = sp.corrcoef(mated_filtered_means, virgin_filtered_means)[0,1]
+        medians_corr = sp.corrcoef(mated_filtered_medians, virgin_filtered_medians)[0,1]
+        print 'Correlation between mated and virgin flies, means: %0.2f, medians: %0.2f'%(means_corr,medians_corr)
+        phen_dict[phen]['corrs'] = {'means':means_corr, 'medians':medians_corr}
     return phen_dict
     
     
-def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated',ind_missing_thres=0.2, snp_missing_thres=0.05, maf_thres=0.1,
-                                       genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/CEGS.216.lines.NO_DPGP4.GATK.SNP.HETS.FILTERED.Filter.vcf.hdf5'):
+def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated',k_thres=0.8, ind_missing_thres=0.5, snp_missing_thres=0.05, maf_thres=0.1,
+                                       genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/CEGS.216.lines.NO_DPGP4.GATK.SNP.HETS.FILTERED.Filter_imputed.hdf5'):
     """
     Parse genotypes and coordinate with phenotype, and ready data for analysis.
     """
@@ -534,18 +586,24 @@ def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated
     gt_ids = gt_ids[ind_filter]
     Y_means = p_dict['Y_means'][p_dict['ind_filter']]
     Y_means = Y_means[ind_filter]
+    Y_medians = p_dict['Y_medians'][p_dict['ind_filter']]
+    Y_medians = Y_medians[ind_filter]
     rep_count =  p_dict['rep_count'][p_dict['ind_filter']]
     rep_count = rep_count[ind_filter]
     
     print 'Now removing "bad" genotypes.'
-    bad_genotypes = ['Raleigh_149','Raleigh_181','Raleigh_361','Raleigh_398','Raleigh_908']
+    bad_genotypes = ['Raleigh_272', 'Raleigh_378', 'Raleigh_554', 'Raleigh_591', 'Raleigh_398', 'Raleigh_138', 'Raleigh_208', 
+                     'Raleigh_336', 'Raleigh_370', 'Raleigh_373', 'Raleigh_374', 'Raleigh_799', 'Raleigh_821', 'Raleigh_822',
+                     'Raleigh_884', 'Raleigh_335']
     ind_filter = sp.negative(sp.in1d(gt_ids,bad_genotypes))
     gt_ids = gt_ids[ind_filter]
     Y_means= Y_means[ind_filter]
+    Y_medians= Y_medians[ind_filter]
     rep_count= rep_count[ind_filter]    
     snps = snps[:,ind_filter]
     print 'Removed %d "bad" genotypes'%sp.sum(sp.negative(ind_filter))
     
+    n = len(snps[0])
     print 'Filtering SNPs with missing rate >%0.2f'%snp_missing_thres
     missing_mat = sp.isnan(snps)
     snp_missing_rates = sp.sum(missing_mat,1)/float(n)
@@ -560,22 +618,56 @@ def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated
     ok_counts = n-sp.sum(missing_mat,1)
     snps[missing_mat]=0
     snp_means = sp.sum(snps,1)/ok_counts
+#     print snp_means.shape
+#     print snp_means[:10]
+#     import pdb
+#     pdb.set_trace()
     for i in range(len(snps)):
         snps[i,missing_mat[i]]=snp_means[i]
-    
+
     print 'And filtering SNPs with MAF<%0.2f'%maf_thres
+    snp_means = sp.mean(snps,1)
     snp_mafs = sp.minimum(snp_means,1-snp_means)
     snps_filter = snp_mafs>maf_thres
     snps = snps[snps_filter]
     positions = positions[snps_filter]
     print 'Filtered %d SNPs with low MAFs'%sp.sum(sp.negative(snps_filter))
+    
+
+    print 'Filtering based on kinship w threshold:',k_thres
+    import kinship
+    K = kinship.calc_ibd_kinship(snps)
+    print '\nKinship calculated'
+    K_ind_filter = []
+    for i in range(n):
+        K_ind_filter.append(not sp.any(K[i,i+1:n]>k_thres))
+    if sum(K_ind_filter)==n:
+        print 'No individuals were filtered based on kinship..'
+    else:
+        print 'Filtering %d individuals based on kinship.'%(n-sum(K_ind_filter))
+        K_ind_filter = sp.array(K_ind_filter)
+        gt_ids = gt_ids[K_ind_filter]
+        Y_means= Y_means[K_ind_filter]
+        Y_medians= Y_medians[K_ind_filter]
+        rep_count= rep_count[K_ind_filter]    
+        snps = snps[:,K_ind_filter]
+        
+        print 'Again filtering SNPs with MAF<%0.2f'%maf_thres
+        snp_means = sp.mean(snps,1)
+        snp_mafs = sp.minimum(snp_means,1-snp_means)
+        snps_filter = snp_mafs>maf_thres
+        snps = snps[snps_filter]
+        positions = positions[snps_filter]
+        print 'Filtered %d additional SNPs with low MAFs'%sp.sum(sp.negative(snps_filter))
+
 
     print 'All filtering done.'
     
     m,n = snps.shape
     print 'In all there are %d SNPs remaining, for %d individuals.'%(m,n)
     
-    ret_dict = {'Y_means':Y_means, 'rep_count':rep_count, 'gt_ids':gt_ids, 'positions':positions, 'snps':snps}
+    ret_dict = {'Y_means':Y_means, 'Y_medians':Y_medians, 'rep_count':rep_count, 'gt_ids':gt_ids, 
+                'positions':positions, 'snps':snps}
     
     
     
