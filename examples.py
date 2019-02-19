@@ -410,6 +410,47 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         
         
 
+def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv', 
+                           gt_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/all_chromosomes_binary.csv', 
+                           pvalue_file='mm_results.pvals', manhattan_plot_file='mm_manhattan.png', qq_plot_file_prefix='mm_qq'):
+    """
+    Perform mixed model (EMMAX) GWAS for Lotus data
+    """
+    import linear_models as lm
+    import kinship
+    import gwaResults as gr
+    import dataParsers as dp
+    # Load genotypes
+    sd = dp.parse_snp_data(gt_file)
+    
+    # Load phenotypes
+    import phenotypeData as pd
+    phend = pd.parse_phenotype_file(phen_file)
+    
+    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+    # phenotypes, leaving only accessions (individuals) which overlap between both, 
+    # and SNPs that are polymorphic in the resulting subset.
+    sd.coordinate_w_phenotype_data(phend, phenotype_id)
+    
+    # Calculate kinship (IBS)
+    K = kinship.calc_ibs_kinship(sd.get_snps())
+    
+    # Perform mixed model GWAS
+    mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
+    
+    # Construct a results object
+    res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+
+    # Save p-values to file
+    res.write_to_file(pvalue_file)
+
+    # Plot Manhattan plot
+    res.plot_manhattan(png_file=manhattan_plot_file, percentile=90, plot_bonferroni=True,
+                        neg_log_transform=True)
+    # Plot a QQ-plot
+    res.plot_qq(qq_plot_file_prefix)
+
+
 
 if __name__ == '__main__':
     _test_GxE_mixed_model_gwas()
