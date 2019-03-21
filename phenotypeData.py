@@ -1045,6 +1045,7 @@ def parse_phenotype_file(file_name=None, file_object=None, delim=',', file_forma
     else:
         f = open(file_name, 'rU')
     header = f.next()
+    print header
     if len(header.split(delim)) < 2:
         test_delims = [',', '\t']
         for n_delim in test_delims:
