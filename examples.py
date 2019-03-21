@@ -410,7 +410,7 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         
         
 
-def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv', 
+def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv', 
                            gt_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/all_chromosomes_binary.csv', 
                            pvalue_file='mm_results.pvals', manhattan_plot_file='mm_manhattan.png', qq_plot_file_prefix='mm_qq'):
     """
