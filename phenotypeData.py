@@ -1064,6 +1064,7 @@ def parse_phenotype_file(file_name=None, file_object=None, delim=',', file_forma
         else:
             print 'Guessing old format.'
             file_format = 'old'
+    print file_format
 
     if file_format == 'old':
         if with_db_ids:
