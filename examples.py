@@ -453,7 +453,7 @@ def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file = '/home/bjarni/
 
 
 if __name__ == '__main__':
-    _test_GxE_mixed_model_gwas()
+    lotus_mixed_model_gwas()
     #    linear_regression_gwas()
 #    multiple_loci_mixed_model_gwas()
     pass
