@@ -1045,7 +1045,6 @@ def parse_phenotype_file(file_name=None, file_object=None, delim=',', file_forma
     else:
         f = open(file_name, 'rU')
     header = f.next()
-    print header
     if len(header.split(delim)) < 2:
         test_delims = [',', '\t']
         for n_delim in test_delims:
@@ -1059,23 +1058,12 @@ def parse_phenotype_file(file_name=None, file_object=None, delim=',', file_forma
     if file_format == 'guess':
         header = map(str.strip, header.split(delim))
         print header
-#        if len(header) != 5:
-#            print 'Guessing old format.'
-#            #print len(header), header
-#            file_format = 'old'
         if 'phenotype_id' in header or 'replicate_id' in header:
             print 'Guessing new format.'
             file_format = 'new'
         else:
             print 'Guessing old format.'
             file_format = 'old'
-#            v = int(raw_input('File format is ambiguous:\n (1) - old format\n (2) - new format\n (3) - exit\n:'))
-#            if v == 1:
-#                file_format = 'old'
-#            elif v == 2:
-#                file_format = 'new'
-#            else:
-#                sys.exit()
 
     if file_format == 'old':
         if with_db_ids:

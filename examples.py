@@ -425,7 +425,7 @@ def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file = '/home/bjarni/
     
     # Load phenotypes
     import phenotypeData as pd
-    phend = pd.parse_phenotype_file(phen_file)
+    phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
     
     # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
     # phenotypes, leaving only accessions (individuals) which overlap between both, 
