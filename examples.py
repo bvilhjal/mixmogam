@@ -464,7 +464,7 @@ def lotus_data_analysis(phenotype_id=1,
 #     K = kinship.calc_ibd_kinship(sd.get_snps())
 #     print K
 
-    # Perform mixed model GWAS
+# Perform mixed model GWAS
     print 'Performing mixed model GWAS'
 #     mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
 
@@ -492,8 +492,8 @@ def lotus_data_analysis(phenotype_id=1,
     # Local-global scan
 
 
-def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file='/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv',
-                           gt_file='/home/bjarni/LotusGenome/cks/Lotus31012019/all_chromosomes_binary.csv',
+def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv', 
+                           gt_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/all_chromosomes_binary.csv', 
                            pvalue_file='mm_results.pvals', manhattan_plot_file='mm_manhattan.png', qq_plot_file_prefix='mm_qq'):
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
@@ -507,10 +507,10 @@ def lotus_mixed_model_gwas(phenotype_id='OW_2014_15', phen_file='/home/bjarni/Lo
 
     # Load phenotypes
     import phenotypeData as pd
-    phend = pd.parse_phenotype_file(phen_file)
-
-    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and
-    # phenotypes, leaving only accessions (individuals) which overlap between both,
+    phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
+    
+    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+    # phenotypes, leaving only accessions (individuals) which overlap between both, 
     # and SNPs that are polymorphic in the resulting subset.
     sd.coordinate_w_phenotype_data(phend, phenotype_id)
 
