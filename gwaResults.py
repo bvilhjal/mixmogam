@@ -1170,10 +1170,10 @@ class Result(object):
                     else:
                         ticksList2.append(chrom)
                 else:
-                    for j in range(oldOffset, offset, 4000000):
+                    for j in range(oldOffset, offset, 8000000):
                         ticksList1.append(j)
-                    for j in range(0, chromosome_end, 4000000):
-                        if j % 8000000 == 0 and j < chromosome_end - 4000000 :
+                    for j in range(0, chromosome_end, 8000000):
+                        if j % 16000000 == 0 and j < chromosome_end - 8000000 :
                             ticksList2.append(j / 1000000)
                         else:
                             ticksList2.append("")
@@ -1270,7 +1270,7 @@ class Result(object):
         Returns list of indices (and prev chromosome), for the when the chromosomes
         change in the scores, positions indices.
         """
-        last_chrom = 0
+        last_chrom = -1
         chromosome_splits = []
         for i, chrom in enumerate(self.snp_results['chromosomes']):
             if last_chrom != chrom:
@@ -1875,6 +1875,7 @@ class Result(object):
         num_scores = self.num_scores()
 #        try:
         if not only_pickled:
+            print 'Writing to file: %s'%filename
             with open(filename, "w") as f:
                 f.write(','.join(columns) + "\n")
                 if score_threshold:
