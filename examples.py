@@ -157,7 +157,7 @@ def perform_cegs_gwas(kinship_type='ibd', phen_type='medians'):
             elif kinship_type == 'ibd':
                 K = kinship.calc_ibd_kinship(d['snps'])
             else:
-                raise NotImplemented
+                raise NotImplementedError
 
             if phen_type == 'means':
                 lmm = lm.LinearMixedModel(d['Y_means'])
