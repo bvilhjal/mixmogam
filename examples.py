@@ -420,6 +420,7 @@ def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome
     import kinship
     import gwaResults as gr
     import dataParsers as dp
+    
     # Load genotypes
     sd = dp.parse_snp_data(gt_file)
     
@@ -447,6 +448,7 @@ def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome
     # Plot Manhattan plot
     res.plot_manhattan(png_file=manhattan_plot_file, percentile=90, plot_bonferroni=True,
                         neg_log_transform=True)
+    
     # Plot a QQ-plot
     res.plot_qq(qq_plot_file_prefix)
 
