@@ -5,20 +5,17 @@ Author: Bjarni J. Vilhjalmsson
 Email: bjarni.vilhjalmsson@gmail.com
 
 """
-try:
-    import scipy as sp
+import scipy as sp
 #    sp.alterdot()
-    from scipy import linalg
-    from scipy import stats
-    from scipy import optimize
-    
-    # Creating a vectorized function for anti-snp
-    anti_decoder = {1:0, 0:1}  # For haploid organisms (e.g. A. thaliana)
-#    anti_decoder = {2:0, 1:1, 0:2}  # Diploid organisms (e.g. Humans)    
-    get_anti_snp = sp.vectorize(lambda x: anti_decoder[x])  
+from scipy import linalg
+from scipy import stats
+from scipy import optimize
 
-except Exception, err_str:
-    print 'scipy is missing:', err_str
+# Creating a vectorized function for anti-snp
+anti_decoder = {1:0, 0:1}  # For haploid organisms (e.g. A. thaliana)
+#    anti_decoder = {2:0, 1:1, 0:2}  # Diploid organisms (e.g. Humans)    
+get_anti_snp = sp.vectorize(lambda x: anti_decoder[x])  
+
 
 import snpsdata
 import warnings
