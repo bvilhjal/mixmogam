@@ -1118,6 +1118,7 @@ class Result(object):
         scoreRange = max_score - min_score
         offset = 0
         chromosome_splits = result.get_chromosome_splits()
+        print chromosome_splits
 
         ticksList1 = []
         ticksList2 = []
