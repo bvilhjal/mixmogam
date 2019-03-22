@@ -221,7 +221,7 @@ def perform_cegs_gwas(kinship_type='ibd', phen_type='medians'):
             plt.savefig('/Users/bjarnivilhjalmsson/data/tmp/cegs_gwas_%s_%s_%s_%s.png' % (kinship_type,phenotype, env, phen_type))
 
 
-def leave_k_out_blup(num_cvs=20,genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/', k_thres=0.5):
+def leave_k_out_blup(num_repeats=20,num_cvs=5,genotype_file='/Users/bjarnivilhjalmsson/data/cegs_lehmann/', k_thres=0.5):
     """
 
     """
@@ -237,92 +237,97 @@ def leave_k_out_blup(num_cvs=20,genotype_file='/Users/bjarnivilhjalmsson/data/ce
     
     phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
     envs= ['mated','virgin']
-    res_dict = {}
-    for phenotype in phenotypes:
-        env_dict = {}
-        for env in envs:
-            print phenotype, env
-            s1 = time.time()
-            #Load data..
-            d = hdf5_data.coordinate_cegs_genotype_phenotype(phen_dict,phenotype,env, k_thres=k_thres)
-            Y_means = d['Y_means']
-            snps = d['snps']
-            assert sp.all(sp.negative(sp.isnan(snps))), 'WTF?'
-            K = kinship.calc_ibd_kinship(snps)
-            print '\nKinship calculated'
-            assert sp.all(sp.negative(sp.isnan(K))), 'WTF?'
-            n = len(Y_means)
-            #partition genotypes in k parts.
-            gt_ids = d['gt_ids']
-            num_ids = len(gt_ids)
-            chunk_size = num_ids /num_cvs
-            
-            #Create k CV sets of prediction and validation data
-            
-            cv_chunk_size = int((n / num_cvs) + 1)
-            ordering = sp.random.permutation(n)
-            
-            a = sp.arange(n)
-            osb_ys = []
-            pred_ys = []
-            p_herits = []
-            for cv_i, i in enumerate(range(0, n, cv_chunk_size)):
-                cv_str = 'cv_%d' % cv_i
-                #print 'Working on CV %d' % cv_i
-                end_i = min(n, i + cv_chunk_size)
-                validation_filter = sp.in1d(a, ordering[i:end_i])
-                training_filter = sp.negative(validation_filter)
+    rep_dict = {}
+    for rep_i in range(num_repeats):
+        res_dict = {}
+        for phenotype in phenotypes:
+            env_dict = {}
+            for env in envs:
+                print phenotype, env
+                s1 = time.time()
+                #Load data..
+                d = hdf5_data.coordinate_cegs_genotype_phenotype(phen_dict,phenotype,env, k_thres=k_thres)
+                Y_means = d['Y_means']
+                snps = d['snps']
+                assert sp.all(sp.negative(sp.isnan(snps))), 'WTF?'
+                K = kinship.calc_ibd_kinship(snps)
+                print '\nKinship calculated'
+                assert sp.all(sp.negative(sp.isnan(K))), 'WTF?'
+                n = len(Y_means)
+                #partition genotypes in k parts.
+                gt_ids = d['gt_ids']
+                num_ids = len(gt_ids)
+                chunk_size = num_ids /num_cvs
                 
-                train_snps = snps[:,training_filter]
-                val_snps = snps[:,validation_filter]
-
-                train_Y = Y_means[training_filter]
-                val_Y = Y_means[validation_filter]
+                #Create k CV sets of prediction and validation data
                 
-                #Calc. kinship
-                K_train = K[training_filter,:][:,training_filter]
-                K_cross = K[validation_filter,:][:,training_filter]
-                #Do gBLUP
-                lmm = lm.LinearMixedModel(train_Y)
-                lmm.add_random_effect(K_train)
-                r1 = lmm.get_REML()
-        
-                #Now the BLUP.
-                y_mean = sp.mean(lmm.Y)
-                Y = lmm.Y - y_mean
-                p_herit = r1['pseudo_heritability']
-                p_herits.append(p_herit)
-                #delta = (1 - p_herit) / p_herit
-        #        if K_inverse == None:
-        #            K_inverse = K.I
-        #        M = (sp.eye(K.shape[0]) + delta * K_inverse)
-        #        u_blup = M.I * Y
-                M = sp.mat(p_herit*sp.mat(K_train) + (1 - p_herit) * sp.eye(K_train.shape[0]))
-                u_mean_pred = sp.array(K_cross * (M.I * Y)).flatten()
-                osb_ys.extend(val_Y)
-                pred_ys.extend(u_mean_pred)
-            corr = sp.corrcoef(osb_ys, pred_ys)[1,0]
-            print 'Correlation:',corr
-            r2 = corr**2
-            print 'R2:',r2
-            mean_herit = sp.mean(p_herits)
-            print 'Avg. heritability:',mean_herit
-            env_dict[env]={'R2':r2, 'obs_y':osb_ys, 'pred_y':pred_ys, 'corr':corr, 'avg_herit':mean_herit}
-            
-        res_dict[phenotype]=env_dict
+                cv_chunk_size = int((n / num_cvs) + 1)
+                ordering = sp.random.permutation(n)
+                
+                a = sp.arange(n)
+                osb_ys = []
+                pred_ys = []
+                p_herits = []
+                for cv_i, i in enumerate(range(0, n, cv_chunk_size)):
+                    cv_str = 'cv_%d' % cv_i
+                    #print 'Working on CV %d' % cv_i
+                    end_i = min(n, i + cv_chunk_size)
+                    validation_filter = sp.in1d(a, ordering[i:end_i])
+                    training_filter = sp.negative(validation_filter)
+                    
+                    train_snps = snps[:,training_filter]
+                    val_snps = snps[:,validation_filter]
     
+                    train_Y = Y_means[training_filter]
+                    val_Y = Y_means[validation_filter]
+                    
+                    #Calc. kinship
+                    K_train = K[training_filter,:][:,training_filter]
+                    K_cross = K[validation_filter,:][:,training_filter]
+                    #Do gBLUP
+                    lmm = lm.LinearMixedModel(train_Y)
+                    lmm.add_random_effect(K_train)
+                    r1 = lmm.get_REML()
+            
+                    #Now the BLUP.
+                    y_mean = sp.mean(lmm.Y)
+                    Y = lmm.Y - y_mean
+                    p_herit = r1['pseudo_heritability']
+                    p_herits.append(p_herit)
+                    #delta = (1 - p_herit) / p_herit
+            #        if K_inverse == None:
+            #            K_inverse = K.I
+            #        M = (sp.eye(K.shape[0]) + delta * K_inverse)
+            #        u_blup = M.I * Y
+                    M = sp.mat(p_herit*sp.mat(K_train) + (1 - p_herit) * sp.eye(K_train.shape[0]))
+                    u_mean_pred = sp.array(K_cross * (M.I * Y)).flatten()
+                    osb_ys.extend(val_Y)
+                    pred_ys.extend(u_mean_pred)
+                corr = sp.corrcoef(osb_ys, pred_ys)[1,0]
+                print 'Correlation:',corr
+                r2 = corr**2
+                print 'R2:',r2
+                mean_herit = sp.mean(p_herits)
+                print 'Avg. heritability:',mean_herit
+                env_dict[env]={'R2':r2, 'obs_y':osb_ys, 'pred_y':pred_ys, 'corr':corr, 'avg_herit':mean_herit}
+                
+            res_dict[phenotype]=env_dict
+        rep_dict[rep_i] = res_dict
     res_hdf5_file = '/Users/bjarnivilhjalmsson/data/tmp/leave_%d_BLUP_results_kthres_%0.1f.hdf5'%(num_cvs,k_thres)
     h5f = h5py.File(res_hdf5_file)
-    for phenotype in phenotypes:
-        phen_g = h5f.create_group(phenotype)
-        for env in envs:
-            d = res_dict[phenotype][env]
-            env_g = phen_g.create_group(env)
-            env_g.create_dataset('R2',  data=[d['R2']])
-            env_g.create_dataset('corr',  data=[d['corr']])
-            env_g.create_dataset('obs_y',  data=d['obs_y'])
-            env_g.create_dataset('pred_y',  data=d['pred_y'])
-            env_g.create_dataset('avg_herit',  data=[d['avg_herit']])
+    for rep_i in range(num_repeats):
+        res_dict = rep_dict[rep_i]
+        rep_g = h5f.create_group('repl_%d'%rep_i)
+        for phenotype in phenotypes:
+            phen_g = rep_g.create_group(phenotype)
+            for env in envs:
+                d = res_dict[phenotype][env]
+                env_g = phen_g.create_group(env)
+                env_g.create_dataset('R2',  data=[d['R2']])
+                env_g.create_dataset('corr',  data=[d['corr']])
+                env_g.create_dataset('obs_y',  data=d['obs_y'])
+                env_g.create_dataset('pred_y',  data=d['pred_y'])
+                env_g.create_dataset('avg_herit',  data=[d['avg_herit']])
     h5f.close()
             
 
@@ -409,10 +414,73 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
         res.plot_qq('%s_%d_gres_qq.png' % (plot_prefix , i))
         
         
+def lotus_data_analysis(phenotype_id=1,
+                        result_files_prefix='/Users/bjarnivilhjalmsson/Dropbox/Cloud_folder/tmp/lmm_results',
+                        manhattan_plot_file='/Users/bjarnivilhjalmsson/Dropbox/Cloud_folder/tmp/lmm_manhattan.png',
+                        qq_plot_file_prefix='/Users/bjarnivilhjalmsson/Dropbox/Cloud_folder/tmp/lmm_qq'):
+    """
+    Lotus GWAS (data from Stig U Andersen)
+    """
+    import linear_models as lm
+    import kinship
+    import gwaResults as gr
+    import dataParsers as dp
+    import phenotypeData as pd
 
+    # Load genotypes
+    print 'Parsing genotypes'
+    sd = dp.parse_snp_data('/Users/bjarnivilhjalmsson/Dropbox/Lotus_GWAS/20140603_NonRep.run2.vcf.matrix.ordered.csv')
+    
+    # Load phenotypes
+    print 'Parsing phenotypes'
+    phend = pd.parse_phenotype_file('/Users/bjarnivilhjalmsson/Dropbox/Lotus_GWAS/141007_FT_portal_upd.csv')
+    
+    print 'Box-cox'
+    phend.box_cox_transform(1)
+    
+    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+    # phenotypes, leaving only accessions (individuals) which overlap between both, 
+    # and SNPs that are polymorphic in the resulting subset.
+    print 'Coordinating data'
+    sd.coordinate_w_phenotype_data(phend, phenotype_id)
+    
+    # Calculate kinship (IBS/IBD)
+#     print 'Calculating kinship'
+#     K = kinship.calc_ibd_kinship(sd.get_snps())
+#     print K
+    
+    # Perform mixed model GWAS
+    print 'Performing mixed model GWAS'
+#     mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
+    
+#     mlmm_results = lm.mlmm(phend.get_values(phenotype_id), K, sd=sd,
+#                          num_steps=10, file_prefix=result_files_prefix,
+#                          save_pvals=True, pval_file_prefix=result_files_prefix)
+
+
+
+    lg_results = lm.local_vs_global_mm_scan(phend.get_values(phenotype_id), sd, 
+                                            file_prefix='/Users/bjarnivilhjalmsson/Dropbox/Cloud_folder/tmp/lotus_FT_loc_glob_0.1Mb', 
+                                            window_size=100000, jump_size=50000, kinship_method='ibd', global_k=None)
+    
+#     # Construct a results object
+    print 'Processing results'
+#     res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+ 
+    # Save p-values to file
+#     res.write_to_file(pvalue_file)
+  
+    # Plot Manhattan plot
+#     res.plot_manhattan(png_file=manhattan_plot_file, percentile=90, plot_bonferroni=True,
+#                         neg_log_transform=True)
+    # Plot a QQ-plot
+#     res.plot_qq(qq_plot_file_prefix)
+
+    #Local-global scan
 
 if __name__ == '__main__':
-    _test_GxE_mixed_model_gwas()
+    lotus_data_analysis()
+#     _test_GxE_mixed_model_gwas()
     #    linear_regression_gwas()
 #    multiple_loci_mixed_model_gwas()
     pass

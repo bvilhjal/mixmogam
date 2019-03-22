@@ -13,6 +13,7 @@ import bisect
 import h5py
 import os
 import random
+import kinship
 try:
     import scipy as sp
     sp.seterr(divide='raise')
@@ -2329,13 +2330,13 @@ class SNPsDataSet:
             print 'Found %d local SNPs' % len(local_snps)
             print 'and %d global SNPs' % len(global_snps)
         if kinship_method == 'ibd':
-            local_k = self._calc_ibd_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+            local_k = kinship.calc_ibd_kinship(local_snps) if len(local_snps) else None
             if global_kinship == None:
-                global_k = self._calc_ibd_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+                global_k = kinship.calc_ibd_kinship(global_snps) if len(global_snps) else None
         elif kinship_method == 'ibs':
-            local_k = self._calc_ibs_kinship_(local_snps, num_dots=0) if len(local_snps) else None
+            local_k = kinship.calc_ibs_kinship(local_snps) if len(local_snps) else None
             if global_kinship == None:
-                global_k = self._calc_ibs_kinship_(global_snps, num_dots=0) if len(global_snps) else None
+                global_k = kinship.calc_ibs_kinship(global_snps) if len(global_snps) else None
         else:
             raise NotImplementedError
         if global_kinship != None:

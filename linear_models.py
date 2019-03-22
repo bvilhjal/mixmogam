@@ -3248,7 +3248,7 @@ def chrom_vs_rest_mm(y, sd, kinship_method='ibd', global_k=None):
         'chromosomes':chromosomes}
 
 
-def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=1000000, jump_size=500000, kinship_method='ibd', global_k=None):
+def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=500000, jump_size=250000, kinship_method='ibd', global_k=None):
     """
     Local vs. global kinship mixed model.
     """
@@ -3257,9 +3257,9 @@ def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=1000000,
     import gwaResults as gr
     if global_k == None:
         if kinship_method == 'ibd':
-            K = sd.get_ibd_kinship_matrix()
+            K = kinship.calc_ibd_kinship(sd.get_snps())
         elif kinship_method == 'ibs':
-            K = sd.get_ibs_kinship_matrix()
+            K = kinship.calc_ibs_kinship(sd.get_snps())
         else:
             raise NotImplementedError
     else:
@@ -3296,11 +3296,11 @@ def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=1000000,
                 h1_heritabilities.append(res_dict['pseudo_heritability1'])
                 pvals.append(res_dict['pval'])
 
-                # print 'H0: pseudo_heritability=%0.2f' % (res_dict['h0_res']['pseudo_heritability'])
-                # print 'H1: pseudo_heritability=%0.2f, perc_var1=%0.2f, perc_var2=%0.2f' % \
-                #        (res_dict['h1_res']['pseudo_heritability'],
-                #        res_dict['h1_res']['perc_var1'],
-                #        res_dict['h1_res']['perc_var2'])
+#                 print 'H0: pseudo_heritability=%0.2f' % (res_dict['h0_res']['pseudo_heritability'])
+#                 print 'H1: pseudo_heritability=%0.2f, perc_var1=%0.2f, perc_var2=%0.2f' % \
+#                        (res_dict['h1_res']['pseudo_heritability'],
+#                        res_dict['h1_res']['perc_var1'],
+#                        res_dict['h1_res']['perc_var2'])
             if est_num_chunks >= 100 and (chunk_i + 1) % int(est_num_chunks / 100) == 0:  # Print dots
                 sys.stdout.write('.')
                 sys.stdout.flush()
@@ -3310,6 +3310,7 @@ def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=1000000,
     pval_res = gr.Result(scores=pvals, positions=positions, chromosomes=chromosomes)
     pval_res.neg_log_trans()
     pval_res.plot_manhattan(png_file=file_prefix + '_lrt_pvals.png', percentile=0, plot_bonferroni=True)
+    pval_res.write_to_file(filename=file_prefix + '_lrt_pvals.txt')
     perc_var_res = gr.Result(scores=perc_variances2, positions=positions, chromosomes=chromosomes)
     perc_var_res.plot_manhattan(png_file=file_prefix + '_perc_var_explained.png', percentile=0,
                 ylab='% of variance explained')
@@ -3394,6 +3395,7 @@ def local_vs_global_gene_mm_scan(y, sd, file_prefix='/tmp/temp', radius=20000, k
     pval_res = gr.Result(scores=pvals, positions=positions, chromosomes=chromosomes)
     pval_res.neg_log_trans()
     pval_res.plot_manhattan(png_file=file_prefix + '_lrt_pvals.png', percentile=0, plot_bonferroni=True)
+    pval_res.write_to_file(filename=file_prefix + '_lrt_pvals.txt')
     perc_var_res = gr.Result(scores=perc_variances2, positions=positions, chromosomes=chromosomes)
     perc_var_res.plot_manhattan(png_file=file_prefix + '_perc_var_explained.png', percentile=0,
                 ylab='% of variance explained')
