@@ -504,7 +504,7 @@ def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome
     import dataParsers as dp
     
     # Load genotypes
-    sd = dp.parse_snp_data(gt_file)
+    sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
 
     # Load phenotypes
     import phenotypeData as pd
