@@ -11,7 +11,7 @@ def load_a_thaliana_genotypes():
     """
     Loads A. thaliana genotypes (Horton et al., 2012) and returns a snps_data object
     """
-    import dataParsers as dp
+    from mixmogam import dataParsers as dp
     sd = dp.parse_snp_data('at_data/all_chromosomes_binary.csv')
     return sd
 
@@ -21,7 +21,7 @@ def load_a_thaliana_phenotypes():
     Loads A. thaliana phenotypes (Atwell et al., 2010) and returns a phenotype_data 
     object containing 107 different phenotypes.
     """
-    import phenotypeData as pd
+    from mixmogam import phenotypeData as pd
     phend = pd.parse_phenotype_file('at_data/199_phenotypes.csv')
     return phend
 
@@ -33,8 +33,8 @@ def linear_regression_gwas(phenotype_id=5, pvalue_file='lr_results.pvals',
     Perform linear regression GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    import linear_models as lm
-    import gwaResults as gr
+    from mixmogam import linear_models as lm
+    from mixmogam import gwaResults as gr
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -69,9 +69,9 @@ def mixed_model_gwas(phenotype_id=5, pvalue_file='mm_results.pvals',
     Perform mixed model (EMMAX) GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    import linear_models as lm
-    import kinship
-    import gwaResults as gr
+    from mixmogam import linear_models as lm
+    from mixmogam import kinship
+    from mixmogam import gwaResults as gr
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -108,8 +108,8 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_resu
     Perform multiple loci mixed model GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    import linear_models as lm
-    import kinship
+    from mixmogam import linear_models as lm
+    from mixmogam import kinship
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -134,13 +134,13 @@ def perform_cegs_gwas(kinship_type='ibd', phen_type='medians'):
     """
     Perform a simple MLM GWAS for the 8 traits
     """
-    import hdf5_data
-    import kinship
-    import linear_models as lm
+    from mixmogam import hdf5_data
+    from mixmogam import kinship
+    from mixmogam import linear_models as lm
     import time
     import scipy as sp
     from matplotlib import pyplot as plt
-    import analyze_gwas_results as agr
+    from mixmogam import analyze_gwas_results as agr
     phen_dict = hdf5_data.parse_cegs_drosophila_phenotypes()
 
     phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
@@ -230,13 +230,13 @@ def leave_k_out_blup(num_repeats=20, num_cvs=5, genotype_file='/Users/bjarnivilh
 
     """
     import h5py
-    import hdf5_data
-    import kinship
-    import linear_models as lm
+    from mixmogam import hdf5_data
+    from mixmogam import kinship
+    from mixmogam import linear_models as lm
     import time
     import scipy as sp
     from matplotlib import pyplot as plt
-    import analyze_gwas_results as agr
+    from mixmogam import analyze_gwas_results as agr
     phen_dict = hdf5_data.parse_cegs_drosophila_phenotypes()
 
     phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
@@ -347,11 +347,11 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
     Simulates correlated trait pairs with exponentially distributed effects. 
     """
 
-    import simulations
-    import kinship
+    from mixmogam import simulations
+    from mixmogam import kinship
     import scipy as sp
-    import linear_models as lm
-    import gwaResults as gr
+    from mixmogam import linear_models as lm
+    from mixmogam import gwaResults as gr
     num_trait_pairs = 10
     num_indivs = 200
     num_snps = 10000
@@ -434,11 +434,11 @@ def lotus_data_analysis(phenotype_id=1,
     """
     Lotus GWAS (data from Stig U Andersen)
     """
-    import linear_models as lm
-    import kinship
-    import gwaResults as gr
-    import dataParsers as dp
-    import phenotypeData as pd
+    from mixmogam import linear_models as lm
+    from mixmogam import kinship
+    from mixmogam import gwaResults as gr
+    from mixmogam import dataParsers as dp
+    from mixmogam import phenotypeData as pd
 
     # Load genotypes
     print 'Parsing genotypes'
@@ -492,46 +492,57 @@ def lotus_data_analysis(phenotype_id=1,
     # Local-global scan
 
 
-def lotus_mixed_model_gwas(phenotype_id=4, phen_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/20181113_136LjAccessionData.csv', 
-                           gt_file = '/home/bjarni/LotusGenome/cks/Lotus31012019/all_chromosomes_binary.csv', 
-                           pvalue_file='mm_results.pvals', manhattan_plot_file='mm_manhattan.png', qq_plot_file_prefix='mm_qq'):
+def lotus_mixed_model_gwas(phenotype_ids=None, phen_file = '/Users/au507860/test_data/20190322_lotus/20181113_136LjAccessionData.csv', 
+                           gt_file = '/Users/au507860/test_data/20190322_lotus/all_chromosomes_binary.csv', 
+                           pvalue_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_results', 
+                           manhattan_plot_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_manhattan', 
+                           qq_plot_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_qq'):
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
-    import linear_models as lm
-    import kinship
-    import gwaResults as gr
-    import dataParsers as dp
+    from mixmogam import linear_models as lm
+    from mixmogam import kinship
+    from mixmogam import gwaResults as gr
+    from mixmogam import dataParsers as dp
     
     # Load genotypes
-    sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
 
     # Load phenotypes
-    import phenotypeData as pd
+    from mixmogam import phenotypeData as pd
     phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
+    phen_names = phend.get_names()
     
-    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
-    # phenotypes, leaving only accessions (individuals) which overlap between both, 
-    # and SNPs that are polymorphic in the resulting subset.
-    sd.coordinate_w_phenotype_data(phend, phenotype_id)
-
-    # Calculate kinship (IBS)
-    K = kinship.calc_ibs_kinship(sd.get_snps())
-
-    # Perform mixed model GWAS
-    mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
-
-    # Construct a results object
-    res = gr.Result(scores=mm_results['ps'], snps_data=sd)
-
-    # Save p-values to file
-    res.write_to_file(pvalue_file)
-
-    # Plot Manhattan plot
-    res.plot_manhattan(png_file=manhattan_plot_file, percentile=90, plot_bonferroni=True,
-                       neg_log_transform=True)
-    # Plot a QQ-plot
-    res.plot_qq(qq_plot_file_prefix)
+    for pid, phen in enumerate(phen_names):
+        sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
+     
+        phenotype_id = pid+1
+        print phen, phenotype_id
+        phend.log_transform(phenotype_id)
+        
+        # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+        # phenotypes, leaving only accessions (individuals) which overlap between both, 
+        # and SNPs that are polymorphic in the resulting subset.
+        sd.coordinate_w_phenotype_data(phend, phenotype_id)
+        sd.filter_mac_snps(1)
+        sd.filter_monomorphic_snps()
+        
+        # Calculate kinship (IBS)
+        K = sd.get_ibd_kinship_matrix()
+    
+        # Perform mixed model GWAS
+        mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
+    
+        # Construct a results object
+        res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+    
+        # Save p-values to file
+        res.write_to_file(pvalue_file_prefix+'_%s.pvals'%(phen))
+    
+        # Plot Manhattan plot
+        res.plot_manhattan(png_file=manhattan_plot_file_prefix+'_%s.png'%(phen), percentile=90, plot_bonferroni=True,
+                           neg_log_transform=True)
+        # Plot a QQ-plot
+        res.plot_qq(qq_plot_file_prefix+'_%s'%(phen))
 
 
 if __name__ == '__main__':

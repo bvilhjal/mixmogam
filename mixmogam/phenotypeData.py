@@ -49,7 +49,7 @@ class phenotype_data:
     def get_pseudo_heritabilities(self, K, pids=None):
         phers = []
         pvals = []
-        if pids == None:
+        if pids is None:
             pids = self.phen_ids
         for pid in pids:
             d = self.get_pseudo_heritability(pid, K)
@@ -86,7 +86,7 @@ class phenotype_data:
         methods: 'avg' (averages), 'repl' (replicates)
         """
         from scipy import stats
-        import linear_models as lm
+        from mixmogam import linear_models as lm
         phen_vals = self.get_values(pid)
         lmm = lm.LinearMixedModel(phen_vals)
         if len(phen_vals) == len(set(phen_vals)):
@@ -109,7 +109,7 @@ class phenotype_data:
         Returns the REML estimate for the BLUP and the pseudo-heritability.
         """
         from scipy import stats
-        import linear_models as lm
+        from mixmogam import linear_models as lm
         phen_vals = self.get_values(pid)
         lmm = lm.LinearMixedModel(phen_vals)
         if len(phen_vals) == len(set(phen_vals)):
@@ -144,7 +144,7 @@ class phenotype_data:
         """
         Estimates the broad sense heritability from replicates.
         """
-        import linear_models as lm
+        from mixmogam import linear_models as lm
         if not pids:
             pids = sorted(self.phen_dict.keys())
         bs_herits = []
@@ -972,7 +972,7 @@ class phenotype_data:
 
 
     def plot_phen_relatedness(self, k, k_accessions, plot_file_prefix, pids=None):
-        import kinship
+        from mixmogam import kinship
         import pylab
         import scipy as sp
         from scipy import linalg

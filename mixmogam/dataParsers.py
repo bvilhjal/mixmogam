@@ -6,7 +6,7 @@ Email: bjarni.vilhjalmsson@gmail.com
 """
 import time, random
 import cPickle
-from snpsdata import *
+from mixmogam.snpsdata import *
 import scipy as sp
 import h5py
 
@@ -842,7 +842,7 @@ def parse_tair_gff_file(chrom=None, reg_start_pos=None, reg_end_pos=None, only_g
                         {'type':gene_type, 'short_description':short_description,
                         'curator_summary':curator_summary,
                         'computational_description':computational_description}
-        if chrom == None:
+        if chrom is None:
             cPickle.dump(gene_dict, open(pickled_filename, 'wb'), protocol=2)
         elif reg_start_pos != None and reg_end_pos != None:
             tair_ids = gene_dict.keys()

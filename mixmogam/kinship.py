@@ -64,7 +64,7 @@ def calc_ibd_kinship(snps, dtype='single', scaled=True):
         snps_array = sp.array(snps[i:i + n_indivs])
         snps_array = snps_array.T
         norm_snps_array = (snps_array - sp.mean(snps_array, 0)) / sp.std(snps_array, 0)
-        assert sp.all(sp.negative(sp.isnan(norm_snps_array))), 'WTF?'
+        assert sp.all(sp.logical_not(sp.isnan(norm_snps_array))), 'WTF?'
         x = sp.mat(norm_snps_array.T)
         k_mat += x.T * x
         sys.stdout.write('\b\b\b\b\b\b\b%0.2f%%' % (100.0 * (min(1, ((chunk_i + 1.0) * n_indivs) / num_snps))))

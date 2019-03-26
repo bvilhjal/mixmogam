@@ -6,8 +6,8 @@ Container for functions that work with HDF5 genotype/phenotype datasets.
 import h5py
 import scipy as sp
 import sys
-import linear_models as lm
-import analyze_gwas_results as agr
+from mixmogam import linear_models as lm
+from mixmogam import analyze_gwas_results as agr
 import time
 import matplotlib
 matplotlib.use('Agg')
@@ -635,7 +635,7 @@ def coordinate_cegs_genotype_phenotype(phen_dict, phenotype='Protein',env='mated
     
 
     print 'Filtering based on kinship w threshold:',k_thres
-    import kinship
+    from mixmogam import kinship
     K = kinship.calc_ibd_kinship(snps)
     print '\nKinship calculated'
     K_ind_filter = []

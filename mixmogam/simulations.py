@@ -11,7 +11,7 @@ import scipy as sp
 from scipy import stats
 import sys
 import random
-import snpsdata
+from mixmogam import snpsdata
 
 
 def simulate_genotypes(num_indivs=1000, num_snps=1000):

@@ -17,7 +17,7 @@ anti_decoder = {1:0, 0:1}  # For haploid organisms (e.g. A. thaliana)
 get_anti_snp = sp.vectorize(lambda x: anti_decoder[x])  
 
 
-import snpsdata
+from mixmogam import snpsdata
 import warnings
 import pdb
 import cPickle
@@ -29,8 +29,8 @@ import itertools as it
 import math
 import platform
 import os
-import analyze_gwas_results as agr
-import kinship
+from mixmogam import analyze_gwas_results as agr
+from mixmogam import kinship
 
 # Used for setting the maximum number of threads.  
 # This only works if numpy/scipy is built against BLAS/LAPACK libraries that allow for multiple threads.
@@ -587,7 +587,7 @@ class LinearMixedModel(LinearModel):
 
 
     def _get_eigen_L_(self, K=None, dtype='single'):
-        if K == None:
+        if K is None:
             K = self.random_effects[1][1]
         if sp.__version__ < '0.8':
             K = sp.mat(K, dtype=dtype)
@@ -598,13 +598,13 @@ class LinearMixedModel(LinearModel):
 
 
     def _get_eigen_R_(self, X=None, K=None, hat_matrix=None, dtype='single'):
-        if X == None:
+        if X is None:
             X = self.X
         q = X.shape[1]
         if not hat_matrix:
             X_squared_inverse = linalg.pinv(X.T * X)  # (X.T*X).I
             hat_matrix = X * X_squared_inverse * X.T
-        if K == None:
+        if K is None:
             K = self.random_effects[1][1]
         S = sp.mat(sp.identity(self.n)) - hat_matrix  # S=I-X(X'X)^{-1}X'
         M = sp.mat(S * (K + self.random_effects[0][1]) * S, dtype='double')
@@ -675,7 +675,7 @@ class LinearMixedModel(LinearModel):
         
         H is the (full) covariance matrix, which speeds up calculations if it's available.
         """
-        if H == None:
+        if H is None:
             if not eig_L:
                 K = self.random_effects[1][1]
                 eig_L = self._get_eigen_L_(K)
@@ -934,7 +934,7 @@ class LinearMixedModel(LinearModel):
         """
         assert len(self.random_effects) == 2, "Expedited REMLE only works when we have exactly two random effects."
         K = self.random_effects[1][1]
-        if eig_L == None:
+        if eig_L is None:
             eig_L = self._get_eigen_L_(K)
         num_snps = len(snps)
         f_stats = sp.empty(num_snps)
@@ -1230,6 +1230,7 @@ class LinearMixedModel(LinearModel):
         return res_d
 
 
+
     def emmax_f_test(self, snps, snp_priors=None, Z=None, with_betas=False, method='REML',
             eig_L=None, eig_R=None, emma_num=100):
         """
@@ -1432,7 +1433,7 @@ class LinearMixedModel(LinearModel):
         dtype = 'single'
         n = self.n
         num_snps = len(snps)
-        if Z == None:
+        if Z is None:
             Z = sp.eye(n)
 
         h0_X = sp.mat(H_sqrt_inv * self.X, dtype=dtype)
@@ -1907,7 +1908,7 @@ def _plot_manhattan_and_qq_(file_prefix, step_i, pvals, quantiles_dict=None, plo
             highlight_ppa_markers=None, ppas=None, markersize=3, chrom_col_map=None, perc_var_expl=None,
             **kwargs):
     import pylab
-    import gwaResults as gr
+    from mixmogam import gwaResults as gr
     cm = pylab.get_cmap('hsv')
 
     png_file_name = '%s_step%d.png' % (file_prefix, step_i)
@@ -2337,7 +2338,7 @@ def lin_reg_step(phen_vals, sd, cof_chr_pos_list, plot_prefix=None):
     
     Returns various stats useful for stepwise regression.
     """
-    import gwaResults as gr
+    from mixmogam import gwaResults as gr
     import bisect
     s1 = time.time()
     lm = LinearModel(phen_vals)
@@ -2423,7 +2424,7 @@ def mm_step(phen_vals, sd, K, cof_chr_pos_list, eig_L=None, eig_R=None, plot_pre
     """
     """
 
-    import gwaResults as gr
+    from mixmogam import gwaResults as gr
     import bisect
     s1 = time.time()
     lmm = LinearMixedModel(phen_vals)
@@ -2547,7 +2548,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
     """
     Run step-wise linare mixed model forward-backward.
     """
-    import gwaResults as gr
+    from mixmogam import gwaResults as gr
     if local:
         with_qq_plots = False
 
@@ -2576,7 +2577,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
         lmm.add_random_effect(K2)
     num_snps = len(snps)
 
-    if snp_priors == None:
+    if snp_priors is None:
         print "Using default SNP priors"
         snp_priors = [1.0 / num_snps] * num_snps
 
@@ -2619,7 +2620,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
     ppa_cofactors = []
 
     action = 'None'
-    if K2 == None:
+    if K2 is None:
         pherit = reml_res['pseudo_heritability']
     print '\nStep %d: action=%s, num_par=%d, p_her=%0.4f, ll=%0.2f, rss=%0.2f, reml_m_rss=%0.2f, bic=%0.2f, extended_bic=%0.2f, modified_bic=%0.2f, num_snps=%d' % \
         (step_i, action, num_par, pherit, ll, rss, reml_mahalanobis_rss, \
@@ -2745,7 +2746,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
         criterias['ebics'].append(extended_bic)
         criterias['mbics'].append(modified_bic)
 
-        if K2 == None:
+        if K2 is None:
             pherit = reml_res['pseudo_heritability']
         print '\nStep %d: action=%s, num_par=%d, p_her=%0.4f, ll=%0.2f, rss=%0.2f, reml_m_rss=%0.2f, bic=%0.2f, extended_bic=%0.2f, modified_bic=%0.2f, num_snps=%d' % \
             (step_i, action, num_par, pherit, ll, rss, reml_mahalanobis_rss, \
@@ -2876,7 +2877,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
             (bic, extended_bic, modified_bic) = _calc_bic_(ll, num_snps, num_par, lmm.n)
             criterias['ebics'].append(extended_bic)
             criterias['mbics'].append(modified_bic)
-            if K2 == None:
+            if K2 is None:
                 pherit = reml_res['pseudo_heritability']
             print '\nStep %d: action=%s, num_par=%d, p_her=%0.4f, ll=%0.2f, rss=%0.2f, reml_m_rss=%0.2f, bic=%0.2f, extended_bic=%0.2f, modified_bic=%0.2f, num_snps=%d' % \
                 (step_i, action, num_par, pherit, ll, rss,
@@ -3190,7 +3191,7 @@ def local_vs_global_mm(y, local_k, global_k, K, h0_res=None):
     """
     Local vs. global kinship mixed model.
     """
-    if h0_res == None:
+    if h0_res is None:
         lmm0 = LinearMixedModel(Y=y)
         lmm0.add_random_effect(K)
         eig_L = lmm0._get_eigen_L_()
@@ -3210,7 +3211,7 @@ def local_vs_global_mm(y, local_k, global_k, K, h0_res=None):
 
 
 def chrom_vs_rest_mm(y, sd, kinship_method='ibd', global_k=None):
-    if global_k == None:
+    if global_k is None:
         if kinship_method == 'ibd':
             K = sd.get_ibd_kinship_matrix()
         elif kinship_method == 'ibs':
@@ -3251,8 +3252,8 @@ def local_vs_global_mm_scan(y, sd, file_prefix='/tmp/temp', window_size=500000, 
     """
     print 'Starting Mixed model, local vs. global kinship scan...'
     print 'window size is %d, and jump size is %d' % (window_size, jump_size)
-    import gwaResults as gr
-    if global_k == None:
+    from mixmogam import gwaResults as gr
+    if global_k is None:
         if kinship_method == 'ibd':
             K = kinship.calc_ibd_kinship(sd.get_snps())
         elif kinship_method == 'ibs':
@@ -3323,9 +3324,9 @@ def local_vs_global_gene_mm_scan(y, sd, file_prefix='/tmp/temp', radius=20000, k
     Local vs. global kinship mixed model.
     """
     print 'Starting Mixed model, local vs. global kinship scan...'
-    import gwaResults as gr
-    import dataParsers as dp
-    if global_k == None:
+    from mixmogam import gwaResults as gr
+    from mixmogam import dataParsers as dp
+    if global_k is None:
         if kinship_method == 'ibd':
             K = sd.get_ibd_kinship_matrix()
         elif kinship_method == 'ibs':
@@ -3340,7 +3341,7 @@ def local_vs_global_gene_mm_scan(y, sd, file_prefix='/tmp/temp', radius=20000, k
     h0_res = lmm0.get_estimates(eig_L)
 
     gene_dict = dp.parse_tair_gff_file()
-    if tair_ids == None:
+    if tair_ids is None:
         tair_ids = gene_dict.keys()
     tair_ids.sort()
     chromosomes = []

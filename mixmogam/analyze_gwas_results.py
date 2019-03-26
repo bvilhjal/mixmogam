@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import warnings
 import itertools as it
 import random
-import phenotypeData as pd
+from mixmogam import phenotypeData as pd
 import math
 
 

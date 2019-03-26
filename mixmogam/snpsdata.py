@@ -13,7 +13,7 @@ import bisect
 import h5py
 import os
 import random
-import kinship
+from mixmogam import kinship
 try:
     import scipy as sp
     sp.seterr(divide='raise')
@@ -595,7 +595,7 @@ class _SnpsData_(object):
         """
         Prints info on the accessions/ecotype IDs to a file.
         """
-        import phenotypeData as pd
+        from mixmogam import phenotypeData as pd
         eid = pd.get_ecotype_id_info_dict()
         f = open(filename, 'w')
         f.write((", ".join(["Ecotype_id", "Native_name", "Stock_parent", "latitude", "longitude", "country"])) + "\n")
@@ -2305,7 +2305,7 @@ class SNPsDataSet:
         
         Currently it works only for binary kinship matrices.
         """
-        import kinship
+        from mixmogam import kinship
         print 'Starting kinship calculation'
         snps = self.getSnps(debug_filter)
         return kinship.calc_ibs_kinship(snps, snps_data_format=self.data_format, snp_dtype=snp_dtype,
@@ -2475,10 +2475,10 @@ class SNPsDataSet:
 
 
     def get_ibd_kinship_matrix(self, debug_filter=1, dtype='single'):
-        import kinship
+        from mixmogam import kinship
         print 'Starting IBD calculation'
         snps = self.getSnps(debug_filter)
-        cov_mat = kinship.calc_ibd_kinship(snps, len(self.accessions), dtype=dtype)
+        cov_mat = kinship.calc_ibd_kinship(snps, dtype=dtype)
         print 'Finished calculating IBD kinship matrix'
         return cov_mat
 
@@ -2626,12 +2626,12 @@ class SNPsDataSet:
         
         'color_by' is by default set to be the phenotype values.
         """
-        import phenotypeData as pd
+        from mixmogam import phenotypeData as pd
         import matplotlib
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
         # matplotlib.rcParams['backend'] = 'GTKAgg'
-        if eid == None:
+        if eid is None:
             eid = pd.get_ecotype_id_info_dict()
         lats = []
         lons = []
@@ -3196,7 +3196,7 @@ class SNPsDataSet:
 
 
     def filter_for_countries(self, country_codes, complement=False):
-        import phenotypeData as pd
+        from mixmogam import phenotypeData as pd
         ei_dict = pd.get_ecotype_id_info_dict()
         acc_indices_to_keep = []
         if complement:
@@ -3269,7 +3269,7 @@ class SNPsDataSet:
 def plot_tree(K, tree_file, ets, verbose=True, label_values=None):
         import scipy.cluster.hierarchy as hc
         import pylab
-        import phenotypeData
+        from mixmogam import phenotypeData
         e_dict = phenotypeData.get_ecotype_id_info_dict()
         # print e_dict
         labels = []

@@ -111,19 +111,19 @@ class Result(object):
                 self._load_result_(result_file)
         else:
 
-            if chromosomes != None:
+            if chromosomes is not None:
                 self.keys.append('chromosomes')
                 self.snp_results['chromosomes'] = chromosomes
-            if positions != None:
+            if positions is not None:
                 self.keys.append('positions')
                 self.snp_results['positions'] = positions
-            if scores != None:
+            if scores is not None:
                 self.keys.append('scores')
                 self.snp_results['scores'] = scores
-            if mafs != None:
+            if mafs is not None:
                 self.keys.append('mafs')
                 self.snp_results['mafs'] = mafs
-            if macs != None:
+            if macs is not None:
                 self.keys.append('macs')
                 self.snp_results['macs'] = macs
         if snps_data:
@@ -1252,7 +1252,7 @@ class Result(object):
 
 
     def plot_qq(self, file_prefix, exp_scores=None):
-        import analyze_gwas_results as agr
+        from mixmogam import analyze_gwas_results as agr
         ks_stat = agr.calc_ks_stats(self.snp_results['scores'], exp_scores=exp_scores)
         exp_median = 0.5
         if exp_scores:
@@ -1913,7 +1913,7 @@ class Result(object):
 
 
 def get_gene_dict(chrom=None, start_pos=None, end_pos=None, only_genes=False):
-    import dataParsers as dp
+    from mixmogam import dataParsers as dp
     return dp.parse_tair_gff_file(chrom, start_pos, end_pos, only_genes)
 
 
