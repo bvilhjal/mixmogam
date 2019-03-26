@@ -5,13 +5,24 @@ Author: Bjarni J. Vilhjalmsson
 Email: bjarni.vilhjalmsson@gmail.com
 
 """
+import h5py
+import time
+import scipy as sp
+from matplotlib import pyplot as plt
+from mixmogam import linear_models as lm
+from mixmogam import kinship
+from mixmogam import gwaResults as gr
+from mixmogam import dataParsers as dp
+from mixmogam import phenotypeData as pd
+from mixmogam import hdf5_data
+from mixmogam import analyze_gwas_results as agr
+from mixmogam import simulations
 
 
 def load_a_thaliana_genotypes():
     """
     Loads A. thaliana genotypes (Horton et al., 2012) and returns a snps_data object
     """
-    from mixmogam import dataParsers as dp
     sd = dp.parse_snp_data('at_data/all_chromosomes_binary.csv')
     return sd
 
@@ -21,7 +32,6 @@ def load_a_thaliana_phenotypes():
     Loads A. thaliana phenotypes (Atwell et al., 2010) and returns a phenotype_data 
     object containing 107 different phenotypes.
     """
-    from mixmogam import phenotypeData as pd
     phend = pd.parse_phenotype_file('at_data/199_phenotypes.csv')
     return phend
 
@@ -33,8 +43,6 @@ def linear_regression_gwas(phenotype_id=5, pvalue_file='lr_results.pvals',
     Perform linear regression GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    from mixmogam import linear_models as lm
-    from mixmogam import gwaResults as gr
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -69,9 +77,6 @@ def mixed_model_gwas(phenotype_id=5, pvalue_file='mm_results.pvals',
     Perform mixed model (EMMAX) GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    from mixmogam import linear_models as lm
-    from mixmogam import kinship
-    from mixmogam import gwaResults as gr
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -108,8 +113,6 @@ def multiple_loci_mixed_model_gwas(phenotype_id=5, pvalue_file_prefix='mlmm_resu
     Perform multiple loci mixed model GWAS for flowering time (phenotype_id=5 in the phenotype file) 
     in plants grown under 10C conditions. 
     """
-    from mixmogam import linear_models as lm
-    from mixmogam import kinship
     # Load genotypes
     sd = load_a_thaliana_genotypes()
 
@@ -134,13 +137,6 @@ def perform_cegs_gwas(kinship_type='ibd', phen_type='medians'):
     """
     Perform a simple MLM GWAS for the 8 traits
     """
-    from mixmogam import hdf5_data
-    from mixmogam import kinship
-    from mixmogam import linear_models as lm
-    import time
-    import scipy as sp
-    from matplotlib import pyplot as plt
-    from mixmogam import analyze_gwas_results as agr
     phen_dict = hdf5_data.parse_cegs_drosophila_phenotypes()
 
     phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
@@ -229,14 +225,6 @@ def leave_k_out_blup(num_repeats=20, num_cvs=5, genotype_file='/Users/bjarnivilh
     """
 
     """
-    import h5py
-    from mixmogam import hdf5_data
-    from mixmogam import kinship
-    from mixmogam import linear_models as lm
-    import time
-    import scipy as sp
-    from matplotlib import pyplot as plt
-    from mixmogam import analyze_gwas_results as agr
     phen_dict = hdf5_data.parse_cegs_drosophila_phenotypes()
 
     phenotypes = ['Protein', 'Sugar', 'Triglyceride', 'weight']
@@ -347,11 +335,6 @@ def _test_GxE_mixed_model_gwas(num_indivs=1000, num_snps=10000, num_trait_pairs=
     Simulates correlated trait pairs with exponentially distributed effects. 
     """
 
-    from mixmogam import simulations
-    from mixmogam import kinship
-    import scipy as sp
-    from mixmogam import linear_models as lm
-    from mixmogam import gwaResults as gr
     num_trait_pairs = 10
     num_indivs = 200
     num_snps = 10000
@@ -434,11 +417,6 @@ def lotus_data_analysis(phenotype_id=1,
     """
     Lotus GWAS (data from Stig U Andersen)
     """
-    from mixmogam import linear_models as lm
-    from mixmogam import kinship
-    from mixmogam import gwaResults as gr
-    from mixmogam import dataParsers as dp
-    from mixmogam import phenotypeData as pd
 
     # Load genotypes
     print 'Parsing genotypes'
@@ -500,15 +478,10 @@ def lotus_mixed_model_gwas(phenotype_ids=None, phen_file = '/Users/au507860/test
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
-    from mixmogam import linear_models as lm
-    from mixmogam import kinship
-    from mixmogam import gwaResults as gr
-    from mixmogam import dataParsers as dp
     
     # Load genotypes
 
     # Load phenotypes
-    from mixmogam import phenotypeData as pd
     phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
     phen_names = phend.get_names()
     
