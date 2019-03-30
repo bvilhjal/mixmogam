@@ -595,6 +595,7 @@ def lotus_mixed_model_gwas_perm(phenotype_id=None,
     lmm.add_random_effect(K)
     mm_results = lmm.emmax_f_test(snps, emma_num=emma_num, eig_L=her_dict['eig_L'])
     perm_res =  lmm.emmax_permutations(snps, num_perm, emma_num=emma_num, return_all_pvals=True)
+    print mm_results
     
     data = {'Chromosome': sd.get_chr_list(), 'Position': sd.get_positions(), 'Obs_pval':mm_results['ps']}
     for perm_i in range(num_perm):
