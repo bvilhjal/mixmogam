@@ -1223,7 +1223,6 @@ class LinearMixedModel(LinearModel):
                     f_stats = (rss_ratios - 1) * n_p / float(q)
                     p_vals = stats.f.sf(f_stats, q, n_p)
                     all_pvals.append(p_vals)
-                    assert sp.all(h0_rss_list>rss_list),'Andskotans'
                 if emma_num>0:
                     all_rss.append(rss_list)
                 min_rss_list = sp.minimum(min_rss_list, rss_list)
