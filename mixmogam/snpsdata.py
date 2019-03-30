@@ -2268,14 +2268,15 @@ class SNPsDataSet:
             phend.filter_ecotypes(pd_indices_to_keep, pids=[pid])  # Removing accessions that don't have genotypes or phenotype values
             ets = phend.phen_dict[pid]['ecotypes']
             print "Out of %d, leaving %d values." % (num_values, len(ets))
+       
         # Ordering accessions according to the order of accessions in the genotype file
 
-#        if ets != self.accessions:
-#            l = zip(ets, range(len(ets)))
-#            l.sort()
-#            l = map(list, zip(*l))
-#            ets_map = l[1]
-#            phend.order_ecotypes(ets_map, pids=[pid])
+        if ets != self.accessions:
+            l = zip(ets, range(len(ets)))
+            l.sort()
+            l = map(list, zip(*l))
+            ets_map = l[1]
+            phend.order_ecotypes(ets_map, pids=[pid])
 
 
         if self.data_format == 'binary':
@@ -3027,37 +3028,19 @@ class SNPsDataSet:
 
 
 
-#    def get_pc(self, pc_num=1, random_fraction=0.1):
-#        """
-#        Returns the pc_num'th principal components of the genotype 
-#        """
-#        import random
-#        import rpy, util
-#
-#        if not self.is_binary:
-#            print "Converting the snps data to binary format."
-#            self.convert_2_binary()
-#
-#        snps = []
-#        for sd in self.snpsDataList:
-#            snps.extend(random.sample(sd.snps, int(random_fraction * len(sd.snps))))
-#        genotypes = map(list, zip(*snps))
-#
-#
-#        for genotype in genotypes:
-#            sd = util.calcSD(genotype)
-#            for j in range(len(genotype)):
-#                genotype[j] = genotype[j] / sd
-#
-#        genotypes = sp.transpose(sp.array(genotypes))
-#        #print genotypes
-#        pc = rpy.r.princomp(genotypes)
-#        pc_sorted = zip(list(pc["scores"][pc_num - 1]), self.accessions)
-#        pc_sorted.sort()
-#        print pc_sorted
-#        pc = list(pc["scores"][pc_num - 1])
-#        self.pc = pc
-#        return pc
+    def get_pc(self, pc_num=1, random_fraction=0.1):
+        """
+        Returns the pc_num'th principal components of the genotype 
+        """
+
+        snps = []
+        for sd in self.snpsDataList:
+            snps.extend(random.sample(sd.snps, int(random_fraction * len(sd.snps))))
+        snps = sp.array(snps)
+        norm_snps = snps
+        K = snps.T *snps/(len(M))
+
+
 
 
     def updateRegions(self, regionList):

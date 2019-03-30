@@ -188,9 +188,12 @@ class LinearModel(object):
         """
         Returns the log-likelihood
         """
-        if not rss:
-            rss = self.get_rss(dtype)
-        return (-self.n / 2) * (1 + sp.log(2 * sp.pi) + rss / self.n)
+#         if not rss:
+#             rss = self.get_rss(dtype)
+#             print rss
+#             print self.n
+#         return (-self.n / 2.0) * (1.0 - sp.log(2.0 * sp.pi*self.n)) + rss / float(self.n)
+        #ll = -0.5 * (n * sp.log(2 * sp.pi) + sp.sum(sp.log(evals)) + mahalanobis_rss)
 
 
     def fast_f_test(self, snps, verbose=True, Z=None, with_betas=False):
@@ -561,10 +564,9 @@ class LinearMixedModel(LinearModel):
         """
         self.n = len(Y)
         self.y_var = sp.var(Y, ddof=1, dtype=dtype)
-#        self.Y = sp.matrix([[y] for y in Y], dtype=dtype)
-#        self.X = sp.matrix([[1] for y in Y], dtype=dtype)  # The intercept
         self.Y = sp.matrix(Y, dtype=dtype)
         self.Y.shape = (self.n, 1) 
+#         self.X = sp.mat(sp.repeat(1, self.n), dtype='single').T  # The intercept
         self.X = sp.matrix(sp.ones((self.n, 1), dtype=dtype))  # The intercept
         self.p = 1
         self.beta_est = None
@@ -586,18 +588,17 @@ class LinearMixedModel(LinearModel):
             self.add_random_effect(cov_matrix=kinship.scale_k(cov_matrix))
 
 
-    def _get_eigen_L_(self, K=None, dtype='single'):
+    def _get_eigen_L_(self, K=None, dtype='double'):
         if K is None:
             K = self.random_effects[1][1]
-        if sp.__version__ < '0.8':
-            K = sp.mat(K, dtype=dtype)
+        K = sp.mat(K, dtype=dtype)
         evals, evecs = linalg.eigh(K)
         evals = sp.array(evals, dtype=dtype)
         return {'values':evals, 'vectors':sp.mat(evecs, dtype=dtype).T}
 
 
 
-    def _get_eigen_R_(self, X=None, K=None, hat_matrix=None, dtype='single'):
+    def _get_eigen_R_(self, X=None, K=None, hat_matrix=None, dtype='double'):
         if X is None:
             X = self.X
         q = X.shape[1]
@@ -607,9 +608,7 @@ class LinearMixedModel(LinearModel):
         if K is None:
             K = self.random_effects[1][1]
         S = sp.mat(sp.identity(self.n)) - hat_matrix  # S=I-X(X'X)^{-1}X'
-        M = sp.mat(S * (K + self.random_effects[0][1]) * S, dtype='double')
-        if sp.__version__ < '0.8':
-            M = sp.mat(M, dtype=dtype)
+        M = sp.mat(S * (K + self.random_effects[0][1]) * S, dtype=dtype)
         evals, evecs = linalg.eigh(M, overwrite_a=True)  # eigen of S(K+I)S
         eig_values = sp.array(evals[q:], dtype=dtype) - 1  # Because of S(K+I)S?
         return {'values':eig_values, 'vectors':(sp.mat(evecs, dtype=dtype).T[q:])}
@@ -716,8 +715,6 @@ class LinearMixedModel(LinearModel):
 #        ys2 = []
         for it_i in range(len(ngrids)):
             delta = float(ulim - llim) / ngrids[it_i]
-            # print llim, ulim
-            # print delta
             log_k_ratio = llim
             lls = []
             res_list = []
@@ -736,8 +733,6 @@ class LinearMixedModel(LinearModel):
                 # ys2.append(res_dict['pseudo_heritability'])
                 log_k_ratio += delta
             max_ll_i = sp.argmax(lls)
-            # print 'max_ll_i:', max_ll_i
-            # print 'delta:', delta
             # Update the ulim and llim
             ulim = llim + delta * (max_ll_i + 1)
             llim = llim + delta * (max_ll_i - 1)
@@ -779,12 +774,12 @@ class LinearMixedModel(LinearModel):
         """
         if verbose:
             print 'Retrieving %s variance estimates' % method
-        if xs != None:
+        if xs is not None:
             X = sp.hstack([self.X, xs])
         else:
             X = self.X
 
-        if not (eig_R and xs != None):
+        if not (eig_R and xs is not None):
             eig_R = self._get_eigen_R_(X=X, K=K)
         q = X.shape[1]  # number of columns
         n = self.n
@@ -810,12 +805,9 @@ class LinearMixedModel(LinearModel):
             dlls = 0.5 * (p * s3 / s1 - s4)
         elif method == 'ML':
             if verbose: print 'Calculating grid ML values'
-            # Xis < -matrix(eig.L$values, n, m) + matrix(delta, n, m, byrow=TRUE)
             eig_vals_L = sp.array(eig_L['values'], dtype=dtype)
             xis = sp.reshape(sp.repeat(eig_vals_L, m), (n, m)) + \
                 sp.reshape(sp.repeat(deltas, n), (m, n)).T
-            # LL <- 0.5*(n*(log(n/(2*pi))-1-log(colSums(Etasq/Lambdas)))-colSums(log(Xis)))    
-            # dLL <- 0.5*delta*(n*colSums(Etasq/(Lambdas*Lambdas))/colSums(Etasq/Lambdas)-colSums(1/Xis))    
 
             s2 = sp.sum(sp.log(xis), axis=0)
             lls = 0.5 * (n * (sp.log((n) / (2.0 * sp.pi)) - 1 - sp.log(s1)) - s2)
@@ -911,7 +903,7 @@ class LinearMixedModel(LinearModel):
             'rss':rss, 'mahalanobis_rss':mahalanobis_rss, 'H_sqrt_inv':H_sqrt_inv,
             'pseudo_heritability':1.0 / (1 + opt_delta)}
 
-        if xs != None and return_f_stat:
+        if xs is not None and return_f_stat:
 #            rss_ratio = h0_rss / rss_list
 #            var_perc = 1 - 1 / rss_ratio
 #            f_stats = (rss_ratio - 1) * n_p / float(q)
@@ -921,6 +913,7 @@ class LinearMixedModel(LinearModel):
             f_stat = (h0_rss / mahalanobis_rss - 1) * p / xs.shape[1]
             res_dict['var_perc'] = 1.0 - mahalanobis_rss / h0_rss
             res_dict['f_stat'] = float(f_stat)
+            res_dict['h0_rss'] = h0_rss
         if return_pvalue:
             p_val = stats.f.sf(f_stat, (xs.shape[1]), p)
             res_dict['p_val'] = float(p_val)
@@ -962,10 +955,12 @@ class LinearMixedModel(LinearModel):
             if verbose and num_snps >= 1000 and (i + 1) % (num_snps / 1000) == 0:  # Print dots
                 sys.stdout.write('.')
                 sys.stdout.flush()
-
-
-        return {'ps':p_vals, 'f_stats':f_stats, 'vgs':vgs, 'ves':ves, 'var_perc':var_perc,
+        ret_dict = {'ps':p_vals, 'f_stats':f_stats, 'vgs':vgs, 'ves':ves, 'var_perc':var_perc,
             'max_lls':max_lls, 'betas':betas, 'rss':rss_list}
+        if 'h0_rss' in res:
+            ret_dict['h0_rss']=res['h0_rss']
+
+        return ret_dict
 
 
 
@@ -1177,7 +1172,7 @@ class LinearMixedModel(LinearModel):
 
  
     
-    def emmax_permutations(self, snps, num_perm, method='REML'):
+    def emmax_permutations(self, snps, num_perm, method='REML', emma_num=0, return_all_pvals=False):
         """
         EMMAX permutation test
         Single SNPs
@@ -1195,38 +1190,84 @@ class LinearMixedModel(LinearModel):
         n = self.n
         n_p = n - p
         H_sqrt_inv = res['H_sqrt_inv']
-        Y = H_sqrt_inv * self.Y  # The transformed outputs.
+        Y_t = H_sqrt_inv * self.Y  # The transformed outputs.
         h0_X = H_sqrt_inv * self.X
-        (h0_betas, h0_rss, h0_rank, h0_s) = linalg.lstsq(h0_X, Y)
-        Y = Y - h0_X * h0_betas
+        (h0_betas, h0_rss, h0_rank, h0_s) = linalg.lstsq(h0_X, Y_t)
+        Y_t = Y_t - h0_X * h0_betas
         num_snps = len(snps)
-        max_fstat_list = []
-        min_pval_list = []
-        chunk_size = len(Y)
+        chunk_size = len(self.Y)
         Ys = sp.mat(sp.zeros((chunk_size, num_perm)))
         for perm_i in range(num_perm):
             # print 'Permutation nr. % d' % perm_i
-            sp.random.shuffle(Y)
-            Ys[:, perm_i] = Y
-
+            sp.random.shuffle(Y_t)
+            Ys[:, perm_i] = Y_t
+            
         min_rss_list = sp.repeat(h0_rss, num_perm)
+        if emma_num>0:
+            all_rss = []# MxK where M:#SNPs, K:#perm 
+            
+        if return_all_pvals:
+            all_pvals = []
+            (h0_betas, h0_rss_list, h0_rank, h0_s) = linalg.lstsq(h0_X, Ys, overwrite_a=True)
+           
         for i in range(0, num_snps, chunk_size):  # Do the dot-product in chuncks!
             snps_chunk = sp.matrix(snps[i:i + chunk_size])
             Xs = snps_chunk * (H_sqrt_inv.T)
-            Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
+#             Xs = Xs - sp.mat(sp.mean(Xs, axis=1))
             for j in range(len(Xs)):
-                (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
-                min_rss_list[i + j] = rss_list.min()
+                (betas, rss_list, p, sigma) = linalg.lstsq(sp.hstack([h0_X, Xs[j].T]), Ys, \
+                                overwrite_a=True)
+#                 (betas, rss_list, p, sigma) = linalg.lstsq(Xs[j].T, Ys, overwrite_a=True)
+                if return_all_pvals:
+                    rss_ratios = h0_rss_list / rss_list
+                    f_stats = (rss_ratios - 1) * n_p / float(q)
+                    p_vals = stats.f.sf(f_stats, q, n_p)
+                    all_pvals.append(p_vals)
+                    assert sp.all(h0_rss_list>rss_list),'Andskotans'
+                if emma_num>0:
+                    all_rss.append(rss_list)
+                min_rss_list = sp.minimum(min_rss_list, rss_list)
                 if num_snps >= 10 and (i + j + 1) % (num_snps / num_perm) == 0:  # Print dots
                     sys.stdout.write('.')
                     sys.stdout.flush()
-
         if num_snps >= 10:
             sys.stdout.write('\n')
+
+        
+        if emma_num>0:
+            print 'Updating p-values using EMMA for the smallest %d p-values.' % emma_num
+            H_sqrt = H_sqrt_inv.I
+            all_rss = sp.array(all_rss)
+            if return_all_pvals:
+                all_pvals = sp.array(all_pvals)
+            #For each phenotype
+            for perm_i in range(num_perm):
+                #Retrieve un-transformed phenotype
+                Y_t = Ys[:, perm_i]
+                Y = H_sqrt*Ys[:, perm_i]
+                phen_rss = all_rss[:, perm_i]
+                top_indices = sorted(it.izip(phen_rss, range(len(snps))))[:emma_num]
+                l = map(list, it.izip(*top_indices))
+                top_snps = [snps[pi] for pi in l[1]]
+                lmm = LinearMixedModel(Y)
+                lmm.add_random_effect(K)
+                top_emma_res = lmm.expedited_REML_t_test(top_snps, eig_L=eig_L)
+                min_rss_list[perm_i] = min(min_rss_list[perm_i], top_emma_res['rss'].min())
+                if return_all_pvals:
+                    for pi, p in it.izip(l[1], top_emma_res['ps']):
+                        all_pvals[pi,perm_i]= p                    
+                del lmm
+                sys.stdout.write('.')
+                sys.stdout.flush()
+            sys.stdout.write('\n')
+              
         max_f_stats = ((h0_rss / min_rss_list) - 1.0) * n_p / float(q)
         min_pvals = (stats.f.sf(max_f_stats, q, n_p))
 
         res_d = {'min_ps':min_pvals, 'max_f_stats':max_f_stats}
+        if return_all_pvals:
+            res_d['all_pvals']=all_pvals
+            res_d['mean_pvals']=sp.mean(all_pvals,axis=0)
         return res_d
 
 
@@ -1294,7 +1335,7 @@ class LinearMixedModel(LinearModel):
         Y = sp.mat(Y - h0_X * h0_betas, dtype=dtype)
         h0_betas = map(float, list(h0_betas))
 
-        if Z != None:
+        if Z is not None:
             H_sqrt_inv = H_sqrt_inv * Z
 
         if not with_betas:
@@ -1309,7 +1350,7 @@ class LinearMixedModel(LinearModel):
         rss_list = sp.repeat(h0_rss, num_snps)
         if return_transformed_snps:
             t_snps = []
-        if snp_priors != None:
+        if snp_priors is not None:
             snp_priors = sp.array(snp_priors)
             log_h0_rss = sp.log(h0_rss)
             log_bfs = sp.zeros(num_snps)  # Bayes factors
@@ -1332,7 +1373,7 @@ class LinearMixedModel(LinearModel):
                     # assert rss[0] >= 0.0
                     # assert rss[0] <= h0_rss * (1.01), 'rss0=%f, rss1=%f' % (h0_rss, rss[0])
 
-                    if snp_priors != None:
+                    if snp_priors is not None:
                         log_bfs[i + j] = log_h0_rss - sp.log(rss)  # -(1/2)*log(n)
 
                 if verbose and num_snps >= 10 and (i + j + 1) % (num_snps / 10) == 0:  # Print dots
@@ -1355,7 +1396,7 @@ class LinearMixedModel(LinearModel):
             res_d['betas'] = betas_list
         if return_transformed_snps:
             res_d['t_snps'] = t_snps
-        if snp_priors != None:
+        if snp_priors is not None:
             bfs = sp.exp((log_bfs * n - sp.log(n)) * 1 / 2)  # Bayes factors
             res_d['bfs'] = bfs
             pos = bfs * snp_priors / (1 - snp_priors)  # Posterior odds
@@ -2560,7 +2601,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
         d = sd.get_mafs()
         kwargs['macs'] = d['mafs']
         kwargs['mafs'] = d['marfs']
-    if snp_priors:
+    if snp_priors is not None:
         print 'Using provided SNP priors'
         kwargs['snp_priors'] = snp_priors[:]
 
@@ -2573,7 +2614,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
     chr_pos_list = zip(chromosomes, positions)
     lmm = LinearMixedModel(phenotypes)
     lmm.add_random_effect(K)
-    if K2 != None:
+    if K2 is not None:
         lmm.add_random_effect(K2)
     num_snps = len(snps)
 
@@ -2593,7 +2634,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
     num_par = 2  # mean and variance scalar
     num_pher_0 = 0
 
-    if K2 != None:  # Then first estimate K
+    if K2 is not None:  # Then first estimate K
         res = lmm.get_estimates_3()
         pherit = res['perc_var1']
         print res['perc_var1'], res['perc_var2']
@@ -2798,7 +2839,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
                     highlight_ppa_markers=ppa_cofactors, markersize=markersize,
                     chrom_col_map=chrom_col_map)
         # Plot posterior probabilities of association
-    if pval_file_prefix:
+    if pval_file_prefix is not None:
         res = gr.Result(scores=ex_pvals, perc_var_expl=ex_perc_var_expl, **kwargs)
         res.filter_percentile(0.02, reversed=True)
         pval_file_name = '%s_step%d.pvals' % (pval_file_prefix, step_i)
@@ -2839,7 +2880,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
 
 
             # Re-estimating the REML and ML.
-            if K2 != None:  # Again first estimate K
+            if K2 is not None:  # Again first estimate K
                 res = lmm.get_estimates_3()
                 pherit = res['perc_var1']
                 K = res['opt_k']
@@ -2857,7 +2898,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
 
             # Update the p-values
             cofactor_pvals = []
-            if snp_priors != None:
+            if snp_priors is not None:
                 cofactor_ppas = []  # Posterior probabilities of association
             for i, snp in enumerate(cofactor_snps):
                 t_cofactors = cofactor_snps[:]
@@ -2916,7 +2957,7 @@ def mlmm(phenotypes, K, sd=None, num_steps=10, file_prefix=None, forward_backwar
     else:
         print 'Took %f seconds.' % (secs)
 
-    if file_prefix:
+    if file_prefix is not None:
         _plot_stepwise_stats_(file_prefix, step_info_list, sign_threshold, type='emmax')
 
     res_dict = {'step_info_list':step_info_list, 'first_emmax_res':first_emmax_res, 'opt_dict':opt_dict}

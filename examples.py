@@ -17,7 +17,8 @@ from mixmogam import phenotypeData as pd
 from mixmogam import hdf5_data
 from mixmogam import analyze_gwas_results as agr
 from mixmogam import simulations
-
+from mixmogam import linear_models
+import pandas
 
 def load_a_thaliana_genotypes():
     """
@@ -70,7 +71,7 @@ def linear_regression_gwas(phenotype_id=5, pvalue_file='lr_results.pvals',
     res.plot_qq(qq_plot_file_prefix)
 
 
-def mixed_model_gwas(phenotype_id=5, pvalue_file='mm_results.pvals',
+def mixed_model_gwas(phenotype_id=16, pvalue_file='mm_results.pvals',
                      manhattan_plot_file='mm_manhattan.png',
                      qq_plot_file_prefix='mm_qq'):
     """
@@ -87,6 +88,8 @@ def mixed_model_gwas(phenotype_id=5, pvalue_file='mm_results.pvals',
     # phenotypes, leaving only accessions (individuals) which overlap between both,
     # and SNPs that are polymorphic in the resulting subset.
     sd.coordinate_w_phenotype_data(phend, phenotype_id)
+    
+    sd.filter_mac_snps(8)
 
     # Calculate kinship (IBS)
     K = kinship.calc_ibs_kinship(sd.get_snps())
@@ -470,58 +473,159 @@ def lotus_data_analysis(phenotype_id=1,
     # Local-global scan
 
 
-def lotus_mixed_model_gwas(phenotype_ids=None, phen_file = '/Users/au507860/test_data/20190322_lotus/20181113_136LjAccessionData.csv', 
-                           gt_file = '/Users/au507860/test_data/20190322_lotus/all_chromosomes_binary.csv', 
-                           pvalue_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_results', 
-                           manhattan_plot_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_manhattan', 
-                           qq_plot_file_prefix='/Users/au507860/test_data/20190322_lotus/results/mm_qq'):
+
+
+def lotus_mixed_model_gwas(phenotype_ids=None, 
+                            phen_file = '/Users/au507860/test_data/20190322_lotus/20181113_136LjAccessionData.csv', 
+                            gt_file = '/Users/au507860/test_data/20190322_lotus/all_chromosomes_binary.csv', 
+                            output_prefix = '/Users/au507860/test_data/20190322_lotus/results/mlmm'):
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
-    
-    # Load genotypes
 
-    # Load phenotypes
-    phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
-    phen_names = phend.get_names()
+    summary_dict = {}    
     
-    for pid, phen in enumerate(phen_names):
+    for pid in [0,3]:
+
+        # Load phenotypes
+        phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
+        phenotype_id = pid+1
+        phen = phend.get_name(phenotype_id)
+        print phen
+#         phend.most_normal_transformation(phenotype_id)
+        
+        file_prefix = output_prefix+'_%s'%phen
+
+        # Load genotypes
         sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
      
-        phenotype_id = pid+1
-        print phen, phenotype_id
-        phend.log_transform(phenotype_id)
         
         # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
         # phenotypes, leaving only accessions (individuals) which overlap between both, 
         # and SNPs that are polymorphic in the resulting subset.
-        sd.coordinate_w_phenotype_data(phend, phenotype_id)
-        sd.filter_mac_snps(1)
+        sample_size = len(sd.coordinate_w_phenotype_data(phend, phenotype_id)['pd_indices_to_keep'])
+        sd.filter_mac_snps(8)
         sd.filter_monomorphic_snps()
-        
-        # Calculate kinship (IBS)
-        K = sd.get_ibd_kinship_matrix()
-    
-        # Perform mixed model GWAS
-        mm_results = lm.emmax(sd.get_snps(), phend.get_values(phenotype_id), K)
-    
-        # Construct a results object
-        res = gr.Result(scores=mm_results['ps'], snps_data=sd)
-    
-        # Save p-values to file
-        res.write_to_file(pvalue_file_prefix+'_%s.pvals'%(phen))
-    
-        # Plot Manhattan plot
-        res.plot_manhattan(png_file=manhattan_plot_file_prefix+'_%s.png'%(phen), percentile=90, plot_bonferroni=True,
-                           neg_log_transform=True)
-        # Plot a QQ-plot
-        res.plot_qq(qq_plot_file_prefix+'_%s'%(phen))
+        snps = sd.get_snps()
 
+        res_dict={'sample_size':sample_size}
+ 
+        #Calc kinship
+        K = kinship.calc_ibd_kinship(snps)
+    
+        # Get heritability
+        her_dict = phend.get_pseudo_heritability(phenotype_id, K)
+        res_dict['herit'] = her_dict['pseudo_heritability']
+        res_dict['pval'] = her_dict['pval']
+    
+        #Plot trait histogram
+        phend.plot_histogram(phenotype_id, title=phen, png_file=output_prefix+'hist_%s.png'%(phen), p_her=res_dict['herit'])
+
+        # Perform mixed model GWAS
+#         lmm = linear_models.LinearMixedModel(phend.get_values(phenotype_id))
+#         lmm.add_random_effect(K)
+#         mm_results = lmm.emmax_f_test(snps, emma_num=1000, eig_L=her_dict['eig_L'])
+        
+        linear_models.mlmm(phend.get_values(phenotype_id), K, sd=sd, file_prefix=file_prefix,  
+             pval_file_prefix=file_prefix, emma_num=200)
+        
+#         # Construct a results object
+#         res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+#     
+#         # Save p-values to file
+#         res.write_to_file(file_prefix+'.pvals')
+#     
+#         # Plot Manhattan plot
+#         res.plot_manhattan(png_file=file_prefix+'manhattan.png', percentile=90, plot_bonferroni=True,
+#                            neg_log_transform=True)
+#         # Plot a QQ-plot
+#         res.plot_qq(file_prefix+'_qq')
+#         print res_dict
+#         summary_dict[phen]=res_dict
+        
+#     print summary_dict
+
+def lotus_mixed_model_gwas_perm(phenotype_ids=None, 
+                            phen_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/20181113_136LjAccessionData.csv', 
+                            gt_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/all_chromosomes_binary.csv', 
+                            output_prefix = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/results/perm'):
+    """
+    Perform mixed model (EMMAX) GWAS for Lotus data
+    """
+    
+    summary_dict = {}    
+    for pid in [0,3]:
+
+        # Load phenotypes
+        phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
+        phenotype_id = pid+1
+        phen = phend.get_name(phenotype_id)
+        print phen
+#         phend.most_normal_transformation(phenotype_id)
+        
+        file_prefix = output_prefix+'_%s'%phen
+
+        # Load genotypes
+        sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
+     
+        
+        # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+        # phenotypes, leaving only accessions (individuals) which overlap between both, 
+        # and SNPs that are polymorphic in the resulting subset.
+        sample_size = len(sd.coordinate_w_phenotype_data(phend, phenotype_id)['pd_indices_to_keep'])
+        sd.filter_mac_snps(8)
+        sd.filter_monomorphic_snps()
+        snps = sd.get_snps()
+        res_dict={'sample_size':sample_size}
+ 
+        #Calc kinship
+        K = kinship.calc_ibd_kinship(snps)
+    
+        # Get heritability
+        her_dict = phend.get_pseudo_heritability(phenotype_id, K)
+        res_dict['herit'] = her_dict['pseudo_heritability']
+        res_dict['pval'] = her_dict['pval']
+    
+        #Plot trait histogram
+        phend.plot_histogram(phenotype_id, title=phen, png_file=output_prefix+'hist_%s.png'%(phen), p_her=res_dict['herit'])
+
+        # Perform mixed model GWAS
+        lmm = linear_models.LinearMixedModel(phend.get_values(phenotype_id))
+        lmm.add_random_effect(K)
+        mm_results = lmm.emmax_f_test(snps, emma_num=200, eig_L=her_dict['eig_L'])
+        num_perm=10
+        perm_res =  lmm.emmax_permutations(snps, num_perm, emma_num=20, return_all_pvals=True)
+        
+        data = {'Chromosome': sd.get_chr_list(), 'Position': sd.get_positions(), 'Obs_pval':mm_results['ps']}
+        for perm_i in range(num_perm):
+            data['Perm_%d_pval'%perm_i]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
+        df = pandas.DataFrame(data=data)
+        df.to_csv(file_prefix+'_perm.csv', index=False)
+        
+        # Construct a results object
+#         res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+             # Save p-values to file
+#         res.write_to_file(file_prefix+'.pvals')
+     
+        # Plot Manhattan plot
+#         res.plot_manhattan(png_file=file_prefix+'manhattan.png', percentile=90, plot_bonferroni=True,
+#                            neg_log_transform=True)
+        # Plot a QQ-plot
+#         res.plot_qq(file_prefix+'_qq')
+#         print res_dict
+#         summary_dict[phen]=res_dict
+        
+    print summary_dict
+
+
+def get_lotus_pcs(gt_file = '/Users/au507860/test_data/20190322_lotus/all_chromosomes_binary.csv'):
+    sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
+    sd.get_pc(2, 1)
 
 if __name__ == '__main__':
-    #    lotus_data_analysis()
+#     mixed_model_gwas()
     #     _test_GxE_mixed_model_gwas()
-    lotus_mixed_model_gwas()
+#     get_lotus_pcs()
+    lotus_mixed_model_gwas_perm()
     #    linear_regression_gwas()
 #    multiple_loci_mixed_model_gwas()
-    pass

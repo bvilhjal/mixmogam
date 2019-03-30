@@ -89,18 +89,19 @@ class phenotype_data:
         from mixmogam import linear_models as lm
         phen_vals = self.get_values(pid)
         lmm = lm.LinearMixedModel(phen_vals)
-        if len(phen_vals) == len(set(phen_vals)):
-            lmm.add_random_effect(K)
-        else:
-            Z = self.get_incidence_matrix(pid)
-            lmm.add_random_effect(Z * K * Z.T)
+#         if len(phen_vals) == len(set(phen_vals)):
+        lmm.add_random_effect(K)
+#         else:
+#             Z = self.get_incidence_matrix(pid)
+#             lmm.add_random_effect(Z * K * Z.T)
         r1 = lmm.get_REML()
         ll1 = r1['max_ll']
-        rlm = lm.LinearModel(phen_vals)
-        ll0 = rlm.get_ll()
+        rlm = lm.LinearMixedModel(phen_vals)
+        ll0 = rlm.get_ML(H=sp.eye(len(phen_vals)),H_inv=sp.eye(len(phen_vals)),H_sqrt_inv=sp.eye(len(phen_vals)))['ll']
         lrt_stat = 2 * (ll1 - ll0)
+        print lrt_stat
         pval = stats.chi2.sf(lrt_stat, 1)
-        return {'pseudo_heritability':r1['pseudo_heritability'], 'pval':pval}
+        return {'pseudo_heritability':r1['pseudo_heritability'], 'pval':pval, 'eig_L':r1['eig_L']}
 
 
 
@@ -626,7 +627,7 @@ class phenotype_data:
         minVal = min(phen_vals)
         maxVal = max(phen_vals)
         x_range = maxVal - minVal
-        histRes = plt.hist(phen_vals, bins=round(8 + 2 * sp.log(len(phen_vals))), alpha=0.7)
+        histRes = plt.hist(phen_vals, bins=int(round(8 + 2 * sp.log(len(phen_vals)))), alpha=0.7)
         y_max = max(histRes[0])
         plt.axis([minVal - 0.035 * x_range, maxVal + 0.035 * x_range, -0.035 * y_max, 1.19 * y_max])
         num_phen_vals = len(phen_vals)

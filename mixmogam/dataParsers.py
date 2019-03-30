@@ -6,16 +6,18 @@ Email: bjarni.vilhjalmsson@gmail.com
 """
 import time, random
 import cPickle
-from mixmogam.snpsdata import *
+from snpsdata import SNPsData, RawSnpsData, SNPsDataSet
 import scipy as sp
 import h5py
+import numpy as np
+import os
+import sys
 
 # this should be fixed
 
-
-#Standard missing value is N (Used to be NA)
+# Standard missing value is N (Used to be NA)
 missing_val = 'N'
-#Standard nt decoding, is using the IUPAC alphabet
+# Standard nt decoding, is using the IUPAC alphabet
 nt_decoder = {'A':'A',
           'C':'C',
           'G':'G',
@@ -36,13 +38,12 @@ nt_decoder = {'A':'A',
           'H':'H',
           'V':'V',
           'B':'B',
-          'X':'X', #Unknown base(s)
-          'N':'X', #Unknown base(s)
-          '-':'-', #Indel 
+          'X':'X',  # Unknown base(s)
+          'N':'X',  # Unknown base(s)
+          '-':'-',  # Indel 
           '|':missing_val}
 
-
-#An int decoder is useful for processing the data efficiently
+# An int decoder is useful for processing the data efficiently
 nt_int_decoder = {'A':1,
           'C':2,
           'G':3,
@@ -63,15 +64,10 @@ nt_int_decoder = {'A':1,
           'H':18,
           'V':19,
           'B':20,
-          'X':21, #Unknown base(s)
-          'N':21, #Unknown base(s)
-          '-':22, #Indel 
+          'X':21,  # Unknown base(s)
+          'N':21,  # Unknown base(s)
+          '-':22,  # Indel 
           '|':0}
-
-
-
-
-
 
 
 def parse_raw_snps_data(datafile, target_format='nucleotides', deliminator=",", missing_val='N', return_chromosomes=False,
@@ -86,7 +82,7 @@ def parse_raw_snps_data(datafile, target_format='nucleotides', deliminator=",", 
     #code_fun = sp.vectorize(lambda x: decoder[x], otypes=['a1']) #FINISH!!!
     accessions = []
 
-    #Reading column data
+    # Reading column data
     with open(datafile, 'r') as f:
         array_ids = None
         first_line = map(str.strip, f.next().split(deliminator))
@@ -157,23 +153,14 @@ def parse_raw_snps_data(datafile, target_format='nucleotides', deliminator=",", 
         return snps_data_list
 
 
-
-
-
-
-
-
-
-
-def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=1, 
-                             filter_accessions=None,use_pickle=True, dtype='int8', 
+def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=1,
+                             filter_accessions=None, use_pickle=True, dtype='int8',
                              data_format='binary'):
     """
     A sped-up version, to load a int (e.g. binary) file.
     
     If pickle is used then more memory is required, but it speeds up.
     """
-    import numpy as np
     pickle_file = data_file + '.pickled'
     filter_accessions_ = None
     if use_pickle:
@@ -199,7 +186,7 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
     snpsd_ls = []
     chromosomes = []
 
-    #Reading accession data
+    # Reading accession data
     f = open(data_file, 'rb')
     line = f.next().split(delimiter)
     for acc in line[2:]:
@@ -219,10 +206,10 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
     positions = []
     snps = []
     line = f.next().split(delimiter)
+    assert len(line)==len(accessions)+2
     old_chromosome = int(line[0])
     positions.append(int(line[1]))
     snps.append(np.array(line[2:], dtype=dtype))
-    #snps.append(map(int,line[2:]))
     i = 0
 
     if filter < 1.0:
@@ -231,7 +218,7 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                 if random.random() > filter: continue
                 line_list = line.split(delimiter)
                 chromosome = int(line_list[0])
-                if chromosome != old_chromosome: #Then save snps_data
+                if chromosome != old_chromosome:  # Then save snps_data
                     snpsd = SNPsData(snps, positions, accessions=accessions, chromosome=old_chromosome)
                     snpsd_ls.append(snpsd)
                     chromosomes.append(old_chromosome)
@@ -241,7 +228,7 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                     sys.stderr.write("Loaded %s SNPs.\n" % i)
                 positions.append(int(line_list[1]))
                 l_list = line_list[2:]
-                #snp = [int(l_list[j]) for j in indices_to_include]
+                # snp = [int(l_list[j]) for j in indices_to_include]
                 snp = np.array([l_list[j] for j in indices_to_include], dtype=dtype)
                 snps.append(snp)
         else:
@@ -249,7 +236,7 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                 if random.random() > filter: continue
                 line_list = line.split(delimiter)
                 chromosome = int(line_list[0])
-                if chromosome != old_chromosome: #Then save snps_data
+                if chromosome != old_chromosome:  # Then save snps_data
                     snpsd = SNPsData(snps, positions, accessions=accessions, chromosome=old_chromosome)
                     snpsd_ls.append(snpsd)
                     chromosomes.append(old_chromosome)
@@ -258,14 +245,14 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                     old_chromosome = chromosome
                     sys.stderr.write("Loaded %s SNPs.\n" % i)
                 positions.append(int(line_list[1]))
-                #snps.append(map(int,line_list[2:]))
+                # snps.append(map(int,line_list[2:]))
                 snps.append(np.array(line_list[2:], dtype=dtype))
     else:
         if filter_accessions:
             for i, line in enumerate(f):
                 line_list = line.split(delimiter)
                 chromosome = int(line_list[0])
-                if chromosome != old_chromosome: #Then save snps_data
+                if chromosome != old_chromosome:  # Then save snps_data
                     snpsd = SNPsData(snps, positions, accessions=accessions, chromosome=old_chromosome)
                     snpsd_ls.append(snpsd)
                     chromosomes.append(old_chromosome)
@@ -275,14 +262,14 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                     sys.stderr.write("Loaded %s SNPs.\n" % i)
                 positions.append(int(line_list[1]))
                 l_list = line_list[2:]
-                #snp = [int(l_list[j]) for j in indices_to_include]
+                # snp = [int(l_list[j]) for j in indices_to_include]
                 snp = np.array([l_list[j] for j in indices_to_include], dtype=dtype)
                 snps.append(snp)
         else:
             for i, line in enumerate(f):
                 line_list = line.split(delimiter)
                 chromosome = int(line_list[0])
-                if chromosome != old_chromosome: #Then save snps_data
+                if chromosome != old_chromosome:  # Then save snps_data
                     snpsd = SNPsData(snps, positions, accessions=accessions, chromosome=old_chromosome)
                     snpsd_ls.append(snpsd)
                     chromosomes.append(old_chromosome)
@@ -291,10 +278,8 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
                     old_chromosome = chromosome
                     sys.stderr.write("Loaded %s SNPs.\n" % i)
                 positions.append(int(line_list[1]))
-                #snps.append(map(int,line_list[2:]))
+                # snps.append(map(int,line_list[2:]))
                 snps.append(np.array(line_list[2:], dtype=dtype))
-
-
 
     f.close()
     snpsd = SNPsData(snps, positions, accessions=accessions, chromosome=old_chromosome)
@@ -305,15 +290,14 @@ def parse_numerical_snp_data(data_file, delimiter=",", missing_val='NA', filter=
     if use_pickle:
         print 'Saving a pickled version of genotypes.'
         f = open(pickle_file, 'wb')
-        cPickle.dump(sd, f, protocol=2)
+        cPickle.dump(sd, f, protocol=-1)
         f.close()
     if filter_accessions_:
         sd.filter_accessions(filter_accessions_)
     return sd
 
 
-
-def parse_snp_data(data_file, delimiter=",", missingVal='NA', data_format='binary', filter=1, 
+def parse_snp_data(data_file, delimiter=",", missingVal='NA', data_format='binary', filter=1,
                    useDecoder=True, look_for_binary=True, filter_accessions=None,
                    use_pickle=True):
     """
@@ -325,19 +309,8 @@ def parse_snp_data(data_file, delimiter=",", missingVal='NA', data_format='binar
             sd = parse_numerical_snp_data(data_file, delimiter=delimiter, missing_val=missingVal,
                         filter=filter, filter_accessions=filter_accessions,
                         use_pickle=use_pickle, dtype='int8', data_format=data_format)
-        else: #Try nucleotide format
-            sd = parse_snp_data(data_file , format='nucleotides', delimiter=delimiter,
-                          missingVal=missingVal, filter=filter, look_for_binary=False,
-                          filter_accessions=filter_accessions)
-            sd.convert_data_format('binary')
-#            print 'Save a binary snps data file:', sd_binary_file
-#            sd.writeToFile(sd_binary_file, binary_format=True)
-#            if use_pickle:
-#                pickle_file = sd_binary_file + '.pickled'
-#                print 'Saving a pickled version of genotypes.'
-#                f = open(pickle_file, 'wb')
-#                cPickle.dump(sd, f, protocol=2)
-#                f.close()
+        else:
+            raise Exception('Genotype file not found: %s'%data_file)
     elif data_format in ['int', 'diploid_int']:
         sd = parse_numerical_snp_data(data_file, delimiter=delimiter, missing_val=missingVal,
                     filter=filter, filter_accessions=filter_accessions,
@@ -357,9 +330,6 @@ def parse_snp_data(data_file, delimiter=",", missingVal='NA', data_format='binar
     return sd
 
 
-
-
-
 def parse_chr_pos_list(datafile, delimiter=","):
     """
     Return a chr_pos list without loading all data...
@@ -369,7 +339,7 @@ def parse_chr_pos_list(datafile, delimiter=","):
 
     chr_pos_list = []
 
-    #Reading column data
+    # Reading column data
     f = open(datafile, 'r')
     lines = f.readlines()
     f.close()
@@ -385,7 +355,6 @@ def parse_chr_pos_list(datafile, delimiter=","):
         i += 1
     sys.stderr.write("Chromosomes and positions read\n")
     return chr_pos_list
-
 
 
 def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
@@ -417,7 +386,7 @@ def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
                 chrom_pos_dict[chrom]['positions'].append(int(l[3]))
         print 'The map file was loaded:'
         print 'Pickling..'
-        cPickle.dump(chrom_pos_dict, open(map_pickled_filename, 'wb'), protocol=2)
+        cPickle.dump(chrom_pos_dict, open(map_pickled_filename, 'wb'), protocol=-1)
     num_markers = 0
     for chrom in sorted(chrom_pos_dict):
         n = len(chrom_pos_dict[chrom]['positions'])
@@ -429,7 +398,6 @@ def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
     for i, nt1 in enumerate(['A', 'C', 'G', 'T']):
         for j, nt2 in enumerate(['A', 'C', 'G', 'T']):
             nt_pair_map[(nt1, nt2)] = i * 4 + j + 1
-
 
     if os.path.isfile(ped_pickled_filename):
         print 'Loading pickled ped file'
@@ -449,23 +417,22 @@ def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
                 assert not ind_id in individ_dict, 'The indivual %d is already in dictionary??' % ind_id
                 individ_dict[ind_id] = {'fam_id':int(l[0]), 'pat_id':int(l[2]), 'mat_id':int(l[3]),
                             'sex':int(l[4]), 'phen_val':int(l[5])}
-                #print individ_dict[ind_id]
+                # print individ_dict[ind_id]
                 nt_pairs = sp.zeros(num_markers, dtype='int8')
-                #missing_count = 0
+                # missing_count = 0
                 missing_indices = []
                 for snp_i, genotype in enumerate(l[6:]):
                     nt_pair = genotype.split()
                     if nt_pair == ['0', '0']:
-                        #missing_count += 1
+                        # missing_count += 1
                         missing_indices.append(snp_i)
                     nt_pairs[snp_i] = nt_pair_map[tuple(nt_pair)]
-                #print '%d missing values were found' % missing_count
+                # print '%d missing values were found' % missing_count
                 individ_dict[ind_id]['snps'] = nt_pairs
                 individ_dict[ind_id]['missing_indices'] = missing_indices
         print 'The ped file was loaded:'
         print 'Pickling..'
-        cPickle.dump(individ_dict, open(ped_pickled_filename, 'wb'), protocol=2)
-
+        cPickle.dump(individ_dict, open(ped_pickled_filename, 'wb'), protocol=-1)
 
     missing_indices_set = set()
     missing_nums = []
@@ -479,17 +446,12 @@ def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
         missing_nums.append(num_missing)
     print len(missing_indices_set)
     print num_retained
-#    import pylab
-#    pylab.hist(missing_nums, bins=50, alpha=0.6)
-#    pylab.savefig(env['tmp_dir'] + 'missing_data_hist.png')
-
 
     snp_mat = sp.zeros((len(individ_dict), num_markers), dtype='int8')
     for i, ind_id in enumerate(individ_dict):
                 snp_mat[i] = individ_dict[ind_id]['snps']
 
     print 'Finished construcing matrix.'
-
 
     num_weird_snps = 0
     snps = []
@@ -511,7 +473,6 @@ def parse_plink_ped_file(file_prefix, only_binary_snps=True, debug=False):
 
     print 'Number of weird SNPs is %d, out of %d' % (num_weird_snps, num_markers)
 #    accessions = individ_dict.keys()
-
 
 
 def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=False):
@@ -538,9 +499,8 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
                 l = map(str.strip, line.split())
                 individs.append(l[1])
                 sex_list.append(int(l[4]))
-        cPickle.dump((individs, sex_list), open(tfam_pickled_filename, 'wb'), protocol=2)
+        cPickle.dump((individs, sex_list), open(tfam_pickled_filename, 'wb'), protocol=-1)
     num_individs = len(individs)
-
 
 #    k_mat = sp.zeros((num_individs, num_individs))
     if os.path.isfile(tped_pickled_filename):
@@ -590,10 +550,8 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
                     if imputation_type == 'simple2':
                         snp[snp == 3] = sp.argmax(bin_counts[:-1])
 
-
-
                 chrom_pos_snp_dict[chrom]['snps'].append(snp)
-        cPickle.dump(chrom_pos_snp_dict, open(tped_pickled_filename, 'wb'), protocol=2)
+        cPickle.dump(chrom_pos_snp_dict, open(tped_pickled_filename, 'wb'), protocol=-1)
 
     chromosomes = sorted(chrom_pos_snp_dict.keys())
     snpsds = []
@@ -619,14 +577,12 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
             with open(ibs_filename) as f:
                 for i, line in enumerate(f):
                     K[i] = map(float, line.split())
-            cPickle.dump([K, individs], open(ibs_pickled_filename, 'wb'), protocol=2)
+            cPickle.dump([K, individs], open(ibs_pickled_filename, 'wb'), protocol=-1)
             print 'K was loaded.'
         return sd, K
     return sd
 
-
-
-#def load_snps_call_method(call_method_id=75, data_format='binary', debug_filter=1.0, min_mac=5):
+# def load_snps_call_method(call_method_id=75, data_format='binary', debug_filter=1.0, min_mac=5):
 #    file_prefix = '%s%d/' % (env['cm_dir'], call_method_id)
 #    data_file = file_prefix + 'all_chromosomes_%s.csv' % data_format
 #    if os.path.isfile(data_file):
@@ -679,7 +635,7 @@ def parse_plink_tped_file(file_prefix, imputation_type='simple', return_kinship=
 #    raise NotImplementedError
 #
 #
-#def load_hdf5_snps_call_method(call_method_id=75, data_format='binary', debug_filter=1.0):
+# def load_hdf5_snps_call_method(call_method_id=75, data_format='binary', debug_filter=1.0):
 #    file_prefix = '%s%d/' % (env['cm_dir'], call_method_id)
 #    data_file = file_prefix + 'all_chromosomes_%s.hdf5' % data_format
 #    if os.path.isfile(data_file):
@@ -723,7 +679,7 @@ def load_full_sequence_data(file_prefix, data_format='diploid_int', min_mac=5, c
             sd.filter_mac_snps(min_mac)
             file_name = file_prefix + 'chr_%d_%s_mac%d.csv' % (chrom, data_format, min_mac)
             pickled_file_name = file_name + '.pickled'
-            cPickle.dump(sd, open(pickled_file_name, 'wb'), protocol=2)
+            cPickle.dump(sd, open(pickled_file_name, 'wb'), protocol=-1)
         print "Done."
 
         if debug_filter < 1.0:
@@ -739,11 +695,9 @@ def load_full_sequence_data(file_prefix, data_format='diploid_int', min_mac=5, c
     return sd
 
 
-
-
 def parse_tair_gff_file(chrom=None, reg_start_pos=None, reg_end_pos=None, only_genes=False,
-                        gff_file = 'at_data/TAIR10_GFF3_genes_transposons.gff.tsv',
-                        func_desc_file ='at_data/TAIR10_functional_descriptions.tsv'):
+                        gff_file='at_data/TAIR10_GFF3_genes_transposons.gff.tsv',
+                        func_desc_file='at_data/TAIR10_functional_descriptions.tsv'):
     """
     Loads the TAIR GFF file.
     """
@@ -843,7 +797,7 @@ def parse_tair_gff_file(chrom=None, reg_start_pos=None, reg_end_pos=None, only_g
                         'curator_summary':curator_summary,
                         'computational_description':computational_description}
         if chrom is None:
-            cPickle.dump(gene_dict, open(pickled_filename, 'wb'), protocol=2)
+            cPickle.dump(gene_dict, open(pickled_filename, 'wb'), protocol=-1)
         elif reg_start_pos != None and reg_end_pos != None:
             tair_ids = gene_dict.keys()
             for tair_id in tair_ids:
@@ -857,9 +811,7 @@ def parse_tair_gff_file(chrom=None, reg_start_pos=None, reg_end_pos=None, only_g
             if gene_dict[tid]['gene_type'] != 'gene':
                 del gene_dict[tid]
 
-
     return gene_dict    
-    
 
 
 def _parse_map_file_():

@@ -1054,6 +1054,7 @@ class Result(object):
         "Plotting a Manhattan-style plot with %i markers." % num_scores
 
         chromosome_ends = self.get_chromosome_ends()
+        print chromosome_ends
         result = self.simple_clone()
         if neg_log_transform:
             result.neg_log_trans()
@@ -1197,7 +1198,7 @@ class Result(object):
             ys = []
             xs = []
             for c, p, score in highlight_markers:
-                x = chr_offsets[c - 1] + p
+                x = chr_offsets[c] + p
                 xs.append(x)
                 if score > max_score:
                     plt.text(x, max_score * 1.1, str(round(score, 2)), rotation=45, size="small")
@@ -1275,8 +1276,8 @@ class Result(object):
         chromosome_splits = []
         for i, chrom in enumerate(self.snp_results['chromosomes']):
             if last_chrom != chrom:
-                while last_chrom < chrom:
-                    last_chrom += 1
+                if last_chrom < chrom:
+                    last_chrom = chrom
                     chromosome_splits.append(i)
         chromosome_splits.append(i)
         return chromosome_splits
