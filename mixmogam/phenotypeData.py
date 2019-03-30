@@ -8,9 +8,8 @@ import itertools as it
 import sys
 try:
     import scipy as sp
-    import matplotlib
-    matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    plt.switch_backend('agg')
 except Exception, err_str:
     print 'scipy/matplotlib is missing:', err_str
 import warnings
@@ -614,6 +613,7 @@ class phenotype_data:
     def plot_histogram(self, pid, title=None , pdf_file=None, png_file=None, x_label=None, p_her=None,
             p_her_pval=None):
 
+        plt.switch_backend('agg')
         if title:
             plt.figure(figsize=(6, 5.4))
             plt.axes([0.13, 0.11, 0.85, 0.82])
