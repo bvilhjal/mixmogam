@@ -545,7 +545,7 @@ def lotus_mixed_model_gwas(phenotype_ids=None,
         
 #     print summary_dict
 
-def lotus_mixed_model_gwas_perm(phenotype_ids=None, 
+def lotus_mixed_model_gwas_perm(phenotype_id=None, 
                             phen_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/20181113_136LjAccessionData.csv', 
                             gt_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/all_chromosomes_binary.csv', 
                             output_prefix = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/results/perm'):
@@ -553,67 +553,54 @@ def lotus_mixed_model_gwas_perm(phenotype_ids=None,
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
     
+    emma_num=200
+    num_perm=10
+    
     summary_dict = {}    
-    for pid in [0,3]:
 
-        # Load phenotypes
-        phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
-        phenotype_id = pid+1
-        phen = phend.get_name(phenotype_id)
-        print phen
+    # Load phenotypes
+    phend = pd.parse_phenotype_file(phen_file, with_db_ids=False)
+    phen = phend.get_name(phenotype_id)
+    print phen
 #         phend.most_normal_transformation(phenotype_id)
-        
-        file_prefix = output_prefix+'_%s'%phen
+    
+    file_prefix = output_prefix+'_%s'%phen
 
-        # Load genotypes
-        sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
-     
-        
-        # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
-        # phenotypes, leaving only accessions (individuals) which overlap between both, 
-        # and SNPs that are polymorphic in the resulting subset.
-        sample_size = len(sd.coordinate_w_phenotype_data(phend, phenotype_id)['pd_indices_to_keep'])
-        sd.filter_mac_snps(8)
-        sd.filter_monomorphic_snps()
-        snps = sd.get_snps()
-        res_dict={'sample_size':sample_size}
+    # Load genotypes
+    sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
  
-        #Calc kinship
-        K = kinship.calc_ibd_kinship(snps)
     
-        # Get heritability
-        her_dict = phend.get_pseudo_heritability(phenotype_id, K)
-        res_dict['herit'] = her_dict['pseudo_heritability']
-        res_dict['pval'] = her_dict['pval']
-    
-        #Plot trait histogram
-        phend.plot_histogram(phenotype_id, title=phen, png_file=output_prefix+'hist_%s.png'%(phen), p_her=res_dict['herit'])
+    # Coordinate phenotype of interest and genotypes.  This filters the genotypes and 
+    # phenotypes, leaving only accessions (individuals) which overlap between both, 
+    # and SNPs that are polymorphic in the resulting subset.
+    sample_size = len(sd.coordinate_w_phenotype_data(phend, phenotype_id)['pd_indices_to_keep'])
+    sd.filter_mac_snps(8)
+    sd.filter_monomorphic_snps()
+    snps = sd.get_snps()
+    res_dict={'sample_size':sample_size}
 
-        # Perform mixed model GWAS
-        lmm = linear_models.LinearMixedModel(phend.get_values(phenotype_id))
-        lmm.add_random_effect(K)
-        mm_results = lmm.emmax_f_test(snps, emma_num=200, eig_L=her_dict['eig_L'])
-        num_perm=10
-        perm_res =  lmm.emmax_permutations(snps, num_perm, emma_num=20, return_all_pvals=True)
-        
-        data = {'Chromosome': sd.get_chr_list(), 'Position': sd.get_positions(), 'Obs_pval':mm_results['ps']}
-        for perm_i in range(num_perm):
-            data['Perm_%d_pval'%perm_i]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
-        df = pandas.DataFrame(data=data)
-        df.to_csv(file_prefix+'_perm.csv', index=False)
-        
-        # Construct a results object
-#         res = gr.Result(scores=mm_results['ps'], snps_data=sd)
-             # Save p-values to file
-#         res.write_to_file(file_prefix+'.pvals')
-     
-        # Plot Manhattan plot
-#         res.plot_manhattan(png_file=file_prefix+'manhattan.png', percentile=90, plot_bonferroni=True,
-#                            neg_log_transform=True)
-        # Plot a QQ-plot
-#         res.plot_qq(file_prefix+'_qq')
-#         print res_dict
-#         summary_dict[phen]=res_dict
+    #Calc kinship
+    K = kinship.calc_ibd_kinship(snps)
+
+    # Get heritability
+    her_dict = phend.get_pseudo_heritability(phenotype_id, K)
+    res_dict['herit'] = her_dict['pseudo_heritability']
+    res_dict['pval'] = her_dict['pval']
+
+    #Plot trait histogram
+    phend.plot_histogram(phenotype_id, title=phen, png_file=output_prefix+'hist_%s.png'%(phen), p_her=res_dict['herit'])
+
+    # Perform mixed model GWAS
+    lmm = linear_models.LinearMixedModel(phend.get_values(phenotype_id))
+    lmm.add_random_effect(K)
+    mm_results = lmm.emmax_f_test(snps, emma_num=emma_num, eig_L=her_dict['eig_L'])
+    perm_res =  lmm.emmax_permutations(snps, num_perm, emma_num=emma_num, return_all_pvals=True)
+    
+    data = {'Chromosome': sd.get_chr_list(), 'Position': sd.get_positions(), 'Obs_pval':mm_results['ps']}
+    for perm_i in range(num_perm):
+        data['Perm_%d_pval'%perm_i]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
+    df = pandas.DataFrame(data=data)
+    df.to_csv(file_prefix+'_perm.csv', index=False)        
         
     print summary_dict
 
@@ -622,10 +609,18 @@ def get_lotus_pcs(gt_file = '/Users/au507860/test_data/20190322_lotus/all_chromo
     sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
     sd.get_pc(2, 1)
 
+import argparse
+parser = argparse.ArgumentParser(prog='mixmogam',
+                                 formatter_class=argparse.RawDescriptionHelpFormatter,
+                                 description='..')
+                                                            
+
+#coord arguments 
+parser.add_argument('--pid', type=int, default=4,
+                    help='')
+
 if __name__ == '__main__':
-#     mixed_model_gwas()
-    #     _test_GxE_mixed_model_gwas()
-#     get_lotus_pcs()
-    lotus_mixed_model_gwas_perm()
-    #    linear_regression_gwas()
-#    multiple_loci_mixed_model_gwas()
+    parameters = parser.parse_args()
+    p_dict= vars(parameters)
+    lotus_mixed_model_gwas_perm(p_dict['pid'])
+
