@@ -602,7 +602,21 @@ def lotus_mixed_model_gwas_perm(phenotype_id=None,
         data['Perm_%d_pval'%perm_i]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
     df = pandas.DataFrame(data=data)
     df.to_csv(file_prefix+'_perm.csv', index=False)        
-        
+
+
+    # Construct a results object
+    res = gr.Result(scores=mm_results['ps'], snps_data=sd)
+ 
+    # Save p-values to file
+    res.write_to_file(file_prefix+'_pvals.csv')
+ 
+    # Plot Manhattan plot
+    res.plot_manhattan(png_file=file_prefix+'manhattan.png', percentile=90, plot_bonferroni=True,
+                       neg_log_transform=True)
+    # Plot a QQ-plot
+    res.plot_qq(file_prefix+'_qq')
+    print res_dict
+    summary_dict[phen]=res_dict        
     print summary_dict
 
 
