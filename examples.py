@@ -596,11 +596,15 @@ def lotus_mixed_model_gwas_perm(phenotype_id=None, num_perm=100, run_id='',
     perm_res =  lmm.emmax_permutations(snps, num_perm, emma_num=emma_num, return_all_pvals=True)
     print perm_res
     
+    columns = ['Chromosome','Position','Obs_pval']
     data = {'Chromosome': sd.get_chr_list(), 'Position': sd.get_positions(), 'Obs_pval':mm_results['ps']}
     for perm_i in range(num_perm):
-        data['Perm_%d_pval'%perm_i]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
+        col_name = 'Perm_%d_pval'%perm_i
+        data[col_name]= perm_res['all_pvals'][:,perm_i].flatten()  #M x K matrix
+        columns.append(col_name)
     df = pandas.DataFrame(data=data)
-    df.to_csv(file_prefix+'_perm.csv', index=False)        
+    
+    df.to_csv(file_prefix+'_perm.csv', index=False,columns=columns)        
 
 
     # Construct a results object
