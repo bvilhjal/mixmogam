@@ -545,16 +545,15 @@ def lotus_mixed_model_gwas(phenotype_ids=None,
         
 #     print summary_dict
 
-def lotus_mixed_model_gwas_perm(phenotype_id=None, 
+def lotus_mixed_model_gwas_perm(phenotype_id=None, num_perm=100, run_id='',
                             phen_file = '/home/bjarni/LotusGenome/faststorage/bjarni/20181113_136LjAccessionData.csv', 
                             gt_file = '/home/bjarni/LotusGenome/faststorage/bjarni/all_chromosomes_binary.csv', 
-                            output_prefix = '/home/bjarni/LotusGenome/faststorage/bjarni/results_20190331/perm'):
+                            output_prefix = '/home/bjarni/LotusGenome/faststorage/bjarni/results_20190331/'):
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
     
     emma_num=200
-    num_perm=10
     
     summary_dict = {}    
 
@@ -564,7 +563,7 @@ def lotus_mixed_model_gwas_perm(phenotype_id=None,
     print phen
 #         phend.most_normal_transformation(phenotype_id)
     
-    file_prefix = output_prefix+'_%s'%phen
+    file_prefix = output_prefix+'%s_%s'%(run_id,phen)
 
     # Load genotypes
     sd = dp.parse_snp_data(gt_file, data_format='diploid_int')
@@ -633,9 +632,13 @@ parser = argparse.ArgumentParser(prog='mixmogam',
 #coord arguments 
 parser.add_argument('--pid', type=int, default=4,
                     help='')
+parser.add_argument('--perm', type=int, default=100,
+                    help='')
+parser.add_argument('--id', type=str, default='',
+                    help='')
 
 if __name__ == '__main__':
     parameters = parser.parse_args()
     p_dict= vars(parameters)
-    lotus_mixed_model_gwas_perm(p_dict['pid'])
+    lotus_mixed_model_gwas_perm(p_dict['pid'],num_perm=p_dict['perm'],run_id=p_dict['id'])
 
