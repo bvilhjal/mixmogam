@@ -546,9 +546,9 @@ def lotus_mixed_model_gwas(phenotype_ids=None,
 #     print summary_dict
 
 def lotus_mixed_model_gwas_perm(phenotype_id=None, 
-                            phen_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/20181113_136LjAccessionData.csv', 
-                            gt_file = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/all_chromosomes_binary.csv', 
-                            output_prefix = '/home/bjarni/LotusGenome/bjarni/lotus_gwas_data_20190219/results/perm'):
+                            phen_file = '/home/bjarni/LotusGenome/faststorage/bjarni/20181113_136LjAccessionData.csv', 
+                            gt_file = '/home/bjarni/LotusGenome/faststorage/bjarni/all_chromosomes_binary.csv', 
+                            output_prefix = '/home/bjarni/LotusGenome/faststorage/bjarni/results_20190331/perm'):
     """
     Perform mixed model (EMMAX) GWAS for Lotus data
     """
