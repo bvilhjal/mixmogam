@@ -345,7 +345,9 @@ class LMM:
         p = lam.size
         v = lam + delta
         v1 = sq_etas / v
-        return float(p * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / v))
+        # true derivative (v1's _redll_ carried a deliberate factor 2,
+        # harmless for root finding; normalized here)
+        return float(0.5 * (p * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / v)))
 
     @staticmethod
     def _ml_ll(
@@ -368,7 +370,9 @@ class LMM:
         n = xi.size
         v = lam + delta
         v1 = sq_etas / v
-        return float(n * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / (xi + delta)))
+        return float(
+            0.5 * (n * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / (xi + delta)))
+        )
 
     def _reml_op(self):
         """matvec of S K S with S = I - Q Q', Q the covariate basis."""
@@ -383,18 +387,129 @@ class LMM:
         return mv
 
     def _exact_pack(self, method: str):
-        """Exact ll/dll/s1 evaluators from the full eigenspaces."""
-        lam, U_R = self.eig_R()
-        etas = U_R.T @ self.y
-        sq_etas = etas * etas
+        """Exact ll/dll/s1 evaluators from ONE eigendecomposition.
+
+        REML is evaluated through the matrix determinant lemma:
+        log|X'V^-1 X| and the GLS quadratic need only U'X (n x q) and
+        U'y once the spectrum of K is known, so the second O(n^3)
+        eigendecomposition of S(K+I)S (the v1/EMMA construction, kept
+        as :meth:`eig_R` for reference tests) is unnecessary.
+        """
+        if self._kop is not None:
+            raise RuntimeError(
+                "the exact solver needs a dense K; streaming kinship "
+                "operators use the 'slq' solver"
+            )
+        eig = self.eigen()
+        if eig["full"]:
+            lam = eig["values"]  # descending, paired with U's columns
+            U = eig["vectors"]
+        else:  # exact fit even when the scan truncates the spectrum
+            try:
+                vals, vecs = linalg.eigh(
+                    self.K, check_finite=False, driver="evr"
+                )
+            except np.linalg.LinAlgError:
+                vals, vecs = linalg.eigh(
+                    self.K, check_finite=False, driver="evd"
+                )
+            lam = vals[::-1]
+            U = vecs[:, ::-1]
+        W = U.T @ self.X  # (n, q)
+        w = U.T @ self.y  # (n,)
+        XtX_logdet = float(np.linalg.slogdet(self.X.T @ self.X)[1])
+        p = self.n - self.q
+
         if method == "ml":
-            xi = self.eigen()["values"][::-1]
-            ll_at = lambda d: self._ml_ll(d, lam, xi, sq_etas)
-            dll_at = lambda d: self._ml_dll(d, lam, xi, sq_etas)
+
+            def s1_at(d):
+                D = 1.0 / (lam + d)
+                Dw = D * w
+                A = W.T @ (D[:, None] * W)
+                b = W.T @ Dw
+                return float(w @ Dw - b @ np.linalg.solve(A, b))
+
+            def ll_at(d):
+                # ML: profiled over sigma^2, determinant lemma on the full space
+                D = 1.0 / (lam + d)
+                Dw = D * w
+                A = W.T @ (D[:, None] * W)
+                b = W.T @ Dw
+                rss = float(w @ Dw - b @ np.linalg.solve(A, b))
+                return float(
+                    0.5
+                    * (
+                        self.n
+                        * (np.log(self.n / (2.0 * np.pi)) - 1.0 - np.log(rss))
+                        - np.sum(np.log(lam + d))
+                    )
+                )
+
+            def dll_at(d):
+                v = lam + d
+                D = 1.0 / v
+                D2 = D * D
+                Dw = D * w
+                A = W.T @ (D[:, None] * W)
+                Ainv = np.linalg.inv(A)
+                b = W.T @ Dw
+                Ainv_b = Ainv @ b
+                rss = float(w @ Dw - b @ Ainv_b)
+                c1 = float(-w @ (D2 * w))
+                b1 = -W.T @ (D2 * w)
+                A1 = -W.T @ (D2[:, None] * W)
+                rss1 = c1 - 2.0 * b @ (Ainv @ b1) + Ainv_b @ (A1 @ Ainv_b)
+                n = self.n
+                return float(
+                    0.5 * (-n * rss1 / rss - np.sum(1.0 / v))
+                )
+
         else:
-            ll_at = lambda d: self._reml_ll(d, lam, sq_etas)
-            dll_at = lambda d: self._reml_dll(d, lam, sq_etas)
-        s1_at = lambda d: float(np.sum(sq_etas / (lam + d)))
+
+            def _pieces(d):
+                v = lam + d
+                D = 1.0 / v
+                D2 = D * D
+                Dw = D * w
+                A = W.T @ (D[:, None] * W)
+                Ainv = np.linalg.inv(A)
+                b = W.T @ Dw
+                Ainv_b = Ainv @ b
+                rss = float(w @ Dw - b @ Ainv_b)
+                return v, D, D2, Dw, A, Ainv, b, Ainv_b, rss
+
+            def s1_at(d):
+                _, _, _, Dw, A, _, b, Ainv_b, _ = _pieces(d)
+                return float(w @ Dw - b @ Ainv_b) if False else float(
+                    w @ Dw - b @ (np.linalg.solve(A, b))
+                )
+
+            def ll_at(d):
+                _, _, _, _, A, _, _, _, rss = _pieces(d)
+                logdet_A = float(np.linalg.slogdet(A)[1])
+                return float(
+                    0.5
+                    * (
+                        p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(rss))
+                        - (np.sum(np.log(lam + d)) + logdet_A - XtX_logdet)
+                    )
+                )
+
+            def dll_at(d):
+                v, D, D2, Dw, A, Ainv, b, Ainv_b, rss = _pieces(d)
+                c1 = float(-w @ (D2 * w))
+                b1 = -W.T @ (D2 * w)
+                A1 = -W.T @ (D2[:, None] * W)
+                rss1 = c1 - 2.0 * b @ (Ainv @ b1) + Ainv_b @ (A1 @ Ainv_b)
+                logdetA1 = float(np.trace(Ainv @ A1))
+                return float(
+                    0.5
+                    * (
+                        -p * rss1 / rss
+                        - (np.sum(1.0 / v) + logdetA1)
+                    )
+                )
+
         return ll_at, dll_at, s1_at
 
     def _slq_pack(self, method: str, probes: int, steps: int, deflate: int):
