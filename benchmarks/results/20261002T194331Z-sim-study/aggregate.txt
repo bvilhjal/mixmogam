@@ -1,0 +1,21 @@
+scenario      method                       secs  metrics (mean over 3 seeds)
+S1_ld_small   fit_exact                    0.19  pseudo_h2=0.4856
+S1_ld_small   fit_exact_kinship25          0.28  pseudo_h2=0.4705
+S1_ld_small   fit_slq                      0.30  delta_rel_err=0.0136  pseudo_h2=0.4848
+S1_ld_small   kinship_full                 0.37  
+S1_ld_small   permutations_batched         1.10  threshold_05=8.58e-05
+S1_ld_small   scan_lmm_exact_f32           0.52  lambda_gc=1.016  power=0.06667  n_false_positive=1.667
+S2_structure  fit_exact                    0.21  pseudo_h2=0.5729
+S2_structure  fit_exact_kinship25          0.31  pseudo_h2=0.5693
+S2_structure  fit_slq                      0.32  delta_rel_err=0.01117  pseudo_h2=0.5737
+S2_structure  kinship_full                 0.35  
+S2_structure  lmm_vs_lm                    0.00  lambda_gc_lm=0.4063  lambda_gc_lmm=1.008  fp_lm=769.3  fp_lmm=1.667
+S2_structure  scan_lm_nok                  0.18  lambda_gc=0.4063  power=0.03333  n_false_positive=769.3
+S2_structure  scan_lmm_exact_f32           0.41  lambda_gc=1.008  power=0.03333  n_false_positive=1.667
+S3_large      fit_exact                   26.77  pseudo_h2=0.4941
+S3_large      fit_exact_kinship25         26.59  pseudo_h2=0.4856
+S3_large      fit_slq                     18.95  delta_rel_err=0.02113  pseudo_h2=0.4903
+S3_large      kinship_full                 6.65  
+S3_large      scan_lmm_exact_f32          11.84  lambda_gc=1.03  power=0.2667  n_false_positive=37.67
+S3_large      scan_lmm_exact_f64          11.27  lambda_gc=1.03  power=0.2667  n_false_positive=37.67
+S3_large      scan_topk1024               14.44  lambda_gc=1.019  power=0.2777  n_false_positive=35.33  max_dlog10p=1.232  top100_overlap=94.33

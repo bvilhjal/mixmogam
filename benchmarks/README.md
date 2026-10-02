@@ -11,11 +11,18 @@ OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
 
 Benchmarks:
 
-- `scan_vs_reference` — the batched engine against a float64 port of the
-  v1 per-SNP least-squares loop (the `tests/_reference.py` oracle),
-  asserting agreement while timing both.
-- `scan_n{N}_m{M}_{dtype}` — throughput across problem shapes.
-- `permutations_batched` — all permutations through one SNP-block pass.
+- `run_benchmarks.py`
+  - `scan_vs_reference` — the batched engine against a float64 port of
+    the v1 per-SNP least-squares loop (the `tests/_reference.py`
+    oracle), asserting agreement while timing both.
+  - `scan_n{N}_m{M}_{dtype}` — throughput across problem shapes.
+  - `permutations_batched` — all permutations through one SNP-block pass.
+- `sim_study.py` — the thorough simulation study: phensim coalescent
+  datasets (LD structure, model-consistent and structure-confounded
+  traits) crossed with the method variants (exact vs SLQ fits, exact vs
+  truncated-spectrum scans, subsampled kinships, LM vs LMM correction,
+  batched permutations). Latest archive:
+  `results/20261002T194331Z-sim-study/` (findings in NOTES.md).
 
 Hardware/threads are recorded in the archive notes; keep source
 snapshots with results for reproducibility.

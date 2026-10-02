@@ -37,6 +37,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with mean imputation (`fast` extra).
   - Benchmarks (measured suite under `benchmarks/`), docs (`docs/`), and
     runnable examples (`examples/`).
+  - Simulation study on phensim coalescent data: LMM vs plain-LM genomic
+    control (lambda_GC 0.41 -> 1.01, ~769 -> ~2 false positives at 0.5
+    confounding), SLQ fits within 1-2% of exact, top-1024 scans with
+    94/100 top-hit overlap, subsampled-kinship h2 within 0.01
+    (`benchmarks/sim_study.py`, archive 20261002T194331Z-sim-study).
 - Missing genotypes are now handled by per-SNP missingness filtering plus mean
   imputation (EMMAX-consistent) so SNP blocks stay batchable; v1's per-SNP
   sample subsetting is available opt-in via `exact_missing=True`.
