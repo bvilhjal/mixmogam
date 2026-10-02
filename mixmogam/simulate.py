@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Optional, Union
+from typing import Union
 
 import numpy as np
 
@@ -49,7 +49,7 @@ def simulate_traits(
     h2: float = 0.5,
     n_causal: int = 10,
     seed: Union[int, np.random.Generator, None] = 1,
-    chroms: Optional[np.ndarray] = None,
+    effect_dist: str = "normal",
 ) -> dict:
     """Simulate a standardized trait with polygenic background and QTLs.
 
@@ -57,7 +57,9 @@ def simulate_traits(
     infinitesimal genetic value (u ~ N(0, h2 K) in distribution, drawn
     through the genotype projection so it matches the GRM the model will
     fit), on top of which ``n_causal`` QTL effects of total variance
-    ``h2`` replace a like share of the background.
+    ``h2`` replace a like share of the background. ``effect_dist='equal'``
+    gives every causal locus the same (absolute) effect so per-locus power
+    is deterministic; ``'normal'`` draws N(0,1) effects (v1 style).
     """
     rng = np.random.default_rng(seed)
     Gd = np.asarray(G, dtype=np.float64)
@@ -70,7 +72,10 @@ def simulate_traits(
     u *= np.sqrt(h2) / u.std()
 
     causal = rng.choice(m, size=min(n_causal, m), replace=False)
-    effects = rng.normal(0, 1, causal.size)
+    if effect_dist == "equal":
+        effects = np.ones(causal.size) * rng.choice([-1.0, 1.0])
+    else:
+        effects = rng.normal(0, 1, causal.size)
     q = Z[causal].T @ effects
     q *= np.sqrt(h2) / q.std()
     # combine: half infinitesimal, half QTL (both var h2/2)
