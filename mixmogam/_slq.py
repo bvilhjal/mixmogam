@@ -23,6 +23,10 @@ def randomized_eigh_op(
     oversampling: int = 12,
     n_iter: int = 5,
     random_state=None,
+    variance: float | None = None,
+    total: float | None = None,
+    rank_cap: int | None = None,
+    initial_k: int = 64,
 ) -> tuple[np.ndarray, np.ndarray]:
     """Top-k eigenpairs of a symmetric operator given only by ``matvec``.
 
@@ -30,19 +34,40 @@ def randomized_eigh_op(
     Rayleigh-Ritz extraction; used to deflate extreme eigenvalues before
     Lanczos quadrature, which otherwise converges slowly on spectra with
     strong outliers.
+
+    With ``variance`` and ``total`` (the operator trace), ``k`` is treated
+    as a cap and the retained width is grown from ``initial_k`` until the
+    captured mass reaches ``variance * total`` -- the adaptive-rank scheme
+    of the ldpred3 LD suite. The final attempt spans the whole operator,
+    where Rayleigh-Ritz is exact, so the loop cannot return
+    under-converged. ``rank_cap`` bounds the numerical rank (e.g. the
+    number of markers behind a genotype operator).
     """
     rng = np.random.default_rng(random_state)
-    k = min(k, n - 1)
-    ell = min(k + oversampling, n)
-    Omega = rng.standard_normal((n, ell))
-    Q, _ = np.linalg.qr(matvec(Omega), mode="reduced")
-    for _ in range(n_iter - 1):
-        Q, _ = np.linalg.qr(matvec(Q), mode="reduced")
-    B = Q.T @ matvec(Q)
-    B = 0.5 * (B + B.T)
-    vals, vecs = np.linalg.eigh(B)
-    order = np.argsort(vals)[::-1][:k]
-    return np.maximum(vals[order], 0.0), Q @ vecs[:, order]
+    cap = n - 1 if rank_cap is None else max(1, min(int(rank_cap), n - 1))
+    adaptive = variance is not None and total is not None and total > 0
+
+    def _solve(k_try: int) -> tuple[np.ndarray, np.ndarray]:
+        k_try = min(k_try, cap)
+        ell = min(k_try + oversampling, n)
+        Omega = rng.standard_normal((n, ell))
+        Q, _ = np.linalg.qr(matvec(Omega), mode="reduced")
+        for _ in range(n_iter - 1):
+            Q, _ = np.linalg.qr(matvec(Q), mode="reduced")
+        B = Q.T @ matvec(Q)
+        B = 0.5 * (B + B.T)
+        vals, vecs = np.linalg.eigh(B)
+        order = np.argsort(vals)[::-1][:k_try]
+        return np.maximum(vals[order], 0.0), Q @ vecs[:, order]
+
+    if not adaptive:
+        return _solve(k)
+    k_now = max(1, min(int(k), cap, max(initial_k, 1)))
+    while True:
+        vals, vecs = _solve(k_now)
+        if float(vals.sum()) >= variance * float(total) or k_now >= cap:
+            return vals, vecs
+        k_now = min(cap, k_now * 2)
 
 
 def lanczos_quadrature(

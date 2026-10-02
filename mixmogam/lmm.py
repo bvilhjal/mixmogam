@@ -210,7 +210,14 @@ class LMM:
                         "GenotypeKinship operator with the default top-k "
                         "spectrum instead"
                     )
-                values, vectors = linalg.eigh(self.K, check_finite=False)
+                try:
+                    values, vectors = linalg.eigh(
+                        self.K, check_finite=False, driver="evr"
+                    )
+                except np.linalg.LinAlgError:
+                    values, vectors = linalg.eigh(
+                        self.K, check_finite=False, driver="evd"
+                    )
                 self._eig = {
                     "values": values[::-1],
                     "vectors": vectors[:, ::-1],
@@ -220,7 +227,14 @@ class LMM:
             else:
                 # one matvec-based randomized solver for dense and
                 # streaming kinships alike, so truncated bases (and the
-                # scans built on them) are implementation-independent
+                # scans built on them) are implementation-independent.
+                # Fixed-width truncation (not variance-adaptive): GRM
+                # spectra from many independent markers carry a
+                # Marchenko-Pastur bulk that does not decay, so a
+                # captured-mass criterion would grow toward full rank;
+                # the cap with the reported tail-mass audit is the right
+                # contract. (The solver supports adaptive width for
+                # genuinely decaying spectra.)
                 values, vectors = randomized_eigh_op(
                     self._kdot, self.n, self.n_eig,
                     random_state=self.random_state,
@@ -229,7 +243,7 @@ class LMM:
                     try:  # operators may expose a streaming diagonal
                         trace = float(np.asarray(self._kop.diagonal()).sum())
                     except AttributeError:
-                        trace = np.nan
+                        trace = float("nan")
                 else:
                     trace = float(np.trace(self.K))
                 self._eig = {
@@ -262,9 +276,14 @@ class LMM:
                 A = self.K - Q @ (self.K @ Q).T  # K - Q Q' K
                 Kc = A - (A @ Q) @ Q.T  # S K S with S = I - Q Q'
                 M = Kc + np.eye(self.n)
-                values, vectors = linalg.eigh(
-                    M, overwrite_a=True, check_finite=False
-                )
+                try:
+                    values, vectors = linalg.eigh(
+                        M, overwrite_a=True, check_finite=False, driver="evr"
+                    )
+                except np.linalg.LinAlgError:
+                    values, vectors = linalg.eigh(
+                        M, overwrite_a=True, check_finite=False, driver="evd"
+                    )
                 values = values[self.q :] - 1.0
                 vectors = vectors[:, self.q :]
             self._eig_R = (values, vectors)
