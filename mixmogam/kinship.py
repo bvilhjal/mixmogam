@@ -218,3 +218,104 @@ def windowed_kinships(
             Kloc = scale_k(Kloc)
             Krest = scale_k(Krest)
         yield wi, Kloc, Krest
+
+
+class GenotypeKinship:
+    """Streaming kinship operator: K x = Z (Z' x) / m_eff, never forming K.
+
+    The BOLT-LMM / LDAK-KVIK large-n design: the additive GRM only ever
+    enters computations through matrix products, and Z is tall-skinny, so
+    applying K through the genotypes costs O(n m) per product with O(block)
+    working memory -- instead of O(n^2) storage plus an O(n^2 m)
+    materialization. Uses the same Yang-2010 called-only standardization
+    as :func:`realized_relationship`; the resulting operator equals the
+    GRM that function would build (up to its trailing ``scale_k``, which
+    the column standardization already approximates: columns are centered
+    so the mean off-diagonal is ~0 and mean diagonal ~1).
+
+    Parameters
+    ----------
+    gt : Genotypes
+        Sample-major genotype container (or a plain (n, m) dosage array).
+    weights : optional per-SNP weights (LDAK-style)
+    snp_subset : optional variant subset for cheap null fits
+    block : SNP-block size for streaming products
+    """
+
+    def __init__(self, gt, weights=None, snp_subset=None, block: int = 8192,
+                 dtype=np.float32, normalize: bool = True):
+        gt = _as_genotypes(gt)
+        if snp_subset is not None:
+            gt = gt.variant_mask(np.asarray(snp_subset))
+            weights = None if weights is None else np.asarray(weights)[snp_subset]
+        self.gt = gt
+        self.weights = weights
+        self.block = block
+        self.dtype = dtype
+        self.normalize = normalize
+        self.n = gt.n_samples
+        self.shape = (self.n, self.n)
+        self.n_variants = gt.n_variants
+        self._norm = None  # (c, d) lazy scale_k constants
+
+    def _scaling(self):
+        """scale_k constants (mean off-diagonal c, diagonal divisor d)."""
+        if self._norm is None:
+            diag = self._raw_diagonal()
+            total = self._grand_sum()
+            n = self.n
+            tr = float(diag.sum())
+            c = (total - tr) / (n * (n - 1))
+            d = tr / n - c
+            self._norm = (c, d)
+        return self._norm
+
+    def _apply_raw(self, X: np.ndarray) -> np.ndarray:
+        out = np.zeros_like(X)
+        for Z, w in _standardized_blocks(self.gt, self.block, self.dtype,
+                                         self.weights):
+            Zd = Z.T.astype(np.float64)
+            out += Zd @ (Z @ X)
+        return out / self.n_variants
+
+    def matmul(self, X: np.ndarray) -> np.ndarray:
+        """Apply K to a vector or column block: Z (Z' X) / m."""
+        X = np.asarray(X, dtype=np.float64)
+        vec = X.ndim == 1
+        if vec:
+            X = X[:, None]
+        out = self._apply_raw(X)
+        if self.normalize:
+            c, d = self._scaling()
+            out -= c * np.outer(np.ones(self.n), X.sum(axis=0))
+            out /= d
+        return out[:, 0] if vec else out
+
+    __matmul__ = matmul
+
+    def _raw_diagonal(self) -> np.ndarray:
+        out = np.zeros(self.n)
+        for Z, _ in _standardized_blocks(self.gt, self.block, self.dtype,
+                                         self.weights):
+            Zd = Z.T.astype(np.float64)
+            out += np.einsum("ij,ij->i", Zd, Zd)
+        return out / self.n_variants
+
+    def diagonal(self) -> np.ndarray:
+        """diag(K); with normalization, (raw diagonal - c) / d."""
+        diag = self._raw_diagonal()
+        if self.normalize:
+            c, d = self._scaling()
+            return (diag - c) / d
+        return diag
+
+    def _grand_sum(self) -> float:
+        """sum(K) = |Z' 1|^2 / m in one streaming pass."""
+        acc = np.zeros(self.n_variants)
+        i = 0
+        for Z, _ in _standardized_blocks(self.gt, self.block, self.dtype,
+                                         self.weights):
+            k = Z.shape[0]
+            acc[i : i + k] = Z.sum(axis=1)
+            i += k
+        return float(acc @ acc) / self.n_variants

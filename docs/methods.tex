@@ -228,11 +228,43 @@ same batched two-column update. The stepwise MLMM rescans with the
 current cofactors appended to $\X$, selecting by
 $\mathrm{BIC} = \ell - \tfrac{k}{2}\log n$ with backward elimination.
 
+\section{Large \texorpdfstring{$n$}{n}: the kinship as a streaming operator}
+\label{sec:operator}
+
+Following BOLT-LMM and LDAK-KVIK, above the dense regime the kinship is
+never materialized. \texttt{GenotypeKinship} wraps the genotype store and
+applies $K$ only through streaming products,
+\begin{equation}
+  K X \;=\; \frac{1}{m}\sum_{\text{blocks}} Z_b \bigl(Z_b^\top X\bigr),
+\end{equation}
+with $Z_b$ the Yang-2010 called-only standardized block; the
+\texttt{scale\_k} normalization constants (mean off-diagonal, mean
+diagonal) are obtained from two cheap streaming passes and folded into
+the same products, so the operator equals the dense GRM to machine
+precision (verified to $10^{-14}$ in the tests). Every large-$n$
+computation is operator-native: the randomized eigensolver, the SLQ
+solver of Section~\ref{sec:slq}, the scan transform (through the
+truncated basis below) and gBLUP all consume mat-vec products only.
+Cost per product is $O(nm)$ tall-skinny GEMMs with $O(\text{block})$
+working memory, replacing $O(n^2)$ storage and an $O(n^2 m)$
+materialization; the equivalence to the dense pipeline (variance
+components, likelihood, gBLUP, scan under gentle truncation) is tested
+directly.
+
+\paragraph{Adaptive deflation.} The SLQ solver deflates only
+\emph{well-separated} extreme eigenvalues (Ritz values at least
+$4\times$ the bulk median): the analytic accounting for deflated
+directions is exact only for an invariant subspace, and subspace
+iteration cannot converge the boundary of a near-degenerate bulk.
+Spectra without outliers deflate nothing -- the tight bulk is precisely
+the regime Gauss quadrature resolves well.
+
 \section{Large \texorpdfstring{$n$}{n}: truncated randomized spectrum}
 \label{sec:topk}
 
-Above $n \approx 8{,}000$ the dense eigendecomposition is replaced by a
-randomized top-$k$ approximation ($k = 2048$ by default). A Gaussian
+Above $n \approx 8{,}000$ (or whenever the kinship is a streaming
+operator) the dense eigendecomposition is replaced by a randomized
+top-$k$ approximation ($k = 2048$ by default). A Gaussian
 sketch $\Omega \in \R^{n\times(k+p)}$ ($p = 12$ oversampling) is
 powered by $\ell = 5$ subspace iterations,
 $\Q_0 \gets \operatorname{orth}(\K\Omega)$, \

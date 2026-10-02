@@ -25,7 +25,7 @@ from scipy import linalg, optimize, stats
 
 from mixmogam._slq import lanczos_quadrature, randomized_eigh_op, trace_estimator
 
-__all__ = ["LMM", "LMFit", "randomized_eigh"]
+__all__ = ["LMM", "LMFit"]
 
 _EXACT_N_MAX = 8000  # n above which the exact O(n^3) eigh is skipped
 _DEFAULT_TOP_K = 2048
@@ -92,34 +92,20 @@ def _design_matrix(
     return np.hstack(cols)
 
 
-def randomized_eigh(
-    K: np.ndarray,
-    k: int,
-    oversampling: int = 12,
-    n_iter: int = 5,
-    random_state: Union[int, np.random.Generator, None] = 0,
-) -> tuple[np.ndarray, np.ndarray, float]:
-    """Top-k eigenpairs of a symmetric matrix via randomized subspace iteration.
+def _separated_extremes(values: np.ndarray, vectors: np.ndarray,
+                        ratio: float = 4.0) -> tuple[np.ndarray, np.ndarray]:
+    """Keep the leading Ritz pairs that stand out from the bulk.
 
-    Returns ``(values_desc, vectors, tail_mass)`` where ``tail_mass`` is
-    ``trace(K) - sum(values)``, the spectral mass left out of the basis.
+    A pair is kept while its eigenvalue is at least ``ratio`` times the
+    bulk reference (the median of the candidate values). Spectra without
+    outliers keep nothing -- the tight bulk is exactly the regime Gauss
+    quadrature resolves well.
     """
-    rng = np.random.default_rng(random_state)
-    n = K.shape[0]
-    k = min(k, n - 1)
-    ell = min(k + oversampling, n)
-    Omega = rng.standard_normal((n, ell))
-    Q = linalg.qr(K @ Omega, mode="economic")[0]
-    for _ in range(n_iter - 1):
-        Q = linalg.qr(K @ Q, mode="economic")[0]
-    B = Q.T @ (K @ Q)
-    B = 0.5 * (B + B.T)
-    vals, vecs = linalg.eigh(B, check_finite=False)
-    order = np.argsort(vals)[::-1][:k]
-    values = np.maximum(vals[order], 0.0)
-    vectors = Q @ vecs[:, order]
-    tail_mass = float(np.trace(K) - values.sum())
-    return values, vectors, tail_mass
+    if values.size == 0:
+        return values, vectors
+    bulk = float(np.median(values))
+    keep = int(np.sum(values >= ratio * bulk))
+    return values[:keep], vectors[:, :keep]
 
 
 class LMM:
@@ -161,18 +147,27 @@ class LMM:
         self.X = _design_matrix(X, self.n, add_intercept)
         self.q = self.X.shape[1]
         self.K = None
+        self._kop = None  # duck-typed operator with .matmul(X) and .n
         self._eig: Optional[dict] = None
         self._eig_R: Optional[tuple[np.ndarray, np.ndarray]] = None
         self._resid_projector: Optional[np.ndarray] = None
         if K is not None:
-            K = np.asarray(K, dtype=np.float64)
-            if K.shape != (self.n, self.n):
-                raise ValueError(
-                    f"K has shape {K.shape}, expected {(self.n, self.n)}"
-                )
-            self.K = 0.5 * (K + K.T)
+            if hasattr(K, "matmul") and getattr(K, "n", None) is not None:
+                if K.n != self.n:
+                    raise ValueError(
+                        f"operator K has n={K.n}, y has {self.n} observations"
+                    )
+                self._kop = K  # streaming kinship; never materialized
+            else:
+                K = np.asarray(K, dtype=np.float64)
+                if K.shape != (self.n, self.n):
+                    raise ValueError(
+                        f"K has shape {K.shape}, expected {(self.n, self.n)}"
+                    )
+                self.K = 0.5 * (K + K.T)
         if n_eig == "auto":
-            n_eig = self.n if self.K is None or self.n <= _EXACT_N_MAX else _DEFAULT_TOP_K
+            dense_ok = self.K is not None and self.n <= _EXACT_N_MAX
+            n_eig = self.n if dense_ok else min(_DEFAULT_TOP_K, self.n - 1)
         self.n_eig = int(n_eig)
         self.random_state = random_state
         self.fit_result: Optional[LMFit] = None
@@ -189,6 +184,10 @@ class LMM:
             self._resid_projector = linalg.qr(self.X, mode="economic")[0]
         return self._resid_projector
 
+    def _kdot(self, X: np.ndarray) -> np.ndarray:
+        """K @ X through the dense matrix or the streaming operator."""
+        return self.K @ X if self.K is not None else self._kop.matmul(X)
+
     def eigen(self) -> dict:
         """Spectrum of K as ``{values, vectors, tail_mass, full}`` (cached).
 
@@ -197,7 +196,7 @@ class LMM:
         ``tail_mass`` records the spectral mass outside it.
         """
         if self._eig is None:
-            if self.K is None:
+            if self.K is None and self._kop is None:
                 self._eig = {
                     "values": np.ones(self.n),
                     "vectors": np.eye(self.n),
@@ -205,6 +204,12 @@ class LMM:
                     "full": True,
                 }
             elif self.n_eig >= self.n:
+                if self.K is None:
+                    raise RuntimeError(
+                        "the exact full spectrum needs a dense K; use a "
+                        "GenotypeKinship operator with the default top-k "
+                        "spectrum instead"
+                    )
                 values, vectors = linalg.eigh(self.K, check_finite=False)
                 self._eig = {
                     "values": values[::-1],
@@ -213,13 +218,24 @@ class LMM:
                     "full": True,
                 }
             else:
-                values, vectors, tail = randomized_eigh(
-                    self.K, self.n_eig, random_state=self.random_state
+                # one matvec-based randomized solver for dense and
+                # streaming kinships alike, so truncated bases (and the
+                # scans built on them) are implementation-independent
+                values, vectors = randomized_eigh_op(
+                    self._kdot, self.n, self.n_eig,
+                    random_state=self.random_state,
                 )
+                if self._kop is not None:
+                    try:  # operators may expose a streaming diagonal
+                        trace = float(np.asarray(self._kop.diagonal()).sum())
+                    except AttributeError:
+                        trace = np.nan
+                else:
+                    trace = float(np.trace(self.K))
                 self._eig = {
                     "values": values,
                     "vectors": vectors,
-                    "tail_mass": tail,
+                    "tail_mass": trace - float(values.sum()),
                     "full": False,
                 }
         return self._eig
@@ -233,15 +249,15 @@ class LMM:
         spectrum only; large-n models should use the SLQ solver.
         """
         if self._eig_R is None:
+            if self._kop is not None:
+                raise RuntimeError(
+                    "exact REML eigenspace requires a dense K; streaming "
+                    "kinship operators use the 'slq' solver"
+                )
             if self.K is None:
                 values = np.ones(self.n)
                 vectors = np.eye(self.n)
             else:
-                if not self.eigen()["full"]:
-                    raise RuntimeError(
-                        "exact REML eigenspace requires the full spectrum; "
-                        "use n_eig >= n or the 'slq' solver"
-                    )
                 Q = self.resid_projector
                 A = self.K - Q @ (self.K @ Q).T  # K - Q Q' K
                 Kc = A - (A @ Q) @ Q.T  # S K S with S = I - Q Q'
@@ -269,7 +285,7 @@ class LMM:
         """
         eig = self.eigen()
         key = np.dtype(dtype)
-        if self.K is None:
+        if self.K is None and self._kop is None:
             return np.asarray(A, dtype=key) / key.type(np.sqrt(np.float64(delta)))
         # the eigenbasis is cast once per dtype and cached, so float32
         # scans run genuine float32 GEMMs end-to-end (scales stay in
@@ -338,11 +354,11 @@ class LMM:
     def _reml_op(self):
         """matvec of S K S with S = I - Q Q', Q the covariate basis."""
         Q = self.resid_projector
-        K = self.K
+        kdot = self._kdot
 
         def mv(x):
             x = x - Q @ (Q.T @ x)
-            Kx = K @ x
+            Kx = kdot(x)
             return Kx - Q @ (Q.T @ Kx)
 
         return mv
@@ -374,13 +390,20 @@ class LMM:
         Q = self.resid_projector
         y_proj = self.y - Q @ (Q.T @ self.y)
 
+        has_kinship = self.K is not None or self._kop is not None
         d = 0
         lam_d = np.empty(0)
         U_d = np.empty((self.n, 0))
-        if deflate > 0 and self.K is not None:
+        if deflate > 0 and has_kinship:
             lam_d, U_d = randomized_eigh_op(
                 op, self.n, min(deflate, self.n - 1), random_state=self.random_state
             )
+            # deflate only well-separated extremes: the analytic
+            # top-eigenvalue accounting is exact only for an invariant
+            # subspace, and subspace iteration cannot converge the
+            # near-degenerate bulk boundary. Directions inside the tight
+            # bulk are left to the quadrature, which handles them well.
+            lam_d, U_d = _separated_extremes(lam_d, U_d)
             d = lam_d.size
 
         def op_defl(x):
@@ -425,16 +448,17 @@ class LMM:
         if method == "ml":
             lam_k = np.empty(0)
             U_k = None
-            if deflate > 0 and self.K is not None:
+            if deflate > 0 and has_kinship:
                 lam_k, U_k = randomized_eigh_op(
-                    lambda x: self.K @ x,
+                    self._kdot,
                     self.n,
                     min(deflate, self.n - 1),
                     random_state=self.random_state,
                 )
+                lam_k, U_k = _separated_extremes(lam_k, U_k)
 
             def _k_op(x):
-                out = self.K @ x
+                out = self._kdot(x)
                 if U_k is not None:
                     out = out - U_k @ (lam_k * (U_k.T @ x))
                 return out
@@ -539,11 +563,10 @@ class LMM:
         if self.fit_result is not None and not recompute:
             return self.fit_result
         if solver == "auto":
-            solver = (
-                "exact"
-                if self.K is None or self.eigen()["full"]
-                else "slq"
+            can_exact = self._kop is None and (
+                self.K is None or self.eigen()["full"]
             )
+            solver = "exact" if can_exact else "slq"
         if solver == "exact":
             ll_at, dll_at, s1_at = self._exact_pack(method)
         elif solver == "slq":
@@ -594,7 +617,7 @@ class LMM:
 
     def _scan_factors(self, dtype: np.dtype) -> dict:
         """Precomputed pieces of the batched scan for the fitted delta."""
-        if self.K is not None and self.fit_result is None:
+        if (self.K is not None or self._kop is not None) and self.fit_result is None:
             raise ValueError("call fit() before scan() on a mixed model")
         delta = self.fit_result.delta if self.fit_result is not None else 1.0
         Xt = self._apply_inv_sqrt(self.X, delta, dtype)
@@ -643,7 +666,7 @@ class LMM:
         dict with keys ``ps``, ``f_stats``, ``rss``, ``var_perc`` and, if
         ``with_betas``, ``betas`` and ``ses``.
         """
-        if self.K is not None and self.fit_result is None:
+        if (self.K is not None or self._kop is not None) and self.fit_result is None:
             raise ValueError("call fit() before scan() on a mixed model")
         fac = self._scan_factors(dtype)
         Q, r, rss0, df = fac["Q"], fac["r"], fac["rss0"], fac["df"]
@@ -705,11 +728,11 @@ class LMM:
     def blup(self) -> np.ndarray:
         """gBLUP of breeding values u ~ N(0, vg K) at the fitted delta."""
         fit = self.fit()
-        if self.K is None:
+        if self.K is None and self._kop is None:
             return np.zeros(self.n)
         r = self.y - self.X @ fit.beta
         w = self._v_inv_vec(r, fit.delta)
-        return fit.vg * (self.K @ w)
+        return fit.vg * self._kdot(w)
 
     def predict(self, X=None) -> np.ndarray:
         """Predict E[y] = X beta (plus gBLUP if a kinship was fitted)."""

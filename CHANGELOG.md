@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- K-free large-n path (BOLT-LMM / LDAK-KVIK design): `GenotypeKinship`
+  wraps the genotype store as a streaming linear operator (K x =
+  Z(Z'x)/m over SNP blocks, machine-precision equal to the dense GRM),
+  and `LMM` accepts it directly for the randomized eigensolver, SLQ
+  fitting, scanning and gBLUP -- no n x n matrix is ever formed. SLQ
+  deflation is now adaptive by spectral gap (well-separated extremes
+  only), fixing a systematic bias when the deflation window crossed a
+  near-degenerate bulk.
 - Scan transform casts the eigenbasis once per dtype, so float32 scans
   run genuine float32 GEMMs end-to-end: ~3.3x faster than float64 at
   n=2000-5000 (the earlier "float32" path computed in float64

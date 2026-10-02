@@ -70,33 +70,47 @@ def _power_metrics(res: GwasResult, causal) -> dict:
 
 
 def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
-    """Large-n regime: SLQ + truncated spectrum (exact only where feasible)."""
+    """Large-n regime, K-free (BOLT/KVIK style): the kinship enters only
+    as a streaming operator over the genotypes; no n x n matrix is ever
+    formed. The dense-exact reference runs only where feasible (n <= 12k)."""
+    import resource
+
+    from mixmogam.kinship import GenotypeKinship
+
     ds = make_dataset(n=cfg["n"], m=cfg["m"], h2=cfg["h2"],
                       n_causal=cfg["n_causal"], seed=seed)
     gt, y, causal = ds["gt"], ds["y"], ds["causal"]
     base = {"scenario": scenario, "seed": seed, "n": cfg["n"], "m": cfg["m"]}
 
-    t0 = time.perf_counter()
-    K = realized_relationship(gt)
-    rows.append({**base, "method": "kinship_full", "seconds": round(time.perf_counter() - t0, 2)})
-
     exact_fit = None
-    if cfg["n"] <= 12_000:  # exact dense eigh still feasible at 10k
-        lmm = LMM(y, K=K, n_eig=cfg["n"])
+    if cfg["n"] <= 12_000:
         t0 = time.perf_counter()
+        K = realized_relationship(gt)
+        lmm = LMM(y, K=K, n_eig=cfg["n"])
         exact_fit = lmm.fit()
-        rows.append({**base, "method": "fit_exact", "seconds": round(time.perf_counter() - t0, 2),
+        t_exact = time.perf_counter() - t0
+        scan_e = lmm.scan(gt, dtype=np.float32)
+        res_e = GwasResult.from_scan(scan_e, gt, fit=exact_fit)
+        rows.append({**base, "method": "dense_exact_pipeline",
+                     "seconds": round(t_exact, 2),
+                     "peak_rss_gb": round(
+                         resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2),
                      "delta": round(exact_fit.delta, 5),
-                     "pseudo_h2": round(exact_fit.pseudo_heritability, 4)})
+                     "pseudo_h2": round(exact_fit.pseudo_heritability, 4),
+                     **_power_metrics(res_e, causal)})
+        del K, lmm
 
-    lmm_t = LMM(y, K=K, n_eig=2048)
     t0 = time.perf_counter()
+    op = GenotypeKinship(gt)
+    lmm_t = LMM(y, K=op, n_eig=2048)
     fit_t = lmm_t.fit(solver="slq", recompute=True)
     t_fit = time.perf_counter() - t0
-    row = {**base, "method": "fit_slq_topk2048", "seconds": round(t_fit, 2),
+    row = {**base, "method": "kfree_slq_topk2048", "seconds": round(t_fit, 2),
            "delta": round(fit_t.delta, 5),
            "pseudo_h2": round(fit_t.pseudo_heritability, 4),
-           "tail_mass": round(lmm_t.eigen()["tail_mass"], 1)}
+           "tail_mass": round(lmm_t.eigen()["tail_mass"], 1),
+           "peak_rss_gb": round(
+               resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2)}
     if exact_fit is not None:
         row["delta_rel_err"] = round(
             abs(fit_t.delta - exact_fit.delta) / exact_fit.delta, 4)
@@ -106,23 +120,17 @@ def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
     scan = lmm_t.scan(gt, dtype=np.float32, with_betas=True)
     t_scan = time.perf_counter() - t0
     res = GwasResult.from_scan(scan, gt, fit=fit_t)
-    rows.append({**base, "method": "scan_topk2048_f32", "seconds": round(t_scan, 2),
-                 **_power_metrics(res, causal)})
-
+    row = {**base, "method": "kfree_scan_topk2048_f32", "seconds": round(t_scan, 2),
+           "peak_rss_gb": round(
+               resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2),
+           **_power_metrics(res, causal)}
     if exact_fit is not None:
-        lmm_e = LMM(y, K=K, n_eig=cfg["n"])
-        lmm_e.fit_result = exact_fit
-        t0 = time.perf_counter()
-        scan_e = lmm_e.scan(gt, dtype=np.float32)
-        t_scan_e = time.perf_counter() - t0
-        res_e = GwasResult.from_scan(scan_e, gt, fit=exact_fit)
-        dlog = np.abs(np.log10(np.clip(res_e.p, 1e-300, 1))
+        dlog = np.abs(np.log10(np.clip(scan_e["ps"], 1e-300, 1))
                       - np.log10(np.clip(res.p, 1e-300, 1)))
-        rows.append({**base, "method": "scan_exact_f32", "seconds": round(t_scan_e, 2),
-                     "max_dlog10p": round(float(dlog.max()), 4),
-                     "top100_overlap": len(set(np.argsort(res_e.p)[:100])
-                                           & set(np.argsort(res.p)[:100])),
-                     **_power_metrics(res_e, causal)})
+        row["max_dlog10p"] = round(float(dlog.max()), 4)
+        row["top100_overlap"] = len(set(np.argsort(scan_e["ps"])[:100])
+                                    & set(np.argsort(res.p)[:100]))
+    rows.append(row)
 
 
 def run_replicate(scenario: str, cfg: dict, seed: int, rows: list, quick: bool):
