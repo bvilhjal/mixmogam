@@ -2,7 +2,7 @@
 
 import numpy as np
 import pytest
-from scipy import stats
+from scipy import linalg, stats
 
 from mixmogam import LMM
 from mixmogam.genotypes import Genotypes
@@ -60,10 +60,26 @@ def test_gxe_finds_interaction(setup):
     g_causal = gt.G[:, 0].astype(float)
     y_gxe = 0.5 * g_causal * E + 0.3 * (K @ rng.standard_normal(300)) + 0.5 * rng.standard_normal(300)
     y_gxe = (y_gxe - y_gxe.mean()) / y_gxe.std()
-    lmm = LMM(y_gxe, X=E, K=K).fit()
-    res = scan_gxe(lmm, gt, E)
+    model = LMM(y_gxe, X=E, K=K)
+    fit = model.fit()
+    res = scan_gxe(fit, gt, E, dtype=np.float64)
     assert res["ps"][0] == min(res["ps"])
     assert res["ps"][0] < 1e-6
+    # independent oracle: direct GLS of the whitened interaction column
+    g0 = gt.G[:, 0].astype(np.float64)
+    c = model._apply_inv_sqrt((g0 * E)[:, None], fit.delta, np.float64)
+    Xw = model._apply_inv_sqrt(model.X, fit.delta, np.float64)
+    design = np.hstack([Xw, c])
+    beta, _, _, _ = linalg.lstsq(design, model._apply_inv_sqrt(model.y, fit.delta, np.float64))
+    resid_full = model._apply_inv_sqrt(model.y, fit.delta, np.float64) - design @ beta
+    beta0, _, _, _ = linalg.lstsq(Xw, model._apply_inv_sqrt(model.y, fit.delta, np.float64))
+    resid_null = model._apply_inv_sqrt(model.y, fit.delta, np.float64) - Xw @ beta0
+    n = y_gxe.size
+    f_oracle = ((resid_null @ resid_null - resid_full @ resid_full) / 1) / (
+        resid_full @ resid_full / (n - 3)
+    )
+    p_oracle = stats.f.sf(f_oracle, 1, n - 3)
+    assert res["ps"][0] == pytest.approx(p_oracle, rel=1e-4)
 
 
 def test_permutation_threshold_uniform_null(setup):

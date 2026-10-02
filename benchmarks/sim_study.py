@@ -42,6 +42,11 @@ SCENARIOS = {
     "S3_large": dict(n=4_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0),
 }
 
+LARGE_SCENARIOS = {
+    "S4_n10k": dict(n=10_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0),
+    "S5_n20k": dict(n=20_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0),
+}
+
 
 def _on_battery() -> bool:
     try:
@@ -62,6 +67,62 @@ def _power_metrics(res: GwasResult, causal) -> dict:
         "n_significant": pw["n_significant"],
         "n_false_positive": pw["n_false_positive"],
     }
+
+
+def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
+    """Large-n regime: SLQ + truncated spectrum (exact only where feasible)."""
+    ds = make_dataset(n=cfg["n"], m=cfg["m"], h2=cfg["h2"],
+                      n_causal=cfg["n_causal"], seed=seed)
+    gt, y, causal = ds["gt"], ds["y"], ds["causal"]
+    base = {"scenario": scenario, "seed": seed, "n": cfg["n"], "m": cfg["m"]}
+
+    t0 = time.perf_counter()
+    K = realized_relationship(gt)
+    rows.append({**base, "method": "kinship_full", "seconds": round(time.perf_counter() - t0, 2)})
+
+    exact_fit = None
+    if cfg["n"] <= 12_000:  # exact dense eigh still feasible at 10k
+        lmm = LMM(y, K=K, n_eig=cfg["n"])
+        t0 = time.perf_counter()
+        exact_fit = lmm.fit()
+        rows.append({**base, "method": "fit_exact", "seconds": round(time.perf_counter() - t0, 2),
+                     "delta": round(exact_fit.delta, 5),
+                     "pseudo_h2": round(exact_fit.pseudo_heritability, 4)})
+
+    lmm_t = LMM(y, K=K, n_eig=2048)
+    t0 = time.perf_counter()
+    fit_t = lmm_t.fit(solver="slq", recompute=True)
+    t_fit = time.perf_counter() - t0
+    row = {**base, "method": "fit_slq_topk2048", "seconds": round(t_fit, 2),
+           "delta": round(fit_t.delta, 5),
+           "pseudo_h2": round(fit_t.pseudo_heritability, 4),
+           "tail_mass": round(lmm_t.eigen()["tail_mass"], 1)}
+    if exact_fit is not None:
+        row["delta_rel_err"] = round(
+            abs(fit_t.delta - exact_fit.delta) / exact_fit.delta, 4)
+    rows.append(row)
+
+    t0 = time.perf_counter()
+    scan = lmm_t.scan(gt, dtype=np.float32, with_betas=True)
+    t_scan = time.perf_counter() - t0
+    res = GwasResult.from_scan(scan, gt, fit=fit_t)
+    rows.append({**base, "method": "scan_topk2048_f32", "seconds": round(t_scan, 2),
+                 **_power_metrics(res, causal)})
+
+    if exact_fit is not None:
+        lmm_e = LMM(y, K=K, n_eig=cfg["n"])
+        lmm_e.fit_result = exact_fit
+        t0 = time.perf_counter()
+        scan_e = lmm_e.scan(gt, dtype=np.float32)
+        t_scan_e = time.perf_counter() - t0
+        res_e = GwasResult.from_scan(scan_e, gt, fit=exact_fit)
+        dlog = np.abs(np.log10(np.clip(res_e.p, 1e-300, 1))
+                      - np.log10(np.clip(res.p, 1e-300, 1)))
+        rows.append({**base, "method": "scan_exact_f32", "seconds": round(t_scan_e, 2),
+                     "max_dlog10p": round(float(dlog.max()), 4),
+                     "top100_overlap": len(set(np.argsort(res_e.p)[:100])
+                                           & set(np.argsort(res.p)[:100])),
+                     **_power_metrics(res_e, causal)})
 
 
 def run_replicate(scenario: str, cfg: dict, seed: int, rows: list, quick: bool):
@@ -182,6 +243,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--seeds", type=int, default=3)
+    ap.add_argument("--large", action="store_true",
+                    help="add the n=10k / n=20k large-n scenarios")
     args = ap.parse_args()
     if _on_battery():
         print("refusing to run on battery power (timings not trustworthy)")
@@ -197,8 +260,15 @@ def main():
             run_replicate(scenario, cfg, seed, rows, args.quick)
             print(f"{scenario} seed {seed}: {time.perf_counter() - t0:.1f}s", flush=True)
 
+    if args.large:
+        for scenario, cfg in LARGE_SCENARIOS.items():
+            for seed in range(1, args.seeds + 1):
+                t0 = time.perf_counter()
+                run_large_replicate(scenario, cfg, seed, rows)
+                print(f"{scenario} seed {seed}: {time.perf_counter() - t0:.1f}s", flush=True)
+
     run_id = dt.datetime.now().strftime("%Y%m%dT%H%M%SZ")
-    out = Path(f"benchmarks/results/{run_id}-sim-study")
+    out = Path(f"benchmarks/results/{run_id}-sim-study{'-large' if args.large else ''}")
     out.mkdir(parents=True, exist_ok=True)
     keys = sorted({k for r in rows for k in r})
     with open(out / "sim_study.csv", "w", newline="") as fh:

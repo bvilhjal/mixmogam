@@ -52,12 +52,15 @@ Design notes and measured evidence: [docs/design.md](docs/design.md) (full techn
 [benchmarks/](benchmarks/). Highlights (development laptop, 4 BLAS
 threads, AC power):
 
-- **45x faster than the v1-style per-SNP least-squares loop** at
-  n=2000, m=10k (0.68 s vs 30.9 s, p-values asserted equal in the same
+- **123x faster than the v1-style per-SNP least-squares loop** at
+  n=2000, m=10k (0.27 s vs 33.7 s, p-values asserted equal in the same
   benchmark), and the gap widens with marker count (the v1 loop is
   per-SNP Python);
-- scan throughput ~1.3e5 SNPs/s at n=500 and ~1.7e4 SNPs/s at n=2000
-  (100k SNPs in ~0.8 s / ~5.8 s);
+- float32 scans run genuine float32 GEMMs (the eigenbasis is cast once
+  per dtype): ~3.3x faster than float64 at n=2000-5000 with identical
+  top statistics;
+- scan throughput ~2.5e5 SNPs/s at n=500 and ~4.8e4 SNPs/s at n=2000
+  (100k SNPs in ~0.4 s / ~2.1 s, float32);
 - permutations batch all replicates through the same SNP-block GEMMs
   (~7.5e5 perm-SNP tests/s);
 - exact EMMA REML fit up to n≈8000; above that the randomized top-2048

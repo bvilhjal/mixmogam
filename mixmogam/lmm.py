@@ -176,6 +176,7 @@ class LMM:
         self.n_eig = int(n_eig)
         self.random_state = random_state
         self.fit_result: Optional[LMFit] = None
+        self._basis_cache: dict = {}  # dtype -> cast eigenbasis
 
     # ------------------------------------------------------------------
     # Eigenspaces
@@ -267,20 +268,26 @@ class LMM:
         exact when the dropped eigenvalues are zero.
         """
         eig = self.eigen()
-        lam = eig["values"]
-        U = eig["vectors"]
-
-        def _row_scale(s, proj):
-            return s[:, None] * proj if proj.ndim == 2 else s * proj
-
+        key = np.dtype(dtype)
+        if self.K is None:
+            return np.asarray(A, dtype=key) / key.type(np.sqrt(np.float64(delta)))
+        # the eigenbasis is cast once per dtype and cached, so float32
+        # scans run genuine float32 GEMMs end-to-end (scales stay in
+        # float64 until the final cast, preserving accuracy)
+        U = self._basis_cache.get(key)
+        if U is None:
+            U = eig["vectors"].astype(key, copy=False)
+            self._basis_cache[key] = U
+        lam = np.maximum(eig["values"], 0.0)
+        A = np.asarray(A, dtype=key)
         if eig["full"]:
-            if self.K is None:
-                return (np.asarray(A) / np.sqrt(delta)).astype(dtype, copy=False)
-            scale = (np.maximum(lam, 0.0) + delta) ** -0.5
-            return (U @ _row_scale(scale, U.T @ A)).astype(dtype, copy=False)
-        base = np.asarray(A, dtype=np.float64) * delta**-0.5
-        corr = (np.maximum(lam, 0.0) + delta) ** -0.5 - delta**-0.5
-        return (base + U @ _row_scale(corr, U.T @ A)).astype(dtype, copy=False)
+            s = ((lam + delta) ** -0.5).astype(key)
+            return U @ (s[:, None] * (U.T @ A)) if A.ndim == 2 else U @ (s * (U.T @ A))
+        s0 = np.float64(delta) ** -0.5
+        corr = ((lam + delta) ** -0.5 - s0).astype(key)
+        proj = U.T @ A
+        upd = corr[:, None] * proj if proj.ndim == 2 else corr * proj
+        return A * key.type(s0) + U @ upd
 
     # ------------------------------------------------------------------
     # Likelihood machinery (EMMA exact + stochastic Lanczos quadrature)

@@ -89,7 +89,12 @@ def scan_gxe(
     """Gene-environment interaction scan (v1 emmax_GxT successor).
 
     Tests the interaction column g_j * E (1 df), or with ``joint=True``
-    the joint [g_j, g_j*E] block (2 df). ``E`` is a complete (n,) vector.
+    the joint [g_j, g_j*E] block (2 df). ``E`` is a complete (n,) vector
+    and may also appear among the covariates: the interaction column is
+    formed in *raw* space (g * E), then transformed and residualized --
+    V^{-1/2}(g E) is not the product of the separate transforms, and
+    residualizing E itself would annihilate the interaction when E is a
+    covariate.
     """
     lmm = _model(lmm)
     E = np.asarray(E, dtype=np.float64)
@@ -97,33 +102,33 @@ def scan_gxe(
         raise ValueError("environment vector length mismatch")
     fac = lmm._scan_factors(dtype)
     Q, r, rss0, df0 = fac["Q"], fac["r"], fac["rss0"], lmm.n - lmm.q
-    Et = lmm._apply_inv_sqrt(E, fac["delta"], np.float64)
-    Et = Et - Q @ (Q.T @ Et)
-    Et = Et.astype(dtype)
     r64 = r.astype(np.float64)
+    tiny = np.finfo(float).tiny
     ps, fs, betas = [], [], []
-    for S in gt.iter_snp_blocks(block=block, dtype=dtype, impute="mean"):
-        G = lmm._apply_inv_sqrt(S.T.astype(np.float64), fac["delta"], np.float64).T
-        G -= (G @ Q) @ Q.T
-        G = G.astype(dtype)
-        GE = G * Et[None, :]
+    for S in gt.iter_snp_blocks(block=block, dtype=np.float64, impute="mean"):
+        GE_raw = S * E[None, :]  # (k, n) raw interaction columns
+        C = lmm._apply_inv_sqrt(GE_raw.T, fac["delta"], np.float64)  # (n, k)
+        C -= Q @ (Q.T @ C)
+        C = C.T  # (k, n) transformed, residualized interaction columns
         if not joint:
-            num = GE @ r
-            den = np.einsum("ij,ij->i", GE, GE)
-            t2 = (num.astype(np.float64) ** 2) / np.maximum(den, np.finfo(float).tiny)
+            num = C @ r64
+            den = np.einsum("ij,ij->i", C, C)
+            t2 = (num**2) / np.maximum(den, tiny)
             rss = np.maximum(rss0 - t2, 0.0)
             df2 = df0 - 1
             f = t2 / rss * df2
             ps.append(stats.f.sf(f, 1, df2))
-            betas.append(num / np.maximum(den, np.finfo(float).tiny))
+            betas.append(num / np.maximum(den, tiny))
         else:
+            G = lmm._apply_inv_sqrt(S.T, fac["delta"], np.float64)
+            G -= Q @ (Q.T @ G)
+            G = G.T  # (k, n) transformed, residualized main columns
             b0 = G @ r64
-            b1 = GE @ r64
+            b1 = C @ r64
             c00 = np.einsum("ij,ij->i", G, G)
-            c11 = np.einsum("ij,ij->i", GE, GE)
-            c01 = np.einsum("ij,ij->i", G, GE)
-            det = c00 * c11 - c01 * c01
-            det = np.maximum(det, np.finfo(float).tiny)
+            c11 = np.einsum("ij,ij->i", C, C)
+            c01 = np.einsum("ij,ij->i", G, C)
+            det = np.maximum(c00 * c11 - c01 * c01, tiny)
             beta0 = (b0 * c11 - b1 * c01) / det
             beta1 = (b1 * c00 - b0 * c01) / det
             reduction = beta0 * b0 + beta1 * b1

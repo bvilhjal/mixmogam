@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Scan transform casts the eigenbasis once per dtype, so float32 scans
+  run genuine float32 GEMMs end-to-end: ~3.3x faster than float64 at
+  n=2000-5000 (the earlier "float32" path computed in float64
+  internally); headline scan speed-up vs the v1-style loop is now 123x.
+- Fixed `scan_gxe`: the interaction column is now formed in raw space
+  (g * E) and then transformed and residualized. The previous
+  product-of-transforms approximation was wrong in general and
+  catastrophically degenerate when E is also a covariate; the corrected
+  statistic is certified against a direct GLS oracle in the tests.
 - Complete revision of the package (the Python-2-era flat modules of v1.0 are
   preserved under the `v1.0-legacy` git tag). mixmogam 2.0 is a modern Python
   (>=3.10) package with a NumPy/SciPy BLAS-3 mixed-model engine:

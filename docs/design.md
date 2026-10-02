@@ -114,14 +114,17 @@ the development laptop (M-series, 4 BLAS threads):
 
 | workload | result |
 |---|---|
-| scan vs v1-style per-SNP lstsq (n=2000, m=10k) | see benchmarks.csv |
-| scan throughput n=500, m=100k, float32 | ~1e5 SNPs/s |
-| scan throughput n=2000, m=100k | ~1.4e4 SNPs/s |
-| 500 permutations x 5k SNPs (n=1500) | one batched pass |
+| scan vs v1-style per-SNP lstsq (n=2000, m=10k, f32) | 123x (0.27 s vs 33.7 s) |
+| scan throughput n=500, m=100k, float32 | ~2.5e5 SNPs/s |
+| scan throughput n=2000, m=100k, float32 | ~4.8e4 SNPs/s (float64: ~1.5e4) |
+| 500 permutations x 5k SNPs (n=1500) | one batched pass, 1.5 s |
 
-float64 scans cost about the same as float32 on Apple Accelerate (both
-vectorize); float32 mainly halves memory traffic, which matters when
-blocks stream from disk.
+The scan transform casts the eigenbasis once per dtype, so float32
+scans run float32 GEMMs end-to-end (measured ~3.3x over float64 at
+n=2000-5000 with identical leading statistics; scales on OpenBLAS-style
+BLAS are expected to be larger). An earlier revision computed the
+transform in float64 internally and cast only the result -- its
+"float32" timings were float64 timings in disguise.
 
 ## Roadmap (not yet implemented)
 

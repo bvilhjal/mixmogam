@@ -121,6 +121,44 @@ def bench_permutations(n=1500, m=5000, n_perm=500, seed=13):
     }
 
 
+def bench_thread_scaling():
+    """(fit, kinship, scan) at 1/2/4 BLAS threads via subprocess workers."""
+    import os
+
+    py = sys.executable
+    rows = []
+    for threads in (1, 2, 4):
+        env = dict(
+            os.environ,
+            OPENBLAS_NUM_THREADS=str(threads),
+            OMP_NUM_THREADS=str(threads),
+            MKL_NUM_THREADS=str(threads),
+        )
+        out = subprocess.run(
+            [py, str(Path(__file__).parent / "_thread_worker.py")],
+            capture_output=True,
+            text=True,
+            env=env,
+            check=True,
+        ).stdout.strip().splitlines()[-1]
+        t_kin, t_fit, t_scan = (float(v) for v in out.split(","))
+        rows.append(
+            {
+                "benchmark": f"thread_scaling_{threads}t",
+                "n": 2000,
+                "m": 20000,
+                "kinship_s": t_kin,
+                "fit_s": t_fit,
+                "scan_s": t_scan,
+                "blas_threads": threads,
+            }
+        )
+    base = rows[0]
+    for r in rows:
+        r["scan_speedup_vs_1t"] = base["scan_s"] / r["scan_s"]
+    return rows
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
@@ -142,6 +180,7 @@ def main():
     rows += bench_scan_scaling(sizes)
     rows += bench_scan_scaling([(2000, 100000)], dtype=np.float64)
     rows.append(bench_permutations(n_perm=100 if args.quick else 500))
+    rows += bench_thread_scaling()
 
     import csv
 
