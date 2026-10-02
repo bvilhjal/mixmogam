@@ -27,6 +27,8 @@ def read_regmap(
     data_format: str = "diploid_int",
     sample_ids: Optional[Sequence[str]] = None,
     reference: Optional[str] = None,
+    stride: int = 1,
+    max_variants: Optional[int] = None,
 ) -> Genotypes:
     """Merge per-chromosome CSV files into one Genotypes container.
 
@@ -34,6 +36,9 @@ def read_regmap(
     ``nucleotides`` format; genotypes are coded as the number of alleles
     differing from the reference accession's allele (0/1/2), matching v1's
     ``getSnpsData`` binary-relative-to-reference convention for haploids.
+
+    ``stride`` keeps every s-th variant and ``max_variants`` caps the total,
+    letting multi-hundred-MB files be subsampled cheaply.
     """
     if data_format not in ("nucleotides", "binary", "int", "diploid_int", "float"):
         raise ValueError(f"unknown data_format {data_format!r}")
@@ -55,6 +60,13 @@ def read_regmap(
             raise ValueError(f"{path}: missing header row (first cell 'Chromosome')")
         cols = list(header) if sample_ids is None else [s for s in header if s in set(sample_ids)]
         col_idx = [header.index(c) for c in cols]
+        keep_rows = lines[::stride] if stride > 1 else lines
+        if max_variants is not None:
+            budget = max_variants - sum(b.shape[0] for b in blocks) if blocks else max_variants
+            keep_rows = keep_rows[: max(budget, 0)]
+            if not keep_rows:
+                continue
+        lines = keep_rows
         m_ch = len(lines)
         arr = np.empty((m_ch, len(cols)), dtype=object)
         ch = np.empty(m_ch, dtype=np.int32)
@@ -64,7 +76,10 @@ def read_regmap(
             ch[i] = int(parts[0])
             pos[i] = int(parts[1])
             arr[i] = [parts[2 + k] for k in col_idx]
-        G_ch = _decode(arr, data_format, reference, cols)
+        if data_format in ("int", "diploid_int", "float", "binary"):
+            G_ch = _decode_numeric(arr)
+        else:
+            G_ch = _decode(arr, data_format, reference, cols)
         chroms.append(ch)
         poss.append(pos)
         blocks.append(G_ch)
@@ -81,6 +96,15 @@ def read_regmap(
             [f"{c}:{p}" for c, p in zip(all_ch, all_pos)], dtype=object
         ),
     )
+
+
+def _decode_numeric(arr: np.ndarray) -> np.ndarray:
+    """Vectorized decode of numeric cells (NA/blank -> MISSING)."""
+    m, n = arr.shape
+    flat = np.array([v if v not in ("NA", "N", "-", "") else "nan" for row in arr for v in row], dtype=np.float64)
+    out = flat.reshape(m, n).astype(np.int8)
+    out[np.isnan(flat.reshape(m, n))] = MISSING
+    return out
 
 
 def _decode(arr: np.ndarray, data_format: str, reference, cols) -> np.ndarray:
