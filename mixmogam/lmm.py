@@ -527,6 +527,8 @@ class LMM:
         :class:`LMFit` and caches it on ``self.fit_result``; :meth:`scan`
         uses the cached fit.
         """
+        if method not in ("reml", "ml"):
+            raise ValueError(f"unknown method {method!r}; use 'reml' or 'ml'")
         if self.fit_result is not None and not recompute:
             return self.fit_result
         if solver == "auto":
