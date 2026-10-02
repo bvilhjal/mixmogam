@@ -36,7 +36,10 @@ def simulate_genotypes(
             0.99,
         )
     pops = rng.integers(0, n_pop, n)
-    p = freqs if n_pop <= 1 or pop_fst == 0.0 else freqs[:, pops]
+    if n_pop <= 1 or pop_fst == 0.0:
+        p = np.broadcast_to(freqs[:, None], (m, n))
+    else:
+        p = freqs[:, pops]
     G = rng.binomial(2, p).astype(np.int8)
     return G
 
@@ -84,5 +87,7 @@ def simulate_kinship(G: np.ndarray) -> np.ndarray:
     Z = Gd - Gd.mean(axis=1, keepdims=True)
     sd = Z.std(axis=1, keepdims=True)
     Z = Z / np.where(sd > 0, sd, 1.0)
+    from mixmogam.kinship import scale_k
+
     K = (Z.T @ Z) / Gd.shape[0]
-    return K / np.diag(K).mean()
+    return scale_k(K)
