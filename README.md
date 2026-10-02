@@ -48,7 +48,7 @@ two-kinship mixtures), `kinship.loco_kinships`. See
 
 ## Efficiency
 
-Design notes and measured evidence: [docs/design.md](docs/design.md),
+Design notes and measured evidence: [docs/design.md](docs/design.md) (full technical methods with pseudocode: [docs/methods.pdf](docs/methods.pdf), [docs/methods.tex](docs/methods.tex)),
 [benchmarks/](benchmarks/). Highlights (development laptop, 4 BLAS
 threads, AC power):
 

@@ -1,0 +1,432 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,amsthm}
+\usepackage{booktabs}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage[colorlinks=true,linkcolor=blue,citecolor=blue,urlcolor=blue]{hyperref}
+\usepackage{enumitem}
+
+\newcommand{\y}{\mathbf{y}}
+\newcommand{\x}{\mathbf{x}}
+\newcommand{\g}{\mathbf{g}}
+\newcommand{\rv}{\mathbf{r}}
+\newcommand{\K}{\mathbf{K}}
+\newcommand{\Mm}{\mathbf{M}}
+\newcommand{\Am}{\mathcal{A}}
+\newcommand{\X}{\mathbf{X}}
+\newcommand{\Q}{\mathbf{Q}}
+\newcommand{\U}{\mathbf{U}}
+\newcommand{\V}{\mathbf{V}}
+\newcommand{\G}{\mathbf{G}}
+\newcommand{\Sm}{\mathbf{S}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\tr}{\operatorname{tr}}
+\newcommand{\E}{\mathbb{E}}
+\newcommand{\given}[1]{\,\middle|\,#1}
+\title{mixmogam 2.0: Technical Details of the Mixed-Model Association Engine}
+\author{mixmogam contributors}
+\date{October 2026}
+
+\begin{document}
+\maketitle
+
+\section{Overview and notation}
+
+mixmogam fits the standard linear mixed model for genome-wide
+association mapping,
+\begin{equation}
+  \y = \X\beta + u + e, \qquad
+  u \sim \mathcal{N}(0, \sigma_g^2 \K), \quad
+  e \sim \mathcal{N}(0, \sigma_e^2 I_n),
+  \label{eq:model}
+\end{equation}
+where $n$ is the number of samples, $\X \in \R^{n\times q}$ the
+covariate design (an intercept is included by default), and
+$\K \in \R^{n\times n}$ a kinship (relationship) matrix. We write
+$\delta = \sigma_e^2/\sigma_g^2$ and
+$\V = \sigma_g^2(\K + \delta I_n)$. The covariance of \eqref{eq:model}
+is parameterized by the single ratio $\delta$; all variance-component
+estimation reduces to one-dimensional optimization of the REML or ML
+profile likelihood over $\delta$.
+
+The package implements three regimes:
+\begin{enumerate}[nosep]
+  \item \textbf{Exact} ($n \lesssim 8{,}000$): one dense
+        eigendecomposition of $\K$ and of the restricted matrix
+        $\Sm(\K+I)\Sm$ (Section~\ref{sec:fit}); the association scan
+        evaluates the exact EMMAX statistic in batched dense GEMMs
+        (Section~\ref{sec:scan}).
+  \item \textbf{Truncated spectrum} (large $n$): a randomized top-$k$
+        eigenbasis of $\K$ with an exact identity-tail correction
+        (Section~\ref{sec:topk}).
+  \item \textbf{SLQ fitting} (large $n$): variance components by
+        deflated stochastic Lanczos quadrature, requiring only
+        matrix--vector products with $\K$ and no $O(n^3)$
+        factorization (Section~\ref{sec:slq}).
+\end{enumerate}
+Genotypes are stored sample-major as $n \times m$ matrices of
+\texttt{int8} dosages in $\{0,1,2\}$ with $-1$ encoding missing calls;
+SNP blocks are converted to \texttt{float32} with fused mean
+imputation immediately before use, so the float working set is bounded
+by the block size regardless of $m$.
+
+\section{Variance-component estimation: exact EMMA}
+\label{sec:fit}
+
+\subsection{Restricted eigenspace}
+
+Let $\Sm = I_n - \X(\X^\top\X)^{-1}\X^\top$ project onto the orthogonal
+complement of the covariate space. Following
+Kang et al.\ (2008), the REML likelihood depends on $\y$ and $\K$ only
+through the spectral decomposition of the \emph{restricted} matrix
+\begin{equation}
+  \Mm = \Sm(\K + I_n)\Sm .
+\end{equation}
+Writing its eigenpairs $(\mu_i, u_i)$ in ascending order, the first
+$q$ eigenvalues are (numerically) zero; for the remaining $p = n - q$
+directions we set
+\begin{equation}
+  \lambda^R_i = \mu_{q+i} - 1, \qquad
+  \eta_i = u_{q+i}^\top \y .
+\end{equation}
+The factorization is computed once in \texttt{float64} and cached.
+
+\subsection{Profile likelihood and grid}
+
+The REML profile log-likelihood as a function of $\delta$ is
+\begin{equation}
+  \ell_R(\delta) = \tfrac12\Big[p\big(\log\tfrac{p}{2\pi} - 1 - \log s_1(\delta)\big) - s_2(\delta)\Big],
+  \qquad
+  s_1(\delta) = \sum_{i=1}^{p} \frac{\eta_i^2}{\lambda^R_i + \delta},
+  \quad
+  s_2(\delta) = \sum_{i=1}^{p} \log(\lambda^R_i + \delta),
+  \label{eq:reml}
+\end{equation}
+and the ML variant replaces $p$ by $n$ and $s_2$ by the full-spectrum
+determinant $\sum_{j=1}^{n}\log(\lambda^K_j + \delta)$ evaluated on the
+eigenvalues of $\K$, using the R~EMMA formulation (the quadratic form
+$s_1$ retains the restricted basis). The grid
+$\delta_j = \exp(\mathrm{linspace}(l_{\min}, l_{\max}, G{+}1))$ with
+$G = 100$ and $[l_{\min},l_{\max}] = [-10, 10]$ is evaluated
+\emph{vectorized over all grid points simultaneously} by broadcasting
+$\lambda^R$ against $\delta$, so the whole grid costs $O(pG)$ fused
+operations. The maximizing bracket is located by a sign change of
+$\mathrm{d}\ell/\mathrm{d}\delta$ and polished with Brent's method
+(v1 used Newton from the bracket midpoint; the root is identical and
+Brent cannot diverge), with v1's boundary-acceptance and
+grid-argmax fallback rules retained. Finally
+\begin{equation}
+  \hat\sigma_g^2 = \frac{s_1(\hat\delta)}{p}, \qquad
+  \hat\sigma_e^2 = \hat\delta\,\hat\sigma_g^2, \qquad
+  h^2_{\text{pseudo}} = \frac{1}{1+\hat\delta}.
+\end{equation}
+
+\begin{algorithm}[t]
+\caption{EMMA exact fit (REML shown; ML analogous)}
+\label{alg:emma}
+\begin{algorithmic}[1]
+\Require $\y$, $\X$, $\K$, grid $(G, l_{\min}, l_{\max})$, tolerance $\tau$
+\State $\Q \gets$ thin QR of $\X$;\quad $\Sm \gets I - \Q\Q^\top$
+\State eigendecompose $\Mm = \Sm(\K + I)\Sm$; keep $\{\lambda^R_i, \eta_i\}_{i\le p}$
+\State vectorize $\ell_R(\delta_j)$, $\ell'_R(\delta_j)$ over the grid $j=0..G$
+\State $i^\ast \gets \arg\max_j \ell_R(\delta_j)$
+\State find $i$ with $\ell'_R(\delta_{i}) > 0 > \ell'_R(\delta_{i+1})$ maximizing mean endpoint likelihood
+\State $\hat\delta \gets \mathrm{Brent}(\ell'_R,\ \delta_i,\ \delta_{i+1},\ \tau)$; accept per boundary rules, else fall back to $\delta_{i^\ast}$
+\State \Return $\hat\delta$, $\hat\sigma_g^2 = s_1(\hat\delta)/p$, $h^2_{\text{pseudo}}$, $\beta$ via \eqref{eq:gls}
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{GLS coefficients and gBLUP}
+
+With $\H \equiv \V^{-1/2}$ (applied implicitly, Section~\ref{sec:topk}),
+\begin{equation}
+  \hat\beta = \big(\X^\top\V^{-1}\X\big)^{-1}\X^\top\V^{-1}\y
+  \quad\text{computed as}\quad
+  \big((\H\X)^\top(\H\X)\big)^{-1}(\H\X)^\top(\H\y),
+  \label{eq:gls}
+\end{equation}
+and the gBLUP of breeding values is
+$\hat u = \hat\sigma_g^2\,\K\,\V^{-1}(\y - \X\hat\beta)$, with
+$\V^{-1}$ applied through the eigenbasis.
+
+\section{The association scan: EMMAX as batched GEMM}
+\label{sec:scan}
+
+\subsection{Single-SNP statistic}
+
+For a candidate SNP $g \in \R^n$ (missing calls mean-imputed), v1
+regressed the transformed, covariate-residualized phenotype on the
+transformed, covariate-residualized SNP by an explicit least-squares
+solve \emph{per SNP}. The identical statistic has a closed form.
+Define, at the fitted $\hat\delta$,
+\begin{equation}
+  \Q \gets \operatorname{qr}\big(\H\X\big), \qquad
+  r \gets (I - \Q\Q^\top)\,\H\y, \qquad
+  \tilde g \gets (I - \Q\Q^\top)\,\H g, \qquad
+  \mathrm{RSS}_0 \gets \|r\|^2 .
+\end{equation}
+The one-degree-of-freedom F statistic is the rank-one update
+\begin{equation}
+  \mathrm{RSS}(g) = \mathrm{RSS}_0 - \frac{(\tilde g^\top r)^2}{\tilde g^\top\tilde g},
+  \qquad
+  F(g) = \Big(\frac{\mathrm{RSS}_0}{\mathrm{RSS}(g)} - 1\Big)(n - q - 1),
+  \qquad
+  p(g) = F_{1,\,n-q-1}\big(F(g)\big),
+  \label{eq:scanstat}
+\end{equation}
+which equals v1's per-SNP regression exactly (Frobenius--Waugh--Lovell
+partialling out). Effect sizes and standard errors come in closed form,
+\begin{equation}
+  \hat\beta_g = \frac{\tilde g^\top r}{\tilde g^\top \tilde g},
+  \qquad
+  \operatorname{se}(\hat\beta_g) =
+  \sqrt{\frac{\mathrm{RSS}(g)}{(n - q - 1)\,\tilde g^\top\tilde g}} .
+\end{equation}
+
+\subsection{Batching}
+
+All per-SNP quantities are rows of matrix expressions. For a block
+$\G \in \R^{k\times n}$ of $k$ SNPs:
+\begin{equation}
+  \widetilde\G^\top = (I - \Q\Q^\top)\,\H\,\G^\top, \qquad
+  \mathbf{num} = \widetilde\G\,^\top r \in \R^k, \qquad
+  \mathbf{den} = \operatorname{diag}(\widetilde\G^\top\widetilde\G) \in \R^k,
+\end{equation}
+and \eqref{eq:scanstat} is applied elementwise. The transform
+$\H\,\G^\top$ is two GEMMs against the eigenbasis (one GEMM per side);
+the residualization is one small GEMM of cost $O(nqk)$. The scan is
+therefore $O(n^2 m)$ dense linear algebra with BLAS-3 kernels, no
+Python-level per-SNP loop, and no per-SNP factorization; arithmetic
+defaults to \texttt{float32} (fitting stays \texttt{float64}).
+
+\begin{algorithm}[t]
+\caption{Batched EMMAX scan}
+\label{alg:scan}
+\begin{algorithmic}[1]
+\Require fitted $\hat\delta$; covariates $\X$; phenotype $\y$; genotype store returning blocks $\G \in \R^{k\times n}$; block size $k$, dtype
+\State $\Q \gets \operatorname{qr}(\H\X)$; $r \gets (I-\Q\Q^\top)\H\y$; $\mathrm{RSS}_0 \gets \|r\|^2$; $\nu \gets n - q - 1$
+\ForAll{blocks $\G$ from the store}
+  \State $\widetilde\G^\top \gets (I - \Q\Q^\top)\,\H\,\G^\top$ \Comment{2 GEMMs vs.\ eigenbasis + 1 small GEMM}
+  \State $\mathbf{num} \gets \widetilde\G^\top r$;\quad $\mathbf{den} \gets \operatorname{rowsums}(\widetilde\G \circ \widetilde\G)$
+  \State $t^2 \gets \mathbf{num}^2 / \max(\mathbf{den}, \epsilon)$;\quad
+         $\mathbf{RSS} \gets \max(\mathrm{RSS}_0 - t^2, 0)$
+  \State $F \gets t^2 / \mathbf{RSS} \cdot \nu$;\quad $p \gets F_{1,\nu}(F)$ \Comment{batched survival function}
+\EndFor
+\State \Return $\{p, F, \mathrm{RSS}, \hat\beta_g, \operatorname{se}(\hat\beta_g)\}$
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Multi-df extensions}
+
+2-df genotypic tests (v1's ANOVA path) group SNPs by level count $L$
+and build $L{-}1$ indicator contrasts per SNP; the small
+$(L{-}1)\times(L{-}1)$ normal equations are solved \emph{batched} over
+the block (stacked \texttt{solve}). GxE scans test the interaction
+column $g \circ E$ (1~df), or jointly $[g,\; g\circ E]$ (2~df) with the
+same batched two-column update. The stepwise MLMM rescans with the
+current cofactors appended to $\X$, selecting by
+$\mathrm{BIC} = \ell - \tfrac{k}{2}\log n$ with backward elimination.
+
+\section{Large \texorpdfstring{$n$}{n}: truncated randomized spectrum}
+\label{sec:topk}
+
+Above $n \approx 8{,}000$ the dense eigendecomposition is replaced by a
+randomized top-$k$ approximation ($k = 2048$ by default). A Gaussian
+sketch $\Omega \in \R^{n\times(k+p)}$ ($p = 12$ oversampling) is
+powered by $\ell = 5$ subspace iterations,
+$\Q_0 \gets \operatorname{orth}(\K\Omega)$, \
+$\Q_t \gets \operatorname{orth}(\K\Q_{t-1})$, and the Ritz extraction
+$B = \Q^\top\K\Q$, $B = W\Lambda W^\top$ yields
+$\hat\Lambda_k, \hat U_k = \Q W_k$ (Halko et al.\ 2011). The
+$V^{-1/2}$ map applied to any matrix $A$ becomes
+\begin{equation}
+  \boxed{\;
+  \H A \;=\; \delta^{-1/2} A \;+\;
+  \hat U_k\Big[\operatorname{diag}\big((\hat\lambda_i + \delta)^{-1/2}\big) -
+  \delta^{-1/2} I_k\Big]\hat U_k^\top A \;}
+  \label{eq:tail}
+\end{equation}
+which is \emph{exact} whenever the discarded eigenvalues vanish, costs
+two $n \times k$ GEMMs, and never forms an $n \times n$ matrix. The
+unexplained spectral mass
+$\tau = \tr(\K) - \sum_{i\le k}\hat\lambda_i$ is reported on the fit so
+the approximation can be audited; the same identity serves the scan,
+gBLUP and $\V^{-1}$ applications.
+
+\section{Large-\texorpdfstring{$n$}{n} fitting: deflated stochastic Lanczos quadrature}
+\label{sec:slq}
+
+Fitting $\delta$ without the full spectrum requires the spectral sums
+$s_1, s_2, s_3, s_4$ of Section~\ref{sec:fit}. The SLQ solver
+estimates them from Gauss quadrature rules built by Lanczos iteration
+(Ubaru et al.\ 2017): with $T_t$ the tridiagonal Lanczos matrix after
+$t$ steps from start vector $v$,
+\begin{equation}
+  v^\top f(\Am)\,v \;\approx\; \|v\|^2 \sum_{i=1}^{t} w_i f(\theta_i),
+  \qquad (\theta, w) = \text{eigenpairs of } T_t,\ w_i = (S_{1i})^2,
+\end{equation}
+exact for polynomials of degree $\le 2t{-}1$ and spectrally accurate
+for analytic $f$ such as $f_\delta(t) = (t + \delta)^{-1}$ and
+$\log(t+\delta)$. Trace terms use unbiased Rademacher probe averages
+($\E[z^\top f(\Am) z] = \tr f(\Am)$, probes pre-projected into the
+covariate complement for REML); the quadratic forms in $\y$ use one
+deterministic rule from the projected phenotype. All Lanczos runs use
+full reorthogonalization ($t \le 96$ default, 12 probes).
+
+\paragraph{Deflation.} Gauss quadrature converges slowly when the
+spectrum mixes extreme outliers (population structure) with a tight
+bulk. Extreme eigenpairs of the operator are therefore estimated by a
+randomized top-$d$ pass ($d = 128$) and handled analytically; the
+quadrature resolves only the deflated bulk. Because the deflated
+operator carries the removed directions as (near-)zero eigenvalues,
+the probe estimates must be corrected by their contribution
+$f_\delta(0)$:
+\begin{equation}
+  \sum_{i>p-d} f(\lambda_i) \;=\;
+  \Big[\text{probe mean of } f_\delta\text{-rules}\Big] - d\,f_\delta(0),
+  \qquad f_\delta(0) \in \{1/\delta,\ \log\delta,\ \delta^{-2}\}.
+\end{equation}
+Quadrature nodes are floored at zero to guard against roundoff-negative
+deflated eigenvalues. On structure-rich kinships the resulting
+$\hat\delta$ agrees with the exact EMMA fit to a few percent (the REML
+profile is very flat near its optimum) and profile likelihoods agree to
+about one nat; the total cost is $O(n^2)$ per matvec times
+$O(\text{probes} \times \text{steps})$ matvecs, with no $O(n^3)$
+factorization.
+
+\begin{algorithm}[t]
+\caption{Deflated SLQ variance-component fit}
+\label{alg:slq}
+\begin{algorithmic}[1]
+\Require operator $\mathrm{mv}(x) = \Sm\K\Sm x$; $\y$, $\X$; probes $P$, steps $t$, deflation $d$
+\State $\hat\lambda, \hat U \gets$ randomized top-$d$ of $\mathrm{mv}$
+\State $\mathrm{mv}_d(x) \gets \mathrm{mv}(x) - \hat U(\hat\lambda \circ (\hat U^\top x))$
+\State $y_\perp \gets \Sm\y$; decompose $y_\perp = \hat U c + y_{\mathrm{rest}}$
+\State rules: one Lanczos$(\mathrm{mv}_d, y_{\mathrm{rest}}, t)$; $P$ Lanczos$(\mathrm{mv}_d, \Sm z, t)$
+\For{$\delta$ on grid and within Brent bracket}
+  \State $s_1(\delta) \gets \sum_i c_i^2/(\hat\lambda_i{+}\delta) + \mathcal{Q}_y[f_\delta]$
+  \State $s_2(\delta) \gets \sum_i \log(\hat\lambda_i{+}\delta) + \overline{\mathcal{Q}}_P[\log] - d\log\delta$ \Comment{deflation correction}
+  \State $s_4(\delta) \gets \sum_i (\hat\lambda_i{+}\delta)^{-1} + \overline{\mathcal{Q}}_P[f_\delta] - d/\delta$
+  \State assemble $\ell_R(\delta)$, $\ell'_R(\delta)$ as in \eqref{eq:reml}
+\EndFor
+\State \Return $\hat\delta$ by bracketing + Brent; $\hat\sigma_g^2 = s_1(\hat\delta)/p$
+\end{algorithmic}
+\end{algorithm}
+
+\section{Kinships}
+
+\paragraph{Additive GRM.} Per variant $j$, genotypes are standardized
+over \emph{called} samples only,
+$z_{ij} = (g_{ij} - \bar g_j)/s_j$ for called $g_{ij}$ and $z_{ij}=0$
+otherwise (Yang et al.\ 2010), and
+$\K = \sum_j w_j\, z_j z_j^\top / \sum_j w_j$ is accumulated over SNP
+blocks in \texttt{float64}. Optional weights $w_j$ implement LDAK-style
+weighting; an optional SNP subset fits the null model from a marker
+subsample (LDAK-KVIK style) at reduced cost.
+
+\paragraph{IBS.} Identity-by-state similarity is accumulated as one-hot
+GEMMs per block: with $H_a$ the indicator of genotype $a \in \{0,1,2\}$
+over called entries, the shared-allele numerator is
+$\sum_a H_a H_a^\top$ and the denominator is $C C^\top$ with $C$ the
+called-indicator, so $\K_{\mathrm{IBS}} = S/C$ per pair.
+
+\paragraph{Exact LOCO.} Because the GRM is a sum of globally
+standardized outer products, the blocks accumulated for each
+chromosome $\K_c = m^{-1}\sum_{j \in c} z_j z_j^\top$ satisfy $\sum_c \K_c = \K$
+\emph{exactly} under a single global standardization, and the
+leave-one-chromosome-out matrix is the algebraic difference
+\begin{equation}
+  \K_{\mathrm{loco}}(c) = \frac{m\,\K - m_c\,\K_c}{m - m_c},
+\end{equation}
+rescaled to mean diagonal one. No per-chromosome restandardization is
+performed, hence no approximation. Windowed local/global pairs along
+the genome are the same construction restricted to a sliding interval.
+
+\section{Batched permutation thresholds}
+
+Permutation follows v1 semantics: the \emph{raw} phenotype is permuted
+and variance components stay fixed at $\hat\delta$. Because
+permutation does not commute with the whitening transform
+($P\H \neq \H P$), permuted phenotypes are transformed after
+permutation, $\mathbf{Y}_P = \H\,\y[\Pi]$, and residualized against the fixed
+$\Q$. All $B$ permutations then flow through each SNP-block GEMM at
+once:
+\begin{equation}
+  T = \widetilde\G^\top R_P \in \R^{k\times B}, \qquad
+  F = \frac{T \circ T}{\mathbf{den}\,\mathrm{RSS}_{0,P}}\,\nu,
+\end{equation}
+so a permutation costs a matrix multiply rather than a full scan, and
+the genome-wide 5\% threshold is the 5th percentile of the per-
+permutation minimum $p$.
+
+\section{Two-kinship mixtures}
+
+For $\V = \sigma_{g_1}^2\K_1 + \sigma_{g_2}^2\K_2 + \sigma_e^2 I$, the
+ratio $\rho = \sigma^2_{g_1}/\sigma^2_{g_2}$ is profiled on a grid of
+$\log\rho$ over $[-3,3]$ (cascading refinements around the best
+bracket), fitting each candidate mixture
+$a\K_1 + (1{-}a)\K_2$ by the exact EMMA path of Section~\ref{sec:fit};
+variance shares are reported per matrix.
+
+\section{Missing data}
+
+Per-SNP sample subsetting (v1's behavior) breaks block batching. The
+default policy is a per-variant missingness filter followed by
+mean imputation over called genotypes (EMMAX-consistent), fused into
+the int8-to-float block conversion (optionally a Numba kernel);
+\texttt{impute='none'} propagates NaN for analyses that prefer explicit
+handling.
+
+\section{Validation and measured performance}
+
+Correctness is certified against a float64 port of the v1
+mathematics (\texttt{tests/\_reference.py}): F statistics agree to
+rtol $10^{-6}$, null $p$-values pass a Kolmogorov--Smirnov uniformity
+test, simulated causal loci are recovered with high power, the SLQ
+solver reproduces the exact fit (Section~\ref{sec:slq}), and the
+bundled \emph{A.\ thaliana} Atwell data runs end-to-end. Measured
+timings (development laptop, Apple silicon, 4 BLAS threads, AC power;
+archive \texttt{benchmarks/results/}):
+
+\begin{center}
+\small
+\setlength{\tabcolsep}{4.5pt}
+\begin{tabular}{@{}llr@{}}
+\toprule
+Workload & Metric & Result \\
+\midrule
+scan vs.\ v1-style per-SNP least squares ($n{=}2000$, $m{=}10$k) & speed-up & $45\times$ (0.68\,s vs 30.9\,s) \\
+scan, $n{=}500$, $m{=}100$k, float32 & throughput & $1.3\times10^{5}$ SNPs/s \\
+scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $1.7\times10^{4}$ SNPs/s \\
+500 permutations $\times$ 5k SNPs, $n{=}1500$ (batched) & throughput & $1.1\times10^{6}$ perm-SNPs/s \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{References}
+
+\begin{itemize}[nosep,leftmargin=1.4em]
+\item Kang, H.M.\ et al.\ (2008) Efficient control of population
+  structure in model organism association mapping. \emph{Genetics} 178:1709--1723. (EMMA)
+\item Kang, H.M.\ et al.\ (2010) Variance component model to account
+  for sample structure in genome-wide association studies.
+  \emph{Nat Genet} 42:348--354. (EMMAX)
+\item Yang, J.\ et al.\ (2010) Common SNPs explain a large proportion
+  of the heritability for human height. \emph{Nat Genet} 42:565--569. (GRM)
+\item Loh, P.-R.\ et al.\ (2015) Efficient Bayesian mixed-model
+  analysis in genome-wide association studies. \emph{Nat Genet}
+  47:284--290. (BOLT-LMM; truncated-spectrum scanning)
+\item Mbatchou, J.\ et al.\ (2021) Computationally efficient
+  whole-genome regression for quantitative and binary traits.
+  \emph{Nat Genet} 53:1097--1103. (REGENIE; batched permutation-style projection scanning)
+\item Tian, J.\ et al.\ (2024) LDAK-KVIK: fast and accurate
+  variance-component estimation and association testing.
+  (randomized eigensolvers, SNP-subsampled null fits)
+\item Halko, N., Martinsson, P.-G., Tropp, J.A.\ (2011) Finding
+  structure with randomness. \emph{SIAM Review} 53:217--288.
+\item Ubaru, S., Chen, J., Saad, Y.\ (2017) Fast estimation of
+  $\tr f(A)$ via stochastic Lanczos quadrature. \emph{SIAM J.\ Matrix Anal.\ Appl.}\ 38:1075--1099.
+\end{itemize}
+
+\end{document}
