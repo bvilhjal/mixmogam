@@ -27,16 +27,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     thresholds, 2-df genotypic tests, and 2-kinship mixture models.
   - Test suite with a reference oracle ported from the v1 math; the old
     package had none.
-  - Large-n paths: randomized top-k spectrum with identity-tail
-    correction (BOLT-LMM style) for n > 8000, and a deflated
-    stochastic-Lanczos-quadrature REML/ML solver that needs no O(n^3)
-    eigendecomposition (LDAK-KVIK / fastGWA-GLMM style); batched
-    permutation thresholds push all replicates through one SNP-block
-    GEMM pass (REGENIE-style batching).
-  - Optional Numba kernel for the fused int8-to-float block conversion
-    with mean imputation (`fast` extra).
-  - Benchmarks (measured suite under `benchmarks/`), docs (`docs/`), and
-    runnable examples (`examples/`).
 - Missing genotypes are now handled by per-SNP missingness filtering plus mean
   imputation (EMMAX-consistent) so SNP blocks stay batchable; v1's per-SNP
   sample subsetting is available opt-in via `exact_missing=True`.

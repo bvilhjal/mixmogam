@@ -173,12 +173,25 @@ class Genotypes:
         each variant (EMMAX-style, keeps blocks batchable); ``'zero'`` fills
         with 0; ``'none'`` propagates NaN.
         """
-        from mixmogam._fast import convert_block
-
         G = self.G if variant_indices is None else self.G[:, variant_indices]
         m = G.shape[1]
         for i in range(0, m, block):
-            yield convert_block(G[:, i : i + block], dtype, impute)
+            s = slice(i, min(i + block, m))
+            g = G[:, s]
+            out = g.T.astype(dtype)
+            miss = out == MISSING
+            if miss.any():
+                if impute == "none":
+                    out[miss] = np.nan
+                elif impute == "zero":
+                    out[miss] = 0
+                else:
+                    msum = np.where(miss, 0, out).sum(axis=1)
+                    mcnt = (~miss).sum(axis=1)
+                    with np.errstate(invalid="ignore", divide="ignore"):
+                        mean = np.where(mcnt > 0, msum / np.maximum(mcnt, 1), 0.0)
+                    out[miss] = np.take(mean, np.nonzero(miss)[0])
+            yield out
 
     def snp_major(self, dtype=np.float32, impute: str = "mean") -> np.ndarray:
         """Full SNP-major float matrix (materializes m x n)."""
@@ -189,31 +202,3 @@ class Genotypes:
         return (
             f"Genotypes(n_samples={self.n_samples}, n_variants={self.n_variants})"
         )
-
-    # ------------------------------------------------------------------
-    # Loader conveniences (IO modules import lazily to keep extras optional)
-    # ------------------------------------------------------------------
-
-    @classmethod
-    def load_plink(cls, prefix: str, **kwargs) -> "Genotypes":
-        from mixmogam.io.plink import read_plink
-
-        return read_plink(prefix, **kwargs)
-
-    @classmethod
-    def load_tped(cls, prefix: str) -> "Genotypes":
-        from mixmogam.io.plink import read_tped
-
-        return read_tped(prefix)
-
-    @classmethod
-    def load_eigenstrat(cls, prefix: str) -> "Genotypes":
-        from mixmogam.io.eigenstrat import read_eigenstrat
-
-        return read_eigenstrat(prefix)
-
-    @classmethod
-    def load_hdf5(cls, path: str) -> "Genotypes":
-        from mixmogam.io.hdf5 import read_hdf5
-
-        return read_hdf5(path)

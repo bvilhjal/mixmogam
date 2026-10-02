@@ -172,17 +172,3 @@ def test_phenotypes_replicate_averaging():
     ph.convert_to_averages("t")
     np.testing.assert_allclose(ph.values("t"), [2.0, 5.0])
     assert list(ph.sample_ids) == ["a", "b"]
-
-
-def test_numba_kernel_matches_numpy():
-    pytest.importorskip("numba")
-    from mixmogam._fast import HAS_NUMBA, _convert_numpy, convert_block
-
-    if not HAS_NUMBA:
-        pytest.skip("numba not installed")
-    rng = np.random.default_rng(17)
-    g = rng.integers(-1, 3, size=(50, 400)).astype(np.int8)
-    for impute in ("mean", "zero"):
-        a = convert_block(g, np.float32, impute)
-        b = _convert_numpy(g, np.float32, impute)
-        np.testing.assert_allclose(a, b, rtol=0, atol=1e-6)
