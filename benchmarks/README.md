@@ -1,28 +1,28 @@
 # Benchmarks
 
 Measured-evidence suite (family convention: run archives under
-`results/<run-id>/`). Timings refuse to start on battery power like the
-sibling packages.
+`results/<run-id>/` with a source snapshot). Runners refuse to start on
+battery power like the sibling packages.
 
 ```sh
-OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 MKL_NUM_THREADS=4 \
+OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
     python benchmarks/run_benchmarks.py [--quick]
 ```
 
-Benchmarks:
+- `run_benchmarks.py`: the batched exact scan against a float64 port of
+  the v1 per-SNP loop (`tests/_reference.py`), asserting agreement while
+  timing both; scan throughput across shapes; batched permutations.
+- `sim_study.py`: phensim coalescent datasets crossed with the method
+  variants (exact vs SLQ fits; exact scans with and without LOCO;
+  K-free BOLT-LMM-inf; the truncated-spectrum scan; LM vs LMM; batched
+  permutations). Power and false discoveries are counted per locus.
+- `structure_calibration.py`: per-SNP calibration of the two-step
+  statistics (BOLT-LMM-inf, BOLT-LMM, LDAK-KVIK, each with and without
+  the structure-aware denominator) against exact LOCO EMMAX on SNPs that
+  are null by construction, binned by loading on the top kinship
+  eigenvectors. Simulated genotypes with and without structure, and the
+  bundled *A. thaliana* RegMap genotypes.
 
-- `run_benchmarks.py`
-  - `scan_vs_reference` — the batched engine against a float64 port of
-    the v1 per-SNP least-squares loop (the `tests/_reference.py`
-    oracle), asserting agreement while timing both.
-  - `scan_n{N}_m{M}_{dtype}` — throughput across problem shapes.
-  - `permutations_batched` — all permutations through one SNP-block pass.
-- `sim_study.py` — the thorough simulation study: phensim coalescent
-  datasets (LD structure, model-consistent and structure-confounded
-  traits) crossed with the method variants (exact vs SLQ fits, exact vs
-  truncated-spectrum scans, subsampled kinships, LM vs LMM correction,
-  batched permutations). Latest archive:
-  `results/20261002T194331Z-sim-study/` (findings in NOTES.md).
-
-Hardware/threads are recorded in the archive notes; keep source
-snapshots with results for reproducibility.
+Archives before 2026-10-03 printed `lambda_gc` as median(p)/0.5, which
+runs the other way from lambda_GC, and counted LD tags of causal
+variants as false positives. Their NOTES.md files carry dated errata.

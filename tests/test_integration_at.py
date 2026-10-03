@@ -10,6 +10,7 @@ from mixmogam import LMM
 from mixmogam.io.phenofile import read_phenotypes
 from mixmogam.io.regmap import read_regmap
 from mixmogam.kinship import realized_relationship
+from mixmogam.results import GwasResult
 
 pytestmark = pytest.mark.integration
 
@@ -56,7 +57,8 @@ def test_at_emmax_end_to_end(at_genotypes):
     res = fit.scan(gt_f, dtype=np.float32)
     ps = res["ps"]
     assert np.isfinite(ps).all()
-    lam_gc = float(np.median(ps) / 0.5)
+    lam_gc = GwasResult(chromosome=gt_f.chromosome, position=gt_f.position,
+                        p=ps).genomic_control()
     # flowering time is highly structured in RegMap: LMM should tame most
     # of it, but some residual inflation is expected at this SNP count
     assert 0.5 < lam_gc < 15

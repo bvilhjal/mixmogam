@@ -31,3 +31,18 @@
    Bonferroni (2.5e-6) because it accounts for LD-correlated tests.
 6. float32 and float64 scans give identical summary statistics at equal
    speed on Apple Accelerate (f32 pays in memory, not time, here).
+
+## Erratum (2026-10-03)
+
+The `lambda_gc` column was computed as median(p)/0.5, not lambda_GC
+(that metric runs the other way: below 1 means inflation). On the
+lambda_GC scale (median 1-df chi2 / 0.455) the aggregate values read:
+plain LM under confounding 0.41 -> 3.56; LMM 1.008 -> 0.98; S1 LMM
+1.016 -> 0.96; S3 exact 1.03 -> 0.93; S3 top-1024 1.019 -> 0.96. The
+qualitative finding 1 (the kinship removes the structure inflation)
+stands; the exact scans were mildly deflated, because the tested SNP is
+in the kinship (no LOCO). `n_false_positive` counted every significant
+SNP that is not itself causal, LD tags of causal variants included, so
+it is not a false-positive count. Finding 5's permutation threshold used
+raw-phenotype permutation, which is anti-conservative under structure
+(fixed 2026-10-03: whitened-residual permutation). See CHANGELOG.md.

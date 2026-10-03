@@ -23,7 +23,9 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
-      - run: python -m pip install -e ".[test,fast,plot,hdf5,lint]" phensim
+      # phensim (private, not on PyPI) is used only by benchmarks/, which
+      # CI does not run; the package and its tests do not import it
+      - run: python -m pip install -e ".[test,fast,plot,hdf5,lint]"
       - run: ruff check .
       - run: pytest -q -m "not slow and not integration"
       - run: pytest -q -m "slow or integration"

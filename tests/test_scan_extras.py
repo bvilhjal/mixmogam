@@ -52,34 +52,79 @@ def test_genotypic_three_levels():
     assert stats.kstest(ps, "uniform").pvalue > 1e-3
 
 
+def _gls_f(model, fit, cols_full, cols_null):
+    """Direct GLS F test of the extra columns: whitened designs, two lstsq fits."""
+    yw = model._apply_inv_sqrt(model.y, fit.delta, np.float64)
+
+    def rss(cols):
+        D = model._apply_inv_sqrt(np.column_stack(cols), fit.delta, np.float64)
+        b, _, _, _ = linalg.lstsq(D, yw)
+        r = yw - D @ b
+        return r @ r, D.shape[1]
+
+    rss1, k1 = rss(cols_full)
+    rss0, k0 = rss(cols_null)
+    df1, df2 = k1 - k0, model.n - k1
+    f = ((rss0 - rss1) / df1) / (rss1 / df2)
+    return stats.f.sf(f, df1, df2)
+
+
 def test_gxe_finds_interaction(setup):
     gt, K, y = setup
     rng = np.random.default_rng(50)
     E = rng.standard_normal(300)
-    # build a phenotype with a pure interaction effect at one SNP
+    # a pure interaction effect at one SNP
     g_causal = gt.G[:, 0].astype(float)
     y_gxe = 0.5 * g_causal * E + 0.3 * (K @ rng.standard_normal(300)) + 0.5 * rng.standard_normal(300)
     y_gxe = (y_gxe - y_gxe.mean()) / y_gxe.std()
     model = LMM(y_gxe, X=E, K=K)
     fit = model.fit()
-    res = scan_gxe(fit, gt, E, dtype=np.float64)
-    assert res["ps"][0] == min(res["ps"])
+    res = scan_gxe(fit, gt, E)
+    assert res["ps"][0] == np.nanmin(res["ps"])
     assert res["ps"][0] < 1e-6
-    # independent oracle: direct GLS of the whitened interaction column
+    # oracle: GLS F test of g*E in the full model [1, E, g, g*E] vs [1, E, g]
     g0 = gt.G[:, 0].astype(np.float64)
-    c = model._apply_inv_sqrt((g0 * E)[:, None], fit.delta, np.float64)
-    Xw = model._apply_inv_sqrt(model.X, fit.delta, np.float64)
-    design = np.hstack([Xw, c])
-    beta, _, _, _ = linalg.lstsq(design, model._apply_inv_sqrt(model.y, fit.delta, np.float64))
-    resid_full = model._apply_inv_sqrt(model.y, fit.delta, np.float64) - design @ beta
-    beta0, _, _, _ = linalg.lstsq(Xw, model._apply_inv_sqrt(model.y, fit.delta, np.float64))
-    resid_null = model._apply_inv_sqrt(model.y, fit.delta, np.float64) - Xw @ beta0
-    n = y_gxe.size
-    f_oracle = ((resid_null @ resid_null - resid_full @ resid_full) / 1) / (
-        resid_full @ resid_full / (n - 3)
-    )
-    p_oracle = stats.f.sf(f_oracle, 1, n - 3)
-    assert res["ps"][0] == pytest.approx(p_oracle, rel=1e-4)
+    X = model.X
+    p_oracle = _gls_f(model, fit, [X, g0, g0 * E], [X, g0])
+    assert res["ps"][0] == pytest.approx(p_oracle, rel=1e-6)
+    # joint 2-df test: [1, E, g, g*E] vs [1, E]
+    joint = scan_gxe(fit, gt, E, joint=True)
+    p_joint = _gls_f(model, fit, [X, g0, g0 * E], [X])
+    assert joint["ps"][0] == pytest.approx(p_joint, rel=1e-6)
+
+
+def test_gxe_main_effect_is_not_an_interaction(setup):
+    """A SNP with only a main effect must not look like GxE (0/1 environment)."""
+    gt, K, _ = setup
+    rng = np.random.default_rng(51)
+    E = (rng.random(300) < 0.5).astype(float)
+    g = gt.G[:, 3].astype(float)
+    z = (g - g.mean()) / g.std()
+    y = 0.6 * z + 0.3 * (K @ rng.standard_normal(300)) + rng.standard_normal(300)
+    fit = LMM(y, X=E, K=K).fit()
+    res = scan_gxe(fit, gt, E)
+    assert res["ps"][3] > 1e-3  # was ~1e-6 when the main effect was omitted
+    ok = np.isfinite(res["ps"])
+    assert stats.kstest(res["ps"][ok], "uniform").pvalue > 1e-4
+
+
+def test_gxe_adds_missing_environment_covariate(setup):
+    gt, K, y = setup
+    E = (np.random.default_rng(52).random(300) < 0.5).astype(float)
+    fit = LMM(y, K=K).fit()  # E not among the covariates
+    with pytest.warns(UserWarning, match="not among the covariates"):
+        res = scan_gxe(fit, gt, E)
+    ref = scan_gxe(LMM(y, X=E, K=K).fit(), gt, E)
+    np.testing.assert_allclose(res["ps"], ref["ps"], rtol=1e-6, equal_nan=True)
+
+
+def test_gxe_polygenic_interaction_component(setup):
+    gt, K, y = setup
+    E = (np.random.default_rng(53).random(300) < 0.5).astype(float)
+    res = scan_gxe(LMM(y, X=E, K=K).fit(), gt, E, polygenic_gxe=True)
+    ok = np.isfinite(res["ps"])
+    assert ok.mean() > 0.95
+    assert res["model"].K.shape == (300, 300)
 
 
 def test_permutation_threshold_uniform_null(setup):
@@ -87,25 +132,70 @@ def test_permutation_threshold_uniform_null(setup):
     lmm = LMM(y, K=K).fit()
     out = permutation_min_p(lmm, gt, n_perm=200, block=1024, seed=3)
     assert out["min_ps"].shape == (200,)
+    assert out["scheme"] == "whitened"
     assert 0 < out["threshold_05"] < 0.1
-    # the 5% threshold should be near the Bonferroni ballpark
     assert out["threshold_05"] > 1e-8
 
 
-def test_permutations_match_sequential(setup):
-    """Batched permutation scan equals per-permutation full scans."""
+def test_permutations_match_sequential_raw(setup):
+    """v1 scheme: batched permutation scan equals per-permutation scans."""
     gt, K, y = setup
     model = LMM(y, K=K)
     model.fit()
-    out = permutation_min_p(model, gt, n_perm=5, block=10**9, dtype=np.float64, seed=7)
-    # reproduce one permutation by hand
-    rng2 = np.random.default_rng(7)
-    perms = np.argsort(rng2.random((300, 5)), axis=0)
-    y_p = y[perms[:, 0]]
-    lmm_p = LMM(y_p, K=K)
-    lmm_p.fit_result = model.fit_result  # fixed delta, v1 semantics
+    out = permutation_min_p(model, gt, n_perm=5, block=10**9, dtype=np.float64,
+                            seed=7, scheme="raw")
+    perms = np.argsort(np.random.default_rng(7).random((300, 5)), axis=0)
+    lmm_p = LMM(y[perms[:, 0]], K=K)
+    lmm_p.fit_result = model.fit_result  # fixed delta
     r = lmm_p.scan(gt, dtype=np.float64)
     assert out["min_ps"][0] == pytest.approx(r["ps"].min(), rel=1e-6)
+
+
+def test_permutations_match_sequential_whitened(setup):
+    """Whitened scheme: each permutation is the scan of y_b = V^{1/2} P r."""
+    gt, K, y = setup
+    model = LMM(y, K=K)
+    fit = model.fit()
+    out = permutation_min_p(model, gt, n_perm=4, block=10**9, dtype=np.float64, seed=9)
+    perms = np.argsort(np.random.default_rng(9).random((300, 4)), axis=0)
+    r = model._scan_factors(np.float64)["r"]
+    eig = model.eigen()
+    U, lam = eig["vectors"], np.maximum(eig["values"], 0.0)
+    for b in range(4):
+        y_b = U @ (np.sqrt(lam + fit.delta) * (U.T @ r[perms[:, b]]))
+        lmm_b = LMM(y_b, K=K)
+        lmm_b._eig = model._eig
+        lmm_b.fit_result = fit
+        ref = lmm_b.scan(gt, dtype=np.float64)
+        assert out["min_ps"][b] == pytest.approx(np.nanmin(ref["ps"]), rel=1e-6)
+
+
+@pytest.mark.slow
+def test_whitened_permutations_control_fwer_under_structure():
+    """FWER of the permutation threshold under the fitted null model.
+
+    Raw-phenotype permutation (v1) gave ~8% at a nominal 5% here."""
+    n, m = 400, 1500
+    G = simulate_genotypes(n=n, m=m, n_pop=4, pop_fst=0.3, seed=81)
+    gt = Genotypes(G.T)
+    K = simulate_kinship(G)
+    w, U = np.linalg.eigh(K)
+    w = np.maximum(w, 0.0)
+    rng = np.random.default_rng(82)
+    y = U @ (np.sqrt(0.7 * w) * rng.standard_normal(n)) + np.sqrt(0.3) * rng.standard_normal(n)
+    model = LMM(y, K=K)
+    fit = model.fit()
+    thr = permutation_min_p(model, gt, n_perm=1000, dtype=np.float64, seed=83)["threshold_05"]
+    hits = 0
+    reps = 1000
+    for _ in range(reps):
+        ys = U @ (np.sqrt(fit.vg * w) * rng.standard_normal(n)) + np.sqrt(fit.ve) * rng.standard_normal(n)
+        lmm_s = LMM(ys, K=K)
+        lmm_s._eig = model._eig
+        lmm_s.fit_result = fit
+        hits += np.nanmin(lmm_s.scan(gt, dtype=np.float64)["ps"]) < thr
+    fwer = hits / reps
+    assert 0.025 < fwer < 0.075, f"FWER {fwer:.3f} at nominal 0.05"
 
 
 def test_two_kinship_recovers_weights():

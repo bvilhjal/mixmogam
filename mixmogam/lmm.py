@@ -7,30 +7,36 @@ scans use the EMMAX formulation (Kang et al., Nat Genet, 2010) evaluated in
 batched BLAS-3 blocks: each SNP block costs two GEMMs and a rank-q
 residualization, never a per-SNP least-squares solve.
 
-For sample counts beyond the exact-eigendecomposition regime the spectrum of
-K is truncated BOLT-LMM style: a randomized top-k eigenbasis (LDAK-KVIK
-style subspace iteration) is used for the V^{-1/2} transform, with the
-dropped tail handled exactly as a scaled identity (exact when the tail
-eigenvalues are negligible; the unexplained trace mass is reported so the
-approximation can be audited).
+This module is the exact (eigendecomposition) engine. With a truncated
+spectrum (``n_eig < n``) the V^{-1/2} transform uses a randomized top-k
+eigenbasis with the dropped tail treated as a flat bulk at its mean
+eigenvalue. That is an approximation of this package's own design (not
+BOLT-LMM's, which never truncates the spectrum), and it is measurably
+anti-conservative at default width: lambda_GC 1.30 at n = 10,000 with
+k = 1024 (sim study 20261003T001500Z, re-read with the corrected
+lambda_GC). Large-n association should go through
+:func:`mixmogam.association.gwas` (BOLT-LMM / LDAK-KVIK two-step statistics with
+LOCO); a truncated scan warns.
 """
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass, field
 from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
 from scipy import linalg, optimize, stats
 
-from mixmogam._slq import lanczos_quadrature, randomized_eigh_op, trace_estimator
+from mixmogam._slq import (lanczos_quadrature_batch, rademacher_probes,
+                           randomized_eigh_op, trace_estimator)
 
 __all__ = ["LMM", "LMFit"]
 
 _EXACT_N_MAX = 8000  # n above which the exact O(n^3) eigh is skipped
-# BOLT-LMM's design point: only the leading structure axes deviate
-# strongly from isotropy, and the identity-tail correction handles the
-# Marchenko-Pastur bulk exactly, so a narrow basis suffices
+# width of the truncated basis; calibration of truncated scans depends on
+# k / n (lambda_GC 1.02 at k/n = 0.26, 1.30 at k/n = 0.10), so truncated
+# scans are an approximation, not a default path
 _DEFAULT_TOP_K = 1024
 
 
@@ -127,8 +133,9 @@ class LMM:
         Whether to prepend an intercept column to ``X``.
     n_eig : "auto" or int
         Number of leading eigenpairs of K to compute. ``"auto"`` uses the
-        full spectrum while ``n <= 8000`` and a randomized top-2048 basis
-        (with identity tail correction) above that. An int ``>= n`` forces
+        full spectrum while ``n <= 8000`` and a randomized top-1024 basis
+        (with a flat-bulk tail correction) above that; truncated scans are
+        approximate (see the module docstring). An int ``>= n`` forces
         the exact full spectrum.
     random_state :
         Seed for the randomized eigensolver.
@@ -556,19 +563,17 @@ class LMM:
             d = lam_d.size
 
         def op_defl(x):
-            return op(x) - U_d @ (lam_d * (U_d.T @ x))
+            c = U_d.T @ x
+            return op(x) - U_d @ (lam_d[:, None] * c if c.ndim == 2 else lam_d * c)
 
         y_top_coef = U_d.T @ y_proj
         y_rest = y_proj - U_d @ y_top_coef
-        y_rule = lanczos_quadrature(op_defl, y_rest, steps)
-        tr_rules = trace_estimator(
-            op_defl,
-            self.n,
-            probes,
-            steps,
-            rng,
-            pre=lambda x: x - Q @ (Q.T @ x),
-        )
+        # the y rule and the trace probes share every operator pass: one
+        # batched Lanczos run instead of 1 + probes sequential ones (same
+        # probes, same rules up to rounding)
+        Z = rademacher_probes(self.n, probes, rng, pre=lambda x: x - Q @ (Q.T @ x))
+        rules = lanczos_quadrature_batch(op_defl, np.column_stack([y_rest, Z]), steps)
+        y_rule, tr_rules = rules[0], rules[1:]
         p = self.n - self.q
 
         def s1_at(delta):
@@ -609,7 +614,8 @@ class LMM:
             def _k_op(x):
                 out = self._kdot(x)
                 if U_k is not None:
-                    out = out - U_k @ (lam_k * (U_k.T @ x))
+                    c = U_k.T @ x
+                    out = out - U_k @ (lam_k[:, None] * c if c.ndim == 2 else lam_k * c)
                 return out
 
             k_rules = trace_estimator(_k_op, self.n, probes, steps, rng)
@@ -734,15 +740,21 @@ class LMM:
         vg = s1_at(opt_delta) / p
         ve = vg * opt_delta
 
-        H_inv_sqrt_y, H_inv_sqrt_X = (
-            self._apply_inv_sqrt(a, opt_delta, np.float64) for a in (self.y, self.X)
-        )
-        XtX = H_inv_sqrt_X.T @ H_inv_sqrt_X
-        beta = linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos")
+        if self._kop is not None:
+            # streaming kinship: GLS by conjugate gradients, so a fit never
+            # triggers the truncated eigendecomposition the scan would use
+            beta = self._gls_beta_cg(opt_delta)
+            tail = float("nan") if self._eig is None else self._eig["tail_mass"]
+        else:
+            H_inv_sqrt_y, H_inv_sqrt_X = (
+                self._apply_inv_sqrt(a, opt_delta, np.float64) for a in (self.y, self.X)
+            )
+            XtX = H_inv_sqrt_X.T @ H_inv_sqrt_X
+            beta = linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos")
+            tail = self.eigen()["tail_mass"]
         residuals = self.y - self.X @ beta
         rss = float(residuals @ residuals)
 
-        eig = self.eigen()
         self.fit_result = LMFit(
             method=method,
             delta=opt_delta,
@@ -754,11 +766,36 @@ class LMM:
             rss=rss,
             n_grid=ngrids,
             newton_used=used_newton,
-            tail_mass=eig["tail_mass"],
+            tail_mass=tail,
             solver=solver,
             model=self,
         )
         return self.fit_result
+
+    def _operator_trace(self) -> float:
+        """trace(K) of the streaming operator (exact when it exposes one)."""
+        tr = getattr(self._kop, "trace", None)
+        if tr is not None:
+            return float(tr)
+        try:
+            return float(np.asarray(self._kop.diagonal()).sum())
+        except AttributeError:
+            rng = np.random.default_rng(self.random_state)
+            Z = rng.choice(np.array([-1.0, 1.0]), size=(self.n, 32))
+            return float(np.einsum("ij,ij->", Z, self._kdot(Z)) / 32)
+
+    def _gls_beta_cg(self, delta: float) -> np.ndarray:
+        """GLS covariate effects (X'V^-1 X)^-1 X'V^-1 y with CG solves."""
+        from mixmogam._cg import SpectralPreconditioner, batched_pcg
+
+        pre = SpectralPreconditioner(self._kdot, self.n, self._operator_trace(),
+                                     k=min(64, self.n - 2),
+                                     random_state=self.random_state)
+        rhs = np.column_stack([self.X, self.y])
+        W, _ = batched_pcg(lambda P, cols: self._kdot(P) + delta * P, rhs,
+                           lambda R: pre(R, delta), tol=1e-8, max_iter=1000)
+        WX, Wy = W[:, : self.q], W[:, self.q]
+        return linalg.solve(self.X.T @ WX, self.X.T @ Wy, assume_a="pos")
 
     # ------------------------------------------------------------------
     # Scanning
@@ -817,6 +854,14 @@ class LMM:
         """
         if (self.K is not None or self._kop is not None) and self.fit_result is None:
             raise ValueError("call fit() before scan() on a mixed model")
+        if (self.K is not None or self._kop is not None) and not self.eigen()["full"]:
+            warnings.warn(
+                "scan with a truncated spectrum is approximate and was "
+                "anti-conservative in simulations (lambda_GC 1.30 at n=10k, "
+                "k=1024); use mixmogam.gwas(..., method='bolt-inf') for "
+                "large-n association",
+                stacklevel=2,
+            )
         fac = self._scan_factors(dtype)
         Q, r, rss0, df = fac["Q"], fac["r"], fac["rss0"], fac["df"]
         tiny = np.finfo(dtype).tiny

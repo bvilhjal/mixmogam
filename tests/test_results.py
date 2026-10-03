@@ -35,7 +35,7 @@ def test_result_container(scan_result):
     assert top.p.size == 5
     assert np.all(np.diff(top.p) >= 0)
     lam = res.genomic_control()
-    assert 0.05 < lam < 20
+    assert 0.5 < lam < 3.0
     thr = res.bonferroni_threshold()
     assert thr == pytest.approx(0.05 / 2000)
 
@@ -46,7 +46,37 @@ def test_power_analysis(scan_result):
     pw = res.power_analysis(sim["causal"], window=0, alpha=0.01)
     assert pw["n_causal"] == 6
     assert pw["power"] >= 0.3
-    assert pw["n_false_positive"] >= 0
+    assert pw["n_significant_noncausal"] >= 0
+
+
+def test_genomic_control_direction():
+    """lambda_GC > 1 means inflation; a uniform null gives ~1."""
+    rng = np.random.default_rng(5)
+    null = GwasResult(chromosome=np.ones(20000), position=np.arange(20000),
+                      p=rng.random(20000))
+    assert null.genomic_control() == pytest.approx(1.0, abs=0.04)
+    from scipy import stats
+    chi2 = 2.0 * stats.chi2.rvs(1, size=20000, random_state=6)  # 2x inflated
+    infl = GwasResult(chromosome=np.ones(20000), position=np.arange(20000),
+                      p=stats.chi2.sf(chi2, 1))
+    assert infl.genomic_control() == pytest.approx(2.0, rel=0.05)
+
+
+def test_locus_summary_counts_loci_not_snps():
+    pos = np.arange(1000) * 100
+    chrom = np.repeat([1, 2], 500)
+    p = np.full(1000, 0.5)
+    p[100:110] = 1e-12          # one true locus: 10 SNPs around causal 105
+    p[700:703] = 1e-12          # one false locus on chromosome 2
+    res = GwasResult(chromosome=chrom, position=pos, p=p)
+    out = res.locus_summary([105, 300], window=500, alpha=1e-8)
+    assert out["n_significant"] == 13
+    assert out["n_loci"] == 2
+    assert out["n_true_loci"] == 1 and out["n_false_loci"] == 1
+    assert out["fdr"] == pytest.approx(0.5)
+    assert out["discovered"] == 1 and out["power"] == pytest.approx(0.5)
+    snp = res.power_analysis([105, 300], alpha=1e-8)
+    assert snp["n_significant_noncausal"] == 12  # LD tags count here, not as FDR
 
 
 def test_ppa(scan_result):

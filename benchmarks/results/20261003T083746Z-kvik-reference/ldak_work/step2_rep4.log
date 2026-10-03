@@ -1,0 +1,57 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 4 pairs of arguments:
+--kvik-step2 kvik4
+--bfile at
+--pheno pheno4.txt
+--max-threads 2
+
+Note that "--kvik-step2 kvik4" is equivalent to using either "--linear kvik4.step2" or "--logistic kvik4.step2" with "--PRS kvik4.step1"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Performing linear regression including LOCO PRS as an offset for one phenotype
+
+Will compute standard test statistics; use "--spa-test YES" to switch to a saddlepoint approximation, 
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 1307 samples from at.fam
+
+Checking responses for 1307 samples from pheno4.txt
+
+Reading details for 53167 predictors from at.bim
+
+Data contain 1307 samples and 53167 predictors (will be using 1307 and 53167)
+
+Reading phenotypes for 1307 samples from pheno4.txt
+
+Reading LOCO PRS for 1307 samples from kvik4.step1.loco.prs
+Performing linear regression for Chunk 1 of 56 (Chromosome 1)
+Performing linear regression for Chunk 11 of 56 (Chromosome 1)
+Performing linear regression for Chunk 21 of 56 (Chromosome 2)
+Performing linear regression for Chunk 31 of 56 (Chromosome 3)
+Performing linear regression for Chunk 41 of 56 (Chromosome 4)
+Performing linear regression for Chunk 51 of 56 (Chromosome 5)
+
+Main results saved in kvik4.step2.assoc, with a summary version in kvik4.step2.summaries and p-values in kvik4.step2.pvalues
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Sat Oct  3 10:49:55 2026 and ended at Sat Oct  3 10:49:56 2026
+The elapsed time was 0.00 hours
+Given the command used 2 threads, this means the CPU time was 0.00 hours
+
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
