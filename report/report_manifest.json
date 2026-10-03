@@ -1,49 +1,109 @@
 {
-  "revision": "2026-10-03-expanded-manuscript",
-  "recorded_at_utc": "2026-10-03T15:48:42.687111+00:00",
-  "package_version": "2.0.0.dev1",
-  "package_baseline_commit": "729c8532ff36878d9b6f62c20ebd2eb72a86c6db",
-  "revision_state": "report revision for the 2.0.0.dev2 commit; recorded computations retain their original producing version",
+  "revision": "2026-10-03-matched-kvik-hapnest-2.0.0.dev3",
+  "recorded_at_utc": "2026-10-03T18:06:53.039320+00:00",
+  "package_version": "2.0.0.dev3",
+  "package_baseline_commit": "db2322166530361d63dab04538854cdc6476c1f0",
+  "revision_state": "Prepared for the 2.0.0.dev3 source commit. The 23 reviewed mixmogam computational modules are unchanged; package version metadata is updated. Recorded benchmark producing versions and snapshots remain historical.",
   "pdf": {
     "path": "report/mixmogam_report.pdf",
-    "sha256": "171476a048f1fc7f1b5f5eb2222140c6544f06307c332a262a4821b082cd9880",
-    "pages": 19
+    "sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",
+    "pages": 28
   },
   "counts": {
-    "figures": 3,
-    "tables": 4,
-    "numbered_equations": 15,
-    "verified_bibliography_entries": 26,
+    "figures": 5,
+    "tables": 9,
+    "numbered_equations": 17,
+    "verified_bibliography_entries": 27,
     "research_priorities": 6
   },
   "input_sha256": {
-    "report/mixmogam_report.tex": "61f43faac26c9f307bf6cdcaf3c6730a8b4510b0eafce01d96a12fbc421b3bf0",
-    "report/README.md": "b597ade852ccb50b22b57a94a9777ec9f25cfa183845b2e1e250bbaf1676f30d",
-    "report/make_figures.py": "87659abe36f990a78df79b11cee0fa533890bd2f8e0f77de9e0ff20319c6948e",
-    "report/figure_manifest.json": "89ee7d61558117bac4339bca384ae67c0c7281ffa13db3d07cf737463d631647",
-    "report/references.json": "b1ba2bde680471d036ee380febd1e7a1014c6d66b33654b0a542200dbdccb4ca",
-    "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
+    "CHANGELOG.md": "35307fac3ad9b63ca49e4e602eb266716f33502f8d41b05c3bf3eae73b9db8cb",
+    "MANIFEST.in": "d3f8f2366549d52b194ff34adec21a3d3a6f85801d45d317b83b186a0d8eb08c",
+    "README.md": "9578a32989158a42e6bb74dee3b07a8476dca463708528cefe7075085b30b91d",
     "benchmarks/denominator_geometry.py": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
-    "benchmarks/results/20261003-manuscript-geometry/summary.csv": "f4e16789f89b9278c5610bf5395cbaa598b05a43cbf5f9fd5508751d467147a3",
+    "benchmarks/kvik_scaling_plan.md": "86ef40eefdda5c58cbd7d8b5634fc6f7538a1b2dc05a85a99170918fb4e08729",
+    "benchmarks/kvik_simulation.py": "c01dcd0483b72ba6a4915825877466ba49045f7d1f5543e0994d808fc37c987d",
+    "benchmarks/kvik_simulation_plan.md": "5a2fe979a538a980b4930c96cb5a74c645ae27f30c3e0c69bcbae99f0521f16a",
+    "benchmarks/results/20261002T200925Z/benchmarks.csv": "2dd88d036ac220e3cfe004dccf123de94f44d089225c22ed89f8d27a88d0756f",
+    "benchmarks/results/20261003-critical-review/loco_memory.json": "23e99525b7a335073b86bdcd16b0804cf0842863b698ab34f0b0725e25dfa89b",
+    "benchmarks/results/20261003-critical-review/validation.json": "c439b96e8902cc2393a1982e05f5ff506f9d1e24664e01e754486ef87d785002",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/README.md": "cb9f178c4c6a2bd26d6acf7e20849878addf4c5b383e999ba9d64d10a121b056",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/aggregate.csv": "8d45c5e2762eb226f15872a2ed1a39ddac09566c0a3f57475425150326f79b86",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/completion.json": "2bfbb356bc33e7a1f96f4bc58c40b48f571ec173062345469ce8385aa17023ee",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/environment.json": "2809139c8fbc94f0891c17840b125e46a599ac9bcaac6dcd138bc8154c1c7a1f",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/plan.md": "e454b960a53c86e407c28060ddc074de102cb0092166445ad92fc918580e39f3",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/replicates.csv": "afb33ff80fba062ab5e5bb0f591ec747b26244600a409f6ef59526d5bcc47b17",
+    "benchmarks/results/20261003-hapnest-kvik-n10000/validation.json": "f3d4f7739cfcdfed94036cdeaf6b8ed0bceb132d08f8c2f5e67106b32929c8a0",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/README.md": "99d2b0833b62fcbe092cb0f0dfa197b57f6097befcbf0b32ff43b8fc89766966",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/aggregate.csv": "5b71aa011cd07eb1ced41b81087e75b3871f2e88db6843bc374cbad4ac92b4ba",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/completion.json": "2bfbb356bc33e7a1f96f4bc58c40b48f571ec173062345469ce8385aa17023ee",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/environment.json": "97e06e17ee535b7648253e3a1dc02f07863ad32ee7dc4bac323f7dde352742a2",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/plan.md": "e454b960a53c86e407c28060ddc074de102cb0092166445ad92fc918580e39f3",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/replicates.csv": "5c1c9d910f06fbae40b9f455fe488f64d07f5f00786e251057a254f0a01854f2",
+    "benchmarks/results/20261003-hapnest-kvik-n50000/validation.json": "f3d4f7739cfcdfed94036cdeaf6b8ed0bceb132d08f8c2f5e67106b32929c8a0",
+    "benchmarks/results/20261003-hapnest-simulator/environment.json": "733e0a8840e97549db20de9bfbf56b56805e554a4c12187b4a6452b9c67b97c0",
+    "benchmarks/results/20261003-hapnest-simulator/preparation_resources.csv": "49f112142579a34b142f34dedcfbe4484f16f622f83fa18b0b51d403281f393d",
+    "benchmarks/results/20261003-hapnest-simulator/preparation_validation.json": "5038c132163982effa97d9c53349b7b640f63c0cfca361b32481ee16c3e1076a",
+    "benchmarks/results/20261003-hapnest-simulator/resources.csv": "b58676516360c289b2aa426c29a0e471bd2533eedbcdacdb1f80907238120d3f",
     "benchmarks/results/20261003-manuscript-geometry/manifest.json": "f0ea0a5c7d2246798c072863ddfd8f8bb9e692632f8bf8a3b0d60735b5886de2",
     "benchmarks/results/20261003-manuscript-geometry/source.py": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
-    "benchmarks/results/20261003-critical-review/validation.json": "c439b96e8902cc2393a1982e05f5ff506f9d1e24664e01e754486ef87d785002",
-    "benchmarks/results/20261003-critical-review/loco_memory.json": "23e99525b7a335073b86bdcd16b0804cf0842863b698ab34f0b0725e25dfa89b",
+    "benchmarks/results/20261003-manuscript-geometry/summary.csv": "f4e16789f89b9278c5610bf5395cbaa598b05a43cbf5f9fd5508751d467147a3",
+    "benchmarks/results/20261003-phensim-kvik-n2000/aggregate.csv": "02ecee54fe7f1369ac285ef9d5c2a815772ec889b6256c745ca79717e498b328",
+    "benchmarks/results/20261003-phensim-kvik-n2000/completion.json": "96a194d9180f1afac6e052cf794d099479475b41028c608a74bb7b9abf5faecb",
+    "benchmarks/results/20261003-phensim-kvik-n2000/environment.json": "77c46bcd2b94ba99d1ca1467276328e28b94d52a138afcee2042ae97219e53df",
+    "benchmarks/results/20261003-phensim-kvik-n2000/plan.md": "86ef40eefdda5c58cbd7d8b5634fc6f7538a1b2dc05a85a99170918fb4e08729",
+    "benchmarks/results/20261003-phensim-kvik-n2000/replicates.csv": "9a9f5f691f96623394aefea364f98f5e876ed242b6c49978c9819b0ead1d0343",
+    "benchmarks/results/20261003-phensim-kvik-n2000/validation.json": "17256e5bfea6f838dea08730f7e7d49276ec84506c832189a19841b3c107e2ec",
+    "benchmarks/results/20261003-phensim-kvik-n4000/aggregate.csv": "c1d2a91e6a652d2857e882111076d180a34d4d3fe6ec6daa39ef9d108e0ac5cd",
+    "benchmarks/results/20261003-phensim-kvik-n4000/completion.json": "96a194d9180f1afac6e052cf794d099479475b41028c608a74bb7b9abf5faecb",
+    "benchmarks/results/20261003-phensim-kvik-n4000/environment.json": "f9630f076a6e16123d57c6c89efac1228977db9a7b571398c3de25433d7863c8",
+    "benchmarks/results/20261003-phensim-kvik-n4000/plan.md": "86ef40eefdda5c58cbd7d8b5634fc6f7538a1b2dc05a85a99170918fb4e08729",
+    "benchmarks/results/20261003-phensim-kvik-n4000/replicates.csv": "749bd10955f5d13eea60cb0e440fdc0f02d6b5ceb8e0e4abd8e0e091ecd61501",
+    "benchmarks/results/20261003-phensim-kvik-n4000/validation.json": "17256e5bfea6f838dea08730f7e7d49276ec84506c832189a19841b3c107e2ec",
+    "benchmarks/results/20261003-phensim-kvik/aggregate.csv": "f2a5efc0f6169bd87ce04c8a1544086ef6f0cbefc3ced2ba520aa87e3f0a3b88",
+    "benchmarks/results/20261003-phensim-kvik/completion.json": "97444dd28774515c5e188802016eed243bb7634cc12fe7c9ea364a8db5665485",
+    "benchmarks/results/20261003-phensim-kvik/environment.json": "7f98827222a38b86acf598620ec0e38baec6dee3ffeda18004c9e1ae2056bacc",
+    "benchmarks/results/20261003-phensim-kvik/paired_differences.csv": "904811d9464fe4e3e9fde17a6c24215b52d44b7e1351e2bc22c8589861fb1982",
+    "benchmarks/results/20261003-phensim-kvik/plan.md": "5a2fe979a538a980b4930c96cb5a74c645ae27f30c3e0c69bcbae99f0521f16a",
+    "benchmarks/results/20261003-phensim-kvik/replicates.csv": "290cfda78c3b23a62981ade4132c4b652d4575a240658bc1e0d17401dba09008",
+    "benchmarks/results/20261003-phensim-kvik/reproduction_check.json": "4511138d8a780fcfb68c707a60092128854bba1dedb76b03f3065da8b3e850c5",
+    "benchmarks/results/20261003-phensim-kvik/scaling_summary.csv": "d1679b211f0d75fe9f2e012972b68aff5c141e3b1ee0bcb3cad74188ea313fed",
+    "benchmarks/results/20261003-phensim-kvik/validation.json": "597e807c4bb74335e0c7bb56558b5783daafd63cfe74a8ff967301abd82f7139",
+    "benchmarks/results/20261003T001500Z-sim-study-large/NOTES.md": "ca59bfdd78b8dc01a310b251499a8fa2a472edf0374106591cf2fbeaa9d1bd51",
+    "benchmarks/results/20261003T001500Z-sim-study-large/sim_study.csv": "c4707a73bdfe8598609a5245d96cd975c05968d5c4308485533a93a4d1ae2358",
     "benchmarks/results/20261003T081812Z-structure-calibration/structure_calibration.csv": "e8ea322d50633a095c01c7b8998ac4a01de56cb320567d0d56dcde48a858fa9c",
-    "benchmarks/results/20261003T122520Z-sim-study/sim_study.csv": "f2f7cba015f368615a73d2c2175a2ec2ef5533cf271b271d36f438821b926716",
     "benchmarks/results/20261003T122520Z-sim-study/checks_blocks.csv": "41d20f70db20f21410e7cb17d170e91af47d502fd83f0e33062bab6e5909ba1d",
     "benchmarks/results/20261003T122520Z-sim-study/checks_s2_design.csv": "43680794873ae63c2432123f8558bf28210a5af6f3d1d376262b3d563e8aff55",
-    "benchmarks/results/20261003T122520Z-sim-study/src/sim_data.py": "bcc596f47451698875fddcba0821290907b6b786fa600f88e7c74f32ca6e2ba6",
+    "benchmarks/results/20261003T122520Z-sim-study/sim_study.csv": "f2f7cba015f368615a73d2c2175a2ec2ef5533cf271b271d36f438821b926716",
     "benchmarks/results/20261003T122520Z-sim-study/src/phensim/phenotypes.py": "dcc962e9b911436311283f859b02caebd5664ca46567788ef30d87353b254708",
-    "benchmarks/results/20261002T200925Z/benchmarks.csv": "2dd88d036ac220e3cfe004dccf123de94f44d089225c22ed89f8d27a88d0756f",
-    "benchmarks/results/20261003T001500Z-sim-study-large/sim_study.csv": "c4707a73bdfe8598609a5245d96cd975c05968d5c4308485533a93a4d1ae2358",
-    "benchmarks/results/20261003T001500Z-sim-study-large/NOTES.md": "ca59bfdd78b8dc01a310b251499a8fa2a472edf0374106591cf2fbeaa9d1bd51",
-    "report/figures/geometry.pdf": "507720e99e945e101aa3f712c111e90cdf8c35451741197d5c363281343c43d1",
+    "benchmarks/results/20261003T122520Z-sim-study/src/sim_data.py": "bcc596f47451698875fddcba0821290907b6b786fa600f88e7c74f32ca6e2ba6",
+    "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
+    "mixmogam/__init__.py": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+    "report/README.md": "aef66ebba4d9f59716e531e3a70d597a10c07caae6fc6f6c68d074c0f34e0903",
+    "report/figure_manifest.json": "89ee7d61558117bac4339bca384ae67c0c7281ffa13db3d07cf737463d631647",
     "report/figures/calibration.pdf": "8b307f4064a74add27d56824210a1f4f122c2537048065af5684ce3a2e50752f",
+    "report/figures/geometry.pdf": "507720e99e945e101aa3f712c111e90cdf8c35451741197d5c363281343c43d1",
+    "report/figures/kvik_phensim.pdf": "43bf23d6fa985dee162fba192e65c07f48f3507807dddc7e0e1b35f9be5d03a0",
+    "report/figures/kvik_phensim.png": "8a4184c850d60bb17ad9d06be403f4961965f6ca18f5975a760216450084a23f",
+    "report/figures/kvik_scaling.pdf": "ad70718e1b660275a1d761c039542ca7f4a7e9d842395a49d27daed15d50d0e1",
+    "report/figures/kvik_scaling.png": "eebf72b7725d19dd204f6eb274dc6475315a8d88e95303b4dd1ae74db70f3744",
     "report/figures/s2_loading.pdf": "20c70b3c4ef1880942ce853e855fbb50762529caa010e71a2666131556a716d1",
-    "report/tables/geometry.tex": "1007ae46fc41649fc49a7d4adc916f25ecf9240aae71f2859592aef559f25bd4",
+    "report/hapnest_manifest.json": "c079ec72d0cbe8d3062dd42c7a522ba9f0e760d0de7858e6cc62d0571592896f",
+    "report/kvik_figure_manifest.json": "7b5cc6ed6b4edabdc63628a9afa31e68c441a666643c1d8c19bb44f74fcbce76",
+    "report/kvik_scaling_manifest.json": "8632bbc4cc2eefd42877bfd4c95cedae145a1f9fcab834edde000af197539707",
+    "report/make_figures.py": "87659abe36f990a78df79b11cee0fa533890bd2f8e0f77de9e0ff20319c6948e",
+    "report/make_kvik_figures.py": "8c677b9962e48e907c7c6b697a2ab0001bd9bc2e6b43b26b45177f15bbb8cef3",
+    "report/mixmogam_report.tex": "9a063a0b4682b3dbd68e159c1b2469912d459191ae466966b50e8a6f95367c21",
+    "report/references.json": "7eb3a7691bce14e1546533b4c87279f9e206e361bb20c9296d8ec356e9979cd9",
     "report/tables/calibration.tex": "6f0179966a74576706a5f978c8ed0e1aea5739bd378aab4f71569e97c3842201",
-    "report/tables/s2.tex": "80e0ba88ec4c68c98458973b770afafb1c8b11fdff094b35e411af56cc9e5581"
+    "report/tables/geometry.tex": "1007ae46fc41649fc49a7d4adc916f25ecf9240aae71f2859592aef559f25bd4",
+    "report/tables/hapnest_kvik.tex": "7cc08c8c098e3ce53447e8d3c2cbd5192e4deddd2cd84a334878c6e973ceb027",
+    "report/tables/hapnest_simulator.tex": "354ad6e800f496c6a58726cbb17d6dac97e8b4c0b881172283a234840f1addad",
+    "report/tables/kvik_phensim.tex": "df4e5178d30b8adc6380b08516eb71ad2ab1b5498ad67089ca911f597dad6436",
+    "report/tables/kvik_resources.tex": "b4521d93e887d361156920e4e496611523ee55051f6a440808bf1f74da956617",
+    "report/tables/kvik_scaling.tex": "b7ebaf5430d6b9ab364cba421d5cf15bff9c70e24e9c2cfe35c0babe2df20884",
+    "report/tables/s2.tex": "80e0ba88ec4c68c98458973b770afafb1c8b11fdff094b35e411af56cc9e5581",
+    "tests/test_kvik_simulation.py": "90d488e79c595423d2986c6ec92e1933e0147d798859a87e6e0293ad5c70c447"
   },
   "package_source_sha256_unchanged_from_review": {
     "mixmogam/_cg.py": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
@@ -70,6 +130,29 @@
     "mixmogam/stepwise.py": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
     "mixmogam/twostep.py": "d8c54cbff8ad7d1298612f9fda1febb73eac7700b7a3b8ba7787e1ca58d49c5c"
   },
+  "phensim": {
+    "version": "1.0.0.dev2",
+    "baseline_commit": "4939124eb753a73e7d8c06509a996e6e546ff6f0",
+    "delivered_source_sha256": {
+      "phensim/__init__.py": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7",
+      "phensim/_coalescent.py": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6",
+      "phensim/_common.py": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382",
+      "phensim/_numba.py": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60",
+      "phensim/genotypes.py": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69",
+      "phensim/hapnest.py": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7",
+      "phensim/io.py": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1",
+      "phensim/kinship.py": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864",
+      "phensim/pedigree.py": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e",
+      "phensim/phenotypes.py": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda",
+      "phensim/sumstats.py": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60"
+    },
+    "performance_archives": [
+      "../phensim/benchmarks/results/20261003-hapnest-scaling",
+      "../phensim/benchmarks/results/20261003-hapnest-preparation"
+    ],
+    "publication_commit": "f1937dbd9921546cb05fc7119ebeb9f719f7e694",
+    "release_input_compatibility_fixes": "NumPy accumulation now accepts uint64 donor segments, and auto selects NumPy for non-native byte order without a full reference copy. The measured reference arrays use int8 and the frozen benchmark kernels are retained."
+  },
   "build": {
     "engine": "Tectonic 0.17.0",
     "command": "tectonic --keep-logs mixmogam_report.tex",
@@ -79,28 +162,231 @@
     "unresolved_references": 0
   },
   "verification": {
-    "experiment_reproduction": "summary.csv, source.py, and manifest.json byte-identical on an independent rerun with 2000 phenotype replicates per panel",
-    "numerical_checks": "direct GRM and solves versus spectral identities; disjoint calibration/audit sets; analytic versus empirical rejection fractions",
-    "uncertainty": "Monte Carlo standard errors across independent phenotype replicates; historical six-replicate intervals use Student t with 5 degrees of freedom",
-    "visual_review": "all 19 pages rendered with Poppler and inspected; edited pages re-inspected and unchanged page pixels verified",
-    "citations": "all 26 references cited and DOI identities checked against Europe PMC; all internal labels resolve",
-    "lint": "ruff check . passed",
-    "whitespace": "git -c core.whitespace=trailing-space,space-before-tab,cr-at-eol diff --cached --check passed; original CSV CRLF record endings preserved",
-    "package_validation": "117 tests passed for publication; 23 computational source files match the earlier review snapshot; __init__.py changes only the version to 2.0.0.dev2",
-    "publication_tests": {
-      "command": "python -m pytest -q --tb=short",
-      "passed": 117,
-      "skipped": 0,
-      "warnings": 5,
-      "seconds": 56.393,
-      "threads": 1
+    "visual_review": "All 28 manuscript pages inspected. After the release version update, pages 1 and 25 were rendered and inspected again; the other 26 pages are pixel-identical.",
+    "citations": "All 27 bibliography entries cited; DOI identities verified against Europe PMC. Every internal reference resolves.",
+    "conditional_geometry_reproduction": "summary.csv, source.py, and manifest.json byte-identical on an independent rerun with 2000 phenotype replicates per panel",
+    "matched_input_reproduction": "One structured/PC-adjusted primary case regenerated with frozen packages; serialized inputs and all four methods p-values exactly agree. Its source_matches_current_packages field refers to the working trees at reproduction time, before later phensim extensions.",
+    "matched_input_audit": "Every archived source hash checked; all five archives report complete export verification. Large BED files remain local and ignored by Git; hashes and frozen generating inputs retained.",
+    "simulator_checks": "NumPy and Numba, batch sizes, arrays and memory maps agree; Gamma-age probability and no-recombination reference moments independently checked. Three preparation seeds match dense traits within 2e-12 and PLINK bytes exactly.",
+    "tests": {
+      "phensim": {
+        "full_suite_passed": 381,
+        "full_suite_seconds": 14.11,
+        "threads": 1,
+        "after_release_dtype_fixes": true
+      },
+      "mixmogam": {
+        "full_suite_passed": 122,
+        "full_suite_seconds": 62.79,
+        "expected_warnings": 5,
+        "threads": 1,
+        "source_distribution_benchmark_tests": {
+          "passed": 5,
+          "seconds": 3.52,
+          "python": "3.10"
+        }
+      }
     },
-    "publication_metadata": "source version, local egg-info, and installed editable metadata agree at 2.0.0.dev2; pip check passed"
+    "lint": "ruff check . passed in both repositories.",
+    "whitespace": "Staged package, harness, test and document changes pass git diff --check. Frozen logs, diff records and original _cg.py snapshots retain their original whitespace; archive CSV records retain CRLF.",
+    "historical_review": {
+      "package_version": "2.0.0.dev1",
+      "tests_passed": 117,
+      "standalone_wheel_check": "Python 3.10 / NumPy 1.26.4 / SciPy 1.11.4",
+      "note": "This is the earlier review evidence, not a rerun of current benchmark additions."
+    },
+    "archive_housekeeping": "Five Finder metadata files omitted before publication; environment metadata retains their original hashes and omission reason. Executable source snapshots and scientific outputs are unchanged.",
+    "package_artifacts": {
+      "mixmogam": {
+        "wheel_sha256": "fc40b5b44d6ba33ad5c983428db1cc6ae2c043c382b52e0e952baa077be6d48e",
+        "sdist_sha256": "1c54594399707b0eeec064b9738793f1b045fe90ec25b19b27b56d2f7f8b7144",
+        "wheel_built_from_sdist": true,
+        "installed_smoke": {
+          "version": "2.0.0.dev3",
+          "installed_path": "/private/tmp/mixmogam-20261003-release/venv/lib/python3.14/site-packages/mixmogam",
+          "source_files_match": true,
+          "valid_variant_pvalues_by_method": {
+            "exact": 600,
+            "bolt-inf": 600,
+            "kvik": 600
+          }
+        },
+        "test_driver_in_sdist": true,
+        "benchmark_archives_in_sdist": false
+      },
+      "phensim": {
+        "wheel_sha256": "809845b2e47503ddd221504e3aaa2f50b5ece807d317de8efcf4b0499a840bf1",
+        "installed_exports_checked": 37,
+        "smoke": "Backend/batch/memmap parity, uint64 and non-native references, tiled traits, identical PLINK bytes passed."
+      },
+      "editable_versions_match_source": true,
+      "pip_check": "passed"
+    }
   },
-  "evidence_boundary": "New results isolate known-covariance denominator geometry with exact leading eigenvectors. Historical panels are descriptive; the invalid external LDAK comparison is excluded. Research directions are proposals, not completed validation.",
-  "publication_package_version": "2.0.0.dev2",
+  "association_archives": [
+    {
+      "archive": "benchmarks/results/20261003-phensim-kvik",
+      "completion": {
+        "successful_method_runs": 384,
+        "failed_method_runs": 0
+      },
+      "mixmogam_kvik_complete_convergence": 90,
+      "mixmogam_kvik_incomplete": [
+        {
+          "case": "rho0_fst0.05_rep06/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": true
+        },
+        {
+          "case": "rho0.8_fst0.05_rep01/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": true
+        },
+        {
+          "case": "rho0_fst0.05_rep04/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": false
+        },
+        {
+          "case": "rho0_fst0.05_rep05/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": true
+        },
+        {
+          "case": "rho0.8_fst0.05_rep05/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": true
+        },
+        {
+          "case": "rho0.8_fst0.05_rep02/confounded_mixed",
+          "cv_converged": false,
+          "loco_converged": false
+        }
+      ],
+      "delivered_source_comparison": {
+        "mixmogam": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "mixmogam/__init__.py"
+          ]
+        },
+        "phensim": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "phensim/__init__.py",
+            "phensim/genotypes.py",
+            "phensim/io.py",
+            "phensim/phenotypes.py"
+          ]
+        }
+      }
+    },
+    {
+      "archive": "benchmarks/results/20261003-phensim-kvik-n2000",
+      "completion": {
+        "successful_method_runs": 16,
+        "failed_method_runs": 0
+      },
+      "mixmogam_kvik_complete_convergence": 4,
+      "mixmogam_kvik_incomplete": [],
+      "delivered_source_comparison": {
+        "mixmogam": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "mixmogam/__init__.py"
+          ]
+        },
+        "phensim": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "phensim/__init__.py",
+            "phensim/genotypes.py",
+            "phensim/io.py",
+            "phensim/phenotypes.py"
+          ]
+        }
+      }
+    },
+    {
+      "archive": "benchmarks/results/20261003-phensim-kvik-n4000",
+      "completion": {
+        "successful_method_runs": 16,
+        "failed_method_runs": 0
+      },
+      "mixmogam_kvik_complete_convergence": 4,
+      "mixmogam_kvik_incomplete": [],
+      "delivered_source_comparison": {
+        "mixmogam": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "mixmogam/__init__.py"
+          ]
+        },
+        "phensim": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "phensim/__init__.py",
+            "phensim/genotypes.py",
+            "phensim/io.py",
+            "phensim/phenotypes.py"
+          ]
+        }
+      }
+    },
+    {
+      "archive": "benchmarks/results/20261003-hapnest-kvik-n10000",
+      "completion": {
+        "successful_method_runs": 4,
+        "failed_method_runs": 0
+      },
+      "mixmogam_kvik_complete_convergence": 2,
+      "mixmogam_kvik_incomplete": [],
+      "delivered_source_comparison": {
+        "mixmogam": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "mixmogam/__init__.py"
+          ]
+        },
+        "phensim": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "phensim/__init__.py",
+            "phensim/hapnest.py"
+          ]
+        }
+      }
+    },
+    {
+      "archive": "benchmarks/results/20261003-hapnest-kvik-n50000",
+      "completion": {
+        "successful_method_runs": 4,
+        "failed_method_runs": 0
+      },
+      "mixmogam_kvik_complete_convergence": 2,
+      "mixmogam_kvik_incomplete": [],
+      "delivered_source_comparison": {
+        "mixmogam": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "mixmogam/__init__.py"
+          ]
+        },
+        "phensim": {
+          "archived_python_files_match_delivered_tree": false,
+          "changed_since_run": [
+            "phensim/__init__.py",
+            "phensim/hapnest.py"
+          ]
+        }
+      }
+    }
+  ],
+  "evidence_boundary": "The known-covariance experiment isolates denominator geometry. The primary matched comparison has six independent panels per cell at n=800; larger workload extensions have two or one realization per cell and establish measured resources and feasibility only. HAPNEST generation reaches n=100000 at 12000 variants; association reaches n=50000 with controlled synthetic references. This does not validate empirical human diversity, genome-wide biobank calibration, or equivalence to upstream Julia HAPNEST. Historical encoding-invalid external comparisons remain excluded. Research directions are proposals.",
+  "preceding_report_manifest_sha256": "e8e97c03a237a3d96b785972a241dd834445743175755dc73236068f0a330b41",
+  "publication_package_version": "2.0.0.dev3",
   "publication_version_metadata": {
     "path": "mixmogam/__init__.py",
-    "sha256": "a6d8ad6f9813bf7f7080fe0e5b2a622653c7c61064257cc550e19b917e68d9c6"
+    "sha256": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b"
   }
 }

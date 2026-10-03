@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Matched reference benchmark (2.0.0.dev3)
+
+- Extend measured workloads to 50,000 samples with phensim's new HAPNEST
+  model, keeping all production fitting defaults. Preparation uses tiled
+  genotype operations, audited iterative PCs, and isolated processes.
+- Add simulator speed/RSS evidence through 100,000 samples, resource tables,
+  uncertainty-aware matched results and empirical-reference research priorities
+  to the report. Simulation scale and association-validation claims remain
+  distinct; large-n cells have one realization each.
+- Add a prespecified phensim simulation comparison with the official
+  LDAK-KVIK executable, including population structure, within-population
+  LD, environmental confounding and paired PC adjustment.
+- Validate actual BED calls independently and check external-reader sample
+  IDs, allele orientation, frequencies and call rates. Retain raw results,
+  failures, seeds, source snapshots, convergence diagnostics and process RSS.
+- Distinguish global genetic-null calibration, null-chromosome rejection
+  under mixed traits, and direct causal-marker detection with uncertainty
+  across independent genotype/phenotype replicates.
+
 ### Research report (2.0.0.dev2)
 
 - Expand the manuscript with model and calibration derivations, explicit

@@ -3,14 +3,19 @@
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. This revision
-includes a new controlled experiment; it does not claim that older benchmarks
-validate the corrected package or establish superiority over external programs.
+includes a matched comparison with official LDAK-KVIK, workload measurements
+through 50,000 samples, and HAPNEST-model simulation measurements through
+100,000 samples. Historical evidence retains its original limitations.
 
 Table 1. Evidence and provenance used in the manuscript.
 
 | Evidence | Archive under `benchmarks/results/` | Interpretation |
 |---|---|---|
 | Known-covariance denominator experiment | `20261003-manuscript-geometry` | New analytic and simulated conditional calibration; separate calibration/audit variants |
+| Matched phensim comparison | `20261003-phensim-kvik` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
+| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
+| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
+| Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Current software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -37,9 +42,10 @@ The output directory must not already exist. The driver checks direct versus
 spectral algebra, disjoint calibration/audit sets, and simulated versus analytic
 rejection probabilities. It records seeds, versions, genotype hashes, and its
 source snapshot. On macOS it requires AC power with Low Power Mode disabled.
-The manuscript and its new archive describe package `2.0.0.dev1` at commit
-`729c8532`. They are included in `2.0.0.dev2`, which changes the report and
-version metadata without changing the numerical implementation.
+The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
+Its first expanded manuscript was included in `2.0.0.dev2`. This revision
+accompanies `2.0.0.dev3`; these report and benchmark additions preserve the
+reviewed association implementation.
 
 ## Rebuild the manuscript
 
@@ -47,6 +53,7 @@ From the repository root, with matplotlib and Tectonic available:
 
 ```sh
 python report/make_figures.py
+python report/make_kvik_figures.py
 cd report
 tectonic mixmogam_report.tex
 ```
@@ -54,6 +61,12 @@ tectonic mixmogam_report.tex
 This is a multi-file LaTeX project: its figures and tables must remain beside the
 source. The figure script reads the archived CSVs, excludes the invalid external
 comparison, and writes input/output hashes to `figure_manifest.json`.
+The matched comparison has separate figure and HAPNEST manifests. The new
+association results use mixmogam `2.0.0.dev2` at `db232216`, with exact phensim
+extensions frozen per archive; subsequent simulation changes do not retroactively
+validate old results. At large n, input BED files stay local and are ignored by
+Git, with hashes and generating references/seeds retained. The primary matched
+case was independently regenerated and all four methods' p-values agreed exactly.
 `report_manifest.json` records the delivered manuscript, supporting sources, and
 verification. `references.json` contains verified bibliography identities and
 lookup URLs. Regenerate the report manifest when delivering a revised PDF;

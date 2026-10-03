@@ -1,0 +1,305 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index fa968d0..de12287 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Matched reference benchmark
++
++- Add a prespecified phensim simulation comparison with the official
++  LDAK-KVIK executable, including population structure, within-population
++  LD, environmental confounding and paired PC adjustment.
++- Validate actual BED calls independently and check external-reader sample
++  IDs, allele orientation, frequencies and call rates. Retain raw results,
++  failures, seeds, source snapshots, convergence diagnostics and process RSS.
++- Distinguish global genetic-null calibration, null-chromosome rejection
++  under mixed traits, and direct causal-marker detection with uncertainty
++  across independent genotype/phenotype replicates.
++
+ ### Research report (2.0.0.dev2)
+ 
+ - Expand the manuscript with model and calibration derivations, explicit
+diff --git a/benchmarks/README.md b/benchmarks/README.md
+index 90a9bd0..79fd826 100644
+--- a/benchmarks/README.md
++++ b/benchmarks/README.md
+@@ -16,6 +16,33 @@ also changed; previous thresholds belong to `scheme="projected"`.
+ The archived sources/results remain intact. See the
+ [critical review](../docs/review-2026-10-03.md).
+ 
++**Matched simulation comparison.** `kvik_simulation.py` compares exact
++LOCO, local BOLT-inf and local KVIK with the official LDAK-KVIK executable.
++All data come from phensim, including Balding–Nichols populations with
++optional AR(1) LD and explicit environmental exposures. The
++[prespecified protocol](kvik_simulation_plan.md) separates genetic-null
++calibration, null-chromosome rejection and causal-marker power. Each run
++checks individual BED calls independently and verifies the reference
++reader's IDs, frequencies and call rates before fitting.
++
++```sh
++OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
++VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1 \
++python benchmarks/kvik_simulation.py --ldak /path/to/ldak \
++  --ldak-source-url PINNED_DOWNLOAD_URL --out /tmp/new-kvik-comparison
++```
++
++Install the sibling phensim checkout with its structured-LD and explicit
++environment extensions (`pip install -e ../phensim`). Source snapshots in
++the run archive identify the exact versions used. The default design is
++800 samples, 6,000 markers, six independent replicates per cell, two LD
++settings, four structure/covariate settings and two traits. Outputs include
++complete inputs, raw p-values, process peak RSS, full commands and logs,
++convergence diagnostics, and replicate-level Monte Carlo uncertainty.
++Runs require macOS or Linux (`os.wait4` supplies per-process resource data);
++macOS additionally requires AC power with Low Power Mode off. External
++tool failures remain visible. The excluded pilot is not calibration evidence.
++
+ ```sh
+ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
+     python benchmarks/run_benchmarks.py [--quick]
+diff --git a/report/mixmogam_report.tex b/report/mixmogam_report.tex
+index 7e78a7d..f50efb8 100644
+--- a/report/mixmogam_report.tex
++++ b/report/mixmogam_report.tex
+@@ -38,7 +38,7 @@
+ numerical foundations, calibration diagnostics\\
+ and research directions for mixmogam}
+ \author{mixmogam contributors}
+-\date{3 October 2026\\\small Research report for version 2.0.0.dev1}
++\date{3 October 2026\\\small Research report for version 2.0.0.dev2}
+ 
+ \begin{document}
+ \maketitle
+@@ -65,7 +65,8 @@ they do not validate estimated-covariance scans or reference GWAS
+ programs. We reassess historical simulations, separate environmental
+ mean misspecification from denominator error, and withdraw an external
+ comparison compromised by genotype encoding. A reproducible research
+-agenda prioritizes matched-input benchmarks, independent calibration
++agenda extends a new matched-input phensim comparison with reference
++LDAK-KVIK to larger and more realistic settings, independent calibration
+ audits, error-controlled spectral approximations, and validation under
+ realistic ancestry, relatedness, and genetic architectures.
+ \end{abstract}
+@@ -124,18 +125,21 @@ mixmogam offers a useful setting for studying these distinctions because
+ dense and streaming calculations share genotype handling and several
+ model components. Its earlier work included multi-locus mixed-model
+ association \citep{segura2012}; the current engine also supplies LOCO and
+-experimental two-step analyses. The present contribution is a methods
+-and software investigation, not a competitive benchmark establishing a
+-new best-performing GWAS program. We provide the mathematical contracts
++experimental two-step analyses. The present contribution combines a methods
++and software investigation with a controlled reference-program benchmark.
++We provide the mathematical contracts
+ needed to interpret its outputs, a new known-covariance experiment with
+-a disjoint set of audit variants, and a critical reading of archived
++a disjoint set of audit variants, matched phensim simulations with and
++without population structure and LD, and a critical reading of archived
+ simulations. We then formulate research questions that can distinguish
+ a useful general method from an approximation that works only in a
+ favourable example.
+ 
+-The evidence has three levels. Current software checks assess specified
++The evidence has four levels. Current software checks assess specified
+ numerical and data-handling contracts. The new experiment isolates
+-calibration geometry under a deliberately simple null. Historical
++calibration geometry under a deliberately simple null. A matched phensim
++benchmark compares complete scans with the reference LDAK-KVIK executable.
++Historical
+ simulations motivate broader questions but predate the scientific
+ correctness review. Table~\ref{tab:evidence} records these boundaries;
+ they apply throughout the report.
+@@ -159,9 +163,13 @@ small fixed genotype panels, exact leading eigenvectors. \\
+ Archived simulations & Descriptive patterns under the recorded historical
+ implementation & New input handling and fitting changes need fresh
+ end-to-end runs. \\
++Matched phensim benchmark & Independent BED decoding and reference-reader
++checks; null calibration, QTL detection and process resource measurements &
++Six independent panels per cell; small quantitative-trait simulations,
++controlled LD and three discrete populations. \\
+ Archived external comparison & A provenance failure was identified:
+ incorrect PLINK export encoding & External-program calibration, agreement,
+-and superiority claims are withdrawn pending a matched-input rerun. \\
++and superiority claims from that archive remain withdrawn. \\
+ \bottomrule
+ \end{tabularx}
+ \end{table}
+@@ -495,6 +503,93 @@ analytic result is exact conditional on each realized panel and its
+ fixed approximation. It is not an estimate of an average over all
+ possible populations.
+ 
++\subsection{Matched phensim benchmark with reference LDAK-KVIK}
++\label{sec:kvik-design}
++
++We froze a factorial protocol before examining association outcomes and
++used an excluded pilot to check interoperability and resource demands.
++Each cell has six independent genotype and phenotype replicates,
++$n=800$ diploid samples, and $m=6{,}000$ markers on six equal chromosomes.
++All genotypes and phenotypes are generated by phensim. Its
++\code{simulate\_population\_structure} function uses three populations
++with uniformly sampled membership and Balding--Nichols frequency drift.
++The software's \code{fst} parameter is zero or 0.05; it controls frequency
++dispersion and is not an empirical estimate of $F_{ST}$.
++Shared ancestral frequencies are $0.3+N(0,0.05^2)$, clipped to
++$[0.05,0.95]$; population frequencies are clipped to $[0.01,0.99]$.
++
++Two LD settings isolate local linkage from ancestry correlation.
++Markers are either independent conditional on population or generated
++in 50-marker blocks using two latent Gaussian AR(1) haplotypes per person
++with correlation parameter 0.8. Population-specific thresholds convert
++each haplotype to allele indicators. Blocks are independent conditional
++on population, but pooled genotypes share ancestry correlations across
++blocks and chromosomes. We added the optional block generator within
++phensim, preserving its existing independent-marker seeded draws.
++This controlled LD experiment does not reconstruct human demographic
++history. Markers with pooled minor-allele frequency below 0.01 are removed
++before either program receives them; calls are complete.
++
++The base global-null trait has no genetic effects and Gaussian residuals.
++The mixed trait has target genetic variance 0.5, divided equally between
++an infinitesimal background and ten normally distributed QTL effects.
++Both components use chromosomes 1--5 only, with QTLs in distinct blocks;
++chromosome 6 has no generating effects. Shared effects across populations
++are assumed. Phensim records every component, causal index and effect.
++For environmental confounding we pass population labels $-1,0,1$ as an
++explicit exposure $E$, standardized within the sample, and form
++\begin{equation}
++ y=\operatorname{standardize}\left\{\sqrt{s}E+
++       \sqrt{1-s}(u+q+e)\right\},\qquad s\in\{0,0.2\}.
++ \label{eq:phensim-environment}
++\end{equation}
++The component targets are not asserted to equal realized variance
++fractions: population structure can correlate $E$, $u$ and $q$.
++The archive therefore includes their covariance matrix.
++
++Four analysis cells comprise unstructured data, structured data without
++environmental effects, structured data with the exposure, and the same
++confounded phenotype adjusted for the two leading genotype PCs. PCs are
++computed without phenotypes and supplied identically to all methods.
++Every analysis includes an intercept. Exact LOCO EMMAX, local BOLT-inf,
++local KVIK and reference LDAK-KVIK use their default fitting and
++calibration settings with explicit seeds and one thread. These are
++comparisons of supplied procedures, whose priors and tuning searches
++differ; matching inputs does not make their statistical models identical.
++
++Phensim writes PLINK calls counting BIM allele A2. An independent decoder
++checks every BED call against the simulated matrix; mixmogam must read
++the complementary A1 counts. LDAK's own statistics command verifies the
++same marker IDs, sample IDs, allele labels, allele means and call rates.
++Both analysis programs read the same BED/BIM/FAM files and serialized
++phenotypes and covariates. The official native Mac executable
++\code{ldak6.3.mac} is pinned to repository revision \code{995e18753a0a},
++with its full URL and SHA256 in the archive; the generic ``Version 6''
++banner alone does not identify this build.
++
++Calibration is measured on all markers under the global genetic null,
++and separately on chromosome 6 under the mixed trait. The latter shares
++ancestry with causal chromosomes, so rejection assesses control of
++ancestry associations as well as statistical approximation. Other markers
++are not automatically labelled null simply because they are not large
++QTLs. We report rejection at 0.05, 0.01 and 0.001, genomic inflation from
++p-equivalent chi-square statistics, and population-loading, frequency and
++local-LD quintiles. Loading is the fraction of genotype sum of squares
++explained by population membership, chosen without phenotype outcomes.
++Power is direct causal-marker detection at $0.05/m$ and $5\times10^{-8}$.
++Monte Carlo standard errors use independent replicate panels, not the
++number of correlated markers. Six replicates cannot establish calibration
++at genome-wide significance thresholds.
++
++Each method runs in a separate process. Wall time includes startup, input
++loading, fitting, scanning and result writing; reference time sums its
++two stages. Kernel \code{wait4} counters provide peak resident memory,
++using the larger stage peak for the reference. Common simulation,
++export validation and PC construction are recorded separately. Method
++order rotates across replicates, code caches may be warm, and the macOS
++power guard requires AC power with Low Power Mode disabled. This is a
++bounded laptop comparison, not a biobank-scale performance claim.
++
+ \subsection{Historical structure and environmental experiments}
+ \label{sec:historicaldesign}
+ 
+@@ -863,11 +958,14 @@ this ambiguity without additional validation.
+ \subsection{Limitations and intended use}
+ 
+ The current contribution is strongest as a transparent research
+-implementation and a framework for controlled comparisons. The new
++implementation and a framework for controlled comparisons. The conditional
+ study contains three small fixed panels, while the broader archived
+ simulations have three or six replicates and predate important fixes.
+-No valid matched-input external comparison is retained. There is no
+-new validation in human multi-ancestry cohorts, no demonstrated
++The new matched-input external comparison has six independent panels per
++cell at $n=800$, uses controlled AR(1) rather than demographic LD, and
++assumes common genetic effects across three discrete populations.
++It does not establish equivalence of the local and reference KVIK models.
++There is no new validation in human multi-ancestry cohorts, no demonstrated
+ biobank-scale resource profile, and no validation for imputed dosages
+ or strongly imbalanced binary traits. The latter require attention to
+ the likelihood and tail approximation, as illustrated by SAIGE's
+@@ -885,25 +983,24 @@ validated end-to-end behaviour.
+ \section{Future research: hypotheses and decisive experiments}
+ \label{sec:future}
+ 
+-The following directions are proposed work, not completed validation.
++The following directions extend the controlled comparisons in this report.
+ Their order reflects dependence: reliable input identity and reproducible
+ reference comparisons are prerequisites for interpreting a new method's
+ power or speed. Each direction has a hypothesis and a result that could
+ force it to be revised.
+ 
+-\subsection{Priority 1: establish a matched-input reference benchmark}
++\subsection{Priority 1: broaden the matched-input reference benchmark}
+ 
+ \textbf{Question.} After input handling and nuisance definitions are
+ matched, do the local implementations reproduce an independent Gaussian
+ reference, and which differences from external programs remain?
+ 
+-The first benchmark should export one validated genotype matrix and
+-read it back independently, checking individual hard calls, missingness,
+-sample order, allele orientation, and variant filters before any
+-phenotype analysis. A frozen manifest should include the marker set,
+-covariates, phenotype, LOCO map, software versions, commands, and resource
+-limits. Dense known-covariance and fitted-covariance cases should be
+-separate. Comparisons with reference BOLT-LMM, LDAK-KVIK, REGENIE, and
++Section~\ref{sec:kvik-design} supplies the first matched phensim comparison
++with reference LDAK-KVIK, including independent hard-call and reader checks.
++The next benchmark should retain that input contract while adding missing
++calls, admixed and related samples, demographic LD, larger panels and more
++independent replicates. Dense known-covariance and fitted-covariance cases
++should remain separate. Comparisons with reference BOLT-LMM, REGENIE, and
+ Quickdraws should document differences in model and default preprocessing
+ rather than assume they implement the same test.
+ 
+@@ -1081,7 +1178,7 @@ performance claim is made.
+ 
+ The repository is available at
+ \url{https://github.com/bvilhjal/mixmogam}. This report describes package
+-version 2.0.0.dev1; the current numerical experiment uses baseline commit
++version 2.0.0.dev2; the known-covariance experiment uses baseline commit
+ \code{729c8532}. Its self-contained driver is
+ \code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
+ and manifest in \code{20261003-manuscript-geometry} beneath
+@@ -1090,12 +1187,21 @@ and manifest in \code{20261003-manuscript-geometry} beneath
+ source snapshots. The excluded external-program archive is also preserved
+ for provenance; its results are not incorporated into the revised displays.
+ 
++The matched phensim study is archived as \code{20261003-phensim-kvik},
++using mixmogam baseline \code{db232216} and phensim baseline
++\code{4939124e} with the explicitly snapshotted simulator extensions.
++The generating and analysis driver is \code{benchmarks/kvik\_simulation.py};
++the frozen plan, full package sources, complete inputs, raw p-values,
++commands, logs, diagnostics and resource measurements accompany its results.
++The separate \code{report/make\_kvik\_figures.py} renders this evidence
++without rerunning any association test.
++
+ \code{report/README.md} gives the reproduction commands, exact archive
+ identities, and evidence map. The figure generator reads recorded results and does not silently
+ rerun old analyses. The figure and report manifests identify source
+ hashes; the bibliography metadata records verified DOI identities.
+ No new human-participant data were collected for this revision. The
+-new experiment is entirely simulated. Historical RegMap results are
++new experiments are entirely simulated. Historical RegMap results are
+ not used to support current performance claims.
+ 
+ \appendix

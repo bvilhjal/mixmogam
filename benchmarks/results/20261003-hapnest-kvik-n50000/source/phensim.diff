@@ -1,0 +1,450 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5a91e99..ae67455 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+ 
+ ## [Unreleased] (1.0.0.dev1)
+ 
++### Added (2026-10-03 matched GWAS simulations)
++
++- Population simulations accept `fst=0` as a control and optional AR(1)
++  `block_sizes`/`rho` for LD within populations. Existing positive-Fst,
++  independent-marker seeded draws are unchanged.
++- Confounded traits accept an explicit environmental exposure and the base
++  trait's architecture, causal indices and effect distribution. Explicit
++  exposures avoid constructing a dense kinship merely to define an axis.
++  Component targets are documented separately from realized variance fractions.
++
+ ### Changed (2026-10-03 ldpred3 clean-up)
+ 
+ - `simulate_ar1_blocks` accepts counted-allele frequencies in `[0, 1]`
+diff --git a/README.md b/README.md
+index 04ba0fd..7fd054b 100644
+--- a/README.md
++++ b/README.md
+@@ -12,11 +12,12 @@ Table 1. Available genotype structures and their computational character.
+ | Function | Structure | Cost |
+ |---|---|---|
+ | `simulate_independent` | none; fixed or SFS-shaped frequencies (beta / uniform / rare / common) | instant |
+-| `simulate_population_structure` | diverged per-population frequencies (`fst`); normal or exact Balding–Nichols drift, K populations | instant |
++| `simulate_population_structure` | normal or Balding–Nichols drift in K populations; optional AR(1) LD blocks; `fst=0` control | O(nm) |
+ | `simulate_haplotype_blocks` | founder-haplotype copying: genuine haplotypic LD within blocks | one pass |
+ | `simulate_ar1_blocks` | latent-Gaussian haplotypes with AR(1) decay `rho`, thresholded at the MAF quantile; right-skewed geometry via `realistic_block_sizes`; `method="scan"` opts into an O(nk) forward recursion instead of the per-block Cholesky | one pass |
+ | `simulate_coalescent` | coalescent with recombination: haplotype + recombination LD; target SNP count, contiguous LD blocks | seconds |
+ | `simulate_by_mutation_rate` | same, but fixed segment and mutation-rate density lever on a seed-fixed genealogy | seconds |
++| `simulate_hapnest` / `iter_hapnest` | HAPNEST age-dependent copying from phased references; discrete populations; optional Numba, batched or disk-backed output | O(nm), bounded working memory |
+ 
+ The coalescent family has two backends: the **msprime** C library
+ (`pip install phensim[msprime]`) and a **built-in Numba
+@@ -35,20 +36,28 @@ wrappers delegating to it) and `simulate_correlated_traits` draw
+ matrix-free when no kinship is supplied: `m + 1` innovations through an
+ exact factor `F` of the scaled GRM (`F F' = K`), never an `n x n`
+ matrix or eigendecomposition. A supplied `K` keeps the classic
+-eigendecomposition draw. `simulate_confounded_trait` is the exception:
+-it still materializes the GRM for its leading axis, computing one
+-eigendecomposition shared by the structure axis and the background:
++eigendecomposition draw. `simulate_confounded_trait` also draws matrix-free
++when given an explicit `environment`; its default leading kinship axis
++requires one eigendecomposition shared with the background:
+ 
+ - `simulate_trait`: quantitative traits with `mixed` / `infinitesimal`
+   / `qtl` architectures, h2 targeting, normal or equal effect sizes;
+ - `simulate_binary_trait`: liability-threshold case/control with a
+   target prevalence;
+-- `simulate_confounded_trait`: structure-driven phenotypes on the
+-  leading kinship eigenvector (the genomic-control test scenario);
++- `simulate_confounded_trait`: an explicit environmental exposure or the
++  leading kinship eigenvector, plus a chosen base genetic architecture;
+ - `simulate_gxe_trait`: genotype-environment interaction variance;
+ - `simulate_correlated_traits`: bivariate traits with a target genetic
+   correlation rg.
+ 
++For a matched structure/LD experiment, pass `model="balding-nichols"`,
++`block_sizes=[50] * (m // 50)` and `rho=0.8` to
++`simulate_population_structure`; use `fst=0` for the control. Block lengths
++must sum to `m`. Pass the returned population labels, or another chosen
++exposure, as `environment=` to `simulate_confounded_trait`. Its
++`confounding_strength` sets a component target, not the realized fraction
++of phenotype variance: genetic and environmental components can covary.
++
+ **Ascertainment and scale conversions** (`phensim.phenotypes`):
+ `ascertain_case_control` samples exact case/control counts from a
+ simulated trait (the register / balanced-cohort schemes); the trait dict
+@@ -99,6 +108,8 @@ standardization), `ibs_kinship`, exact leave-one-chromosome-out
+   model, and recipes.
+ - [docs/technical.md](docs/technical.md): the models, the algorithms and
+   the numerical contracts.
++- [docs/hapnest.md](docs/hapnest.md): large reference-based cohorts, mutation
++  ages, model boundaries, and speed/memory controls.
+ - [report/phensim_report.pdf](report/phensim_report.pdf): the technical
+   report, with measured validation (targets versus realized,
+   built-in coalescent versus msprime, null calibration) and indicative
+diff --git a/phensim/__init__.py b/phensim/__init__.py
+index e9ca6cb..f4889a0 100644
+--- a/phensim/__init__.py
++++ b/phensim/__init__.py
+@@ -10,6 +10,8 @@ __all__ = [
+     "realistic_block_sizes",
+     "simulate_coalescent",
+     "simulate_by_mutation_rate",
++    "simulate_hapnest",
++    "iter_hapnest",
+     "simulate_trait",
+     "simulate_binary_trait",
+     "simulate_confounded_trait",
+@@ -41,6 +43,8 @@ __all__ = [
+ ]
+ 
+ _MAP = {
++    "simulate_hapnest": ("phensim.hapnest", "simulate_hapnest"),
++    "iter_hapnest": ("phensim.hapnest", "iter_hapnest"),
+     "simulate_independent": ("phensim.genotypes", "simulate_independent"),
+     "simulate_population_structure": ("phensim.genotypes", "simulate_population_structure"),
+     "simulate_haplotype_blocks": ("phensim.genotypes", "simulate_haplotype_blocks"),
+diff --git a/phensim/genotypes.py b/phensim/genotypes.py
+index bb762aa..051ea54 100644
+--- a/phensim/genotypes.py
++++ b/phensim/genotypes.py
+@@ -132,10 +132,16 @@ def simulate_population_structure(
+     maf: float = 0.3,
+     model: str = "normal",
+     seed: Union[int, np.random.Generator, None] = 0,
++    *,
++    block_sizes=None,
++    rho: float = 0.9,
++    phased: bool = False,
+ ):
+-    """Independent SNPs with diverged per-population allele frequencies.
++    """SNPs with diverged per-population allele frequencies, optionally in LD.
+ 
+-    Returns ``(G, pop_labels)``. ``model`` picks the drift model for the
++    Returns ``(G, pop_labels)``. With ``phased=True``, G contains binary
++    haplotypes with shape ``(n, 2, m)`` for reference-based simulation.
++    ``model`` picks the drift model for the
+     per-population frequencies around the shared ``maf``-centred base:
+ 
+     - ``'normal'``: ``p_k ~ N(p, fst * p (1 - p))`` -- the cheap
+@@ -143,19 +149,39 @@ def simulate_population_structure(
+     - ``'balding-nichols'``: ``p_k ~ Beta(p(1-fst)/fst, (1-p)(1-fst)/fst)``,
+       the exact Balding--Nichols drift distribution (clipped polymorphic).
+ 
+-    Use :func:`simulate_coalescent` when LD realism matters.
++    ``fst=0`` is the unstructured control: all populations share the
++    same base frequencies. If ``block_sizes`` is supplied, it must sum
++    to ``m``; each population is sampled with :func:`simulate_ar1_blocks`
++    using its own frequencies and the scan recursion with latent
++    correlation ``rho``. Blocks are independent conditional on population;
++    pooled genotypes also share ancestry correlations across blocks.
++    This controlled LD model is not a demographic coalescent model.
++
++    The default (no blocks, positive fst) preserves earlier seeded draws.
+     """
+     if model not in ("normal", "balding-nichols"):
+         raise ValueError("model must be 'normal' or 'balding-nichols'")
+-    if not 0.0 < fst < 1.0:
+-        raise ValueError("fst must be in (0, 1)")
++    fst = _finite_scalar("fst", fst)
++    if not 0.0 <= fst < 1.0:
++        raise ValueError("fst must be in [0, 1)")
+     n = _positive_int("n", n)
+     m = _positive_int("m", m)
+     n_pops = _positive_int("n_pops", n_pops)
+     maf = _maf_scalar(maf)
++    if block_sizes is not None:
++        sizes = np.asarray(block_sizes)
++        if (sizes.ndim != 1 or sizes.size == 0
++                or not np.issubdtype(sizes.dtype, np.integer)
++                or np.any(sizes < 1) or sum(int(k) for k in sizes) != m):
++            raise ValueError("block_sizes must be positive integer lengths summing to m")
++        rho = _finite_scalar("rho", rho)
++        if not -1 <= rho <= 1:
++            raise ValueError("rho must be in [-1, 1]")
+     rng = np.random.default_rng(seed)
+     base = np.clip(maf + rng.normal(0, 0.05, m), 0.05, 0.95)
+-    if model == "normal":
++    if fst == 0:
++        freqs = np.broadcast_to(base[:, None], (m, n_pops))
++    elif model == "normal":
+         spread = np.sqrt(fst * base * (1 - base))
+         freqs = np.clip(
+             base[:, None] + rng.normal(0, 1, (m, n_pops)) * spread[:, None],
+@@ -168,7 +194,18 @@ def simulate_population_structure(
+             rng.beta(a[:, None], b[:, None], size=(m, n_pops)), 0.01, 0.99
+         )
+     labels = rng.integers(0, n_pops, n)
++    if block_sizes is not None:
++        G = np.empty((n, 2, m) if phased else (n, m), dtype=np.int8)
++        for pop in range(n_pops):
++            members = np.flatnonzero(labels == pop)
++            if members.size:
++                G[members], _ = simulate_ar1_blocks(
++                    members.size, sizes, maf=freqs[:, pop], rho=rho,
++                    method="scan", seed=rng, phased=phased)
++        return G, labels
+     p = freqs[:, labels].T
++    if phased:
++        return rng.binomial(1, p[:, None, :], size=(n, 2, m)).astype(np.int8), labels
+     return rng.binomial(2, p).astype(np.int8), labels
+ 
+ 
+@@ -180,6 +217,7 @@ def simulate_ar1_blocks(
+     seed: Union[int, np.random.Generator, None] = 0,
+     *,
+     method: str = "cholesky",
++    phased: bool = False,
+ ):
+     """Dosages with within-block AR(1) LD via a latent Gaussian model.
+ 
+@@ -192,6 +230,8 @@ def simulate_ar1_blocks(
+     block lengths (see :func:`realistic_block_sizes` for right-skewed
+     geometry). Returns ``(G, blocks)`` with ``G`` int8 ``(n, m)`` and
+     ``blocks`` column-index arrays.
++    ``phased=True`` returns the two binary haplotypes in ``(n, 2, m)``;
++    summing its phase axis exactly recovers the default seeded dosages.
+ 
+     ``method='cholesky'`` (default) draws ``z`` through the factorized
+     ``C + 1e-8 I``; ``method='scan'`` is an opt-in O(nk) forward
+@@ -233,7 +273,7 @@ def simulate_ar1_blocks(
+         raise ValueError("maf must be scalar or a finite length-m vector in [0, 1]")
+     rng = np.random.default_rng(seed)
+     innovation_sd = np.sqrt(1.0 - rho * rho)
+-    G = np.empty((n, m), dtype=np.int8)
++    G = np.empty((n, 2, m) if phased else (n, m), dtype=np.int8)
+     blocks = []
+     col = 0
+     for k in block_sizes:
+@@ -244,7 +284,7 @@ def simulate_ar1_blocks(
+             chol = np.linalg.cholesky(corr + 1e-8 * np.eye(k))
+         thr = norm_isf(maf[col:col + k])
+         hap_sum = np.zeros((n, k))
+-        for _ in range(2):  # two haplotypes -> dosage 0/1/2
++        for phase in range(2):  # two haplotypes -> dosage 0/1/2
+             eps = rng.standard_normal((n, k))
+             if method == "cholesky":
+                 z = eps @ chol.T
+@@ -253,8 +293,12 @@ def simulate_ar1_blocks(
+                 z[:, 0] = eps[:, 0]
+                 for j in range(1, k):
+                     z[:, j] = rho * z[:, j - 1] + innovation_sd * eps[:, j]
+-            hap_sum += (z > thr)
+-        G[:, col:col + k] = hap_sum.astype(np.int8)
++            if phased:
++                G[:, phase, col:col + k] = z > thr
++            else:
++                hap_sum += (z > thr)
++        if not phased:
++            G[:, col:col + k] = hap_sum.astype(np.int8)
+         blocks.append(np.arange(col, col + k))
+         col += k
+     return G, blocks
+diff --git a/phensim/io.py b/phensim/io.py
+index c3e8f1a..054d475 100644
+--- a/phensim/io.py
++++ b/phensim/io.py
+@@ -154,6 +154,8 @@ def write_plink(
+     chromosome=None,
+     position=None,
+     sample_ids=None,
++    *,
++    block_size=None,
+ ) -> None:
+     """Write sample-major dosages as a SNP-major .bed with .bim/.fam.
+ 
+@@ -164,13 +166,21 @@ def write_plink(
+     labels; positions are nonnegative integral base-pair values (0 is
+     the PLINK "unknown" position). All genotype and metadata validation
+     completes before any output file is opened.
++    Encoding is tiled by variants: ``block_size`` defaults to at most
++    256 columns and about one million calls per tile. This also supports
++    memory-mapped input without a whole-matrix missing mask or BED payload.
+     """
+-    G, missing = _plink_genotypes(G)
++    G = np.asarray(G)
++    if G.ndim != 2 or not all(G.shape):
++        raise ValueError("G must be a non-empty sample-major matrix")
+     n, m = G.shape
++    from phensim.genotypes import _positive_int
++    block_size = max(1, min(256, (1 << 20) // n)) if block_size is None else _positive_int("block_size", block_size)
++    for start in range(0, m, block_size):
++        _plink_genotypes(G[:, start:start + block_size])
+     chrom = _plink_chromosomes(chromosome, m)
+     pos = _plink_positions(position, m)
+     sids = _plink_sample_ids(sample_ids, n)
+-    bed_payload = _encode_bed(missing, G, n, m)
+     with open(f"{prefix}.fam", "w") as fh:
+         for s in sids:
+             fh.write(f"0 {s} 0 0 0 -9\n")
+@@ -179,4 +189,6 @@ def write_plink(
+             fh.write(f"{c} sim_{c}_{p} 0 {p} A G\n")
+     with open(f"{prefix}.bed", "wb") as fh:
+         fh.write(_BED_MAGIC)
+-        fh.write(bed_payload)
++        for start in range(0, m, block_size):
++            tile, missing = _plink_genotypes(G[:, start:start + block_size])
++            fh.write(_encode_bed(missing, tile, n, tile.shape[1]))
+diff --git a/phensim/phenotypes.py b/phensim/phenotypes.py
+index 0e0f1ab..ea846c3 100644
+--- a/phensim/phenotypes.py
++++ b/phensim/phenotypes.py
+@@ -7,9 +7,9 @@ the binary/GxE wrappers delegating to it) and
+ ``simulate_correlated_traits`` draw matrix-free with no supplied
+ kinship -- innovations in marker space through an exact factor of the
+ scaled GRM -- while a caller-supplied ``K`` keeps the classic
+-eigendecomposition draw. ``simulate_confounded_trait`` is the exception:
+-it still materializes the GRM for its leading axis, sharing one
+-eigendecomposition between the structure axis and the background.
++eigendecomposition draw. ``simulate_confounded_trait`` only materializes
++the GRM when no explicit environmental axis is supplied, sharing one
++eigendecomposition between its default axis and the background.
+ """
+ 
+ from __future__ import annotations
+@@ -136,6 +136,20 @@ def _draw_background(factor, variance: float, rng) -> np.ndarray:
+     return np.sqrt(variance) * (marker_scale * (Z @ w) + common_scale * common)
+ 
+ 
++def _draw_background_blocked(G, variance, rng, block_size):
++    """Same factor and innovations as the dense draw, accumulated in tiles."""
++    n, m = G.shape
++    w, common = rng.standard_normal(m), rng.standard_normal()
++    score, ss = np.zeros(n), 0.0
++    for start in range(0, m, block_size):
++        Z, _ = _called_standardized(G[:, start:start + block_size])
++        score += Z @ w[start:start + block_size]
++        ss += np.einsum("ij,ij->", Z, Z)
++    if not np.isfinite(ss) or ss <= 0:
++        raise ValueError("no polymorphic genotype variance for a genetic background")
++    return np.sqrt(variance) * (np.sqrt((n - 1) / ss) * score + common / np.sqrt(n))
++
++
+ def simulate_trait(
+     G: np.ndarray,
+     h2: float = 0.5,
+@@ -145,6 +159,8 @@ def simulate_trait(
+     causal: Optional[np.ndarray] = None,
+     K: Optional[np.ndarray] = None,
+     seed: Union[int, np.random.Generator, None] = 1,
++    *,
++    genotype_block_size: Optional[int] = None,
+ ) -> dict:
+     """Quantitative trait with a model-consistent genetic component.
+ 
+@@ -169,11 +185,15 @@ def simulate_trait(
+     while a supplied ``K`` must be finite and symmetric and is drawn
+     through its eigendecomposition. Component variances target h2;
+     finite-sample variances and covariances need not give an exactly
+-    realized heritability. G must be complete.
++    realized heritability. G must be complete. With ``K=None``, setting
++    ``genotype_block_size`` bounds the float64 working matrix to that many
++    variants. This keeps the same innovations and covariance, with only
++    summation roundoff differences from the default dense factor.
+     """
+     return _simulate_trait(
+         G, h2=h2, n_causal=n_causal, architecture=architecture,
+-        effect_dist=effect_dist, causal=causal, K=K, seed=seed)
++        effect_dist=effect_dist, causal=causal, K=K, seed=seed,
++        genotype_block_size=genotype_block_size)
+ 
+ 
+ def _simulate_trait(
+@@ -187,6 +207,7 @@ def _simulate_trait(
+     seed: Union[int, np.random.Generator, None] = 1,
+     *,
+     eigendecomposition=None,
++    genotype_block_size=None,
+ ) -> dict:
+     """Body of :func:`simulate_trait`.
+ 
+@@ -200,6 +221,9 @@ def _simulate_trait(
+         raise ValueError("h2 must be in [0, 1]")
+     if effect_dist not in ("normal", "equal"):
+         raise ValueError("effect_dist must be 'normal' or 'equal'")
++    if genotype_block_size is not None:
++        from phensim.genotypes import _positive_int
++        genotype_block_size = _positive_int("genotype_block_size", genotype_block_size)
+     rng = np.random.default_rng(seed)
+     Gd = _trait_genotypes(G)
+     n, m = Gd.shape
+@@ -217,7 +241,10 @@ def _simulate_trait(
+     u = np.zeros(n)
+     if h2_bg > 0:
+         if K is None:
+-            u = _draw_background(_background_factor(Gd), h2_bg, rng)
++            if genotype_block_size is None:
++                u = _draw_background(_background_factor(Gd), h2_bg, rng)
++            else:
++                u = _draw_background_blocked(Gd, h2_bg, rng, genotype_block_size)
+         else:
+             K = _trait_kinship(K, n)
+             if eigendecomposition is None:
+@@ -283,34 +310,55 @@ def simulate_confounded_trait(
+     n_causal: int = 10,
+     K: Optional[np.ndarray] = None,
+     seed: Union[int, np.random.Generator, None] = 2,
++    *,
++    environment: Optional[np.ndarray] = None,
++    architecture: str = "mixed",
++    effect_dist: str = "normal",
++    causal: Optional[np.ndarray] = None,
++    genotype_block_size: Optional[int] = None,
+ ) -> dict:
+     """Trait driven partly by population structure.
+ 
+-    A share ``confounding_strength`` of the phenotype variance rides the
+-    leading eigenvector of the kinship (a proxy for population
+-    structure / batch effects that a mixed model should absorb), with a
+-    regular QTL architecture underneath. The canonical scenario for
+-    testing genomic-control correction. The kinship eigendecomposition
+-    is computed once and shared by the structure axis and the trait's
+-    background draw; the default still materializes the GRM for that
+-    leading axis.
++    With ``s=confounding_strength``, the raw liability is
++    ``sqrt(s) * standardized(environment) + sqrt(1-s) * base_liability``.
++    These are component targets, not realized variance fractions: the
++    environment and genetic score can covary. ``h2`` describes the base
++    trait, whose architecture, effects and causal indices follow
++    :func:`simulate_trait`.
++
++    An explicit finite, nonconstant ``environment`` has one value per
++    person (for example a population-specific exposure). It uses the
++    matrix-free background draw unless K is supplied. If omitted, the
++    leading kinship eigenvector supplies the axis, preserving earlier
++    seeded draws and sharing the eigendecomposition with the background.
++    This default axis also exists in unstructured data; its presence
++    alone does not establish a population-stratified genotype model.
+     """
+     if not 0 <= confounding_strength <= 1:
+         raise ValueError("confounding_strength must be in [0, 1]")
+     Gd = _trait_genotypes(G)
+     rng = np.random.default_rng(seed)
+-    if K is None:
+-        K = _grm(Gd)
++    eigendecomposition = None
++    if environment is None:
++        K = _grm(Gd) if K is None else _trait_kinship(K, Gd.shape[0])
++        lam, U = np.linalg.eigh(K)
++        lead = _standardized(U[:, -1])
++        eigendecomposition = (lam, U)
+     else:
+-        K = _trait_kinship(K, Gd.shape[0])
+-    lam, U = np.linalg.eigh(K)
+-    lead = _standardized(U[:, -1])
++        lead = np.asarray(environment, dtype=float)
++        if lead.shape != (Gd.shape[0],):
++            raise ValueError("environment must have one value per sample")
++        lead = _standardized(lead)
+     tr = _simulate_trait(
+         Gd,
+         h2=h2,
+         n_causal=n_causal,
++        architecture=architecture,
++        effect_dist=effect_dist,
++        causal=causal,
+         K=K,
+-        eigendecomposition=(lam, U),
++        eigendecomposition=eigendecomposition,
++        genotype_block_size=genotype_block_size,
+         seed=int(rng.integers(1, 2**31 - 1)),
+     )
+     s = confounding_strength

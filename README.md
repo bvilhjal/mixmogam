@@ -4,12 +4,13 @@ Mixed linear models for quantitative-trait genome-wide association,
 with leave-one-chromosome-out (LOCO) testing by default. The core uses
 NumPy and SciPy; Numba accelerates optional kernels.
 
-**Development version 2.0.0.dev2.** The [critical review](docs/review-2026-10-03.md)
+**Development version 2.0.0.dev3.** The [critical review](docs/review-2026-10-03.md)
 records correctness fixes, migration notes, validation, and remaining work.
-In particular, the older LDAK binary comparison must be rerun: the PLINK
-writer used the wrong bit encoding. The [revised research report](report/mixmogam_report.pdf)
-separates current correctness checks, a new known-covariance experiment,
-and historical benchmarks, and develops a testable research agenda.
+The older LDAK binary comparison is withdrawn because its PLINK writer used
+the wrong bit encoding. A new comparison verifies every exported genotype.
+The [revised research report](report/mixmogam_report.pdf) separates current
+correctness checks, known-covariance experiments, matched LDAK-KVIK workloads
+through 50,000 samples, and historical evidence, with a testable research agenda.
 
 Table 1. Association methods implemented by the current package.
 
@@ -21,7 +22,7 @@ Table 1. Association methods implemented by the current package.
 | `"kvik"` | KVIK-style elastic-net LOCO scores and structure-dependent calibration |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
 
-The two-step paths are reference implementations with documented departures
+The two-step paths are research implementations with documented departures
 from the original programs, including their variance-component estimators.
 `denominator="spectral"` is a mixmogam extension for the two-step methods.
 Its transfer to mixture and elastic-net statistics is heuristic.
