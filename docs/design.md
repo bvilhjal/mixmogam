@@ -126,6 +126,23 @@ BLAS are expected to be larger). An earlier revision computed the
 transform in float64 internally and cast only the result -- its
 "float32" timings were float64 timings in disguise.
 
+## Measured: truncated-spectrum calibration (sim study 20261003T001500Z)
+
+Scan calibration under truncation depends on covering the GRM bulk's
+eigenvalue spread relative to delta (mean-bulk tail correction in):
+
+| basis | lambda_GC (n=4000, m=50k) |
+|---|---|
+| k=128 | 0.65 |
+| k=512 | 0.89 |
+| k=1024 | 1.02 (exact 1.04) |
+
+At n=10k, k=1024 (10% of the spectrum) gives lambda_GC 0.88 with
+88/100 top-hit overlap and power 0.47 vs 0.50 exact; the K-free fit
+itself matches the dense one-eigh exact delta to 0.09%. Default
+spectrum width is 1024; users needing strict calibration at large n
+should scale it with the sample count.
+
 ## Roadmap (not yet implemented)
 
 - BOLT-LMM's non-inf mixture statistic (batched variational updates over

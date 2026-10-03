@@ -1,0 +1,22 @@
+scenario     method                         secs  metrics
+S1_ld_small  fit_exact                       0.1  delta=1.094  pseudo_h2=0.4776
+S1_ld_small  fit_exact_kinship25             0.2  delta=1.144  pseudo_h2=0.4664
+S1_ld_small  fit_slq                         0.2  delta=1.121  delta_rel_err=0.0251  pseudo_h2=0.4714
+S1_ld_small  kinship_full                    0.3  
+S1_ld_small  permutations_batched            0.4  
+S1_ld_small  scan_lmm_exact_f32              0.6  lambda_gc=1.002  power=0.05
+S2_structure fit_exact_kinship25             0.2  delta=0.6957  pseudo_h2=0.5897
+S2_structure fit_slq                         0.3  delta=0.6928  delta_rel_err=0.0138  pseudo_h2=0.5907
+S2_structure kinship_full                    0.3  
+S2_structure lmm_vs_lm                       0.0  
+S2_structure scan_lm_nok                     0.1  lambda_gc=0.3827
+S2_structure scan_lmm_exact_f32              0.2  lambda_gc=1.006
+S3_large     fit_exact_kinship25             1.7  delta=1.056  pseudo_h2=0.4864
+S3_large     fit_slq                         2.7  delta=1.012  delta_rel_err=0.0096  pseudo_h2=0.497
+S3_large     kinship_full                    1.1  
+S3_large     scan_lmm_exact_f32              0.8  lambda_gc=1.047  power=0.1
+S3_large     scan_lmm_exact_f64              1.8  lambda_gc=1.047  power=0.1
+S3_large     scan_topk1024                   5.0  lambda_gc=1.05  power=0.1  max_dlog10p=0.0792  top100_overlap=99  tail_mass=35.27
+S4_n10k      dense_exact_pipeline          284.0  delta=0.9164  pseudo_h2=0.5218  lambda_gc=1.067  power=0.5  peak_rss_gb=7762
+S4_n10k      kfree_scan_topk1024_f32         6.5  lambda_gc=0.8834  power=0.467  max_dlog10p=17.38  top100_overlap=88  peak_rss_gb=7762
+S4_n10k      kfree_slq_topk1024            315.7  delta=0.9172  delta_rel_err=0.0009  pseudo_h2=0.5216  tail_mass=1454  peak_rss_gb=7762
