@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import csv
 import datetime as dt
+import json
 import subprocess
 import sys
 import time
@@ -110,10 +111,10 @@ def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
 
     t0 = time.perf_counter()
     op = GenotypeKinship(gt)
-    lmm_t = LMM(y, K=op, n_eig=2048)
+    lmm_t = LMM(y, K=op, n_eig=1024)
     fit_t = lmm_t.fit(solver="slq", recompute=True)
     t_fit = time.perf_counter() - t0
-    row = {**base, "method": "kfree_slq_topk2048", "seconds": round(t_fit, 2),
+    row = {**base, "method": "kfree_slq_topk1024", "seconds": round(t_fit, 2),
            "delta": round(fit_t.delta, 5),
            "pseudo_h2": round(fit_t.pseudo_heritability, 4),
            "tail_mass": round(lmm_t.eigen()["tail_mass"], 1),
@@ -128,7 +129,7 @@ def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
     scan = lmm_t.scan(gt, dtype=np.float32, with_betas=True)
     t_scan = time.perf_counter() - t0
     res = GwasResult.from_scan(scan, gt, fit=fit_t)
-    row = {**base, "method": "kfree_scan_topk2048_f32", "seconds": round(t_scan, 2),
+    row = {**base, "method": "kfree_scan_topk1024_f32", "seconds": round(t_scan, 2),
            "peak_rss_gb": round(
                resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e6, 2),
            **_power_metrics(res, causal)}
@@ -275,6 +276,8 @@ def main():
             t0 = time.perf_counter()
             run_replicate(scenario, cfg, seed, rows, args.quick)
             print(f"{scenario} seed {seed}: {time.perf_counter() - t0:.1f}s", flush=True)
+            for r in rows[-6:]:
+                print("ROW " + json.dumps(r), flush=True)
 
     if args.large:
         for scenario, cfg in LARGE_SCENARIOS.items():
@@ -282,6 +285,8 @@ def main():
                 t0 = time.perf_counter()
                 run_large_replicate(scenario, cfg, seed, rows)
                 print(f"{scenario} seed {seed}: {time.perf_counter() - t0:.1f}s", flush=True)
+                for r in rows[-4:]:
+                    print("ROW " + json.dumps(r), flush=True)
 
     run_id = dt.datetime.now().strftime("%Y%m%dT%H%M%SZ")
     out = Path(f"benchmarks/results/{run_id}-sim-study{'-large' if args.large else ''}")

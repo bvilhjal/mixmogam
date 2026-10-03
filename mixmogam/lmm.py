@@ -28,7 +28,10 @@ from mixmogam._slq import lanczos_quadrature, randomized_eigh_op, trace_estimato
 __all__ = ["LMM", "LMFit"]
 
 _EXACT_N_MAX = 8000  # n above which the exact O(n^3) eigh is skipped
-_DEFAULT_TOP_K = 2048
+# BOLT-LMM's design point: only the leading structure axes deviate
+# strongly from isotropy, and the identity-tail correction handles the
+# Marchenko-Pastur bulk exactly, so a narrow basis suffices
+_DEFAULT_TOP_K = 1024
 
 
 @dataclass(frozen=True)
@@ -246,10 +249,17 @@ class LMM:
                         trace = float("nan")
                 else:
                     trace = float(np.trace(self.K))
+                tail = (
+                    float("nan")
+                    if not np.isfinite(trace)
+                    else trace - float(values.sum())
+                )
+                lam_bar = tail / max(self.n - values.size, 1)
                 self._eig = {
                     "values": values,
                     "vectors": vectors,
-                    "tail_mass": trace - float(values.sum()),
+                    "tail_mass": tail,
+                    "lam_bar": lam_bar,
                     "full": False,
                 }
         return self._eig
@@ -318,11 +328,16 @@ class LMM:
         if eig["full"]:
             s = ((lam + delta) ** -0.5).astype(key)
             return U @ (s[:, None] * (U.T @ A)) if A.ndim == 2 else U @ (s * (U.T @ A))
-        s0 = np.float64(delta) ** -0.5
-        corr = ((lam + delta) ** -0.5 - s0).astype(key)
+        # mean-bulk tail: the dropped spectrum (a Marchenko-Pastur bulk
+        # near its mean) is scaled at its average eigenvalue rather than
+        # at zero -- exact for a flat tail, and first-order correct for
+        # the tight bulk GRM spectra actually produce
+        lam_bar = eig.get("lam_bar", 0.0)
+        base_scale = np.float64(delta + lam_bar) ** -0.5
+        corr = ((lam + delta) ** -0.5 - base_scale).astype(key)
         proj = U.T @ A
         upd = corr[:, None] * proj if proj.ndim == 2 else corr * proj
-        return A * key.type(s0) + U @ upd
+        return A * key.type(base_scale) + U @ upd
 
     # ------------------------------------------------------------------
     # Likelihood machinery (EMMA exact + stochastic Lanczos quadrature)
@@ -855,8 +870,9 @@ class LMM:
         U = eig["vectors"]
         if eig["full"]:
             return U @ ((1.0 / (lam + delta)) * (U.T @ v))
-        base = v / delta
-        corr = 1.0 / (lam + delta) - 1.0 / delta
+        lam_bar = eig.get("lam_bar", 0.0)
+        base = v / (delta + lam_bar)
+        corr = 1.0 / (lam + delta) - 1.0 / (delta + lam_bar)
         return base + U @ (corr * (U.T @ v))
 
     def blup(self) -> np.ndarray:
