@@ -257,6 +257,7 @@ class GenotypeKinship:
         self.shape = (self.n, self.n)
         self.n_variants = gt.n_variants
         self._norm = None  # (c, d) lazy scale_k constants
+        self._Z_cache = None  # standardized blocks, built once
 
     def _scaling(self):
         """scale_k constants (mean off-diagonal c, diagonal divisor d)."""
@@ -270,12 +271,27 @@ class GenotypeKinship:
             self._norm = (c, d)
         return self._norm
 
+    def _standardized(self):
+        """Standardized SNP blocks, built once and reused by every product.
+
+        Re-standardizing (and re-converting dtype) per matvec turned each
+        of the ~10^3 Lanczos/solver matvecs into a full memory-bandwidth
+        pass; the cache makes them pure GEMMs.
+        """
+        if self._Z_cache is None:
+            self._Z_cache = [
+                Z
+                for Z, _ in _standardized_blocks(
+                    self.gt, self.block, self.dtype, self.weights
+                )
+            ]
+        return self._Z_cache
+
     def _apply_raw(self, X: np.ndarray) -> np.ndarray:
-        out = np.zeros_like(X)
-        for Z, w in _standardized_blocks(self.gt, self.block, self.dtype,
-                                         self.weights):
-            Zd = Z.T.astype(np.float64)
-            out += Zd @ (Z @ X)
+        Xw = np.asarray(X, dtype=self.dtype)
+        out = np.zeros(Xw.shape, dtype=np.float64)
+        for Z in self._standardized():
+            out += (Z.T @ (Z @ Xw)).astype(np.float64)
         return out / self.n_variants
 
     def matmul(self, X: np.ndarray) -> np.ndarray:
@@ -295,8 +311,7 @@ class GenotypeKinship:
 
     def _raw_diagonal(self) -> np.ndarray:
         out = np.zeros(self.n)
-        for Z, _ in _standardized_blocks(self.gt, self.block, self.dtype,
-                                         self.weights):
+        for Z in self._standardized():
             Zd = Z.T.astype(np.float64)
             out += np.einsum("ij,ij->i", Zd, Zd)
         return out / self.n_variants

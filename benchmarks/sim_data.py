@@ -28,6 +28,7 @@ def make_dataset(
     block_size: int = 200,
     backend: str = "msprime",
     missing: float = 0.0,
+    generator: str = "coalescent",
 ):
     """One benchmark dataset: genotypes, kinship-ready container, trait.
 
@@ -37,9 +38,17 @@ def make_dataset(
     """
     import phensim
 
-    G, blocks = phensim.simulate_coalescent(
-        n, m, block_size, seed=seed, backend=backend
-    )
+    if generator == "blocks":
+        # founder-haplotype LD blocks: genuine within-block haplotype LD
+        # with sharp decay; seconds at n=20k where a coalescent draw of
+        # 20k diploids is impractical on a laptop
+        G = phensim.simulate_haplotype_blocks(
+            n, m, block_size=block_size, n_founders=max(40, n // 250), seed=seed
+        )
+    else:
+        G, blocks = phensim.simulate_coalescent(
+            n, m, block_size, seed=seed, backend=backend
+        )
     if missing > 0:
         rng = np.random.default_rng(seed + 9000)
         mask = rng.random(G.shape) < missing

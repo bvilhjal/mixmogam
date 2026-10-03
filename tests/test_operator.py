@@ -22,8 +22,8 @@ def problem():
 
 def test_operator_matches_dense_products(problem):
     gt, _ = problem
-    op = GenotypeKinship(gt)
-    K = realized_relationship(gt)
+    op = GenotypeKinship(gt, dtype=np.float64)
+    K = realized_relationship(gt, dtype=np.float64)
     rng = np.random.default_rng(0)
     x = rng.standard_normal(gt.n_samples)
     B = rng.standard_normal((gt.n_samples, 3))
@@ -42,14 +42,14 @@ def test_operator_lmm_matches_dense_topk(problem):
     # p-value equality at 47% tail mass
     dense = LMM(y, K=K, n_eig=128, random_state=7)
     fd = dense.fit(solver="slq")
-    op = LMM(y, K=GenotypeKinship(gt), n_eig=128, random_state=7)
+    op = LMM(y, K=GenotypeKinship(gt, dtype=np.float64), n_eig=128, random_state=7)
     fo = op.fit(solver="slq")
     assert fo.delta == pytest.approx(fd.delta, rel=1e-6)
     assert fo.ll == pytest.approx(fd.ll, abs=1e-4)
     assert np.corrcoef(dense.blup(), op.blup())[0, 1] > 0.999
     # with a gentle truncation the bases agree and so do the p-values
     dense_g = LMM(y, K=K, n_eig=500, random_state=7)
-    op_g = LMM(y, K=GenotypeKinship(gt), n_eig=500, random_state=7)
+    op_g = LMM(y, K=GenotypeKinship(gt, dtype=np.float64), n_eig=500, random_state=7)
     dense_g.fit(solver="slq")
     op_g.fit(solver="slq")
     rg_d = dense_g.scan(gt, dtype=np.float64)
@@ -59,7 +59,7 @@ def test_operator_lmm_matches_dense_topk(problem):
 
 def test_operator_auto_routes_to_slq(problem):
     gt, y = problem
-    lmm = LMM(y, K=GenotypeKinship(gt))  # auto n_eig -> top-k
+    lmm = LMM(y, K=GenotypeKinship(gt))  # auto n_eig -> top-k, f32 speed
     fit = lmm.fit()  # auto solver -> slq
     assert fit.solver == "slq"
     assert lmm.eigen()["full"] is False

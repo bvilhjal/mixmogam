@@ -43,8 +43,10 @@ SCENARIOS = {
 }
 
 LARGE_SCENARIOS = {
-    "S4_n10k": dict(n=10_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0),
-    "S5_n20k": dict(n=20_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0),
+    "S4_n10k": dict(n=10_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0,
+                    generator="coalescent"),
+    "S5_n20k": dict(n=20_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0,
+                    generator="blocks"),
 }
 
 
@@ -77,8 +79,12 @@ def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
 
     from mixmogam.kinship import GenotypeKinship
 
+    t0 = time.perf_counter()
     ds = make_dataset(n=cfg["n"], m=cfg["m"], h2=cfg["h2"],
-                      n_causal=cfg["n_causal"], seed=seed)
+                      n_causal=cfg["n_causal"], seed=seed,
+                      generator=cfg.get("generator", "coalescent"))
+    print(f"  {scenario} seed {seed}: data in {time.perf_counter()-t0:.0f}s",
+          flush=True)
     gt, y, causal = ds["gt"], ds["y"], ds["causal"]
     base = {"scenario": scenario, "seed": seed, "n": cfg["n"], "m": cfg["m"]}
 
@@ -91,6 +97,8 @@ def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
         t_exact = time.perf_counter() - t0
         scan_e = lmm.scan(gt, dtype=np.float32)
         res_e = GwasResult.from_scan(scan_e, gt, fit=exact_fit)
+        print(f"  {scenario} seed {seed}: dense-exact reference done in "
+              f"{time.perf_counter()-t0:.0f}s", flush=True)
         rows.append({**base, "method": "dense_exact_pipeline",
                      "seconds": round(t_exact, 2),
                      "peak_rss_gb": round(

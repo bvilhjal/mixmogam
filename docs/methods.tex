@@ -76,37 +76,35 @@ by the block size regardless of $m$.
 
 \subsection{Restricted eigenspace}
 
-Let $\Sm = I_n - \X(\X^\top\X)^{-1}\X^\top$ project onto the orthogonal
-complement of the covariate space. Following
-Kang et al.\ (2008), the REML likelihood depends on $\y$ and $\K$ only
+Following Kang et al.\ (2008), the REML likelihood can be expressed
 through the spectral decomposition of the \emph{restricted} matrix
+$\Mm = \Sm(\K + I_n)\Sm$ with $\Sm = I_n - \X(\X^\top\X)^{-1}\X^\top$
+(the v1 construction; eigenpairs beyond the $q$ annihilated directions,
+offset by one). mixmogam evaluates the identical likelihood from a
+\emph{single} eigendecomposition of $\K$ via the matrix determinant
+lemma: with $V = \K + \delta I_n = \U \operatorname{diag}(\lambda_i +
+\delta) \U^\top$ and $W = \U^\top \X$, $w = \U^\top \y$,
 \begin{equation}
-  \Mm = \Sm(\K + I_n)\Sm .
+  \mathrm{RSS}(\delta) = w^\top D w - b^\top A^{-1} b, \quad
+  A = W^\top D W,\;\; b = W^\top D w,\;\; D = \operatorname{diag}\bigl(\tfrac{1}{\lambda_i + \delta}\bigr),
 \end{equation}
-Writing its eigenpairs $(\mu_i, u_i)$ in ascending order, the first
-$q$ eigenvalues are (numerically) zero; for the remaining $p = n - q$
-directions we set
 \begin{equation}
-  \lambda^R_i = \mu_{q+i} - 1, \qquad
-  \eta_i = u_{q+i}^\top \y .
+  \ell_R(\delta) = \tfrac12\Big[p\big(\log\tfrac{p}{2\pi} - 1 - \log \mathrm{RSS}\big)
+  - \big(\textstyle\sum_i \log(\lambda_i{+}\delta) + \log|A| - \log|\X^\top\X|\big)\Big],
 \end{equation}
-The factorization is computed once in \texttt{float64} and cached.
+with the derivative in closed form through $A' = -W^\top D^2 W$,
+$b' = -W^\top D^2 w$. The two formulations agree to $5 \times 10^{-13}$
+on likelihoods in the test suite; the lemma form replaces the second
+$O(n^3)$ eigendecomposition with $O(nq^2)$ work.
 
 \subsection{Profile likelihood and grid}
 
 The REML profile log-likelihood as a function of $\delta$ is
-\begin{equation}
-  \ell_R(\delta) = \tfrac12\Big[p\big(\log\tfrac{p}{2\pi} - 1 - \log s_1(\delta)\big) - s_2(\delta)\Big],
-  \qquad
-  s_1(\delta) = \sum_{i=1}^{p} \frac{\eta_i^2}{\lambda^R_i + \delta},
-  \quad
-  s_2(\delta) = \sum_{i=1}^{p} \log(\lambda^R_i + \delta),
-  \label{eq:reml}
-\end{equation}
-and the ML variant replaces $p$ by $n$ and $s_2$ by the full-spectrum
-determinant $\sum_{j=1}^{n}\log(\lambda^K_j + \delta)$ evaluated on the
-eigenvalues of $\K$, using the R~EMMA formulation (the quadratic form
-$s_1$ retains the restricted basis). The grid
+The ML variant replaces $p$ by $n$ and drops the $\log|A| - \log|\X^\top\X|$
+terms (same quadratic form). The equivalence with the restricted-eigenspace
+form above (equation label kept for cross-reference) is asserted in the
+tests; v1's deliberate factor-of-two in the derivative function --
+harmless for root finding -- is normalized. The grid
 $\delta_j = \exp(\mathrm{linspace}(l_{\min}, l_{\max}, G{+}1))$ with
 $G = 100$ and $[l_{\min},l_{\max}] = [-10, 10]$ is evaluated
 \emph{vectorized over all grid points simultaneously} by broadcasting
