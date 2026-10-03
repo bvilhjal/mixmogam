@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- `LMM` and its cached `LMFit` referenced each other, so a dropped model
+  (its K and eigendecomposition) waited for the cyclic garbage collector
+  instead of being freed. An exact LOCO `gwas()` stranded its 25 group
+  models, about 8 GB at n = 4,000, and the sim study reached a 17 GB
+  footprint. `LMM.fit_result` now stores the fit without the back
+  reference and returns it bound to the model; a fit returned by
+  `fit()` still keeps its model alive.
 - `GwasResult.genomic_control` returned median(p)/0.5, which is not
   lambda_GC and runs the other way (below 1 meant inflation). It now
   returns the median 1-df chi-square over 0.455. The archived sim-study

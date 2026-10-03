@@ -22,7 +22,7 @@ LOCO); a truncated scan warns.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Callable, Optional, Sequence, Union
 
 import numpy as np
@@ -180,8 +180,20 @@ class LMM:
             n_eig = self.n if dense_ok else min(_DEFAULT_TOP_K, self.n - 1)
         self.n_eig = int(n_eig)
         self.random_state = random_state
-        self.fit_result: Optional[LMFit] = None
+        self._fit: Optional[LMFit] = None  # see fit_result
         self._basis_cache: dict = {}  # dtype -> cast eigenbasis
+
+    @property
+    def fit_result(self) -> Optional[LMFit]:
+        """The cached null fit of :meth:`fit`, bound to this model."""
+        return None if self._fit is None else replace(self._fit, model=self)
+
+    @fit_result.setter
+    def fit_result(self, fit: Optional[LMFit]) -> None:
+        # stored without its model back-reference: an LMM <-> LMFit cycle
+        # kept K and its eigendecomposition alive until the cyclic GC ran,
+        # e.g. 25 stranded LOCO models (~8 GB at n = 4,000) per exact gwas()
+        self._fit = None if fit is None else replace(fit, model=None)
 
     # ------------------------------------------------------------------
     # Eigenspaces
