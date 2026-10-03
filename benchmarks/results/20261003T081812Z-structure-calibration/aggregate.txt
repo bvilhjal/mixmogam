@@ -1,0 +1,75 @@
+
+## sim_none (6 replicates; null SNPs on the last chromosome)
+
+lambda_GC on null SNPs by structure-loading quintile (q1 = lowest loading)
+method                 all     q1     q2     q3     q4     q5   FPR@1%  FPR@0.1%  chi2@QTL  cal_cv   sec
+exact                0.999  0.986  1.010  0.985  1.019  1.013   0.0099  0.00108     15.18     nan   2.7
+bolt-inf             1.000  0.991  1.013  0.985  1.024  1.007   0.0099  0.00104     15.14   0.005   9.3
+bolt-inf-spectral    0.995  0.987  1.008  0.979  1.019  1.003   0.0097  0.00104     15.18   0.004   9.9
+bolt                 1.012  0.992  1.041  0.996  1.027  1.001   0.0099  0.00104     15.46   0.005  13.6
+bolt-spectral        1.007  0.986  1.035  0.990  1.021  0.995   0.0097  0.00100     15.49   0.004  14.4
+kvik                 1.007  0.996  1.038  0.997  1.023  1.006   0.0097  0.00112     15.17     nan  46.7
+kvik-spectral        1.007  0.996  1.038  0.997  1.023  1.006   0.0097  0.00112     15.17     nan  49.7
+
+FPR at p < 0.01 by quintile
+exact               0.0099 0.0073 0.0096 0.0093 0.0112 0.0120
+bolt-inf            0.0099 0.0080 0.0092 0.0088 0.0116 0.0118
+bolt-inf-spectral   0.0097 0.0078 0.0092 0.0084 0.0116 0.0114
+bolt                0.0099 0.0069 0.0090 0.0097 0.0116 0.0122
+bolt-spectral       0.0097 0.0067 0.0090 0.0097 0.0112 0.0118
+kvik                0.0097 0.0073 0.0088 0.0093 0.0121 0.0112
+kvik-spectral       0.0097 0.0073 0.0088 0.0093 0.0121 0.0112
+bolt: mixture used in 83% of replicates
+bolt-spectral: mixture used in 83% of replicates
+kvik: strong structure in 0%; mean lambda 1.000
+kvik-spectral: strong structure in 0%; mean lambda 1.000
+
+## sim_strong (6 replicates; null SNPs on the last chromosome)
+
+lambda_GC on null SNPs by structure-loading quintile (q1 = lowest loading)
+method                 all     q1     q2     q3     q4     q5   FPR@1%  FPR@0.1%  chi2@QTL  cal_cv   sec
+exact                1.002  1.048  0.976  1.054  0.922  1.019   0.0119  0.00100     12.97     nan   3.1
+bolt-inf             0.971  1.337  1.120  1.067  0.822  0.636   0.0131  0.00171     13.33   0.231  11.0
+bolt-inf-spectral    1.003  1.053  0.985  1.051  0.920  1.014   0.0119  0.00092     12.96   0.003  11.9
+bolt                 0.995  1.353  1.137  1.056  0.850  0.698   0.0135  0.00179     13.18   0.231  31.9
+bolt-spectral        1.034  1.071  1.009  1.047  0.962  1.089   0.0117  0.00100     12.85   0.003  32.2
+kvik                 1.022  1.374  1.167  1.121  0.890  0.727   0.0153  0.00225     13.32   0.207  63.4
+kvik-spectral        1.071  1.091  1.035  1.099  1.012  1.119   0.0135  0.00150     13.04   0.003  65.2
+
+FPR at p < 0.01 by quintile
+exact               0.0119 0.0112 0.0131 0.0125 0.0114 0.0111
+bolt-inf            0.0131 0.0245 0.0179 0.0127 0.0080 0.0011
+bolt-inf-spectral   0.0119 0.0114 0.0137 0.0127 0.0110 0.0106
+bolt                0.0135 0.0258 0.0185 0.0123 0.0086 0.0011
+bolt-spectral       0.0117 0.0120 0.0123 0.0117 0.0127 0.0100
+kvik                0.0153 0.0292 0.0202 0.0150 0.0099 0.0011
+kvik-spectral       0.0135 0.0146 0.0133 0.0140 0.0134 0.0124
+bolt: mixture used in 100% of replicates
+bolt-spectral: mixture used in 100% of replicates
+kvik: strong structure in 100%; mean lambda 1.431
+kvik-spectral: strong structure in 100%; mean lambda 1.425
+
+## at_regmap (6 replicates; null SNPs on the last chromosome)
+
+lambda_GC on null SNPs by structure-loading quintile (q1 = lowest loading)
+method                 all     q1     q2     q3     q4     q5   FPR@1%  FPR@0.1%  chi2@QTL  cal_cv   sec
+exact                1.015  1.038  1.013  0.983  1.010  1.036   0.0106  0.00130     11.55     nan   3.9
+bolt-inf             1.010  1.194  1.103  1.012  0.987  0.857   0.0118  0.00139     11.66   0.132  27.6
+bolt-inf-spectral    1.013  1.042  1.018  0.977  1.004  1.027   0.0107  0.00122     11.58   0.029  29.3
+bolt                 1.010  1.194  1.103  1.012  0.987  0.857   0.0118  0.00139     11.66   0.132  48.6
+bolt-spectral        1.013  1.042  1.018  0.977  1.004  1.027   0.0107  0.00122     11.58   0.029  47.7
+kvik                 0.985  1.155  1.060  0.983  0.971  0.846   0.0105  0.00129     11.20   0.111 143.3
+kvik-spectral        1.009  1.033  1.005  0.969  1.017  1.034   0.0106  0.00117     11.33   0.027 141.8
+
+FPR at p < 0.01 by quintile
+exact               0.0106 0.0096 0.0119 0.0107 0.0108 0.0098
+bolt-inf            0.0118 0.0166 0.0167 0.0122 0.0100 0.0056
+bolt-inf-spectral   0.0107 0.0097 0.0125 0.0106 0.0106 0.0099
+bolt                0.0118 0.0166 0.0167 0.0122 0.0100 0.0056
+bolt-spectral       0.0107 0.0097 0.0125 0.0106 0.0106 0.0099
+kvik                0.0105 0.0142 0.0147 0.0112 0.0093 0.0047
+kvik-spectral       0.0106 0.0089 0.0119 0.0104 0.0110 0.0103
+bolt: mixture used in 0% of replicates
+bolt-spectral: mixture used in 0% of replicates
+kvik: strong structure in 100%; mean lambda 1.279
+kvik-spectral: strong structure in 100%; mean lambda 1.278

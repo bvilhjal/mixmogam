@@ -1,0 +1,148 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 4 pairs of arguments:
+--kvik-step1 kvik3
+--bfile at
+--pheno pheno3.txt
+--max-threads 2
+
+Note that "--kvik-step1 kvik3" is equivalent to using "--elastic kvik3.step1" with "--LOCO YES"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Constructing LOCO elastic net PRS
+
+Consider using "--covar" and/or "--factors" to provide quantitative or categorical covariates
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+LDAK will only save selected files (to save all files, use "--verbose YES")
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 1307 samples from at.fam
+
+Checking responses for 1307 samples from pheno3.txt
+
+Reading details for 53167 predictors from at.bim
+
+Data contain 1307 samples and 53167 predictors (will be using 1307 and 53167)
+
+Reading phenotypes for 1307 samples from pheno3.txt
+
+When performing cross-validation, will use 1177 training samples and 130 test samples
+
+Warning, the number of comparison predictors has been reduced to 53167 (the total number of predictors)
+
+Testing for structure using 512 pedigree predictors
+
+Will decide there is high structure if the estimated maximum average inflation is above 0.1000, and the corresponding p-value is below 1.0000e-03 (change these values using "--MAI-threshold" and "--MAI-significance")
+
+Average cross-chromosome squared correlation is 5.4360e-03 (chi-squared test statistic 1926571.1696; p-value 0.0000e+00); estimated maximum average inflation of test statistics is 6.1041
+
+This is relatively high structure, so will estimate the test statistic scaling factor (instead of setting it to one)
+
+Estimating per-predictor heritabilities using Randomized Haseman-Elston Regression with 10 random vectors
+
+Will divide the predictors into 20 partitions (change this using "--num-divides")
+Will exclude chunks containing a predictor with estimated variance explained greater than 0.0765 (change this using "--max-cor")
+
+Calculating traces for Chunk 1 of 208
+Calculating traces for Chunk 201 of 208
+
+Best power is -1.0000 and estimated heritability is 0.1911 (SD 0.0202)
+
+Time check: have so far spent 0.00 hours
+
+Constructing 10 PRS using training samples
+Will also make 33 MCMC REML models (using all samples)
+
+Scan 1: estimating training effect sizes for Chunk 1 of 208
+Scan 1: estimating training effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 2.02
+
+Scan 2: estimating training effect sizes for Chunk 1 of 208
+Scan 2: estimating training effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 2.00
+
+Scan 3: estimating training effect sizes for Chunk 1 of 208
+Scan 3: estimating training effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 2.00
+
+Scan 4: estimating training effect sizes for Chunk 1 of 208
+Scan 4: estimating training effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 2.00
+
+The revised estimate of heritability is 0.3036
+
+Measuring accuracy of each model
+Model 1: heritability 0.3036, p 0.0000, f2 1.0000, mean squared error 0.9877
+Model 2: heritability 0.3036, p 0.5000, f2 0.5000, mean squared error 0.9864
+Model 3: heritability 0.3036, p 0.5000, f2 0.3000, mean squared error 0.9890
+Model 4: heritability 0.3036, p 0.5000, f2 0.1000, mean squared error 0.9954
+Model 5: heritability 0.3036, p 0.1000, f2 0.5000, mean squared error 0.9891
+Model 6: heritability 0.3036, p 0.1000, f2 0.3000, mean squared error 0.9884
+Model 7: heritability 0.3036, p 0.1000, f2 0.1000, mean squared error 0.9879
+Model 8: heritability 0.3036, p 0.0100, f2 0.5000, mean squared error 0.9879
+Model 9: heritability 0.3036, p 0.0100, f2 0.3000, mean squared error 0.9879
+Model 10: heritability 0.3036, p 0.0100, f2 0.1000, mean squared error 0.9879
+
+Time check: have so far spent 0.00 hours
+
+Constructing final PRS (heritability 0.3036, p 0.5000, f2 0.5000) using all samples
+Will also make 10 LOCO PRS, and 20 calibration models
+
+Scan 1: estimating final effect sizes for Chunk 1 of 208
+Scan 1: estimating final effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 2.07
+
+Scan 2: estimating final effect sizes for Chunk 1 of 208
+Scan 2: estimating final effect sizes for Chunk 201 of 208
+Average number of iterations per chunk: 1.64
+
+Scan 3: estimating final effect sizes for Chunk 1 of 131
+Average number of iterations per chunk: 1.50
+
+Scan 4: estimating final effect sizes for Chunk 1 of 65
+Average number of iterations per chunk: 1.66
+
+Scan 5: estimating final effect sizes for Chunk 1 of 43
+Average number of iterations per chunk: 1.35
+
+Scan 6: estimating final effect sizes for Chunk 1 of 15
+Average number of iterations per chunk: 1.07
+
+Scan 7: estimating final effect sizes for Chunk 1 of 1
+Average number of iterations per chunk: 1.00
+
+The ridge regression test statistic scaling factor is 1.2907 (SE 0.0326)
+
+Comparing test statistics for 53167 predictors
+Computing test statistics for Chunk 1 of 210
+Computing test statistics for Chunk 201 of 210
+
+The revised test statistic scaling factor is 1.1406 (SE 0.0292)
+Warning, this is very imprecise, it may be better to repeat using "--ridge" instead of "--elastic"
+The effect size calibration is 1.4118 (SE 0.0000)
+
+Best-fitting model saved in kvik3.step1.effects
+
+LOCO results saved in kvik3.step1.loco.prs and kvik3.step1.loco.details
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Sat Oct  3 10:46:12 2026 and ended at Sat Oct  3 10:46:17 2026
+The elapsed time was 0.00 hours
+Given the command used 2 threads, this means the CPU time was 0.00 hours
+
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
