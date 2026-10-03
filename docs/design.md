@@ -18,8 +18,9 @@ built without its own chromosome. With the tested SNP inside the
 kinship, the polygenic term absorbs part of its effect (proximal
 contamination): the exact non-LOCO scan was deflated, with lambda_GC
 0.91 at n = 4,000 and 0.85 at n = 10,000 (2026-10-03 large-n
-simulation, read on the corrected scale). More than 25 chromosomes are
-merged into 25 contiguous groups of balanced size.
+simulation, read on the corrected scale), and LOCO raised locus-level
+power at n = 4,000 from 0.33 to 0.51 (sim study S3). More than 25
+chromosomes are merged into 25 contiguous groups of balanced size.
 
 | method | residual tested against | calibration |
 |---|---|---|
@@ -29,6 +30,17 @@ merged into 25 contiguous groups of balanced size.
 | `kvik` | y minus the elastic-net LOCO score | lambda = 1, or KVIK's rule under strong structure |
 
 `auto` uses `exact` up to n = 5,000 and `bolt-inf` above.
+
+A kinship alone does not absorb a strong environment that tracks
+ancestry. sigma_g^2 K + sigma_e^2 I gives every eigen-direction the
+variance sigma_g^2 lambda_k + sigma_e^2, so an environment that moves the
+phenotype far along the ancestry axis cannot be represented: pass the
+top principal components as covariates (`X`). In sim study S2 (two
+demes, F_ST 0.02, an environment on deme with 50% of the variance),
+exact LOCO gave lambda_GC 1.27, and null SNPs in the top 1% of loading
+on the environment had mean chi2 2.27. With PC1 these became 1.11 and
+1.13. Non-LOCO's 0.98 there is the same residual offset by
+proximal-contamination deflation.
 
 ## Exact engine
 
@@ -41,6 +53,11 @@ merged into 25 contiguous groups of balanced size.
   solve; float32 GEMMs by default.
 - LOCO: K_{-g} by subtraction from one pass over all SNPs plus one pass
   over group g, then one eigendecomposition and REML refit per group.
+- Models and fits: `LMM.fit()` returns an `LMFit` that holds its model;
+  the model caches the fit without that back reference (`fit_result`
+  binds it on access). The cycle they used to form kept K and its
+  eigendecomposition until Python's cyclic garbage collector ran: about
+  8 GB of stranded LOCO models per exact `gwas()` at n = 4,000.
 
 ## Two-step engine (K-free)
 

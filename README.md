@@ -38,8 +38,9 @@ result.genomic_control(), result.extra["calibration_cv"]
 ```
 
 See [docs/quickstart.md](docs/quickstart.md), the design notes in
-[docs/design.md](docs/design.md) and the technical methods with
-pseudocode in [docs/methods.pdf](docs/methods.pdf).
+[docs/design.md](docs/design.md), the technical methods with
+pseudocode in [docs/methods.pdf](docs/methods.pdf), and a paper-style
+report of the evidence in [report/mixmogam_report.pdf](report/mixmogam_report.pdf).
 
 ## What the evidence says
 
@@ -67,7 +68,15 @@ pseudocode in [docs/methods.pdf](docs/methods.pdf).
   `benchmarks/results/*-structure-calibration`, `*-kvik-reference`.
 - **LOCO matters.** With the tested SNP inside the kinship, the exact
   scan was deflated (lambda_GC 0.85 at n = 10,000 in the 2026-10-03
-  simulation); `gwas()` is LOCO throughout.
+  simulation) and lost power (locus-level power 0.33 against 0.51 with
+  LOCO at n = 4,000); `gwas()` is LOCO throughout.
+- **A kinship alone does not absorb a strong environment that tracks
+  ancestry.** With two demes (F_ST 0.02) and an environment on deme
+  carrying 50% of the variance, exact LOCO gave lambda_GC 1.27, and null
+  SNPs that load most on the environment had mean chi2 2.27. One
+  principal component as a covariate (`gwas(y, gt, X=pcs)`) gave 1.11
+  and 1.13. The non-LOCO scan's 0.98 there is the same residual, offset
+  by proximal-contamination deflation.
 - **BOLT-LMM-inf matches the exact LOCO scan without structure**
   (chi2 correlation 0.996-0.9998). The mixture prior adds power on
   sparse traits (+12% mean chi2 at causal SNPs with 10 equal-effect

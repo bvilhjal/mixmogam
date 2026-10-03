@@ -78,6 +78,15 @@ SNP blocks are converted to \texttt{float32} with fused mean
 imputation immediately before use, so the float working set is bounded
 by the block size regardless of $m$.
 
+\paragraph{Models and fits.} \texttt{LMM.fit()} returns an
+\texttt{LMFit} that holds its model, so \texttt{fit.scan()},
+\texttt{blup()} and \texttt{predict()} work on the fit alone. The model
+caches the fit without that back reference and binds it on access
+(\texttt{LMM.fit\_result}). When the two referenced each other, the cycle
+kept $\K$ and its eigendecomposition alive until Python's cyclic garbage
+collector ran: an exact LOCO scan stranded its 25 group models, about
+8\,GB at $n = 4{,}000$.
+
 \section{Variance-component estimation: exact EMMA}
 \label{sec:fit}
 
@@ -98,6 +107,7 @@ lemma: with $V = \K + \delta I_n = \U \operatorname{diag}(\lambda_i +
 \begin{equation}
   \ell_R(\delta) = \tfrac12\Big[p\big(\log\tfrac{p}{2\pi} - 1 - \log \mathrm{RSS}\big)
   - \big(\textstyle\sum_i \log(\lambda_i{+}\delta) + \log|A| - \log|\X^\top\X|\big)\Big],
+  \label{eq:reml}
 \end{equation}
 with the derivative in closed form through $A' = -W^\top D^2 W$,
 $b' = -W^\top D^2 w$. The two formulations agree to $5 \times 10^{-13}$
@@ -106,11 +116,10 @@ $O(n^3)$ eigendecomposition with $O(nq^2)$ work.
 
 \subsection{Profile likelihood and grid}
 
-The REML profile log-likelihood as a function of $\delta$ is
-The ML variant replaces $p$ by $n$ and drops the $\log|A| - \log|\X^\top\X|$
-terms (same quadratic form). The equivalence with the restricted-eigenspace
-form above (equation label kept for cross-reference) is asserted in the
-tests; v1's deliberate factor-of-two in the derivative function --
+The REML profile log-likelihood is \eqref{eq:reml}. The ML variant
+replaces $p$ by $n$ and drops the $\log|A| - \log|\X^\top\X|$ terms (same
+quadratic form). Its equivalence with the restricted-eigenspace form is
+asserted in the tests; v1's deliberate factor-of-two in the derivative function --
 harmless for root finding -- is normalized. The grid
 $\delta_j = \exp(\mathrm{linspace}(l_{\min}, l_{\max}, G{+}1))$ with
 $G = 100$ and $[l_{\min},l_{\max}] = [-10, 10]$ is evaluated
@@ -400,6 +409,22 @@ is formed by subtraction (two passes over the genotypes in total), the
 variance components are refitted by exact EMMA, and the SNPs of group
 $g$ are scanned with Algorithm~\ref{alg:scan}. Cost: one $O(n^3)$
 eigendecomposition per group.
+
+\paragraph{Strong environmental stratification.} Under
+\eqref{eq:model} the variance of $\y$ along the $k$th eigenvector of
+$\K$ is $\sigma_g^2\lambda_k + \sigma_e^2$, one function of the eigenvalue
+for every direction. An environment that moves the phenotype along the
+leading (ancestry) eigenvector by much more than that cannot be
+represented. REML compensates by inflating $\sigma_g^2$, and SNPs that
+load on the axis keep a residual association. Adding the top principal
+components of $\K$ to $\X$ removes it (Price et al.\ 2006). In the sim
+study's S2 (two demes at $F_{ST} = 0.02$; an environment on deme with 50\%
+of the variance), exact LOCO gave $\lambda_{GC} = 1.27$, and null SNPs in
+the top 1\% of loading on the environment had mean $\chi^2 = 2.27$. With
+PC1 as a covariate these became 1.11 and 1.13 (archive
+\texttt{20261003T122520Z-sim-study}). The non-LOCO scan's 0.98 is the
+same residual offset by proximal-contamination deflation, so under
+structure $\lambda_{GC}$ alone cannot rank LOCO against non-LOCO.
 
 \paragraph{The streaming LOCO operator.} The two-step methods hold the
 genotypes as standardized, covariate-projected blocks
@@ -691,6 +716,18 @@ to LDAK-KVIK through its $\lambda$ rule it is flat but about 7\% inflated
 overall under the simulated structure. Power at the QTLs, which are not
 chosen for structure alignment, is within a few percent across methods.
 
+\paragraph{Simulation study.} Coalescent genotypes (msprime; Baumdicker
+et al.\ 2022) are cut into LD blocks, each its own ``chromosome'', by the
+optimal LD split (Priv\'e 2022; the ldpred3 port) into $m/200$ blocks of
+100--400 SNPs. Fixed 200-SNP cuts had split strong LD, and every S1 false
+locus under them was a QTL tag in the next block. Locus-level power at
+the 5\% Bonferroni threshold, exact LOCO against non-LOCO, was 0.22 against
+0.12 at $n = 800$ and 0.51 against 0.33 at $n = 4{,}000$. The infinitesimal
+half of the simulated heritability puts LOCO's $\lambda_{GC}$ above one
+(1.25 and 1.65) and makes some ``false'' loci real. S2 is described with
+the LOCO scan above. Archive: \texttt{20261003T122520Z-sim-study}; the
+paper-style account is \texttt{report/mixmogam\_report.pdf}.
+
 \paragraph{Speed.} Development laptop, Apple silicon, 4 BLAS threads, AC
 power; these compare mixmogam with itself.
 
@@ -715,6 +752,9 @@ exact scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNP
 \begin{itemize}[nosep,leftmargin=1.4em]
 \item Abney, M.\ (2015) Permutation testing in the presence of polygenic
   variation. \emph{Genet Epidemiol} 39:249--258. doi:10.1002/gepi.21893
+\item Baumdicker, F.\ et al.\ (2022) Efficient ancestry and mutation
+  simulation with msprime 1.0. \emph{Genetics} 220:iyab229.
+  doi:10.1093/genetics/iyab229
 \item Bulik-Sullivan, B.K.\ et al.\ (2015) LD Score regression
   distinguishes confounding from polygenicity in genome-wide association
   studies. \emph{Nat Genet} 47:291--295. doi:10.1038/ng.3211
@@ -742,6 +782,11 @@ exact scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNP
 \item Mbatchou, J.\ et al.\ (2021) Computationally efficient
   whole-genome regression for quantitative and binary traits.
   \emph{Nat Genet} 53:1097--1103. doi:10.1038/s41588-021-00870-7 (REGENIE)
+\item Price, A.L.\ et al.\ (2006) Principal components analysis
+  corrects for stratification in genome-wide association studies.
+  \emph{Nat Genet} 38:904--909. doi:10.1038/ng1847
+\item Priv\'e, F.\ (2022) Optimal linkage disequilibrium splitting.
+  \emph{Bioinformatics} 38:255--256. doi:\allowbreak 10.1093/\allowbreak bioinformatics/\allowbreak btab519
 \item Segura, V.\ et al.\ (2012) An efficient multi-locus mixed-model
   approach for genome-wide association studies in structured
   populations. \emph{Nat Genet} 44:825--830. doi:10.1038/ng.2314 (MLMM)

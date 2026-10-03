@@ -71,6 +71,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `report/`: a paper-style LaTeX report of the evidence: per-SNP
+  calibration under structure on *A. thaliana* and simulated data, the
+  confounding and LD-block simulation designs, LOCO and computation.
+  `report/make_figures.py` rebuilds its figures and tables from the
+  archived results; the methods documentation covers PC covariates under
+  strong environmental stratification and the model/fit memory design.
 - `mixmogam.gwas()`: leave-one-chromosome-out association by default.
   `method="exact"` is EMMAX with one eigendecomposition and REML refit
   per LOCO group; `"bolt-inf"`, `"bolt"` and `"kvik"` are the two-step
