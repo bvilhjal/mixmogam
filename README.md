@@ -80,9 +80,10 @@ pseudocode in [docs/methods.pdf](docs/methods.pdf).
 Speed: the batched EMMAX scan runs SNP blocks as GEMMs (about 123x the
 v1 per-SNP loop at n = 2,000, m = 10,000). That comparison is against
 mixmogam's own 2010 code. At n = 1,300 the exact LOCO path is the
-fastest (3-4 s); mixmogam's LDAK-KVIK (45-145 s) is far slower than the
-LDAK binary (about 9 s). Its value is as a transparent reference
-implementation, not as a replacement.
+fastest (3-4 s). mixmogam's LDAK-KVIK takes about 15 s there, against
+about 9 s for the LDAK binary; it is a transparent reference
+implementation (Python orchestration, BLAS GEMMs, a Numba kernel), not a
+replacement.
 
 ## Status
 

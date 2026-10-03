@@ -13,7 +13,8 @@ from typing import Callable
 import numpy as np
 from scipy.linalg import eigh_tridiagonal
 
-__all__ = ["lanczos_quadrature", "QuadratureRule", "randomized_eigh_op", "trace_estimator"]
+__all__ = ["lanczos_quadrature", "lanczos_quadrature_batch", "QuadratureRule",
+           "randomized_eigh_op", "rademacher_probes", "trace_estimator"]
 
 
 def randomized_eigh_op(
@@ -116,6 +117,81 @@ def lanczos_quadrature(
     return QuadratureRule(theta, weights, norm * norm)
 
 
+def lanczos_quadrature_batch(
+    matvec: Callable[[np.ndarray], np.ndarray],
+    V0: np.ndarray,
+    steps: int,
+) -> list["QuadratureRule"]:
+    """:func:`lanczos_quadrature` for every column of ``V0`` at once.
+
+    The runs are independent (one Krylov basis, one tridiagonal matrix and
+    one breakdown test per column) but share each operator application:
+    ``matvec`` receives an (n, r) block, so a streaming operator makes one
+    pass over the genotypes per step for all r runs instead of r passes.
+    Column for column the rules equal the sequential ones up to rounding.
+    """
+    V0 = np.asarray(V0, dtype=np.float64)
+    if V0.ndim == 1:
+        V0 = V0[:, None]
+    n, r = V0.shape
+    norms = np.linalg.norm(V0, axis=0)
+    if np.any(norms == 0.0):
+        raise ValueError("starting vector has zero norm")
+    steps = max(1, min(steps, n))
+    Q = np.zeros((steps, n, r))
+    alpha = np.zeros((steps, r))
+    beta = np.zeros((max(steps - 1, 1), r))
+    Q[0] = V0 / norms
+    t_eff = np.full(r, steps)
+    active = np.ones(r, dtype=bool)
+    for j in range(steps):
+        cols = np.nonzero(active)[0]
+        W = np.zeros((n, r))
+        W[:, cols] = matvec(Q[j][:, cols])
+        a = np.einsum("ij,ij->j", Q[j], W)
+        alpha[j, cols] = a[cols]
+        W -= a * Q[j]
+        if j > 0:
+            W -= beta[j - 1] * Q[j - 1]
+        # full reorthogonalization, each column against its own basis
+        coef = np.einsum("knc,nc->kc", Q[: j + 1], W)
+        W -= np.einsum("knc,kc->nc", Q[: j + 1], coef)
+        if j == steps - 1:
+            break
+        b = np.linalg.norm(W, axis=0)
+        broke = active & (b <= 1e-12 * np.maximum(1.0, np.abs(alpha[j])))
+        t_eff[broke] = j + 1  # lucky breakdown: invariant subspace found
+        active &= ~broke
+        if not active.any():
+            break
+        beta[j] = np.where(active, b, 0.0)
+        Q[j + 1] = np.where(active, W / np.where(b > 0.0, b, 1.0), 0.0)
+    rules = []
+    for c in range(r):
+        te = int(t_eff[c])
+        if te == 1:
+            theta, weights = np.array([alpha[0, c]]), np.array([1.0])
+        else:
+            theta, s = eigh_tridiagonal(alpha[:te, c], beta[: te - 1, c])
+            weights = s[0, :] ** 2
+        rules.append(QuadratureRule(theta, weights, float(norms[c]) ** 2))
+    return rules
+
+
+def rademacher_probes(n: int, probes: int, rng: np.random.Generator,
+                      pre: Callable[[np.ndarray], np.ndarray] | None = None) -> np.ndarray:
+    """(n, p) Rademacher probes, drawn one at a time (the sequence of the
+    sequential estimator), optionally projected, all-zero probes dropped."""
+    out = []
+    for _ in range(probes):
+        z = rng.choice(np.array([-1.0, 1.0]), size=n)
+        if pre is not None:
+            z = pre(z)
+        if np.any(z):
+            out.append(z)
+    return np.column_stack(out) if out else np.empty((n, 0))
+
+
 class QuadratureRule:
     """Nodes/weights such that v' f(A) v ~= norm2 * sum(w * f(theta))."""
 
@@ -144,14 +220,10 @@ def trace_estimator(
     in expectation; rules are normalized so ``mean(r.apply(f))`` estimates
     ``tr f(A) / n``. ``pre`` projects probes before the run, so the estimate
     covers the operator restricted to the projected subspace (e.g. the
-    covariate complement under REML).
+    covariate complement under REML). All probes run as one batched
+    Lanczos process (:func:`lanczos_quadrature_batch`).
     """
-    rules = []
-    for _ in range(probes):
-        z = rng.choice(np.array([-1.0, 1.0]), size=n)
-        if pre is not None:
-            z = pre(z)
-        if not np.any(z):
-            continue
-        rules.append(lanczos_quadrature(matvec, z, steps))
-    return rules
+    Z = rademacher_probes(n, probes, rng, pre)
+    if Z.shape[1] == 0:
+        return []
+    return lanczos_quadrature_batch(matvec, Z, steps)

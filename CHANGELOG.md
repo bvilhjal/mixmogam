@@ -85,6 +85,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Stochastic Lanczos REML runs the y rule and all trace probes as one
+  batched Lanczos process (`_slq.lanczos_quadrature_batch`): one pass over
+  the genotypes per step instead of one per probe, same probes, fits
+  equal to 1e-13. LDAK-KVIK picks alpha by randomized Haseman-Elston
+  regression with all alphas in one pass (`alpha_method="he"`, LDAK-KVIK's
+  own approach) and runs one REML fit at that alpha; `alpha_method="reml"`
+  keeps one REML fit per alpha. The variational-Bayes kernel reorders its
+  loops for contiguous access, shares one erfc between log Phi and the
+  Mills ratio, and runs its GEMMs in float32 with an exact float64
+  residual at the end. On A. thaliana (n = 1,307, m = 53k) `kvik` went
+  from ~150 s to ~15 s (REML alpha selection: ~41 s); the LDAK binary
+  takes ~9 s.
 - Scans on a truncated spectrum warn: they were anti-conservative in
   simulation. Docstrings no longer attribute the truncated spectrum to
   BOLT-LMM or SNP-subsampled fits to LDAK-KVIK.

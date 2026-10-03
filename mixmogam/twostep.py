@@ -510,7 +510,48 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
             "n_snps": int(sel.size)}
 
 
+def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng) -> dict:
+    """Pick the LDAK-Thin power by randomized Haseman-Elston regression.
+
+    For each alpha, K_alpha = Z' W_alpha Z / sum(W_alpha) with
+    W_alpha = [f (1 - f)]^(1 + alpha). HE regresses the off-diagonal
+    products y_i y_j on K_ij, and at the least-squares h2 its residual sum
+    of squares falls by (sum_{i != j} y_i y_j K_ij)^2 / sum_{i != j} K_ij^2,
+    which is the fit score maximized over alpha. tr(K^2) comes from
+    ``n_probes`` Rademacher probes shared by every alpha (common random
+    numbers); one pass over the genotypes serves all alphas. This is the
+    single-component version of LDAK-KVIK's partitioned randomized HE.
+    """
+    lg = st.lg
+    n, A = lg.n, len(alphas)
+    Wt = np.column_stack([(f * (1.0 - f)) ** (1.0 + a) for a in alphas])  # (m, A)
+    ys = st.y_p / np.sqrt(np.sum(st.y_p**2) / st.n_eff)
+    P = np.column_stack([ys, rng.choice(np.array([-1.0, 1.0]), size=(n, n_probes))])
+    P32 = P.astype(lg.dtype)
+    KP = np.zeros((A, n, P.shape[1]))
+    diag = np.zeros((n, A))
+    for idx, _, Z in lg.blocks():
+        T = Z @ P32
+        wb = Wt[idx].astype(lg.dtype)
+        for a in range(A):
+            KP[a] += (Z.T @ (T * wb[:, a, None])).astype(np.float64)
+        diag += ((Z * Z).T @ wb).astype(np.float64)
+    tot = Wt.sum(axis=0)
+    KP /= tot[:, None, None]
+    diag /= tot
+    scores = np.empty(A)
+    h2 = np.empty(A)
+    for a in range(A):
+        yky = float(ys @ KP[a][:, 0] - np.sum(ys * ys * diag[:, a]))
+        k2 = float(np.mean(np.sum(KP[a][:, 1:] ** 2, axis=0)) - np.sum(diag[:, a] ** 2))
+        scores[a] = yky * yky / k2
+        h2[a] = yky / k2
+    best = int(np.argmax(scores))
+    return {"alpha": alphas[best], "weights": Wt[:, best], "scores": scores, "h2_he": h2}
+
+
 def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+         alpha_method: str = "he", he_probes: int = 32,
          grid=KVIK_GRID, cv_fraction: float = 0.1, n_calibration: int = 30,
          denominator: str = "constant", n_spectral="auto",
          structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
@@ -519,9 +560,12 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
     """LDAK-KVIK: elastic-net LOCO polygenic scores as offsets, OLS score tests.
 
     Following the LDAK-KVIK technical documentation: (1a) structure test;
-    (1b) the LDAK-Thin power alpha is chosen among ``alphas`` -- here by the
-    REML likelihood of the weighted kinship (KVIK: randomized
-    Haseman-Elston regression) -- giving per-SNP heritabilities
+    (1b) the LDAK-Thin power alpha is chosen among ``alphas`` by randomized
+    Haseman-Elston regression (``alpha_method="he"``, all alphas in one
+    pass; :func:`_he_alpha`) or by the REML likelihood of each weighted
+    kinship (``"reml"``, one REML fit per alpha), and h2 is then estimated
+    by REML at the chosen alpha (KVIK revises it by MCMC REML), giving
+    per-SNP heritabilities
     h2_j = w_j h2 / W with w_j = [f_j (1 - f_j)]^(1 + alpha) (no LD
     thinning: every SNP keeps weight w_j); (1d) the elastic-net prior
     p Laplace + (1 - p) N(0, F h2_j / (1 - p)) with (p, F) chosen on a
@@ -546,14 +590,23 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
 
     struct = structure_test(st, structure_snps, rng)
 
-    # (1b) alpha by REML likelihood of the weighted kinship
+    # (1b) alpha, then REML h2 at that alpha
     f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
-    fits = []
-    for a in alphas:
-        w = (f * (1.0 - f)) ** (1.0 + a)
-        fit_a = fit_variance_components(st, weights=w, random_state=random_state)
-        fits.append((fit_a.ll, a, w, fit_a))
-    ll_best, alpha, w, fit = max(fits, key=lambda t: t[0])
+    if alpha_method == "he":
+        he = _he_alpha(st, f, list(alphas), he_probes, rng)
+        alpha, w = he["alpha"], he["weights"]
+        alpha_scores = he["scores"]
+        fit = fit_variance_components(st, weights=w, random_state=random_state)
+    elif alpha_method == "reml":
+        fits = []
+        for a in alphas:
+            w_a = (f * (1.0 - f)) ** (1.0 + a)
+            fit_a = fit_variance_components(st, weights=w_a, random_state=random_state)
+            fits.append((fit_a.ll, a, w_a, fit_a))
+        _, alpha, w, fit = max(fits, key=lambda t: t[0])
+        alpha_scores = np.array([t[0] for t in fits])
+    else:
+        raise ValueError(f"unknown alpha_method {alpha_method!r}; use 'he' or 'reml'")
     h2 = float(fit.pseudo_heritability)
     h2j = w * h2 / float(np.sum(w))
     s2e = max(1.0 - h2, 1e-3)
@@ -586,6 +639,7 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
     U = rsU["chi2"]
 
     extra = {"method": "kvik", "denominator": denominator, "alpha": alpha, "h2": h2,
+             "alpha_method": alpha_method, "alpha_scores": alpha_scores,
              "structure": struct,
              "cv_grid": list(grid), "cv_mse": mse, "cv_best": grid[best],
              "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}

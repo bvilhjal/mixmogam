@@ -28,7 +28,8 @@ from typing import Callable, Optional, Sequence, Union
 import numpy as np
 from scipy import linalg, optimize, stats
 
-from mixmogam._slq import lanczos_quadrature, randomized_eigh_op, trace_estimator
+from mixmogam._slq import (lanczos_quadrature_batch, rademacher_probes,
+                           randomized_eigh_op, trace_estimator)
 
 __all__ = ["LMM", "LMFit"]
 
@@ -562,19 +563,17 @@ class LMM:
             d = lam_d.size
 
         def op_defl(x):
-            return op(x) - U_d @ (lam_d * (U_d.T @ x))
+            c = U_d.T @ x
+            return op(x) - U_d @ (lam_d[:, None] * c if c.ndim == 2 else lam_d * c)
 
         y_top_coef = U_d.T @ y_proj
         y_rest = y_proj - U_d @ y_top_coef
-        y_rule = lanczos_quadrature(op_defl, y_rest, steps)
-        tr_rules = trace_estimator(
-            op_defl,
-            self.n,
-            probes,
-            steps,
-            rng,
-            pre=lambda x: x - Q @ (Q.T @ x),
-        )
+        # the y rule and the trace probes share every operator pass: one
+        # batched Lanczos run instead of 1 + probes sequential ones (same
+        # probes, same rules up to rounding)
+        Z = rademacher_probes(self.n, probes, rng, pre=lambda x: x - Q @ (Q.T @ x))
+        rules = lanczos_quadrature_batch(op_defl, np.column_stack([y_rest, Z]), steps)
+        y_rule, tr_rules = rules[0], rules[1:]
         p = self.n - self.q
 
         def s1_at(delta):
@@ -615,7 +614,8 @@ class LMM:
             def _k_op(x):
                 out = self._kdot(x)
                 if U_k is not None:
-                    out = out - U_k @ (lam_k * (U_k.T @ x))
+                    c = U_k.T @ x
+                    out = out - U_k @ (lam_k[:, None] * c if c.ndim == 2 else lam_k * c)
                 return out
 
             k_rules = trace_estimator(_k_op, self.n, probes, steps, rng)

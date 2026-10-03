@@ -335,7 +335,11 @@ $\log(t+\delta)$. Trace terms use unbiased Rademacher probe averages
 ($\E[z^\top f(\Am) z] = \tr f(\Am)$, probes pre-projected into the
 covariate complement for REML); the quadratic forms in $\y$ use one
 deterministic rule from the projected phenotype. All Lanczos runs use
-full reorthogonalization ($t \le 96$ default, 12 probes).
+full reorthogonalization ($t \le 96$ default, 12 probes), and they run as
+one batched process: each step applies the operator to the $(n \times
+13)$ block of all current Lanczos vectors (one GEMM pass over the
+genotypes) while every run keeps its own basis, tridiagonal matrix and
+breakdown test.
 
 \paragraph{Deflation.} Gauss quadrature converges slowly when the
 spectrum mixes extreme outliers (population structure) with a tight
@@ -479,8 +483,12 @@ $\mathrm{excess} = n_{\mathrm{eff}}\,\overline{r^2} - 1$; strong
 structure if $\mathrm{excess} > 0.1$ with $z > 3$;
 (2)~per-SNP heritabilities $h_j^2 = w_j h^2/\sum_k w_k$ with
 $w_j = [f_j(1-f_j)]^{1+\alpha}$ and $\alpha$ the best of
-$\{-1, -0.75, -0.5, -0.25, 0\}$ by REML likelihood of the weighted kinship
-(LDAK-KVIK: randomized Haseman--Elston regression; no LD thinning here);
+$\{-1, -0.75, -0.5, -0.25, 0\}$ by randomized Haseman--Elston regression:
+the fit score $(\sum_{i\ne j} y_iy_jK_{ij})^2/\sum_{i\ne j}K_{ij}^2$, with
+$\tr \K^2$ from 32 Rademacher probes shared by every $\alpha$, so one pass
+over the genotypes serves all five. $h^2$ is then fitted by REML at the
+chosen $\alpha$ (LDAK-KVIK: partitioned HE, then MCMC REML; no LD thinning
+here; scanning REML likelihoods over $\alpha$ is an option);
 (3)~the elastic-net prior
 $\gamma_j \sim p\,\mathrm{Laplace}\big(\sqrt{2p/((1-F)h_j^2)}\big) + (1-p)\,\mathcal{N}(0, F h_j^2/(1-p))$
 with $(p, F)$ chosen on a 10\% hold-out among KVIK's ten pairs;
@@ -697,7 +705,7 @@ exact scan vs.\ v1-style per-SNP least squares ($n{=}2000$, $m{=}10$k) & speed-u
 exact scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNPs/s \\
 \texttt{gwas} exact LOCO, \emph{A.\ thaliana} ($n{=}1307$, $m{=}53$k, 5 chr.) & wall time & 4\,s \\
 \texttt{gwas} BOLT-LMM-inf, same data (spectral: $+2$\,s) & wall time & 28\,s \\
-\texttt{gwas} LDAK-KVIK, same data (LDAK binary: 9\,s) & wall time & 140\,s \\
+\texttt{gwas} LDAK-KVIK, same data (LDAK binary: 9\,s) & wall time & 15\,s \\
 \bottomrule
 \end{tabular}
 \end{center}

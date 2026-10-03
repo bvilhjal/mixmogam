@@ -78,6 +78,17 @@ def _pm_mixture(u, gjj, s2e, pi1, v1, v2):
     return (w1 * m1 + w2 * m2) / (w1 + w2)
 
 
+def _ndtr_parts(x):
+    """(log Phi(x), phi(x) / Phi(x)) from one erfc, stable in the lower tail."""
+    if x > -20.0:
+        half_erfc = 0.5 * math.erfc(-x / _SQRT2)
+        return (math.log(half_erfc),
+                math.exp(-0.5 * x * x - 0.5 * _LOG_2PI) / half_erfc)
+    x2 = x * x
+    series = 1.0 - 1.0 / x2 + 3.0 / (x2 * x2) - 15.0 / (x2 * x2 * x2)
+    return (-0.5 * x2 - math.log(-x) - 0.5 * _LOG_2PI + math.log(series), -x / series)
+
+
 def _pm_enet(u, gjj, s2e, p, lam, v):
     """Posterior mean under p Laplace(rate lam) + (1 - p) N(0, v)."""
     a = gjj / s2e
@@ -88,13 +99,15 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
     if p > 0.0 and lam > 0.0 and math.isfinite(lam):
         mp = (b - lam) / a
         mn = (b + lam) / a
-        lzp = (b - lam) * (b - lam) / (2.0 * a) + _log_ndtr(mp * sa)
-        lzn = (b + lam) * (b + lam) / (2.0 * a) + _log_ndtr(-mn * sa)
+        lphi_p, mills_p = _ndtr_parts(mp * sa)
+        lphi_n, mills_n = _ndtr_parts(-mn * sa)
+        lzp = (b - lam) * (b - lam) / (2.0 * a) + lphi_p
+        lzn = (b + lam) * (b + lam) / (2.0 * a) + lphi_n
         mz = max(lzp, lzn)
         wp = math.exp(lzp - mz)
         wn = math.exp(lzn - mz)
-        ep = mp + _mills(mp * sa) / sa
-        en = mn - _mills(-mn * sa) / sa
+        ep = mp + mills_p / sa
+        en = mn - mills_n / sa
         ml = (wp * ep + wn * en) / (wp + wn)
         lwl = (math.log(p) + math.log(0.5 * lam) + 0.5 * (_LOG_2PI - math.log(a))
                + mz + math.log(wp + wn))
@@ -112,21 +125,24 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
     return (w1 * ml + w2 * mnn) / (w1 + w2)
 
 
-def _sweep_block(U, beta, grams, col_fold, skip, prior_type, prior, scale, s2e, D):
+def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
     """One Gauss-Seidel sweep over a block of SNPs for every column.
 
     U (B, P): x_a' R at block start, corrected in place as SNPs move;
     beta (B, P): block coefficients, updated in place; grams (F+1, B, B):
-    full and per-fold Gram matrices; D (B, P): output coefficient changes.
+    full and per-fold Gram matrices, ``gidx[p]`` selecting column p's;
+    D (B, P): output coefficient changes. Each SNP first moves in every
+    column, then the products of the later SNPs are corrected row by row
+    (contiguous in both U and the symmetric Gram matrix).
     """
     nb, ncol = U.shape
     for a in range(nb):
+        moved = False
         for p in range(ncol):
             if skip[p]:
                 D[a, p] = 0.0
                 continue
-            G = grams[col_fold[p] + 1]
-            gjj = G[a, a]
+            gjj = grams[gidx[p], a, a]
             if gjj <= 0.0:
                 D[a, p] = 0.0
                 continue
@@ -142,8 +158,13 @@ def _sweep_block(U, beta, grams, col_fold, skip, prior_type, prior, scale, s2e, 
             D[a, p] = d
             if d != 0.0:
                 beta[a, p] = b_new
-                for c in range(a + 1, nb):
-                    U[c, p] -= G[c, a] * d
+                moved = True
+        if moved:
+            for c in range(a + 1, nb):
+                for p in range(ncol):
+                    d = D[a, p]
+                    if d != 0.0:
+                        U[c, p] -= grams[gidx[p], a, c] * d
 
 
 if HAS_NUMBA:
@@ -151,6 +172,7 @@ if HAS_NUMBA:
 
     _log_ndtr = njit(cache=True)(_log_ndtr)
     _mills = njit(cache=True)(_mills)
+    _ndtr_parts = njit(cache=True)(_ndtr_parts)
     _pm_mixture = njit(cache=True)(_pm_mixture)
     _pm_enet = njit(cache=True)(_pm_enet)
     _sweep_block = njit(cache=True)(_sweep_block)
@@ -237,19 +259,23 @@ class VBEngine:
         D = np.empty((self.sub_block, P))
         it = 0
         rel = np.full(P, np.inf)
+        zdt = self.lg.dtype
+        gidx = col_fold + 1  # Gram slice per column (0: all rows)
         for it in range(1, max_iter + 1):
             change = np.zeros(P)
             for b, (idx, g, Zs) in enumerate(self._subblocks()):
                 grams = self._grams[b] if self._grams is not None else self._gram(Zs)
-                Z64 = Zs.astype(np.float64)
-                U = Z64 @ R
+                # GEMMs in the storage precision (float32 by default): no
+                # per-sweep widening of the genotype block, and the residual
+                # is recomputed exactly below
+                U = (Zs @ R.astype(zdt)).astype(np.float64)
                 skip = col_group == g
                 bb = np.ascontiguousarray(beta[idx])
                 Db = D[: idx.size]
-                _sweep_block(U, bb, grams, col_fold, skip, prior_type, prior,
+                _sweep_block(U, bb, grams, gidx, skip, prior_type, prior,
                              np.ascontiguousarray(scale[idx]), s2e, Db)
                 beta[idx] = bb
-                dR = Z64.T @ Db
+                dR = (Zs.T @ Db.astype(zdt)).astype(np.float64)
                 if mask is not None:
                     dR *= mask
                 R -= dR
@@ -257,6 +283,10 @@ class VBEngine:
             rel = change / ynorm
             if rel.max() < tol:
                 break
+        # exact residual from the final effects (one pass, float64)
+        R = Y - self.predict(beta)
+        if mask is not None:
+            R *= mask
         return {"beta": beta, "resid": R, "iterations": it,
                 "converged": bool(rel.max() < tol), "rel_change": rel, "mask": mask}
 

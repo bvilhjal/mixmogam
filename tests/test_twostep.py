@@ -252,3 +252,30 @@ def test_spectral_denominator_fixes_structure_gradient():
     s_lo, s_hi = bin_ratios(spec)
     assert abs(s_lo - 1) < 0.03 and abs(s_hi - 1) < 0.03
     assert spec.extra["calibration_cv"] < 0.25 * const.extra["calibration_cv"]
+
+
+def test_batched_lanczos_matches_sequential():
+    from mixmogam._slq import lanczos_quadrature, lanczos_quadrature_batch
+    rng = np.random.default_rng(21)
+    A = rng.standard_normal((200, 200))
+    A = A @ A.T / 200 + np.diag(np.r_[np.full(4, 30.0), np.zeros(196)])
+    V = rng.standard_normal((200, 5))
+    V[:, 4] = np.linalg.eigh(A)[1][:, :2].sum(axis=1)  # invariant subspace: early breakdown
+    batch = lanczos_quadrature_batch(lambda X: A @ X, V, 50)
+    f = lambda t: 1.0 / (t + 0.5)  # noqa: E731
+    for c in range(5):
+        seq = lanczos_quadrature(lambda x: A @ x, V[:, c], 50)
+        assert batch[c].theta.size == seq.theta.size
+        assert batch[c].apply(f) == pytest.approx(seq.apply(f), rel=1e-10)
+
+
+def test_he_alpha_tracks_reml(small):
+    """Haseman-Elston alpha scan: finite scores, h2 close to REML's."""
+    from mixmogam.twostep import _he_alpha, fit_variance_components
+    gt, y, st = small
+    f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+    he = _he_alpha(st, f, [-1.0, -0.5, 0.0], 64, np.random.default_rng(3))
+    assert np.isfinite(he["scores"]).all()
+    assert he["alpha"] in (-1.0, -0.5, 0.0)
+    reml = fit_variance_components(st).pseudo_heritability
+    assert he["h2_he"][0] == pytest.approx(reml, abs=0.15)

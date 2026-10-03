@@ -61,12 +61,16 @@ merged into 25 contiguous groups of balanced size.
 - **Variance components**: deflated stochastic Lanczos quadrature REML
   on the operator (BOLT-LMM uses Monte Carlo REML, LDAK-KVIK randomized
   Haseman-Elston regression). It matched the exact fit's delta to 0.09%
-  at n = 10,000.
+  at n = 10,000. The y rule and the 12 trace probes run as one batched
+  Lanczos process, one pass over the genotypes per step (96 passes per
+  fit instead of 1,248).
 
 Where mixmogam departs from the reference implementations, the
 docstrings of `mixmogam.twostep` say so. The departures: REML instead
-of MC REML / HE regression; KVIK's alpha chosen by REML likelihood; no
-LD thinning in the LDAK-Thin weights; a 1% relative CV R^2 margin
+of MC REML for BOLT-LMM; KVIK's alpha by single-component (not
+partitioned) randomized HE regression, then REML h2 (`alpha_method=
+"reml"` scans REML likelihoods instead); no LD thinning in the
+LDAK-Thin weights; a 1% relative CV R^2 margin
 before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
 median matching instead of the LDSC intercept when LD scores do not
 vary (coefficient of variation < 0.2).
@@ -147,7 +151,7 @@ statistics.
 | exact scan throughput, n = 2,000, m = 100k, f32 | ~4.8e4 SNPs/s |
 | `gwas` exact LOCO, n = 1,307, m = 53k, 5 chromosomes | ~4 s |
 | `gwas` bolt-inf, same data | ~28 s (spectral +2 s; the K-free path is for large n) |
-| `gwas` kvik, same data | ~140 s (the LDAK binary: ~9 s for both steps) |
+| `gwas` kvik, same data | ~15 s (REML alpha selection ~41 s; the LDAK binary ~9 s) |
 
 These compare mixmogam with itself. It has not been benchmarked against
 GEMMA, BOLT-LMM, REGENIE or LDAK.
