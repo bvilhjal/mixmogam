@@ -38,7 +38,7 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{3 October 2026\\\small Research report for version 2.0.0.dev3}
+\date{3 October 2026\\\small Research report for version 2.0.0.dev4}
 
 \begin{document}
 \maketitle
@@ -71,10 +71,19 @@ confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
 under the genetic null; adjustment for two genotype PCs reduces this to
 0.97\%. Corresponding mixmogam KVIK rates are 0.64\% and 0.94\%.
 These small-panel stress tests do not establish a general ranking.
-We implement a HAPNEST-model simulator in phensim, measure speed and
-resident memory through 100,000 samples, and extend matched association
-workloads. The research agenda emphasizes independent calibration audits,
-reference-panel fidelity, error-controlled approximations and failure limits.
+We implement a HAPNEST-model simulator in phensim and measure generation
+through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
+moment-based variance fitting and optional parallel computation give
+mixmogam median complete-fit times of 33.22 and 32.06 seconds on two
+fixed panels, versus 25.45 and 30.09 seconds for official LDAK-KVIK.
+Disabling the genotype cache approximately halves peak resident memory
+but increases time. Thread changes exceed a prespecified strict numerical
+tolerance, although the tested significance decisions are unchanged.
+These workstation timings, with observed system swapping, establish a
+workload-specific tradeoff rather than general performance or calibration.
+REML remains the default variance estimator. The research agenda emphasizes
+independent calibration audits, reference-panel fidelity, error-controlled
+approximations and measured failure limits.
 \end{abstract}
 
 \section{Introduction}
@@ -141,11 +150,12 @@ simulations. We then formulate research questions that can distinguish
 a useful general method from an approximation that works only in a
 favourable example.
 
-The evidence has four levels. Current software checks assess specified
+The evidence has several levels. Current software checks assess specified
 numerical and data-handling contracts. The new experiment isolates
 calibration geometry under a deliberately simple null. A matched phensim
 benchmark compares complete scans with the official LDAK-KVIK executable.
-Historical
+Larger fixed-panel experiments distinguish estimator choice, numerical
+parallelism and storage costs. Historical
 simulations motivate broader questions but predate the scientific
 correctness review. Table~\ref{tab:evidence} records these boundaries;
 they apply throughout the report.
@@ -160,7 +170,7 @@ from the corrected package.}
 \toprule
 Evidence & Established here & Remaining boundary \\
 \midrule
-Current review, 2.0.0.dev1 & Regression and independent numerical checks;
+Initial review, 2.0.0.dev1 & Regression and independent numerical checks;
 117 local tests passed; installed-artifact checks & Test coverage does
 not establish population calibration. \\
 New denominator experiment & Analytic conditional rejection probabilities,
@@ -173,6 +183,11 @@ Matched phensim benchmark & Independent BED decoding and reference-reader
 checks; null calibration, QTL detection and process resource measurements &
 Six independent panels per cell; small quantitative-trait simulations,
 controlled LD and three discrete populations. \\
+Computational extension, frozen 2.0.0.dev3 & Projected-moment validation;
+paired implementation, thread and cache comparisons; 36 complete fits at
+50,000 samples and 20,000 markers & Two fixed timing panels; different
+variance estimators across programs; strict thread-tolerance failures and
+system-wide swapping retained. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -275,6 +290,69 @@ actual grouping must accompany the results. Exclusion reduces direct
 overlap between the tested region and its background predictor; it does
 not imply statistical independence across groups or correct an omitted
 phenotype mean.
+
+\subsection{An explicit moment-estimation option for KVIK}
+\label{sec:he-method}
+
+Variance estimation can dominate a streaming fit even after individual
+matrix products are efficient. KVIK already computes randomized
+Haseman--Elston (HE) quantities to choose the frequency-weight exponent
+$a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}.
+The optional \code{heritability\_method="he"} reuses these products to
+estimate the genetic and residual covariance coefficients. The default
+remains REML; avoiding its iterative solves and stochastic likelihood
+calculations changes the estimator, not just its implementation.
+
+Let $Q$ span the covariates orthonormally, $S=\I-QQ^\top$, $d=n-p$,
+and $K=S\K_wS$. After residualizing and scaling the phenotype, write
+$\y_s=S\y/\sqrt{\y^\top S\y/d}$. The working covariance is
+$v_gK+v_eS$. The noise term must be $S$, not $\I$: projection makes
+its off-diagonal entries nonzero. Frobenius least squares against
+$\y_s\y_s^\top$ gives the two moment equations
+\begin{equation}
+ \begin{pmatrix}t_2&t_1\\t_1&d\end{pmatrix}
+ \begin{pmatrix}v_g\\v_e\end{pmatrix}
+ =\begin{pmatrix}\y_s^\top K\y_s\\\y_s^\top\y_s\end{pmatrix},
+ \qquad t_1=\tr K,\quad t_2=\tr K^2.
+ \label{eq:he-moments}
+\end{equation}
+Independent Rademacher probes $r_b$ estimate $t_2$ by
+$B^{-1}\sum_{b=1}^B\|Kr_b\|^2$, with $B=32$ by default. The diagonal
+and products already computed for exponent selection supply the remaining
+terms. All exponents use the same probes. Exponent selection retains the
+existing off-diagonal HE score; it is not replaced by the constrained
+fit in Equation~\eqref{eq:he-moments}.
+
+With $D=t_2-t_1^2/d>0$, the unconstrained genetic coefficient is
+$\{\y_s^\top K\y_s-(t_1/d)\y_s^\top\y_s\}/D$.
+If either fitted coefficient is nonpositive, the implementation compares the
+two nonnegative boundary solutions of the same quadratic objective.
+It does not clip the unconstrained ratio to an arbitrary interval.
+Nonfinite or numerically unidentifiable moments, including nonpositive
+curvature, raise an error. The returned diagnostics retain the raw and
+constrained coefficients, boundary status, $D$, and the Monte Carlo
+standard error of $t_2$. This last quantity is not a confidence interval
+for heritability.
+
+The ratio passed to the marker-effect prior is
+\begin{equation}
+ h^2=\frac{v_g}{v_g+v_e},\qquad
+ h^2_{\rm projected}=\frac{v_g t_1/d}{v_g t_1/d+v_e}.
+ \label{eq:he-ratios}
+\end{equation}
+The first follows the package's covariance-coefficient convention;
+only when $t_1/d=1$ is it also the mean projected variance fraction.
+Both are reported. A zero genetic coefficient gives zero polygenic
+effects. The variational fit retains its existing residual-variance
+floor of 0.001 on the standardized phenotype scale, including at the
+opposite boundary; the effective value is reported.
+
+This is a projected single-component moment estimator. It is not
+LDAK-KVIK's partitioned HE procedure with large-effect exclusions, nor its
+optional Monte Carlo REML revision \citep{hof2025}. The pinned reference
+implementation conditions that revision on sample size and its structure
+workflow. Matching a command labelled HE therefore does not make the
+two covariance models or fitted ratios identical.
 
 \subsection{What an exact scan makes exact}
 \label{sec:exact}
@@ -451,6 +529,59 @@ normal-approximation Bayes factor requires effect estimates, standard
 errors, and an explicit effect-variance prior \citep{wakefield2009}.
 It is not a replacement for a joint fine-mapping model. Appendix~\ref{sec:appendix}
 gives these identities and their interpretation.
+
+\subsection{Reuse, bounded workspaces and optional parallelism}
+\label{sec:efficient-implementation}
+
+The computational changes first remove work whose result is already
+available. Variational fitting caches only requested fold-specific Gram
+matrices, reuses full-block Gram matrices for LOCO, and reuses final
+predictions. A persistent matrix-product workspace replaces repeated
+allocations. Residual updates retain float64 accumulation while preparing
+the next matrix-product input in the genotype storage precision, float32
+by default. This distinction matters: converting the entire calculation
+to float32 would be a different numerical contract.
+
+Temporary widening is bounded without dividing the reduction axis:
+genotype standardization uses variant tiles with a 64 MiB scratch target;
+prediction, HE diagonal terms and retrospective statistics use 16 MiB
+targets. These are explicit temporary-workspace budgets, not process RSS
+limits. Genotype validation and PLINK reading also use bounded chunks;
+reading no longer retains an entire packed BED beside its decoded copy.
+The stored input is still an int8 hard-call matrix, not a packed or fully
+out-of-core genotype backend.
+
+With \code{n\_threads>1}, an optional Numba kernel prepares independent
+variants in parallel. Each worker computes called-sample means, a
+two-pass float64 variance and the covariate projection before storing
+float32 values. Sample reductions remain serial within a variant, with
+no fast-math reassociation. The initial scratch is $8(n+p)$ bytes per
+active worker, separate from outputs. Retaining $Mp$ float64 projection
+coefficients permits later decoding directly from int8 calls and prepared
+moments. On the uncached variational path, at most 128 markers are decoded
+per subblock. Other stages may still materialize their configured parent
+blocks, so this is a bounded fitting workspace rather than constant total
+memory. The one-thread default retains the NumPy preparation path.
+
+Coordinate sweeps parallelize independent candidate models and LOCO
+fits while preserving the Gauss--Seidel marker order within each model.
+For sufficiently large multi-model fits, residual matrix products also
+use an output-row partition and a pool capped at four workers. Each output
+entry retains its complete marker reduction; there is no shared writable
+sum across workers. Detected BLAS pools are temporarily limited to one,
+and thread settings and workers are restored on exit. Apple Accelerate
+requires an external thread limit because it is not detected by
+\code{threadpoolctl}. Parallel preparation and BLAS reductions can still
+change floating-point rounding; a scientifically unchanged algorithm is
+not a promise of bitwise equality.
+
+The standardized-genotype cache has a default budget of $4\times10^9$
+bytes and is retained when its size is less than or equal to that budget.
+Consequently a float32 cache at $n=50{,}000$, $M=20{,}000$ lies exactly on
+the inclusion boundary. Disabling it saves retained storage but repeats
+decoding during fitting. The comparison in Section~\ref{sec:20k-results}
+measures this exchange in complete fits rather than inferring it from a
+decoder microbenchmark.
 
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
@@ -656,6 +787,69 @@ eigensolver with audited residuals, never an $n\times n$ matrix. Separate
 preparation processes keep simulation arrays outside association RSS.
 One realization describes feasibility and costs, not stable power or tail
 calibration; a synthetic reference does not establish human-data fidelity.
+
+\subsection{Separating estimator validation from the 20,000-marker workload}
+\label{sec:20k-design}
+
+We evaluated projected HE before using it for the larger workload.
+Four independent phensim genotype panels contain $n=800$, $M=600$:
+two unstructured panels and two with frequency-drift parameter 0.08 and
+two genotype PCs. For each covariance-coefficient target
+$h^2\in\{0,0.3,0.6\}$, 24 Gaussian phenotypes per panel give 288 draws.
+The primary comparison fixes $a=-1$ to match the generating covariance
+and compares 32-probe HE with an independent dense solution of
+Equation~\eqref{eq:he-moments}. Components are not rescaled to force their
+realized sample variances. A separate 64-fit experiment compares complete
+HE and REML scans on the first eight global-null phenotypes per panel.
+These checks concern a specified covariance and Gaussian null; they do
+not validate adaptive exponent selection or confounded positive-heritability
+association scans.
+
+The 20,000-marker extension uses two new HAPNEST-model panels at
+$n=50{,}000$: unstructured, and structured with the environmental exposure
+in Equation~\eqref{eq:phensim-environment} plus two genotype PCs.
+It retains the six-chromosome, ten-QTL and polygenic-background design
+of Section~\ref{sec:hapnest-design}, with 600 simulated reference diploids,
+AR(1) parameter 0.8, pooled or population-restricted copying, and
+$N_e=50N_{\rm ref}$. From 20,400 candidates, a deterministic genotype-only
+rule retains the first MAF-passing markers up to chromosome quotas
+$(3350,3350,3350,3350,3300,3300)$. Selection precedes PCs, QTL selection
+and phenotype generation; original candidate indices are retained.
+Both panels have zero MAF exclusions and 400 quota removals. Chromosome 6
+therefore contains 3,300 genetic-null markers. Six groups preserve the
+earlier LOCO workload structure, although these are new draws rather than
+nested subsets of the 12,000-marker panels.
+
+An independent export audit checks every call, allele orientation and
+sample/marker order; reference-program statistics check the same inputs.
+PCA uses bounded-memory products and audited eigenpair residuals.
+All component covariances are retained, since the nominal trait-component
+targets need not equal realized variance fractions. Common preparation
+and validation run separately from association processes.
+
+The prespecified primary design contains 24 complete fits: two methods,
+two requested thread counts (one and four), three timing repetitions and
+two fixed panels. A separate 12-fit experiment compares cache budgets
+$4\times10^9$ and zero bytes with four mixmogam workers. Every local fit
+explicitly selects HE; the model grid and convergence settings are held
+fixed. Method-first order and thread positions are balanced; cache-first
+order is balanced across the six pairs. Each fit starts in a fresh
+process, with tiny compilation/cache warm-ups excluded. Local time
+includes startup, imports, input, fitting and output. Official time sums
+its two native stages and excludes subsequent parsing and compression;
+RSS is their larger stage peak. Thus timing boundaries are explicit but
+not perfectly symmetric.
+
+All runs use the 16-GB Apple M2 Pro, AC power and Low Power Mode disabled.
+Local BLAS/OpenMP environment limits are one with a Numba pool ceiling
+of eight; \code{n\_threads} requests one or four workers. The official
+Mac executable receives the corresponding environment limit and native
+\code{--max-threads} argument. Requested counts do not assert identical
+thread execution across implementations. The fitted data, drivers and
+package code are frozen; the timed package identifies itself as
+2.0.0.dev3. Repeated timings on two phenotypes measure computational
+variability, not biological replication. The new data are also distinct
+from the small known-covariance HE validation panels.
 
 \subsection{Historical structure and environmental experiments}
 \label{sec:historicaldesign}
@@ -989,7 +1183,7 @@ biological or statistical null a ``false locus'' is meant to represent.
 \subsection{Correctness and computational evidence}
 \label{sec:computation}
 
-The current review recorded 117 passing local tests. A separate installed
+The initial correctness review recorded 117 passing local tests. Its installed
 wheel check on Python 3.10 with NumPy 1.26.4 and SciPy 1.11.4 passed
 71 tests, with five skips for unavailable optional HDF5/plotting
 components. These checks include independent numerical references and
@@ -1111,7 +1305,8 @@ writer includes them. These preparation measurements include the resident
 genotype and interpreter; they are not measurements of an allocation alone.
 
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
-association comparison to n=50,000. These are single-panel timing and
+association comparison to n=50,000. It preserves the earlier, pre-optimization
+implementation with REML-based mixmogam variance fitting. These are single-panel timing and
 feasibility observations. Their null-chromosome summaries are useful
 diagnostics, but neither nominal-looking rejection nor greater detection
 would establish calibration or superiority. Independent reference panels,
@@ -1138,8 +1333,9 @@ and LOCO convergence. Both programs return valid p-values for all markers.
 
 \begin{table}[htbp]
  \centering\small
- \caption{Matched HAPNEST-model workloads, m=12,000, one realization per
- cell. Time is end-to-end seconds; RSS is peak MiB. Inflation and 1\%
+ \caption{Historical pre-optimization HAPNEST-model workloads,
+ m=12,000, one realization per cell; mixmogam uses REML.
+ Time is end-to-end seconds; RSS is peak MiB. Inflation and 1\%
  rejection use the chromosome with no generating genetic effects.
  Structured cells include an environmental effect and two genotype PCs.
  These descriptive values have no replicate-based uncertainty estimate.}
@@ -1152,6 +1348,157 @@ and LOCO convergence. Both programs return valid p-values for all markers.
  \bottomrule
  \end{tabular}
 \end{table}
+
+\subsection{Estimator choice and implementation improvements have different effects}
+\label{sec:he-results}
+
+The implementation-only comparison held REML, model selection and
+convergence settings fixed. At 50,000 samples and 12,000 markers,
+three paired repetitions reduced median complete-fit time from 105.21
+to 90.33 seconds without structure, and from 106.29 to 90.31 seconds
+with structure, environment and PCs: reductions of 14.1\% and 15.0\%.
+Across all 12 paired comparisons, including the 10,000-sample panels,
+saved variational coefficients and fit diagnostics were exact; the
+maximum absolute p-value difference was $1.45\times10^{-15}$.
+Removing redundant products and allocations helped, but repeated kinship
+products for variance fitting remained a major cost.
+
+In a separate one-thread comparison on the two 50,000-sample,
+12,000-marker panels, choosing HE reduced median complete-fit time
+from 76.13 to 26.28 seconds and from 73.57 to 27.20 seconds, respectively.
+These are within-experiment comparisons; the REML times should not be
+substituted for the baseline of the preceding experiment. HE changed
+the fitted covariance ratio from 0.49703 to 0.51260 and from 0.50175
+to 0.52087. Its time saving is therefore an estimator tradeoff, not a
+numerically equivalent acceleration of REML.
+
+The independent known-covariance study supports the narrower claim that
+the projected moment equations target their stated coefficients.
+Expected unconstrained moments recover $v_g$ and $v_e$ within
+$1.2\times10^{-9}$ and $1.2\times10^{-10}$ over 12 analytic checks.
+Across phenotype draws, HE mean ratios at targets 0.3 and 0.6 are
+0.3026 and 0.5930 without structure, and 0.2972 and 0.5968 with PCs;
+corresponding RMSE values range from 0.0508 to 0.0698. At the zero
+boundary, means are positive (0.0148 and 0.0165), as for the constrained
+dense comparator. This is finite-sample boundary bias, not evidence of
+an unbiased heritability estimator. No estimator failures occurred.
+In the separate global-null scans, both HE and REML reject 0.938\% and
+0.948\% of markers at the 1\% threshold in the two cells, respectively,
+with all 64 fits converged. These phenotype-level summaries are conditional
+on four fixed genotype panels and cannot establish genome-wide-tail
+calibration or validity under environmental confounding.
+
+\subsection{Twenty thousand markers: speed, memory and numerical stability}
+\label{sec:20k-results}
+
+All 36 planned fits completed, and every local cross-validation and LOCO
+fit converged. Table~\ref{tab:20k-resources} shows the primary resource
+measurements. Four requested workers reduce mixmogam's median wall time
+by factors 1.77 and 1.22 on the unstructured and PC-adjusted confounded
+panels. At four workers, mixmogam still takes 31\% and 7\% longer than
+the pinned LDAK-KVIK Mac executable, respectively, and its median peak
+RSS is approximately 6.7 and 6.5 times as large. These results support
+useful optional parallelism on this workload; they do not establish
+complete efficiency parity.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Complete fits at 50,000 samples and 20,000 markers, frozen
+ 2.0.0.dev3 code. Wall time and peak RSS are median [minimum, maximum]
+ of three fresh-process repetitions on each fixed panel. Speedup is
+ relative to the same method's one-thread median. Timing boundaries
+ are defined in Section~\ref{sec:20k-design}; the swapping limitation
+ below applies to these workstation measurements.}
+ \label{tab:20k-resources}
+ \begin{tabular}{@{}lrrrr@{}}
+ \toprule
+ Method & Threads & Wall seconds & Speedup & Peak RSS (GiB) \\
+ \midrule
+ \tabinput{tables/kvik_20k_resources.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+The numerical audit preserves its original elementwise tolerances,
+$\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 16 repeated-run
+comparisons within a method and worker count are exact. All six local
+four-versus-one comparisons, however, exceed the strict array tolerance;
+none of the six official comparisons does. Selected exponents and priors,
+integer iteration counts and convergence flags agree across counts.
+The largest local absolute differences are $9.7892\times10^{-9}$ for
+association effects, $3.0826\times10^{-11}$ for standard errors, and
+$1.4312\times10^{-6}$ for p-values; the maximum absolute log-base-ten
+p-value difference is $1.15\times10^{-5}$. All-variant significance
+masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
+in all 30 checks. Unchanged decisions are useful evidence of stability
+for these particular data and thresholds; they do not turn the six
+tolerance failures into passes or exclude threshold crossings elsewhere.
+
+Table~\ref{tab:20k-science} reports descriptive chromosome-6 diagnostics
+from four-worker fits. Local HE ratios are approximately 0.52 and 0.50,
+whereas the official values are approximately 0.25. The different
+partitioning, large-effect handling and fitted covariance definitions
+preclude interpreting this discrepancy as bias against a shared target.
+Both programs detect all ten designated QTLs at both tested stringent
+thresholds, a saturated result with little power to distinguish methods.
+Neither nominal-looking bulk rejection nor 3,300 correlated null markers
+supplies independent replication of a calibration claim.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Descriptive diagnostics on the 3,300-marker genetic-null
+ chromosome of each 20,000-marker panel, using four requested workers.
+ Rejections are percentages. Each entry is unchanged across three timing
+ repetitions of one phenotype. Reported $h^2$ follows each program's
+ own covariance-fitting convention and is not a common estimand.}
+ \label{tab:20k-science}
+ \begin{tabular}{@{}lrrrrr@{}}
+ \toprule
+ Method & Reported $h^2$ & $\lgc$ & $p<0.05$ & $p<0.01$ & $p<0.001$ \\
+ \midrule
+ \tabinput{tables/kvik_20k_science.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+The separate cache experiment makes the memory tradeoff explicit
+(Table~\ref{tab:20k-cache}). Every cached fit retains exactly
+4,000,000,000 float32 genotype bytes, while every uncached fit retains
+zero float-cache bytes. Disabling the cache reduces peak RSS by median
+paired fractions of 52\% and 49\%, with 31\% and 39\% longer wall time.
+All six cache pairs have exactly equal saved association arrays,
+variational coefficients and nested fit diagnostics; all eight within-route
+repeat comparisons are also exact. The 1,000,000,000-byte int8 input,
+prepared moments, projection coefficients and fitting workspaces remain.
+Cache-free fitting is therefore a lower-memory option, not an out-of-core
+analysis. The cache experiment has its own paired baseline and must not
+replace the primary experiment's cached timing with a more favourable one.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Separate cache experiment at 50,000 samples and 20,000 markers,
+ explicit HE and four workers. Entries are median [minimum, maximum]
+ over three matched repetitions. The only changed fitting option is
+ the standardized-genotype cache budget, $4\times10^9$ versus zero bytes.}
+ \label{tab:20k-cache}
+ \begin{tabular}{@{}lrr@{}}
+ \toprule
+ Cache route & Wall seconds & Peak RSS (GiB) \\
+ \midrule
+ \tabinput{tables/kvik_20k_cache.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+Resource interpretation has two additional limits. System-wide VM
+observations spanning the period after primary run nine through the end
+of all fits record 32,093 additional swap-in pages and 111,568 swap-out
+pages. They cannot identify which program or fit caused swapping; the
+wide wall-time and RSS ranges must remain part of the conclusion.
+Second, the pinned official Mac binary links Accelerate and inspection
+finds no OpenMP library linkage or matching symbols. Source-level OpenMP
+directives cannot be assumed active in this executable. These measurements
+do not establish relative scaling against LDAK's Linux OpenMP/MKL build.
 
 \FloatBarrier
 \section{Discussion}
@@ -1240,6 +1587,17 @@ to make a result interpretable. The most productive next step is to
 reduce the gap between those explicit contracts and independently
 validated end-to-end behaviour.
 
+The computational extension narrows a practical gap without removing
+these inferential qualifications. Reusing work, choosing a cheaper
+variance estimator, and changing storage are three distinct interventions.
+The first can preserve a numerical result, the second can change the
+fitted model, and the third exchanges time for memory. Their evidence
+should not be collapsed into one speedup from an early implementation
+to the fastest observed run. At 20,000 markers, memory pressure and
+floating-point sensitivity are still observable limitations. Keeping
+REML and one thread as defaults makes the new choices explicit while
+broader estimator and platform validation proceeds.
+
 \section{Future research: hypotheses and decisive experiments}
 \label{sec:future}
 
@@ -1272,6 +1630,19 @@ haplotypes absent from its reference. Admixed samples require a model of
 admixture time and ancestry tract lengths; donor proportions alone do not
 supply one. Vary sample size and marker density separately and repeat
 across independently drawn reference panels.
+
+Variance estimation should be an explicit factor in this design.
+Cross projected HE and REML with polygenic and sparse architectures,
+known versus omitted environmental means, and increasing covariate
+leverage. Separate fixed-exponent experiments, where the generating
+covariance is known, from adaptive exponent selection. Compare raw
+component bias, boundary frequency, probe uncertainty, association
+calibration and calibrated power, rather than treating agreement in a
+reported $h^2$ as a sufficient endpoint. LDAK's partitioned estimator
+and its optional REML revision need separate reference configurations;
+they cannot serve as interchangeable oracles for the local single-component
+model. The zero-boundary bias observed here is a specific starting point
+for that analysis.
 
 \textbf{Decision criterion.} Numerical discrepancies under an identical
 Gaussian model must be explained at the effect, standard-error,
@@ -1414,19 +1785,38 @@ objective, not merely because relabelling blocks reduces a count.
 
 \subsection{Priority 6: make scale and reproducibility part of method design}
 
-\textbf{Hypothesis.} Packed genotype access, bounded caches, and selective
-precision can improve practical scale without changing the statistical
-procedure.
+\textbf{Hypothesis.} Compact hard-call access and better placement of
+decoding work can reduce the remaining memory gap without forfeiting the
+speed gained by reusing matrix products.
 
-Benchmark whole workflows across sample size, marker count, missingness,
-number of LOCO groups, and genotype storage backend. Record setup,
-variance fitting, prediction, testing, and output time separately,
-as well as total wall time, CPU time, and process peak resident memory.
-Warm-cache and cold-cache runs should be distinguished. Measure the cost
-of diagnostics and fallback calculations, rather than reporting their
-benefits against a baseline that omits them. Mixed-precision variants
-should be judged by errors in effect estimates, small denominators,
-and tail probabilities, not only normwise matrix error.
+The immediate experiment is a repeat of the 20,000-marker comparison on
+an otherwise idle host with enough RAM to avoid the observed swapping,
+followed by the pinned Linux OpenMP/MKL reference build. Use the same
+datasets, balanced order, measured CPU time and complete-fit boundaries.
+Requested thread counts alone do not identify parallel work. Vary sample
+size and marker density separately, placing marker counts on both sides
+of the inclusive 4 GB cache boundary with explicit cache budgets.
+The jump from retained float blocks to repeated decoding is a software
+threshold, not evidence of a statistical complexity transition.
+
+A subsequent implementation study should compare retained int8 calls
+with two-bit storage, reuse prepared per-variant moments and covariate
+coefficients, and profile decoding together with matrix products.
+Reducing bytes read need not reduce time if unpacking prevents efficient
+matrix operations. Missing calls, noncontiguous chromosomes, repeated
+indices and high covariate dimension need independent precision oracles.
+The current $Mp$ projection store is modest for two PCs but its cost
+must be included when $p$ grows. Measure setup, variance fitting,
+prediction and testing separately, alongside total time and peak RSS;
+retain cold-start and warm-kernel distinctions.
+
+Numerical acceptance also needs a declared use. The present four-thread
+path preserves tested decisions while failing a strict array tolerance.
+Future variants should report both effect/standard-error error and
+changes in small p-values, with targeted phenotypes near decision
+thresholds. Test high LD, small residual variance and difficult covariance
+spectra before accepting a wider tolerance. Neither a normwise matrix
+bound nor unchanged decisions on two panels settles this question.
 
 A useful extension would add a carefully specified continuous-dosage
 interface with imputation-quality handling and independent decoding
@@ -1441,13 +1831,15 @@ validated data size, hardware, resource limits, and failure boundary.
 A speedup is scientifically useful only if the inferential target and
 accuracy are preserved. Release artifacts should reproduce a compact
 set of known-truth calculations and input round trips before any larger
-performance claim is made.
+performance claim is made. A compact backend should advance only when
+it improves a prespecified time--memory tradeoff over the measured cached
+and uncached routes, without hiding estimator changes or numerical failures.
 
 \section*{Data, software, and reproducibility}
 
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. This report describes package
-version 2.0.0.dev3; the known-covariance experiment uses baseline commit
+version 2.0.0.dev4; the known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-manuscript-geometry} beneath
@@ -1471,6 +1863,26 @@ retained in their archives. HAPNEST resource summaries here link to full
 phensim source/reference archives. The simulation-only and association
 measurements must not be combined into a claim about the cost of a
 whole-genome analysis at 100,000 samples.
+
+The implementation-only comparison is frozen in
+\code{20261003-kvik-efficiency}. The estimator comparison,
+\code{20261003-kvik-he-efficiency}, also retains the independent variance
+and global-null validation.
+
+The 20,000-marker inputs and their all-call audit are archived as
+\begin{quote}\small
+\code{20261003-hapnest-kvik-n50000-m20000}.
+\end{quote}
+The thread and cache experiments are in \code{20261003-kvik-20k}.
+They retain commands, raw measurements, association arrays, model
+diagnostics and verification records, including numerical failures and
+VM observations. Their frozen source version is 2.0.0.dev3. This report's
+version bump does not relabel those computations.
+
+The table generator, \code{report/}\allowbreak\code{make\_efficiency\_tables.py},
+reads saved individual measurements and never reruns a model. Its
+\code{efficiency\_table\_}\allowbreak\code{manifest.json} records input
+and output hashes.
 
 \code{report/README.md} gives the reproduction commands, exact archive
 identities, and evidence map. The figure generator reads recorded results and does not silently

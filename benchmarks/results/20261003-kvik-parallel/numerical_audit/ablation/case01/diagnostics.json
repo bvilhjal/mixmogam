@@ -1,0 +1,193 @@
+{
+  "result": {
+    "statistic": "chi2",
+    "n": 50000,
+    "n_loco_groups": 6,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ]
+    ],
+    "method": "kvik",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.5125993284953004,
+    "alpha_method": "he",
+    "alpha_scores": [
+      114338.64511067036,
+      113305.11922836074,
+      112202.934226598,
+      111042.38105939222,
+      109832.59299960612
+    ],
+    "structure": {
+      "excess": -0.005987440563208657,
+      "z": -1.9250286345645384,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.606016423265827,
+      0.6046525594741291,
+      0.6050781663164404,
+      0.6038267311589777,
+      0.6050757871436592,
+      0.623763669656075,
+      0.6024682013368987,
+      0.6071761195431317,
+      0.6391703570710182,
+      0.6280924317565508
+    ],
+    "cv_best": [
+      0.01,
+      0.5
+    ],
+    "cv_converged": true,
+    "loco_iterations": 9,
+    "loco_converged": true,
+    "heritability_method": "he",
+    "he_variance": {
+      "raw_vg": 0.5125940835481201,
+      "raw_ve": 0.4873956843916942,
+      "vg": 0.5125940835481201,
+      "ve": 0.4873956843916942,
+      "h2": 0.5125993284953004,
+      "status": "interior",
+      "boundary": "none",
+      "denominator": 435183.1141265261,
+      "trace_k2": 485184.11023962876,
+      "trace_k_over_df": 1.0000199613310299,
+      "projected_genetic_variance_fraction": 0.5126043156083058,
+      "probe_se": 2876.041620804804,
+      "curvature_se_ratio": 151.31321848004015,
+      "n_probes": 32
+    },
+    "vb_residual_variance": 0.48740067150469957,
+    "vb_noise_floor_applied": false,
+    "lambda": 1.0
+  },
+  "vb_fits": [
+    {
+      "iterations": 9,
+      "converged": true,
+      "rel_change": [
+        6.68822264722798e-06,
+        5.948020867065021e-06,
+        3.950220955076852e-06,
+        5.786117124374372e-06,
+        3.3438027299105423e-06,
+        9.649241355843057e-06,
+        3.6029714194347713e-06,
+        7.4377341127415266e-06,
+        8.325356305390875e-06,
+        6.6430256934548005e-06
+      ]
+    },
+    {
+      "iterations": 9,
+      "converged": true,
+      "rel_change": [
+        2.57055757513928e-06,
+        7.395346611382476e-06,
+        6.863628455239662e-06,
+        7.027653033207701e-06,
+        5.976139183176773e-06,
+        6.581078658247181e-06
+      ]
+    }
+  ],
+  "fit_seconds": 17.26992945803795,
+  "package_file": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/source/mixmogam/__init__.py",
+  "versions": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "mixmogam": "2.0.0.dev3",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "numba": "0.66.0"
+  },
+  "threadpools": [
+    {
+      "user_api": "openmp",
+      "internal_api": "openmp",
+      "num_threads": 8,
+      "prefix": "libomp",
+      "filepath": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/lib/libomp.dylib",
+      "version": null
+    }
+  ],
+  "n": 50000,
+  "m": 12000,
+  "seed": 20262486,
+  "warmup": false,
+  "kvik_threads": 4,
+  "cache_bytes": null,
+  "fit_options": {
+    "heritability_method": "he",
+    "n_threads": 4
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "8"
+  },
+  "numba_pool_ceiling": 8
+}

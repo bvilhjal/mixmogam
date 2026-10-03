@@ -1,0 +1,36 @@
+{
+  "command": [
+    "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-20k/thread-scaling/kvik_efficiency.py",
+    "--source",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-20k/thread-scaling/source",
+    "--result-dir",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-20k/thread-scaling/runs/case01/rep01/threads04/mixmogam-he",
+    "--heritability-method",
+    "he",
+    "--worker",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000-m20000/rho0.8_fst0_rep01/unstructured_mixed",
+    "--kvik-threads",
+    "4",
+    "--cache-bytes",
+    "4000000000.0"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 31.35238712496357,
+  "peak_rss_bytes": 4691410944,
+  "user_seconds": 33.705691,
+  "system_seconds": 6.911467,
+  "threads": 4,
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t40%; charging; (no estimate) present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by powerd, Claude, caffeinate, caffeinate, ChatGPT)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "8"
+  },
+  "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+}

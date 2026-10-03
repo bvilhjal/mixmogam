@@ -1,0 +1,29 @@
+{
+  "recorded_utc": "2026-10-03T20:07:16.602292+00:00",
+  "source_head": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+  "source_sha256": {
+    "mixmogam/_loco.py": "f4ec051a5729196f5fe430f741ed3daaf907f0301a8006e4008b572c52f617d9",
+    "mixmogam/_standardize.py": "56ec2fe921e673815f758a24913009d277197fe06af6e145a9a32367fe4d4ac1",
+    "mixmogam/_vb.py": "d49598de699ab2612ea41fd7fd7e3cf2533dbe475a020d6d8a755e063735f8cd",
+    "tests/test_loco_parallel.py": "207b73c1f1f634146c35e04c0682f6a9449aea341200525423147c1f8e5e2336"
+  },
+  "scope": "Optional parallel standardization, prepared decoding, and VB GEMM/column parallelism; source review, no timing execution.",
+  "findings": [
+    {
+      "issue": "Q sample dimension was unchecked before bounds-unchecked Numba loops; a short Q could leave output uninitialized and a long Q could access outside allocations.",
+      "status": "Fixed early Q.ndim and sample-row-count validation in LocoGenotypes.",
+      "validation": "8 targeted cases passed: short, long, 1D and scalar Q under n_threads=1 and 2; no standardization entered."
+    },
+    {
+      "issue": "First-time scipy.linalg.blas loading occurred after threadpoolctl pool discovery in direct VBEngine use.",
+      "status": "Hotspots agent moved _GemmWorkspace construction/BLAS resolution before threadpool_limits; source order verified.",
+      "validation": "Ordering and worker-failure tests added by hotspots; this reviewer did not execute those tests."
+    }
+  ],
+  "review_conclusion": "No additional actionable blocker found in reviewed valid-input paths. Worker outputs partition by disjoint sample rows; complete SNP reductions stay in BLAS; model columns preserve Gauss-Seidel order; ExitStack waits for workers before restoring BLAS and Numba controls; absent threadpoolctl selects existing serial GEMMs.",
+  "memory_boundary": "Prepared decoding removes float64 variant tiles and retains 8*m*q projection bytes. Initial preparation uses 8*(n+q) explicit scratch per active worker. Returned output blocks, full int8 input, optional cache, final prediction parent blocks and runtime/BLAS allocations remain. GEMM adds n*P*itemsize F-order work plus sub_block*P*itemsize products. Not a total-RSS bound.",
+  "prior_prepared_decode_evidence": "/private/tmp/mixmogam-efficiency/prepared_decode_audit.json",
+  "installed_artifact_commands": "/private/tmp/mixmogam-efficiency/validate_installed_parallel.sh",
+  "installed_artifact_status": "Prepared only; not executed. Rebuilds wheel from sdist, installs into temporary system-site-packages venv, checks imported location/version and source hashes, runs copied focused tests outside checkout with Python -I. Dependency-floor environment is root-owned.",
+  "cpu_status_after_review": "idle"
+}

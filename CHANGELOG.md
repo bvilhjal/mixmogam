@@ -7,7 +7,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Matched reference benchmark (2.0.0.dev3)
+## [2.0.0.dev4] - 2026-10-03
+
+### KVIK computational efficiency
+
+- Add explicit `n_threads` for parallel Numba updates across independent
+  KVIK candidate models and LOCO fits, preserving within-model update and
+  reduction order. Restore the caller's thread mask after fitting.
+- Parallelize optional genotype preparation over independent variants with
+  float64 two-pass variance and projection, bounded private worker buffers,
+  and the unchanged one-thread NumPy default.
+- Reuse projection coefficients for direct, parallel hard-call decoding;
+  uncached variational sweeps decode only their current small SNP block.
+- Use contiguous BLAS inputs and parallel sample slices for large residual
+  matrix products, with reusable workspaces and restored BLAS thread limits.
+- Bound hard-call validation, uint8 missing-code conversion and packed BED
+  input scratch instead of allocating masks or retaining packed inputs for
+  the complete dataset.
+- Reuse full-data Gram matrices and final predictions between cross-validation
+  and LOCO; compute only the held-out Gram slices actually requested. Reuse
+  the spectral preconditioner in the strong-structure calibration path.
+- Reuse variational fitting buffers and fuse residual bookkeeping with Numba,
+  retaining float64 residuals, the existing posterior updates and convergence
+  rule, and the NumPy fallback.
+- Bound large temporary arrays in standardization, prediction, retrospective
+  statistics and HE diagonal calculation. Genotype precision and fitting
+  defaults remain unchanged.
+- Add a paired time/RSS comparison against frozen pre-optimization source on
+  existing phensim HAPNEST inputs, with source/input hashes and full numerical
+  and convergence comparisons; see `benchmarks/kvik_efficiency.py`.
+- Add `heritability_method="he"` to KVIK: reuse the alpha scan's products for
+  a covariance-projected, nonnegative two-component moment fit. Report raw
+  estimates, boundaries, trace-probe uncertainty and the variational noise
+  floor. This is a separate estimator; REML remains the default.
+- Fit only the needed variance components in two-step methods, avoiding the
+  unused GLS completion. Compute weighted kinship traces only when requested.
+- Prepare called-sample moments and kinship trace once; uncached requested-row
+  access converts only those rows. Decode BED into contiguous variant columns
+  while preserving the public sample-by-variant array and allele counts.
+- Extend the verified HAPNEST workload to exactly 20,000 retained variants
+  at 50,000 samples. Genotype-only chromosome quotas precede PC and phenotype
+  generation; preparation can run independently of association methods.
+- Archive 24 one/four-thread comparisons with official LDAK-KVIK and 12
+  paired cache fits. Cache routes give identical saved results; six thread
+  comparisons exceed strict array tolerances without changing the checked
+  association decisions. Retain timing ranges and the observed system-wide
+  swapping limitation, rather than claiming uniform superiority to LDAK.
+- Update the manuscript, API guides and research agenda with HE, parallel
+  execution, numerical audits and measured time/memory tradeoffs. Timed source
+  snapshots retain their original version; this release does not rewrite them.
+
+## [2.0.0.dev3] - 2026-10-03
+
+### Matched reference benchmark
 
 - Extend measured workloads to 50,000 samples with phensim's new HAPNEST
   model, keeping all production fitting defaults. Preparation uses tiled
@@ -26,7 +78,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under mixed traits, and direct causal-marker detection with uncertainty
   across independent genotype/phenotype replicates.
 
-### Research report (2.0.0.dev2)
+## [2.0.0.dev2] - 2026-10-03
+
+### Research report
 
 - Expand the manuscript with model and calibration derivations, explicit
   evidence boundaries, and six testable research priorities. Withdraw the
@@ -35,7 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   audit variants, analytic tail probabilities, and phenotype-replicate
   uncertainty; regenerate the report figures with provenance hashes.
 
-### Critical review (2.0.0.dev1)
+## [2.0.0.dev1] - 2026-10-03
+
+### Critical review
 
 - Correct PLINK BED bit encoding/decoding against a specification fixture;
   preserve counted A1/A2 alleles, accept standard TPED allele pairs, and keep

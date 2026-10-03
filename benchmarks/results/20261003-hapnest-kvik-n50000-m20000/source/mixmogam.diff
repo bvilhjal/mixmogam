@@ -1,0 +1,1670 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 41e3e18..77e643d 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### KVIK computational efficiency
++
++- Add explicit `n_threads` for parallel Numba updates across independent
++  KVIK candidate models and LOCO fits, preserving within-model update and
++  reduction order. Restore the caller's thread mask after fitting.
++- Parallelize optional genotype preparation over independent variants with
++  float64 two-pass variance and projection, bounded private worker buffers,
++  and the unchanged one-thread NumPy default.
++- Reuse projection coefficients for direct, parallel hard-call decoding;
++  uncached variational sweeps decode only their current small SNP block.
++- Use contiguous BLAS inputs and parallel sample slices for large residual
++  matrix products, with reusable workspaces and restored BLAS thread limits.
++- Bound hard-call validation, uint8 missing-code conversion and packed BED
++  input scratch instead of allocating masks or retaining packed inputs for
++  the complete dataset.
++- Reuse full-data Gram matrices and final predictions between cross-validation
++  and LOCO; compute only the held-out Gram slices actually requested. Reuse
++  the spectral preconditioner in the strong-structure calibration path.
++- Reuse variational fitting buffers and fuse residual bookkeeping with Numba,
++  retaining float64 residuals, the existing posterior updates and convergence
++  rule, and the NumPy fallback.
++- Bound large temporary arrays in standardization, prediction, retrospective
++  statistics and HE diagonal calculation. Genotype precision and fitting
++  defaults remain unchanged.
++- Add a paired time/RSS comparison against frozen pre-optimization source on
++  existing phensim HAPNEST inputs, with source/input hashes and full numerical
++  and convergence comparisons; see `benchmarks/kvik_efficiency.py`.
++- Add `heritability_method="he"` to KVIK: reuse the alpha scan's products for
++  a covariance-projected, nonnegative two-component moment fit. Report raw
++  estimates, boundaries, trace-probe uncertainty and the variational noise
++  floor. This is a separate estimator; REML remains the default.
++- Fit only the needed variance components in two-step methods, avoiding the
++  unused GLS completion. Compute weighted kinship traces only when requested.
++- Prepare called-sample moments and kinship trace once; uncached requested-row
++  access converts only those rows. Decode BED into contiguous variant columns
++  while preserving the public sample-by-variant array and allele counts.
++
+ ### Matched reference benchmark (2.0.0.dev3)
+ 
+ - Extend measured workloads to 50,000 samples with phensim's new HAPNEST
+diff --git a/MANIFEST.in b/MANIFEST.in
+index 57118b5..ab84917 100644
+--- a/MANIFEST.in
++++ b/MANIFEST.in
+@@ -1,4 +1,8 @@
+ include CHANGELOG.md
+ include benchmarks/kvik_simulation.py
++include benchmarks/kvik_efficiency.py
++include benchmarks/kvik_he_comparison.py
++include benchmarks/kvik_he_validation.py
++include benchmarks/kvik_thread_scaling.py
+ recursive-include tests *.py
+ recursive-include docs *.md
+diff --git a/README.md b/README.md
+index fb837a4..3ae041b 100644
+--- a/README.md
++++ b/README.md
+@@ -27,6 +27,32 @@ from the original programs, including their variance-component estimators.
+ `denominator="spectral"` is a mixmogam extension for the two-step methods.
+ Its transfer to mixture and elastic-net statistics is heuristic.
+ 
++KVIK can reuse its randomized HE products for heritability fitting:
++`gwas(y, gt, method="kvik", heritability_method="he")`. This projected,
++single-component HE option avoids the REML stage and reports unconstrained
++estimates, boundary fits and probe uncertainty in `result.extra["he_variance"]`.
++It differs from LDAK's partitioned HE with large-effect exclusions. The
++existing REML estimator remains the default; use `heritability_method="reml"`
++to select it explicitly. A probe standard error describes trace estimation,
++not a heritability confidence interval.
++
++With the `fast` extra, `gwas(..., method="kvik", n_threads=4)` parallelizes
++genotype preparation and independent candidate-model and LOCO coordinate
++updates. Large fits also distribute residual matrix products across sample
++rows. Model sweeps retain their SNP order; genotype preparation and numerical
++libraries can differ from the default calculation by floating-point rounding.
++The default is one thread. Detected BLAS pools are temporarily limited during
++the parallel matrix products; for Apple Accelerate, set
++`VECLIB_MAXIMUM_THREADS=1` before starting Python to avoid nested threading.
++Numba's configured thread limit must be at least the requested count. Speedup
++depends on the workload; `cache_bytes=0` trades the float genotype cache for
++repeated decoding from prepared moments and projection coefficients.
++The [parallel benchmark](benchmarks/results/20261003-kvik-parallel/README.md)
++reports full-fit time, memory and numerical differences on two fixed phensim
++datasets; the [cache comparison](benchmarks/results/20261003-kvik-cache/README.md)
++measures the memory tradeoff separately. These timings select HE explicitly
++and exclude the initial Numba compilation warm-up.
++
+ ## Install
+ 
+ From this repository:
+diff --git a/benchmarks/README.md b/benchmarks/README.md
+index 8436d7b..2281dbc 100644
+--- a/benchmarks/README.md
++++ b/benchmarks/README.md
+@@ -66,6 +66,88 @@ all analysis outputs are retained. The HAPNEST simulator resource study and
+ its full snapshots live in the sibling phensim archive; a provenance-labelled
+ copy of its summary supports the report here.
+ 
++**KVIK efficiency comparison.** `kvik_efficiency.py` compares two frozen
++mixmogam source trees on those same phensim inputs. It alternates execution
++order across three repetitions, gives each source a fresh JIT cache and a
++separate warm-up, and measures fresh processes with one thread. Whole-process
++time includes imports, BED input and result output; fit time is also recorded.
++Peak RSS comes from each child's operating-system resource counters.
++
++The comparison retains CV and LOCO effects, association results, selected
++priors, variance estimates and convergence diagnostics. Model choices,
++iteration counts and variant metadata must agree exactly; floating-point
++discrepancies and log-p discrepancies are reported explicitly. See
++[`20261003-kvik-efficiency`](results/20261003-kvik-efficiency/README.md)
++for the measurements and their limits. The academic report's previous
++resource tables remain evidence for its recorded pre-optimization source.
++
++```sh
++mkdir -p /tmp/mixmogam-baseline
++git archive 2fb76dfea95c02afa7a9484fc1bddd075c1cb60e mixmogam | \
++  tar -x -C /tmp/mixmogam-baseline
++python benchmarks/kvik_efficiency.py --baseline /tmp/mixmogam-baseline \
++  --optimized . --case PATH_TO_EXISTING_PHENSIM_CASE \
++  --reps 3 --out NEW_DIRECTORY
++```
++
++Repeat `--case` for additional workloads. Keep the five thread variables
++above at one. Use `--profile` only for diagnosis, separately from formal
++timing. Cache sizes and statistical fitting defaults are identical across
++the two workers.
++
++**HE versus REML.** `kvik_he_comparison.py` compares the explicit
++`heritability_method="he"` and `"reml"` modes with fresh official LDAK-KVIK
++runs on the retained phensim inputs. It freezes the sources, both drivers,
++input hashes and executable identity, rotates method order, and records
++association differences instead of demanding agreement between estimators.
++See [`20261003-kvik-he-efficiency`](results/20261003-kvik-he-efficiency/README.md).
++LDAK's default can skip its REML refinement at large sample sizes with low
++detected structure; this distinction matters in interpreting earlier timings.
++
++```sh
++python benchmarks/kvik_he_comparison.py --source . --ldak /path/to/ldak \
++  --case PATH_TO_EXISTING_PHENSIM_CASE --reps 3 --out NEW_DIRECTORY
++```
++
++`kvik_he_validation.py` separately checks the projected HE estimator on
++known conditional covariances generated by phensim. Its `--association-from`
++option reuses the recorded global-null phenotypes for paired HE/REML GWAS
++checks. Neither phenotype replication on a few genotype panels nor repeated
++timing on a fixed dataset establishes general calibration.
++
++**Thread scaling.** `kvik_thread_scaling.py` compares the HE option and the
++official executable at 1, 2, 4 and 8 requested threads, with three timing
++repetitions per dataset. It records wall time, CPU time, peak RSS, and
++within-method changes in saved associations and fit diagnostics. The default
++two-dataset experiment comprises 48 full fits. Thread limits are requests;
++the math library, executable build and matrix shapes determine how much
++parallel work actually occurs.
++
++The [initial thread comparison](results/20261003-kvik-thread-scaling/README.md)
++uses frozen source from before explicit model threading. Add `--parallel-kvik`
++to exercise the new `n_threads` option. For explicit workers, use
++`--blas-threads 1 --numba-threads 8` to avoid nesting local BLAS work inside
++the worker pool. These overrides apply only to mixmogam; LDAK keeps its
++matched requested limits. The runner warms the parallel kernels separately
++before timing. See the [explicit parallel comparison](results/20261003-kvik-parallel/README.md)
++for complete fits, numerical changes and memory measurements.
++
++```sh
++python benchmarks/kvik_thread_scaling.py --source . --ldak /path/to/ldak \
++  --case PATH_TO_UNSTRUCTURED_CASE --case PATH_TO_STRUCTURED_CASE \
++  --parallel-kvik --threads 1 4 8 --blas-threads 1 --numba-threads 8 \
++  --out NEW_DIRECTORY
++```
++
++For a paired cache experiment, `kvik_efficiency.py` accepts independent
++`--baseline-cache-bytes` and `--cache-bytes` budgets. Setting the latter to
++zero measures repeated prepared decoding instead of retaining every float
++genotype. Keep both sources, estimators and requested worker counts identical
++when isolating that memory tradeoff.
++The [paired cache experiment](results/20261003-kvik-cache/README.md) records
++12 complete fits with identical cached and uncached scientific outputs,
++alongside the measured runtime and peak-memory cost of each route.
++
+ ```sh
+ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
+     python benchmarks/run_benchmarks.py [--quick]
+diff --git a/benchmarks/kvik_simulation.py b/benchmarks/kvik_simulation.py
+index ec3ffb5..c7d0bd5 100644
+--- a/benchmarks/kvik_simulation.py
++++ b/benchmarks/kvik_simulation.py
+@@ -233,6 +233,32 @@ def quantile_bins(value):
+     return np.digitize(value, np.quantile(value, [.2, .4, .6, .8]))
+ 
+ 
++def target_variant_mask(chromosome, qc_keep, target_m):
++    """Keep the first passing variants in six fixed, nearly equal quotas.
++
++    Quotas are multiples of the generator's 50-marker LD-block size; extra
++    blocks go to the first chromosomes. Selection uses genotype QC only,
++    before PCs, QTL sampling or phenotype generation. Candidate indices and
++    physical positions remain unchanged when a preceding marker is removed.
++    """
++    if (isinstance(target_m, (bool, np.bool_)) or not isinstance(target_m, (int, np.integer))
++            or target_m < 600 or target_m % 50):
++        raise ValueError("target_m must be an integer >=600 divisible by 50")
++    chromosome, qc_keep = np.asarray(chromosome), np.asarray(qc_keep, dtype=bool)
++    if chromosome.ndim != 1 or qc_keep.shape != chromosome.shape:
++        raise ValueError("chromosome and QC mask must be matching one-dimensional arrays")
++    blocks, remainder = divmod(int(target_m) // 50, 6)
++    quotas = 50 * (blocks + (np.arange(6) < remainder))
++    selected = np.zeros(qc_keep.size, dtype=bool)
++    for chrom, quota in enumerate(quotas, 1):
++        passing = np.flatnonzero(qc_keep & (chromosome == chrom))
++        if passing.size < quota:
++            raise ValueError(f"chromosome {chrom} has {passing.size} variants passing MAF QC; "
++                             f"target_m={target_m} requires {quota}; no panel was selected")
++        selected[passing[:quota]] = True
++    return selected, quotas
++
++
+ def make_panel(out, args, rep, rho, structured):
+     import phensim
+     from mixmogam.io.plink import read_plink
+@@ -266,7 +292,21 @@ def make_panel(out, args, rep, rho, structured):
+             block_sizes=[50]*(args.m//50) if rho else None, rho=rho)
+     original_indices = np.arange(args.m)
+     af = G.mean(0)/2
+-    keep = np.minimum(af, 1-af) >= .01
++    qc_keep = np.minimum(af, 1-af) >= .01
++    target_m = getattr(args, "target_m", None)
++    keep = qc_keep
++    if target_m is not None:
++        keep, quotas = target_variant_mask(chrom, qc_keep, target_m)
++        save_json(work / "marker_selection.json", {
++            "candidate_variants": args.m, "maf_threshold": .01,
++            "passing_maf": int(qc_keep.sum()), "filtered_maf": int((~qc_keep).sum()),
++            "target_variants": target_m, "selected_variants": int(keep.sum()),
++            "trimmed_after_qc": int(qc_keep.sum()-keep.sum()),
++            "chromosomes": np.arange(1, 7), "quotas": quotas,
++            "passing_maf_per_chromosome": [int(np.sum(qc_keep & (chrom == c))) for c in range(1, 7)],
++            "selected_per_chromosome": [int(np.sum(keep & (chrom == c))) for c in range(1, 7)],
++            "selection_rule": "first MAF-passing variants per chromosome, before PCs/QTL/phenotypes",
++            "original_indices": np.flatnonzero(keep), "index_base": 0})
+     if not keep.all():
+         G = G[:, keep]
+     chrom, pos, original_indices = chrom[keep], pos[keep], original_indices[keep]
+@@ -293,6 +333,8 @@ def make_panel(out, args, rep, rho, structured):
+     ld[:-1] = np.where(valid, ld[:-1], 0)
+     null_chr = chrom == 6
+     background = np.flatnonzero(~null_chr)
++    if not np.array_equal(background, np.arange(background.size)):
++        raise ValueError("background chromosomes must precede the reserved null chromosome")
+     rng = np.random.default_rng(seed+71)
+     # Sample blocks before positions so linked QTL do not silently concentrate.
+     eligible_blocks = np.unique(original_indices[background]//50)
+@@ -303,7 +345,8 @@ def make_panel(out, args, rep, rho, structured):
+                         causal=causal, null_chromosome=null_chr, maf=np.minimum(af[keep], 1-af[keep]),
+                         loading=loading, loading_bin=quantile_bins(loading),
+                         maf_bin=quantile_bins(np.minimum(af[keep], 1-af[keep])),
+-                        ld=ld, ld_bin=quantile_bins(ld), pcs=pcs)
++                        ld=ld, ld_bin=quantile_bins(ld), pcs=pcs,
++                        **({"original_indices": original_indices} if target_m is not None else {}))
+     cases = []
+     for cell in args.cells:
+         if (cell != "unstructured") != structured:
+@@ -332,13 +375,17 @@ def make_panel(out, args, rep, rho, structured):
+                       "fst": args.fst if structured else 0, "pcs": cell.endswith("-pc"),
+                       "genotype_seed": seed, "trait_seed": seed+200+(trait == "mixed"),
+                       "method_seed": seed+400, "n": G.shape[0], "m": G.shape[1],
+-                      "n_filtered_maf": int((~keep).sum()),
++                      "n_filtered_maf": int((~qc_keep).sum()),
+                       "causal": causal.tolist() if trait == "mixed" else [],
+                       "component_order": ["u", "q", "e", "structure"],
+                       "component_covariance": np.cov(components, ddof=0),
+                       "liability_variance": tr["liability"].var(),
+                       "mean_loading": loading.mean(), "mean_adjacent_within_population_r2": ld[np.r_[valid, False]].mean(),
+                       "population_sizes": np.bincount(labels, minlength=3)}
++            if target_m is not None:
++                config.update(m_generated=args.m, target_m=target_m,
++                              n_trimmed_after_qc=int(qc_keep.sum()-keep.sum()),
++                              variants_per_chromosome=quotas.tolist())
+             save_json(case / "case.json", config)
+             np.savez_compressed(case / "components.npz", components=components,
+                                 liability=tr["liability"], effects=tr["effects"])
+@@ -481,6 +528,8 @@ def main():
+     ap.add_argument("--out", type=Path)
+     ap.add_argument("--n", type=int, default=800)
+     ap.add_argument("--m", type=int, default=6000)
++    ap.add_argument("--target-m", type=int,
++                    help="Retain exactly this many MAF-passing markers in six chromosome quotas; divisible by 50")
+     ap.add_argument("--reps", type=int, default=6)
+     ap.add_argument("--rhos", type=float, nargs="+", default=[0, .8])
+     ap.add_argument("--cells", nargs="+", choices=CELLS, default=CELLS)
+@@ -495,6 +544,8 @@ def main():
+     ap.add_argument("--pilot", action="store_true")
+     ap.add_argument("--simulator", choices=["balding-nichols", "hapnest"], default="balding-nichols")
+     ap.add_argument("--bounded-memory", action="store_true")
++    ap.add_argument("--prepare-only", action="store_true",
++                    help="Freeze sources and prepare/export panels, without fitting association methods")
+     ap.add_argument("--prepare", type=Path)
+     args = ap.parse_args()
+     if args.prepare:
+@@ -512,25 +563,35 @@ def main():
+         return 0
+     if args.out is None or args.m % 300 or args.m < 600 or args.n < 50 or args.reps < 1:
+         ap.error("supply a new --out, n>=50, m>=600 divisible by 300, reps>=1")
++    if args.target_m is not None and (args.target_m < 600 or args.target_m % 50 or args.target_m > args.m):
++        ap.error("target-m must be >=600, divisible by 50 and no greater than candidate m")
+     args.ldak = str(Path(args.ldak).expanduser().resolve())
+     out = args.out.resolve()
+     args.out = str(out)
+     out.mkdir(parents=True, exist_ok=False)
+     archive_sources(out, args)
+     failures = 0
++    prepared_cases = []
+     for rho in args.rhos:
+         for rep in range(1, args.reps+1):
+             for structured in [False, True]:
+                 if not any((cell != "unstructured") == structured for cell in args.cells):
+                     continue
+-                if args.bounded_memory:
++                if args.bounded_memory or args.prepare_only:
+                     job = out / f"prepare-{rho}-{rep}-{int(structured)}.json"
+                     save_json(job, {"args": vars(args), "rep": rep, "rho": rho, "structured": structured})
+-                    measured([sys.executable, str(Path(__file__).resolve()), "--prepare", str(job)],
++                    driver = out / "source" / Path(__file__).name if args.prepare_only else Path(__file__).resolve()
++                    measured([sys.executable, str(driver), "--prepare", str(job)],
+                              out, job.stem, args.threads)
+                     cases = [Path(p) for p in json.loads(job.with_suffix(".cases.json").read_text())]
+                 else:
+                     cases = make_panel(out, args, rep, rho, structured)
++                if args.prepare_only:
++                    for case in cases:
++                        config = json.loads((case / "case.json").read_text())
++                        prepared_cases.append({"directory": str(case), "n": config["n"], "m": config["m"],
++                                               "cell": config["cell"], "trait": config["trait"]})
++                    continue
+                 for case in cases:
+                     # Rotate method order to distribute warming / temporal effects.
+                     shift = (rep-1) % len(args.methods)
+@@ -543,6 +604,12 @@ def main():
+                             failures += 1
+                             save_json(case / f"{method}.status.json", {"method": method, "status": "failed", "error": str(exc)})
+                             print(f"FAILED {case}: {method}: {exc}", flush=True)
++    if args.prepare_only:
++        save_json(out / "preparation.json", {"complete": True, "prepared_case_count": len(prepared_cases),
++                                            "cases": prepared_cases, "association_methods_run": 0,
++                                            "preparation_outside_method_timings": True})
++        print(f"Prepared {len(prepared_cases)} cases: {out}; no association methods run", flush=True)
++        return 0
+     summarize(out)
+     print(f"Complete: {out}; failures={failures}", flush=True)
+     return int(failures > 0)
+diff --git a/mixmogam/_fast.py b/mixmogam/_fast.py
+index 13da76b..b0fc85c 100644
+--- a/mixmogam/_fast.py
++++ b/mixmogam/_fast.py
+@@ -1,10 +1,9 @@
+ """Optional Numba kernels with automatic NumPy fallbacks.
+ 
+-The fused block converter (int8 genotypes -> imputed float block) is the
+-one hot loop that is memory-bound rather than BLAS-bound, so it pays to
+-fuse the decode, missing-value imputation and dtype conversion into a
+-single pass. Everything else in the package is GEMM-dominated and left
+-to BLAS.
++The fused block converter (int8 genotypes -> imputed float block) combines
++decoding, missing-value imputation and dtype conversion in a single pass.
++Variational fitting has its own optional kernels in :mod:`mixmogam._vb`;
++matrix products use BLAS.
+ """
+ 
+ from __future__ import annotations
+diff --git a/mixmogam/_loco.py b/mixmogam/_loco.py
+index c39dcaa..c2107b1 100644
+--- a/mixmogam/_loco.py
++++ b/mixmogam/_loco.py
+@@ -19,6 +19,11 @@ from mixmogam.genotypes import MISSING
+ 
+ __all__ = ["loco_groups", "LocoGenotypes"]
+ 
++# Explicit conversion/projection scratch, separate from the returned block and
++# the genotype cache. Native BLAS workspace is outside this budget; at least one
++# variant must fit, even when its sample vector alone exceeds the budget.
++_STANDARDIZE_WORK_BYTES = 64 * 1024**2
++
+ 
+ def loco_groups(chromosome, max_groups: int = 25) -> tuple[np.ndarray, list]:
+     """Group variants for LOCO; returns (group index per variant, labels).
+@@ -53,7 +58,14 @@ class LocoGenotypes:
+     projected out: z <- z - (z Q) Q' with Q an orthonormal basis of the
+     covariates (BOLT-LMM's treatment of covariates). Blocks are cached as
+     float32 when ``n * m * 4`` bytes fit in ``cache_bytes``; otherwise they
+-    are re-derived from the int8 store on every pass.
++    are re-derived from the int8 store using moments prepared once.
++
++    This is a prepared view of a fixed genotype dataset: the genotype
++    storage must remain unchanged throughout its lifetime. Replacement or
++    reshaping is rejected; in-place edits cannot be detected without an
++    additional full data pass and are unsupported. Construct a new object
++    after changing genotypes. Covariates and group assignments are copied
++    during preparation, so changes to the caller's arrays do not alter it.
+ 
+     Parameters
+     ----------
+@@ -61,19 +73,42 @@ class LocoGenotypes:
+     groups : (m,) LOCO group index per variant (see :func:`loco_groups`)
+     Q : (n, q) orthonormal covariate basis (None: centering only)
+     block : SNPs per block
++    n_threads : positive integer, default 1
++        Above one, prepare independent variants with Numba workers using
++        float64 two-pass variance and projection. This changes reduction
++        rounding relative to NumPy; the default NumPy path is unchanged.
++        Uncached passes reuse the moments and float64 projection coefficients
++        to decode directly into the storage block with the same arithmetic.
+     """
+ 
+     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
+-                 block: int = 4096, dtype=np.float32, cache_bytes: float = 4e9):
++                 block: int = 4096, dtype=np.float32, cache_bytes: float = 4e9,
++                 n_threads: int = 1):
++        if (isinstance(n_threads, (int, np.integer))
++                and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
++            self.n_threads = 1
++        else:
++            # Keep optional parallel imports out of the default path. The
++            # same validator as VB rejects unsupported requests before work.
++            from mixmogam._standardize import _validate_n_threads
++            self.n_threads = _validate_n_threads(n_threads)
+         self.gt = gt
++        self._genotypes = gt.G
++        self._genotype_shape = getattr(gt.G, "shape", None)
++        self._genotype_dtype = getattr(gt.G, "dtype", None)
+         self.n = gt.n_samples
+         self.m = gt.n_variants
+-        self.groups = np.asarray(groups, dtype=np.int64)
++        self.groups = np.array(groups, dtype=np.int64, copy=True)
+         if self.groups.shape != (self.m,):
+             raise ValueError("groups must have one entry per variant")
+         self.n_groups = int(self.groups.max()) + 1 if self.m else 0
+         self.m_group = np.bincount(self.groups, minlength=self.n_groups).astype(np.float64)
+-        self.Q = np.zeros((self.n, 0)) if Q is None else np.asarray(Q, dtype=np.float64)
++        self.Q = np.zeros((self.n, 0)) if Q is None else np.array(Q, dtype=np.float64, copy=True)
++        if self.Q.ndim != 2 or self.Q.shape[0] != self.n:
++            raise ValueError("Q must be a two-dimensional array with one row per sample")
++        if self.n_threads > 1:
++            self.Q = np.ascontiguousarray(self.Q)
++            self.Q.flags.writeable = False
+         self.dtype = np.dtype(dtype)
+         self.block = int(block)
+         # blocks: (variant indices, group); each block is group-pure
+@@ -84,47 +119,118 @@ class LocoGenotypes:
+                 self._blocks.append((idx[i : i + self.block], g))
+         self.mean = np.zeros(self.m)
+         self.sd = np.zeros(self.m)
++        self._projection = (np.empty((self.m, self.Q.shape[1]))
++                            if self.n_threads > 1 else None)
+         self._cache = None
+         cache = self.n * self.m * self.dtype.itemsize <= cache_bytes
+         if cache:
+             self._cache = []
++        trace = 0.0
+         for idx, _ in self._blocks:
+-            Z = self._standardize(idx)
++            Z = self._standardize(idx, prepare=True)
++            trace += float(np.einsum("ij,ij->", Z, Z, dtype=np.float64))
+             if cache:
+                 self._cache.append(Z)
+-        self.trace = self._trace()
++            else:
++                del Z  # release before allocating the next preparation block
++        self.trace = trace / max(self.m, 1)
++        if self._projection is not None:
++            self._projection.flags.writeable = False
+ 
+     # ------------------------------------------------------------------
+-    def _standardize(self, idx: np.ndarray) -> np.ndarray:
+-        g = np.asarray(self.gt.G[:, idx]).astype(np.float64)  # (n, k)
+-        ok = g != MISSING
+-        cnt = ok.sum(axis=0)
+-        gf = np.where(ok, g, 0.0)
+-        mean = np.where(cnt > 0, gf.sum(axis=0) / np.maximum(cnt, 1), 0.0)
+-        cen = np.where(ok, g - mean, 0.0)
+-        sd = np.sqrt((cen * cen).sum(axis=0) / np.maximum(cnt, 1))
+-        self.mean[idx] = mean
+-        self.sd[idx] = sd
+-        Z = (cen / np.where(sd > 0, sd, 1.0)).T  # (k, n)
+-        if self.Q.shape[1]:
+-            Z -= (Z @ self.Q) @ self.Q.T
+-        return Z.astype(self.dtype)
++    def _check_source(self):
++        if (self.gt.G is not self._genotypes
++                or getattr(self.gt.G, "shape", None) != self._genotype_shape
++                or getattr(self.gt.G, "dtype", None) != self._genotype_dtype):
++            raise RuntimeError("genotype storage changed; construct a new LocoGenotypes object")
++
++    def _tile_size(self):
++        per_variant = 32 * max(self.n, 1) + 8 * self.Q.shape[1] + 128
++        return min(256, max(1, _STANDARDIZE_WORK_BYTES // per_variant))
++
++    def _standardize(self, idx: np.ndarray, *, prepare: bool = False) -> np.ndarray:
++        """Standardize small variant tiles before writing the storage block.
++
++        Called-sample moments and covariate projection remain float64. The
++        scratch bound covers the float64 tile, missing mask, second-moment or
++        projection temporary, and per-variant statistics. Tiling can change
++        BLAS reduction rounding, but neither normalization nor projection.
++        The initial preparation computes called-sample moments; subsequent
++        conversions reuse them without another sum or second-moment pass.
++        Parallel preparation also retains the projection coefficients, so
++        later decoding needs no float64 tile or repeated sample reductions.
++        """
++        self._check_source()
++        out = np.empty((idx.size, self.n), dtype=self.dtype)
++        if self.n_threads > 1:
++            from mixmogam._standardize import decode_parallel, standardize_parallel
++            if prepare:
++                mean, sd, coefficients = standardize_parallel(self.gt.G, idx, self.Q, out, self.n_threads)
++                self.mean[idx], self.sd[idx], self._projection[idx] = mean, sd, coefficients
++            else:
++                decode_parallel(self.gt.G, idx, self.Q, self.mean, self.sd,
++                                self._projection, out, self.n_threads)
++            return out
++        tile = self._tile_size()
++        for start in range(0, idx.size, tile):
++            take = idx[start : start + tile]
++            g = np.asarray(self.gt.G[:, take]).astype(np.float64)  # (n, k)
++            ok = g != MISSING
++            if prepare:
++                cnt = ok.sum(axis=0)
++                g[~ok] = 0.0
++                mean = g.sum(axis=0) / np.maximum(cnt, 1)
++            else:
++                mean = self.mean[take]
++            g -= mean
++            g[~ok] = 0.0
++            if prepare:
++                sd = np.sqrt((g * g).sum(axis=0) / np.maximum(cnt, 1))
++                self.mean[take] = mean
++                self.sd[take] = sd
++            else:
++                sd = self.sd[take]
++            del ok
++            g /= np.where(sd > 0, sd, 1.0)
++            Z = g.T
++            if self.Q.shape[1]:
++                Z -= (Z @ self.Q) @ self.Q.T
++            out[start : start + take.size] = Z
++        return out
+ 
+     def blocks(self):
+         """Yield ``(variant_indices, group, Z_block)`` with Z (k, n)."""
++        self._check_source()
+         for b, (idx, g) in enumerate(self._blocks):
+             Z = self._cache[b] if self._cache is not None else self._standardize(idx)
+             yield idx, g, Z
+ 
+     def rows(self, variant_idx: np.ndarray) -> np.ndarray:
+-        """Standardized projected rows (k, n) of the given variants."""
+-        variant_idx = np.asarray(variant_idx, dtype=np.int64)
++        """Requested rows (k, n), preserving order and repeated indices.
++
++        Without a float cache, only requested variants are converted. Work
++        is tiled independently of the required float64 result matrix.
++        """
++        self._check_source()
++        variant_idx = np.asarray(variant_idx)
++        if variant_idx.ndim != 1 or (variant_idx.size and variant_idx.dtype.kind not in "iu"):
++            raise ValueError("variant indices must be a one-dimensional integer array")
++        if np.any(variant_idx < 0) or np.any(variant_idx >= self.m):
++            raise IndexError("variant index out of range")
++        variant_idx = variant_idx.astype(np.int64, copy=False)
+         out = np.empty((variant_idx.size, self.n), dtype=np.float64)
+-        where = {int(v): i for i, v in enumerate(variant_idx)}
+-        for idx, _, Z in self.blocks():
+-            hit = np.nonzero(np.isin(idx, variant_idx))[0]
+-            for h in hit:
+-                out[where[int(idx[h])]] = Z[h]
++        tile = self._tile_size()
++        for start in range(0, variant_idx.size, tile):
++            take = variant_idx[start : start + tile]
++            target = out[start : start + take.size]
++            if self._cache is None:
++                target[:] = self._standardize(take)
++                continue
++            for (idx, _), Z in zip(self._blocks, self._cache):
++                positions = np.searchsorted(idx, take)
++                possible = np.nonzero(positions < idx.size)[0]
++                hit = possible[idx[positions[possible]] == take[possible]]
++                target[hit] = Z[positions[hit]]
+         return out
+ 
+     def _trace(self) -> float:
+diff --git a/mixmogam/_vb.py b/mixmogam/_vb.py
+index 1a2740d..2db71f1 100644
+--- a/mixmogam/_vb.py
++++ b/mixmogam/_vb.py
+@@ -22,6 +22,8 @@ Priors (per column, scaled per SNP by ``snp_scale``):
+ 
+ from __future__ import annotations
+ 
++from concurrent.futures import ThreadPoolExecutor
++from contextlib import contextmanager, ExitStack
+ import math
+ from typing import Optional
+ 
+@@ -35,6 +37,52 @@ PRIOR_MIXTURE = 0
+ PRIOR_ENET = 1
+ _LOG_2PI = math.log(2.0 * math.pi)
+ _SQRT2 = math.sqrt(2.0)
++_GEMM_MIN_SAMPLES = 50_000
++_GEMM_MIN_COLUMNS = 6
++
++
++def _matmul_rows(left, right, out):
++    """Worker owns output rows; the complete reduction stays inside BLAS."""
++    np.matmul(left, right, out=out)
++
++
++class _GemmWorkspace:
++    """Bounded F-order forward scratch and a shared backward GEMM pool."""
++
++    def __init__(self, n, n_columns, sub_block, dtype, pool, workers):
++        from scipy.linalg.blas import get_blas_funcs
++
++        self.work = np.empty((n, n_columns), dtype=dtype, order="F")
++        self.products = np.empty(sub_block * n_columns, dtype=dtype)
++        self.gemm = get_blas_funcs("gemm", dtype=dtype)
++        self.pool, self.workers = pool, workers
++
++    def forward(self, Z, work, out):
++        # SciPy receives F-contiguous inputs, including the transpose view of
++        # the existing C-order genotype block. Small tails retain NumPy.
++        if Z.shape[0] < 32 or not Z.flags.c_contiguous:
++            np.matmul(Z, work, out=out)
++            return out
++        np.copyto(self.work, work)
++        b, p = out.shape
++        # A first-axis slice of an F matrix loses F contiguity. Reshaping a
++        # flat prefix gives both full blocks and tails a direct BLAS output.
++        products = self.products[:b * p].reshape((b, p), order="F")
++        return self.gemm(1.0, Z.T, self.work, trans_a=1, c=products, overwrite_c=1)
++
++    def backward(self, Z, changes, out):
++        if Z.shape[0] < 128:
++            np.matmul(Z.T, changes, out=out)
++            return
++        left, right = Z.T.view(), changes.view()
++        left.flags.writeable = right.flags.writeable = False
++        futures = []
++        for worker in range(self.workers):
++            start = worker * out.shape[0] // self.workers
++            stop = (worker + 1) * out.shape[0] // self.workers
++            futures.append(self.pool.submit(_matmul_rows, left[start:stop], right, out[start:stop]))
++        for future in futures:
++            future.result()
+ 
+ 
+ def _log_ndtr(x):
+@@ -148,7 +196,11 @@ def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+                 continue
+             b_old = beta[a, p]
+             u = U[a, p] + gjj * b_old
+-            if prior_type == 0:
++            if scale[a] == 0.0:
++                # A zero genetic-variance component is a point mass at zero,
++                # including the Laplace part of an elastic-net prior.
++                b_new = 0.0
++            elif prior_type == 0:
+                 b_new = _pm_mixture(u, gjj, s2e[p], prior[p, 0],
+                                     prior[p, 1] * scale[a], prior[p, 2] * scale[a])
+             else:
+@@ -167,8 +219,38 @@ def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+                         U[c, p] -= grams[gidx[p], a, c] * d
+ 
+ 
++def _sweep_block_parallel(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
++    """Independent model columns; each retains its serial SNP update order."""
++    nb, ncol = U.shape
++    for p in prange(ncol):
++        for a in range(nb):
++            if skip[p]:
++                D[a, p] = 0.0
++                continue
++            gjj = grams[gidx[p], a, a]
++            if gjj <= 0.0:
++                D[a, p] = 0.0
++                continue
++            b_old = beta[a, p]
++            u = U[a, p] + gjj * b_old
++            if scale[a] == 0.0:
++                b_new = 0.0
++            elif prior_type == 0:
++                b_new = _pm_mixture(u, gjj, s2e[p], prior[p, 0],
++                                    prior[p, 1] * scale[a], prior[p, 2] * scale[a])
++            else:
++                b_new = _pm_enet(u, gjj, s2e[p], prior[p, 0],
++                                 prior[p, 1] / math.sqrt(scale[a]), prior[p, 2] * scale[a])
++            d = b_new - b_old
++            D[a, p] = d
++            if d != 0.0:
++                beta[a, p] = b_new
++                for c in range(a + 1, nb):
++                    U[c, p] -= grams[gidx[p], a, c] * d
++
++
+ if HAS_NUMBA:
+-    from numba import njit
++    from numba import config, get_num_threads, njit, prange, set_num_threads
+ 
+     _log_ndtr = njit(cache=True)(_log_ndtr)
+     _mills = njit(cache=True)(_mills)
+@@ -176,6 +258,59 @@ if HAS_NUMBA:
+     _pm_mixture = njit(cache=True)(_pm_mixture)
+     _pm_enet = njit(cache=True)(_pm_enet)
+     _sweep_block = njit(cache=True)(_sweep_block)
++    _sweep_block_parallel = njit(parallel=True, cache=True)(_sweep_block_parallel)
++else:
++    prange = range
++
++
++def _refresh_residual(R, work, delta, mask, change):
++    """One float64 residual update; round only the next GEMM's input."""
++    block_change = np.zeros(R.shape[1], dtype=np.float64)
++    for i in range(R.shape[0]):
++        for p in range(R.shape[1]):
++            d = np.float64(delta[i, p])
++            if mask is not None:
++                d *= mask[i, p]
++            R[i, p] -= d
++            work[i, p] = R[i, p]
++            block_change[p] += d * d
++    change += block_change
++
++
++if HAS_NUMBA:
++    _refresh_residual = njit(cache=True)(_refresh_residual)
++else:  # NumPy fallback keeps the same float64 residual and reduction contract.
++    def _refresh_residual(R, work, delta, mask, change):
++        d = delta.astype(np.float64)
++        if mask is not None:
++            d *= mask
++        R -= d
++        work[:] = R
++        change += np.einsum("ij,ij->j", d, d)
++
++
++def _validate_n_threads(n_threads):
++    """Reject invalid requests before genotype preparation or allocation."""
++    if (isinstance(n_threads, (bool, np.bool_))
++            or not isinstance(n_threads, (int, np.integer)) or n_threads < 1):
++        raise ValueError("n_threads must be a positive integer")
++    if n_threads > 1:
++        if not HAS_NUMBA:
++            raise ImportError("n_threads > 1 requires Numba")
++        if n_threads > config.NUMBA_NUM_THREADS:
++            raise ValueError(f"n_threads exceeds the Numba thread limit ({config.NUMBA_NUM_THREADS})")
++    return int(n_threads)
++
++
++@contextmanager
++def _numba_thread_limit(n_threads):
++    """Temporarily mask this caller's Numba workers, including on failure."""
++    previous = get_num_threads()
++    set_num_threads(n_threads)
++    try:
++        yield
++    finally:
++        set_num_threads(previous)
+ 
+ 
+ class VBEngine:
+@@ -186,37 +321,73 @@ class VBEngine:
+     lg : LocoGenotypes (standardized, covariate-projected blocks)
+     folds : (n,) fold index per sample (0..F-1) for cross-validation, or None
+     sub_block : SNPs per Gauss-Seidel block
+-    gram_cache_bytes : cache per-block Gram matrices (full and per fold)
+-        up to this size; beyond it they are recomputed every sweep
++    gram_cache_bytes : cache per-block Gram matrices (full and requested folds)
++        up to this size; beyond it they are recomputed every sweep. A later
++        full-data fit reuses the full Grams prepared during cross-validation.
++    n_threads : positive integer, default 1
++        Numba workers for SNP coordinate sweeps across independent model
++        columns. Residual updates and norm reductions remain serial. More
++        than one requires Numba and must not exceed its configured thread
++        limit. Large fits also reuse a bounded GEMM workspace and up to four
++        workers over output rows. When threadpoolctl is available, detected
++        BLAS libraries use one thread within that context; otherwise GEMMs
++        retain the serial path. Thread controls are restored after each fit.
+     """
+ 
+     def __init__(self, lg, folds: Optional[np.ndarray] = None, sub_block: int = 128,
+-                 gram_cache_bytes: float = 1e9):
++                 gram_cache_bytes: float = 1e9, n_threads: int = 1):
++        self.n_threads = _validate_n_threads(n_threads)
+         self.lg = lg
+         self.n = lg.n
+         self.sub_block = int(sub_block)
+         self.folds = None if folds is None else np.asarray(folds, dtype=np.int64)
+         self.n_folds = 0 if self.folds is None else int(self.folds.max()) + 1
+-        n_sub = sum(-(-idx.size // self.sub_block) for idx, _ in lg._blocks)
+-        size = n_sub * (self.n_folds + 1) * self.sub_block**2 * 8
+-        self._grams = [] if size <= gram_cache_bytes else None
+-        if self._grams is not None:
+-            for _, _, Zs in self._subblocks():
+-                self._grams.append(self._gram(Zs))
++        self.gram_cache_bytes = gram_cache_bytes
++        self._grams = None
++        self._gram_folds = np.empty(0, dtype=np.int64)
++
++    def _prepare_grams(self, col_fold):
++        """Prepare only the row subsets used by this fit; full data is slice 0."""
++        needed = np.unique(col_fold[col_fold >= 0])
++        if self._grams is None or not np.isin(needed, self._gram_folds).all():
++            # Drop old storage before changing its labels or allocating a
++            # replacement: an interrupted rebuild must not leave stale Grams.
++            self._grams = None
++            self._gram_folds = needed
++            size = sum(sum(min(self.sub_block, idx.size - s)**2
++                           for s in range(0, idx.size, self.sub_block))
++                       for idx, _ in self.lg._blocks) * (needed.size + 1) * 8
++            self._grams = ([self._gram(Zs, needed) for _, _, Zs in self._subblocks()]
++                           if size <= self.gram_cache_bytes else None)
++        # In the uncached case use only this fit's folds, including none for LOCO.
++        active = self._gram_folds if self._grams is not None else needed
++        gidx = np.zeros(col_fold.size, dtype=np.int64)
++        for i, f in enumerate(active):
++            gidx[col_fold == f] = i + 1
++        return active, gidx
+ 
+     def _subblocks(self):
+         B = self.sub_block
++        if self.lg._cache is None and self.lg.n_threads > 1:
++            # Parallel preparation cached each variant's projection already.
++            # Decode only the current VB subblock, retaining every original
++            # parent-block boundary and the exact variant order.
++            for idx, g in self.lg._blocks:
++                for s in range(0, idx.size, B):
++                    take = idx[s : s + B]
++                    yield take, g, self.lg._standardize(take)
++            return
+         for idx, g, Z in self.lg.blocks():
+             for s in range(0, idx.size, B):
+                 yield idx[s : s + B], g, Z[s : s + B]
+ 
+-    def _gram(self, Zs: np.ndarray) -> np.ndarray:
++    def _gram(self, Zs: np.ndarray, folds: np.ndarray) -> np.ndarray:
+         Z64 = Zs.astype(np.float64)
+-        G = np.empty((self.n_folds + 1, Z64.shape[0], Z64.shape[0]))
++        G = np.empty((folds.size + 1, Z64.shape[0], Z64.shape[0]))
+         G[0] = Z64 @ Z64.T
+-        for f in range(self.n_folds):
++        for i, f in enumerate(folds):
+             Zt = Z64[:, self.folds == f]
+-            G[f + 1] = G[0] - Zt @ Zt.T
++            G[i + 1] = G[0] - Zt @ Zt.T
+         return G
+ 
+     def fit(
+@@ -241,6 +412,7 @@ class VBEngine:
+         """
+         Y = np.asarray(Y, dtype=np.float64)
+         n, P = Y.shape
++        parallel = self.n_threads > 1 and P > 1
+         col_fold = np.asarray(col_fold, dtype=np.int64)
+         col_group = np.asarray(col_group, dtype=np.int64)
+         prior = np.ascontiguousarray(prior, dtype=np.float64)
+@@ -256,43 +428,87 @@ class VBEngine:
+         R = Y * mask if mask is not None else Y.copy()
+         ynorm = np.maximum(np.einsum("ij,ij->j", R, R), 1e-300)
+         beta = np.zeros((self.lg.m, P))
+-        D = np.empty((self.sub_block, P))
++        D = np.empty((self.sub_block, P), order="F" if parallel else "C")
+         it = 0
+         rel = np.full(P, np.inf)
+         zdt = self.lg.dtype
+-        gidx = col_fold + 1  # Gram slice per column (0: all rows)
+-        for it in range(1, max_iter + 1):
+-            change = np.zeros(P)
+-            for b, (idx, g, Zs) in enumerate(self._subblocks()):
+-                grams = self._grams[b] if self._grams is not None else self._gram(Zs)
+-                # GEMMs in the storage precision (float32 by default): no
+-                # per-sweep widening of the genotype block, and the residual
+-                # is recomputed exactly below
+-                U = (Zs @ R.astype(zdt)).astype(np.float64)
+-                skip = col_group == g
+-                bb = np.ascontiguousarray(beta[idx])
+-                Db = D[: idx.size]
+-                _sweep_block(U, bb, grams, gidx, skip, prior_type, prior,
+-                             np.ascontiguousarray(scale[idx]), s2e, Db)
+-                beta[idx] = bb
+-                dR = (Zs.T @ Db.astype(zdt)).astype(np.float64)
+-                if mask is not None:
+-                    dR *= mask
+-                R -= dR
+-                change += np.einsum("ij,ij->j", dR, dR)
+-            rel = change / ynorm
+-            if rel.max() < tol:
+-                break
++        gram_folds, gidx = self._prepare_grams(col_fold)
++        # Reuse the large workspaces. The residual itself stays float64; its
++        # storage-precision image is refreshed after *every* block update.
++        work = R.astype(zdt)
++        # Parallel workers repeatedly update their own SNP column. These
++        # workspaces can be column-contiguous. The default GEMM workspaces
++        # remain C-order; large parallel fits add reusable F-order scratch.
++        U = np.empty((self.sub_block, P), order="F" if parallel else "C")
++        products = np.empty((self.sub_block, P), dtype=zdt)
++        changes = np.empty((self.sub_block, P), dtype=zdt)
++        delta = np.empty((n, P), dtype=zdt)
++        sweep = _sweep_block_parallel if parallel else _sweep_block
++        with ExitStack() as stack:
++            if parallel:
++                stack.enter_context(_numba_thread_limit(min(self.n_threads, P)))
++            gemm = None
++            if (parallel and n >= _GEMM_MIN_SAMPLES and P >= _GEMM_MIN_COLUMNS
++                    and zdt in (np.dtype(np.float32), np.dtype(np.float64))):
++                try:
++                    from threadpoolctl import threadpool_limits
++                except ImportError:
++                    pass  # Never create nested workers without BLAS control.
++                else:
++                    workers = min(self.n_threads, 4)
++                    # Load SciPy's BLAS before threadpoolctl discovers pools.
++                    # A library imported inside the context may escape its
++                    # limit; no products are evaluated until both are ready.
++                    gemm = _GemmWorkspace(n, P, self.sub_block, zdt, None, workers)
++                    stack.enter_context(threadpool_limits(limits=1, user_api="blas"))
++                    gemm.pool = stack.enter_context(ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mixmogam-vb"))
++            for it in range(1, max_iter + 1):
++                change = np.zeros(P)
++                for b, (idx, g, Zs) in enumerate(self._subblocks()):
++                    grams = self._grams[b] if self._grams is not None else self._gram(Zs, gram_folds)
++                    # GEMMs in the storage precision (float32 by default): no
++                    # per-sweep widening of the genotype block, and the residual
++                    # is recomputed exactly below
++                    Ub = U[:idx.size]
++                    if gemm is None:
++                        np.matmul(Zs, work, out=products[:idx.size])
++                        Ub[:] = products[:idx.size]
++                    else:
++                        Ub[:] = gemm.forward(Zs, work, products[:idx.size])
++                    skip = col_group == g
++                    bb = np.ascontiguousarray(beta[idx])
++                    Db = D[: idx.size]
++                    sweep(Ub, bb, grams, gidx, skip, prior_type, prior,
++                          np.ascontiguousarray(scale[idx]), s2e, Db)
++                    beta[idx] = bb
++                    changes[:idx.size] = Db
++                    if gemm is None:
++                        np.matmul(Zs.T, changes[:idx.size], out=delta)
++                    else:
++                        gemm.backward(Zs, changes[:idx.size], delta)
++                    # Keep the sample-major residual pass contiguous and
++                    # preserve its serial sample-order norm accumulation.
++                    _refresh_residual(R, work, delta, mask, change)
++                rel = change / ynorm
++                if rel.max() < tol:
++                    break
+         # exact residual from the final effects (one pass, float64)
+-        R = Y - self.predict(beta)
++        prediction = self.predict(beta)
++        R = Y - prediction
+         if mask is not None:
+             R *= mask
+-        return {"beta": beta, "resid": R, "iterations": it,
++        return {"beta": beta, "resid": R, "prediction": prediction, "iterations": it,
+                 "converged": bool(rel.max() < tol), "rel_change": rel, "mask": mask}
+ 
+     def predict(self, beta: np.ndarray) -> np.ndarray:
+         """Fitted values Z' beta (n, P) for every column."""
+         out = np.zeros((self.n, beta.shape[1]))
+         for idx, _, Z in self.lg.blocks():
+-            out += Z.T.astype(np.float64) @ beta[idx]
++            # Tile samples, keeping the complete variant reduction in each
++            # product. Widening scratch is bounded by 16 MiB (or one row).
++            rows = max(1, (16 * 1024**2) // (8 * idx.size))
++            bb = beta[idx]
++            for start in range(0, self.n, rows):
++                stop = min(start + rows, self.n)
++                out[start:stop] += Z[:, start:stop].T.astype(np.float64) @ bb
+         return out
+diff --git a/mixmogam/genotypes.py b/mixmogam/genotypes.py
+index 14d549b..18ed154 100644
+--- a/mixmogam/genotypes.py
++++ b/mixmogam/genotypes.py
+@@ -10,12 +10,29 @@ __all__ = ["Genotypes", "MISSING"]
+ 
+ MISSING = -1  # internal missing genotype code
+ 
++# Explicit temporary storage for fractional-call checks and missing-code
++# conversion. Input/output arrays and NumPy's reduction buffers are separate.
++_HARD_CALL_WORK_BYTES = 8 * 1024**2
++
++
++def _bounded_blocks(array, max_elements):
++    """Views with bounded element counts, including very tall inputs."""
++    n, m = array.shape
++    rows = min(max(n, 1), max_elements)
++    cols = min(max(m, 1), max(1, max_elements // rows))
++    if abs(array.strides[0]) > abs(array.strides[1]):
++        cols = min(max(m, 1), max_elements)
++        rows = min(max(n, 1), max(1, max_elements // cols))
++    for j in range(0, m, cols):
++        for i in range(0, n, rows):
++            yield array[i:i + rows, j:j + cols]
++
+ 
+ class Genotypes:
+     """Diploid genotypes in {0, 1, 2} with ``MISSING`` (-1) for no-calls.
+ 
+-    Storage is sample-major ``G`` of shape (n_samples, n_variants), dtype
+-    int8 (a ``numpy.memmap`` works unchanged). Variant metadata lives in
++    Storage is ``G`` of shape (n_samples, n_variants), dtype int8, in either
++    memory order (a ``numpy.memmap`` works unchanged). Variant metadata lives in
+     parallel arrays. The container never materializes the full matrix in
+     float: :meth:`iter_snp_blocks` streams SNP-major float blocks ready for
+     the scanner, fusing missing-value imputation into the conversion.
+@@ -36,16 +53,26 @@ class Genotypes:
+             raise ValueError("G must be 2-D (n_samples, n_variants)")
+         # Check before casting: int8 conversion otherwise truncates dosages
+         # and wraps large integers into apparently valid hard calls.
++        kind = self.G.dtype.kind
++        if kind not in "biuf":
++            raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
+         upper = 3 if self.G.dtype == np.uint8 else 2
+-        for i in range(0, self.G.shape[1], 8192):
+-            g = self.G[:, i : i + 8192]
+-            if (g.dtype.kind not in "biuf" or not np.isfinite(g).all()
+-                    or np.any((g < -1) | (g > upper))
+-                    or (g.dtype.kind == "f" and np.any(g != np.floor(g)))):
++        if self.G.size:
++            low, high = self.G.min().item(), self.G.max().item()
++            # Python integer scalars retain the full uint64/int64 range;
++            # integer arrays need neither finiteness masks nor floor checks.
++            if (low < -1 or high > upper
++                    or (kind == "f" and not np.isfinite([low, high]).all())):
+                 raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
++            if kind == "f":
++                count = max(1, _HARD_CALL_WORK_BYTES // (self.G.dtype.itemsize + 1))
++                for g in _bounded_blocks(self.G, count):
++                    if np.any(g != np.floor(g)):
++                        raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
+         if self.G.dtype == np.uint8:  # e.g. unpacked bed with 3=missing
+             g = self.G.astype(np.int8)
+-            g[g == 3] = MISSING
++            for part in _bounded_blocks(g, max(1, _HARD_CALL_WORK_BYTES)):
++                part[part == 3] = MISSING
+             self.G = g
+         elif self.G.dtype != np.int8:
+             self.G = self.G.astype(np.int8)
+diff --git a/mixmogam/io/plink.py b/mixmogam/io/plink.py
+index 5fbad6a..8e92109 100644
+--- a/mixmogam/io/plink.py
++++ b/mixmogam/io/plink.py
+@@ -15,6 +15,9 @@ _BED_MAGIC = b"\x6c\x1b\x01"
+ # PLINK's low-order bit pair: A1/A1, missing, A1/A2, A2/A2.
+ _BED_TO_A1 = np.array([2, MISSING, 1, 0], dtype=np.int8)
+ _A1_TO_BED = np.array([3, 2, 0, 1], dtype=np.uint8)  # -1 indexes missing
++# Bound packed input retained alongside decoded calls. One complete variant
++# is the minimum read; per-variant unpacking scratch is separate.
++_BED_READ_BYTES = 8 * 1024**2
+ 
+ 
+ def _chromosomes(labels):
+@@ -75,15 +78,24 @@ def read_plink(prefix: str, max_variants: Optional[int] = None) -> Genotypes:
+         if magic != _BED_MAGIC:
+             raise ValueError(f"{prefix}.bed is not a SNP-major PLINK bed file")
+         nbytes_row = (n + 3) // 4
+-        G = np.empty((n, m), dtype=np.int8)
+-        raw = np.frombuffer(fh.read(nbytes_row * m), dtype=np.uint8)
+-    if raw.size < nbytes_row * m:
+-        raise ValueError("bed file truncated")
+-    raw = raw.reshape(m, nbytes_row)
+-    for i in range(m):
+-        bits = np.unpackbits(raw[i], bitorder="little")  # 8 bits per byte
+-        codes = bits[0::2] + 2 * bits[1::2]
+-        G[:, i] = _BED_TO_A1[codes[:n]]
++        # BED is variant-major. Keep each decoded variant contiguous, both
++        # for these writes and for the subsequent blocked standardization.
++        # The public array remains samples by variants, with identical calls.
++        G = np.empty((n, m), dtype=np.int8, order="F")
++        rows = max(1, _BED_READ_BYTES // max(nbytes_row, 1))
++        for start in range(0, m, rows):
++            count = min(rows, m - start)
++            raw = np.frombuffer(fh.read(nbytes_row * count), dtype=np.uint8)
++            if raw.size < nbytes_row * count:
++                raise ValueError("bed file truncated")
++            raw = raw.reshape(count, nbytes_row)
++            for i in range(count):
++                bits = np.unpackbits(raw[i], bitorder="little")  # 8 bits per byte
++                codes = bits[0::2] + 2 * bits[1::2]
++                G[:, start + i] = _BED_TO_A1[codes[:n]]
++            # Avoid overlapping consecutive packed reads or retaining the
++            # last chunk during Genotypes' validation of the decoded input.
++            del raw, bits, codes
+     return Genotypes(
+         G,
+         sample_ids=samples,
+diff --git a/mixmogam/lmm.py b/mixmogam/lmm.py
+index 4166442..70384ab 100644
+--- a/mixmogam/lmm.py
++++ b/mixmogam/lmm.py
+@@ -75,6 +75,24 @@ class LMFit:
+         return self._current_model().predict(X)
+ 
+ 
++@dataclass(frozen=True)
++class _VarianceFit:
++    """Variance optimization only; deliberately not a scannable null fit."""
++
++    method: str
++    delta: float
++    vg: float
++    ve: float
++    ll: float
++    pseudo_heritability: float
++    n_grid: int
++    newton_used: bool
++    solver: str
++    # OLS needs this quadratic to estimate ve already. Retain it so the
++    # public fit neither repeats projection nor reconstructs a rounded RSS.
++    ols_rss: Optional[float] = field(default=None, repr=False)
++
++
+ def _as_1d_float(a: Sequence[float], name: str, dtype=np.float64) -> np.ndarray:
+     out = np.asarray(a, dtype=dtype).ravel()
+     if out.size == 0:
+@@ -694,29 +712,93 @@ class LMM:
+         :class:`LMFit` and caches it on ``self.fit_result``; :meth:`scan`
+         uses the cached fit.
+         """
++        variance = self._fit_variance_components(
++            method=method, ngrids=ngrids, llim=llim, ulim=ulim, tol=tol,
++            recompute=recompute, solver=solver, slq_probes=slq_probes,
++            slq_steps=slq_steps, slq_deflate=slq_deflate)
++        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate)
++        if self._fit is not None and self._fit_options == options and not recompute:
++            return self.fit_result
++        if variance.solver == "ols":
++            beta = linalg.lstsq(self.X, self.y)[0]
++            rss = variance.ols_rss
++            tail = 0.0
++        else:
++            if self._kop is not None or not self.eigen()["full"]:
++                # A streaming null fit completes GLS through CG; callers
++                # needing only variances avoid this separate spectral solve.
++                beta = self._gls_beta_cg(variance.delta)
++                tail = float("nan") if self._eig is None else self._eig["tail_mass"]
++            else:
++                H_inv_sqrt_y, H_inv_sqrt_X = (
++                    self._apply_inv_sqrt(a, variance.delta, np.float64) for a in (self.y, self.X)
++                )
++                XtX = H_inv_sqrt_X.T @ H_inv_sqrt_X
++                beta = linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos")
++                tail = self.eigen()["tail_mass"]
++            residuals = self.y - self.X @ beta
++            rss = float(residuals @ residuals)
++
++        self.fit_result = LMFit(
++            method=variance.method,
++            delta=variance.delta,
++            vg=variance.vg,
++            ve=variance.ve,
++            ll=variance.ll,
++            pseudo_heritability=variance.pseudo_heritability,
++            beta=beta,
++            rss=rss,
++            n_grid=variance.n_grid,
++            newton_used=variance.newton_used,
++            tail_mass=tail,
++            solver=variance.solver,
++            model=self,
++        )
++        self._fit_options = options
++        return self.fit_result
++
++    def _fit_variance_components(
++        self,
++        method: str = "reml",
++        ngrids: int = 100,
++        llim: float = -10.0,
++        ulim: float = 10.0,
++        tol: float = 1e-6,
++        recompute: bool = False,
++        solver: str = "auto",
++        slq_probes: int = 12,
++        slq_steps: int = 96,
++        slq_deflate: int = 128,
++    ) -> _VarianceFit:
++        """Optimize variances without the GLS completion needed by scans.
++
++        A matching complete public fit may supply the variances. Otherwise
++        this operation leaves the public fit and its option cache untouched:
++        it does not create an incomplete ``LMFit`` or supersede a current one.
++        """
+         if method not in ("reml", "ml"):
+             raise ValueError(f"unknown method {method!r}; use 'reml' or 'ml'")
+         if solver not in ("auto", "exact", "slq"):
+             raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
+         options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate)
+         if self._fit is not None and self._fit_options == options and not recompute:
+-            return self.fit_result
++            fit = self._fit
++            return _VarianceFit(fit.method, fit.delta, fit.vg, fit.ve, fit.ll,
++                                fit.pseudo_heritability, fit.n_grid, fit.newton_used,
++                                fit.solver, fit.rss if fit.solver == "ols" else None)
+         if (not isinstance(ngrids, (int, np.integer)) or ngrids < 1
+                 or not np.isfinite([llim, ulim, tol]).all() or llim >= ulim or tol <= 0):
+             raise ValueError("fit requires a positive grid size, llim < ulim and positive tol")
+         y0 = self._residualized_y()
+         if self.K is None and self._kop is None:
+-            beta = linalg.lstsq(self.X, self.y)[0]
+             rss = float(y0 @ y0)
+             df = self.n if method == "ml" else self.n - self.q
+             if rss <= np.finfo(float).tiny:
+                 raise ValueError("phenotype has no residual variation after covariate adjustment")
+             ve = rss / df
+             ll = -0.5 * df * (np.log(2 * np.pi * ve) + 1)
+-            self.fit_result = LMFit(method, np.inf, 0.0, ve, ll, 0.0, beta,
+-                                    rss, 0, False, solver="ols")
+-            self._fit_options = options
+-            return self.fit_result
++            return _VarianceFit(method, np.inf, 0.0, ve, ll, 0.0, 0, False,
++                                "ols", ols_rss=rss)
+         if solver == "auto":
+             can_exact = self._kop is None and (
+                 self.K is None or self.eigen()["full"]
+@@ -742,38 +824,8 @@ class LMM:
+         if not np.isfinite([opt_ll, vg, ve]).all() or vg <= 0:
+             raise ValueError("variance fit failed: phenotype must have residual variation")
+ 
+-        if self._kop is not None or not self.eigen()["full"]:
+-            # streaming kinship: GLS by conjugate gradients, so a fit never
+-            # triggers the truncated eigendecomposition the scan would use
+-            beta = self._gls_beta_cg(opt_delta)
+-            tail = float("nan") if self._eig is None else self._eig["tail_mass"]
+-        else:
+-            H_inv_sqrt_y, H_inv_sqrt_X = (
+-                self._apply_inv_sqrt(a, opt_delta, np.float64) for a in (self.y, self.X)
+-            )
+-            XtX = H_inv_sqrt_X.T @ H_inv_sqrt_X
+-            beta = linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos")
+-            tail = self.eigen()["tail_mass"]
+-        residuals = self.y - self.X @ beta
+-        rss = float(residuals @ residuals)
+-
+-        self.fit_result = LMFit(
+-            method=method,
+-            delta=opt_delta,
+-            vg=vg,
+-            ve=ve,
+-            ll=opt_ll,
+-            pseudo_heritability=1.0 / (1.0 + opt_delta),
+-            beta=beta,
+-            rss=rss,
+-            n_grid=ngrids,
+-            newton_used=used_newton,
+-            tail_mass=tail,
+-            solver=solver,
+-            model=self,
+-        )
+-        self._fit_options = options
+-        return self.fit_result
++        return _VarianceFit(method, opt_delta, vg, ve, opt_ll,
++                            1.0 / (1.0 + opt_delta), ngrids, used_newton, solver)
+ 
+     def _operator_trace(self) -> float:
+         """trace(K) of the streaming operator (exact when it exposes one)."""
+diff --git a/mixmogam/twostep.py b/mixmogam/twostep.py
+index a5d2876..1625a8b 100644
+--- a/mixmogam/twostep.py
++++ b/mixmogam/twostep.py
+@@ -32,9 +32,9 @@ calibration SNPs (``calibration_cv``): with strong structure it is large,
+ and a single constant cannot calibrate every SNP.
+ 
+ Deviations from the reference implementations are documented on each
+-function (variance components use this package's stochastic Lanczos
+-REML rather than BOLT's Monte Carlo REML or KVIK's randomized
+-Haseman-Elston regression).
++function. Variance components default to this package's stochastic Lanczos
++REML; KVIK also offers projected single-component randomized HE, distinct
++from the reference program's partitioned HE and optional Monte Carlo REML.
+ """
+ 
+ from __future__ import annotations
+@@ -47,7 +47,7 @@ from scipy import linalg, stats
+ 
+ from mixmogam._cg import SpectralPreconditioner, batched_pcg
+ from mixmogam._loco import LocoGenotypes, loco_groups
+-from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine
++from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _validate_n_threads
+ from mixmogam.ldscore import ld_scores, ldsc_intercept
+ from mixmogam.lmm import LMM, _design_matrix
+ from mixmogam.results import GwasResult
+@@ -77,7 +77,7 @@ class _Setup:
+     n_eff: int  # n - q
+ 
+ 
+-def _setup(y, gt, X, max_loco_groups, block, cache_bytes) -> _Setup:
++def _setup(y, gt, X, max_loco_groups, block, cache_bytes, n_threads=1) -> _Setup:
+     y = np.asarray(y, dtype=np.float64).ravel()
+     if not np.isfinite(y).all():
+         raise ValueError("y contains NaN or infinite values")
+@@ -88,7 +88,8 @@ def _setup(y, gt, X, max_loco_groups, block, cache_bytes) -> _Setup:
+     groups, labels = loco_groups(gt.chromosome, max_loco_groups)
+     if len(labels) < 2:
+         raise ValueError("LOCO needs variants on at least two chromosomes/groups")
+-    lg = LocoGenotypes(gt, groups, Q, block=block, cache_bytes=cache_bytes)
++    lg = LocoGenotypes(gt, groups, Q, block=block, cache_bytes=cache_bytes,
++                       n_threads=n_threads)
+     y_p = y - Q @ (Q.T @ y)
+     return _Setup(y=y, y_p=y_p, X=Xd, lg=lg, labels=labels, n_eff=y.size - Xd.shape[1])
+ 
+@@ -100,14 +101,21 @@ class _KOp:
+         self.lg = lg
+         self.n = lg.n
+         self.weights = weights
+-        if weights is None:
+-            self.trace = lg.trace
+-        else:
++        self._trace = None
++
++    @property
++    def trace(self):
++        # SLQ only needs products. Compute this separate genotype pass when
++        # a spectral preconditioner actually requests the trace.
++        if self._trace is None and self.weights is None:
++            self._trace = self.lg.trace
++        elif self._trace is None:
+             tot = 0.0
+-            for idx, _, Z in lg.blocks():
+-                tot += float(np.einsum("ij,ij,i->", Z, Z, weights[idx].astype(Z.dtype),
++            for idx, _, Z in self.lg.blocks():
++                tot += float(np.einsum("ij,ij,i->", Z, Z, self.weights[idx].astype(Z.dtype),
+                                        dtype=np.float64))
+-            self.trace = tot / float(np.sum(weights))
++            self._trace = tot / float(np.sum(self.weights))
++        return self._trace
+ 
+     def matmul(self, P):
+         return self.lg.matmul(P, self.weights)
+@@ -118,19 +126,21 @@ def fit_variance_components(st: _Setup, weights=None, random_state=0, **slq) ->
+ 
+     The kinship is Z' W Z / sum(W) over the covariate-projected
+     standardized genotypes, applied as a streaming operator. BOLT-LMM uses
+-    Monte Carlo REML and LDAK-KVIK randomized Haseman-Elston regression
+-    for this step; both estimate the same quantities.
++    Monte Carlo REML; LDAK-KVIK starts with partitioned randomized HE and
++    optionally refines its heritability by Monte Carlo REML.
+     """
+     lmm = LMM(st.y, X=st.X, K=_KOp(st.lg, weights), add_intercept=False,
+               random_state=random_state)
+-    return lmm.fit(solver="slq", **slq)
++    # Two-step methods use variance components, never the null-model GLS
++    # coefficients or prediction methods of a complete LMFit.
++    return lmm._fit_variance_components(solver="slq", **slq)
+ 
+ 
+ def _loco_solve(st: _Setup, delta: float, rhs: np.ndarray, col_group: np.ndarray,
+                 weights=None, tol: float = 1e-6, pre=None) -> tuple[np.ndarray, dict]:
+     """(K_{-g} + delta I)^{-1} rhs[:, r] for g = col_group[r], batched."""
+-    op = _KOp(st.lg, weights)
+     if pre is None:
++        op = _KOp(st.lg, weights)
+         pre = SpectralPreconditioner(op.matmul, st.lg.n, op.trace, k=min(64, st.lg.n - 2))
+ 
+     def apply(P, cols):
+@@ -149,9 +159,15 @@ def _retro_stats(st: _Setup, W: np.ndarray) -> dict:
+     num = np.zeros(m)
+     zz = np.zeros(m)
+     wn = np.einsum("ij,ij->j", W, W)
++    # Widen at most 16 MiB of variant rows, retaining each full sample
++    # reduction. The minimum one-row tile and native BLAS scratch are separate.
++    tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
+     for idx, g, Z in st.lg.blocks():
+-        num[idx] = Z.astype(np.float64) @ W[:, g]
+-        zz[idx] = np.einsum("ij,ij->i", Z, Z, dtype=np.float64)
++        for start in range(0, idx.size, tile):
++            take = idx[start : start + tile]
++            Zs = Z[start : start + tile]
++            num[take] = Zs.astype(np.float64, copy=False) @ W[:, g]
++            zz[take] = np.einsum("ij,ij->i", Zs, Zs, dtype=np.float64)
+     wg = wn[st.lg.groups]
+     with np.errstate(divide="ignore", invalid="ignore"):
+         chi2 = st.n_eff * num * num / (zz * wg)
+@@ -432,7 +448,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
+     prior = np.array([prior_row(*grid[c // n_folds]) for c in range(P)])
+     cv = eng.fit(np.repeat(st.y_p[:, None], P, axis=1), col_fold, np.full(P, -1),
+                  PRIOR_MIXTURE, prior, np.full(P, fit.ve), max_iter=vb_max_iter, tol=vb_tol)
+-    pred = eng.predict(cv["beta"])
++    pred = cv["prediction"]
+     sse = np.zeros(len(grid))
+     for c in range(P):
+         test = folds == col_fold[c]
+@@ -454,10 +470,10 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
+         return _result(st, gt, inf["chi2"], inf["beta_z"], inf["se_z"], extra)
+ 
+     # Step 2b: LOCO posterior-mean residuals and LD Score calibration
+-    eng2 = VBEngine(st.lg)
+-    loco = eng2.fit(np.repeat(st.y_p[:, None], G, axis=1), np.full(G, -1), np.arange(G),
++    loco = eng.fit(np.repeat(st.y_p[:, None], G, axis=1), np.full(G, -1), np.arange(G),
+                     PRIOR_MIXTURE, np.tile(prior_row(*grid[best]), (G, 1)),
+                     np.full(G, fit.ve), max_iter=vb_max_iter, tol=vb_tol)
++    del loco["prediction"]  # Only CV needs the fitted values after residual reconstruction.
+     rs = _retro_stats(st, loco["resid"])
+     if denominator == "spectral":
+         rs["chi2"] = rs["chi2"] * inf["kappa"]
+@@ -524,7 +540,7 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
+             "n_snps": int(sel.size)}
+ 
+ 
+-def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng) -> dict:
++def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=False) -> dict:
+     """Pick the LDAK-Thin power by randomized Haseman-Elston regression.
+ 
+     For each alpha, K_alpha = Z' W_alpha Z / sum(W_alpha) with
+@@ -536,6 +552,11 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng) -> dict:
+     numbers); one pass over the genotypes serves all alphas. This is the
+     single-component version of LDAK-KVIK's partitioned randomized HE.
+     """
++    if not isinstance(n_probes, (int, np.integer)) or n_probes < 2:
++        raise ValueError("he_probes must be an integer of at least two")
++    alphas = np.asarray(alphas, dtype=np.float64)
++    if alphas.ndim != 1 or not alphas.size or not np.isfinite(alphas).all():
++        raise ValueError("alphas must be a non-empty finite sequence")
+     lg = st.lg
+     n, A = lg.n, len(alphas)
+     Wt = np.column_stack([(f * (1.0 - f)) ** (1.0 + a) for a in alphas])  # (m, A)
+@@ -549,7 +570,15 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng) -> dict:
+         wb = Wt[idx].astype(lg.dtype)
+         for a in range(A):
+             KP[a] += (Z.T @ (T * wb[:, a, None])).astype(np.float64)
+-        diag += ((Z * Z).T @ wb).astype(np.float64)
++        # Square sample tiles instead of the whole genotype block. Each
++        # product still reduces over all variants in the block, in the same
++        # storage precision. Budget the square plus its narrow product/cast.
++        # One sample is the minimum tile; native BLAS scratch is separate.
++        per_sample = Z.shape[0] * Z.dtype.itemsize + A * (Z.dtype.itemsize + 8)
++        tile = max(1, (16 * 1024**2) // max(per_sample, 1))
++        for start in range(0, n, tile):
++            Zs = Z[:, start : start + tile]
++            diag[start : start + tile] += ((Zs * Zs).T @ wb).astype(np.float64, copy=False)
+     tot = Wt.sum(axis=0)
+     KP /= tot[:, None, None]
+     diag /= tot
+@@ -558,19 +587,37 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng) -> dict:
+     for a in range(A):
+         yky = float(ys @ KP[a][:, 0] - np.sum(ys * ys * diag[:, a]))
+         k2 = float(np.mean(np.sum(KP[a][:, 1:] ** 2, axis=0)) - np.sum(diag[:, a] ** 2))
++        if not np.isfinite([yky, k2]).all() or k2 <= 0:
++            scores[a], h2[a] = -np.inf, np.nan
++            continue
+         scores[a] = yky * yky / k2
+         h2[a] = yky / k2
++    if not np.isfinite(scores).any():
++        raise ValueError("HE alpha selection has no identifiable finite candidate; increase probes or use alpha_method='reml'")
++    scores[~np.isfinite(scores)] = -np.inf
+     best = int(np.argmax(scores))
+-    return {"alpha": alphas[best], "weights": Wt[:, best], "scores": scores, "h2_he": h2}
++    result = {"alpha": alphas[best], "weights": Wt[:, best], "scores": scores, "h2_he": h2}
++    if fit_h2:
++        from mixmogam._he import fit_projected_he
++
++        # Reuse the products already needed to select alpha. Residual noise
++        # has covariance I - QQ', so fit both K and that projector; simply
++        # reusing the off-diagonal slope above would ignore its off-diagonals.
++        result["variance_fit"] = fit_projected_he(
++            yky=float(ys @ KP[best, :, 0]), y2=float(ys @ ys),
++            trace_k=float(diag[:, best].sum()),
++            probe_norm2=np.sum(KP[best, :, 1:] ** 2, axis=0), df=st.n_eff)
++    return result
+ 
+ 
+ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+          alpha_method: str = "he", he_probes: int = 32,
++         heritability_method: str = "reml",
+          grid=KVIK_GRID, cv_fraction: float = 0.1, n_calibration: int = 30,
+          denominator: str = "constant", n_spectral="auto",
+          structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
+          cg_tol: float = 1e-6, random_state: int = 0, block: int = 4096,
+-         cache_bytes: float = 4e9) -> GwasResult:
++         cache_bytes: float = 4e9, n_threads: int = 1) -> GwasResult:
+     """LDAK-KVIK: elastic-net LOCO polygenic scores as offsets, OLS score tests.
+ 
+     Following the LDAK-KVIK technical documentation: (1a) structure test;
+@@ -578,7 +625,7 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+     Haseman-Elston regression (``alpha_method="he"``, all alphas in one
+     pass; :func:`_he_alpha`) or by the REML likelihood of each weighted
+     kinship (``"reml"``, one REML fit per alpha), and h2 is then estimated
+-    by REML at the chosen alpha (KVIK revises it by MCMC REML), giving
++    by REML at the chosen alpha, giving
+     per-SNP heritabilities
+     h2_j = w_j h2 / W with w_j = [f_j (1 - f_j)]^(1 + alpha) (no LD
+     thinning: every SNP keeps weight w_j); (1d) the elastic-net prior
+@@ -591,28 +638,64 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+     constant). The phenotype is analysed on the unit-variance scale; effect
+     sizes are returned in phenotype units.
+ 
++    ``heritability_method="he"`` reuses the selected alpha's existing HE
++    products to fit the covariance ``vg K + ve (I - QQ')``, with nonnegative
++    variance components. It reports the unconstrained estimates, boundary
++    status and Monte Carlo precision in ``extra["he_variance"]``. This is
++    single-component HE, not LDAK's partitioned estimator with large-effect
++    exclusions. Alpha selection remains the same off-diagonal HE score.
++    Nonidentified or numerically invalid HE fits raise an error; increase
++    ``he_probes`` or use ``heritability_method="reml"`` in that case. REML
++    remains the default. The existing variational noise floor of 0.001 on
++    the unit-variance scale still applies, and is reported for HE fits.
++    LDAK optionally revises its HE estimate by Monte
++    Carlo REML (by default for smaller samples or strong structure).
++
++    ``n_threads`` controls optional parallel genotype preparation and Numba
++    coordinate sweeps across independent candidate models and LOCO fits.
++    Model sweeps retain their SNP order; float64 genotype preparation may
++    differ from NumPy by rounding at the final storage precision. The default
++    is one; larger values require the ``fast`` extra and cannot exceed Numba's
++    configured thread limit. Large fits also parallelize residual matrix
++    products over sample rows, temporarily limiting detected BLAS pools to
++    one thread. Apple Accelerate is not detected by threadpoolctl; set
++    VECLIB_MAXIMUM_THREADS=1 before Python starts to avoid nested threading.
++
+     ``denominator="spectral"`` (mixmogam extension, heuristic for the
+     elastic-net statistic): with strong structure, U and T are multiplied by
+     the structure-aware factors kappa_j of the weighted ridge model, T is
+     then already calibrated (lambda' = 1), and lambda matches the two.
+     """
++    if heritability_method not in ("he", "reml"):
++        raise ValueError("heritability_method must be 'he' or 'reml'")
++    if heritability_method == "he" and alpha_method != "he":
++        raise ValueError("heritability_method='he' requires alpha_method='he'")
++    n_threads = _validate_n_threads(n_threads)
+     rng = np.random.default_rng(random_state)
+-    st = _setup(y, gt, X, max_loco_groups, block, cache_bytes)
++    st = _setup(y, gt, X, max_loco_groups, block, cache_bytes, n_threads=n_threads)
+     n, G = st.lg.n, st.lg.n_groups
+     if denominator not in ("constant", "spectral"):
+         raise ValueError(f"unknown denominator {denominator!r}")
++    if linalg.norm(st.y_p) <= 10 * np.finfo(float).eps * linalg.norm(st.y):
++        raise ValueError("phenotype has no residual variation after covariate adjustment")
+     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
++    if not np.isfinite(sy) or sy <= np.sqrt(np.finfo(float).tiny):
++        raise ValueError("phenotype has no residual variation after covariate adjustment")
+     ys = st.y_p / sy
+ 
+     struct = structure_test(st, structure_snps, rng)
+ 
+-    # (1b) alpha, then REML h2 at that alpha
++    # (1b) alpha, then variance components at that alpha.
+     f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+     if alpha_method == "he":
+-        he = _he_alpha(st, f, list(alphas), he_probes, rng)
++        he = _he_alpha(st, f, list(alphas), he_probes, rng,
++                       fit_h2=heritability_method == "he")
+         alpha, w = he["alpha"], he["weights"]
+         alpha_scores = he["scores"]
+-        fit = fit_variance_components(st, weights=w, random_state=random_state)
++        if heritability_method == "he":
++            h2 = he["variance_fit"]["h2"]
++        else:
++            fit = fit_variance_components(st, weights=w, random_state=random_state)
+     elif alpha_method == "reml":
+         fits = []
+         for a in alphas:
+@@ -623,7 +706,8 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+         alpha_scores = np.array([t[0] for t in fits])
+     else:
+         raise ValueError(f"unknown alpha_method {alpha_method!r}; use 'he' or 'reml'")
+-    h2 = float(fit.pseudo_heritability)
++    if heritability_method == "reml":
++        h2 = float(fit.pseudo_heritability)
+     h2j = w * h2 / float(np.sum(w))
+     s2e = max(1.0 - h2, 1e-3)
+ 
+@@ -636,21 +720,21 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+     held = rng.choice(n, size=max(1, int(round(cv_fraction * n))), replace=False)
+     folds = np.ones(n, dtype=np.int64)
+     folds[held] = 0  # fold 0 is held out; fold 1 is never held out
+-    eng = VBEngine(st.lg, folds=folds)
++    eng = VBEngine(st.lg, folds=folds, n_threads=n_threads)
+     Pn = len(grid)
+     prior = np.array([prior_row(*g_) for g_ in grid])
+     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
+                  np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
+                  max_iter=vb_max_iter, tol=vb_tol)
+-    pred = eng.predict(cv["beta"])
++    pred = cv["prediction"]
+     mse = np.mean((ys[held, None] - pred[held]) ** 2, axis=0)
+     best = int(np.argmin(mse))
+ 
+     # (1e) LOCO elastic-net scores and the OLS-on-offset statistics U
+-    eng2 = VBEngine(st.lg)
+-    loco = eng2.fit(np.repeat(ys[:, None], G, axis=1), np.full(G, -1), np.arange(G),
++    loco = eng.fit(np.repeat(ys[:, None], G, axis=1), np.full(G, -1), np.arange(G),
+                     PRIOR_ENET, np.tile(prior_row(*grid[best]), (G, 1)), np.full(G, s2e),
+                     snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
++    del loco["prediction"]
+     rsU = _retro_stats(st, loco["resid"])
+     U = rsU["chi2"]
+ 
+@@ -660,15 +744,27 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
+              "cv_grid": list(grid), "cv_mse": mse, "cv_best": grid[best],
+              "cv_converged": cv["converged"],
+              "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}
++    if heritability_method == "he":
++        extra.update({"heritability_method": "he", "he_variance": he["variance_fit"],
++                      "vb_residual_variance": s2e,
++                      "vb_noise_floor_applied": bool(1.0 - h2 < 1e-3)})
+     lam = 1.0
+-    if struct["strong"]:
++    if struct["strong"] and h2 > 0:
+         # ridge-prior LOCO scores: their OLS statistic is the BOLT-LMM-inf
+         # retrospective statistic, lambda' its prospective calibration
+-        delta = (1.0 - h2) / h2 if h2 > 0 else 1e6
++        # At the HE residual-zero boundary, use the same declared noise
++        # floor for ridge calibration as for VB. A zero ridge would leave
++        # the projected LOCO operator singular in the covariate directions.
++        residual_variance = s2e if heritability_method == "he" else 1.0 - h2
++        delta = residual_variance / h2
++        # Both solves use the same weighted kinship and deterministic
++        # spectral basis; construct that basis once, as in _inf_core.
++        op = _KOp(st.lg, w)
++        pre = SpectralPreconditioner(op.matmul, n, op.trace, k=min(64, n - 2))
+         Wr, _ = _loco_solve(st, delta, np.repeat(ys[:, None], G, axis=1), np.arange(G),
+-                            weights=w, tol=cg_tol)
++                            weights=w, tol=cg_tol, pre=pre)
+         rsT = _retro_stats(st, Wr)
+-        cal = _calibrate_inf(st, h2, delta, Wr, rsT, n_calibration, rng, weights=w)
++        cal = _calibrate_inf(st, h2, delta, Wr, rsT, n_calibration, rng, weights=w, pre=pre)
+         lam_p = 1.0 / cal["c"]
+         T = rsT["chi2"]
+         if denominator == "spectral":
+diff --git a/report/README.md b/report/README.md
+index 018b6e5..0544cde 100644
+--- a/report/README.md
++++ b/report/README.md
+@@ -7,6 +7,16 @@ includes a matched comparison with official LDAK-KVIK, workload measurements
+ through 50,000 samples, and HAPNEST-model simulation measurements through
+ 100,000 samples. Historical evidence retains its original limitations.
+ 
++The delivered PDF predates the subsequent KVIK optimizations. Its resource
++tables describe the source identified in `report_manifest.json`. The later
++[HE comparison](../benchmarks/results/20261003-kvik-he-efficiency/README.md)
++and [thread-scaling experiment](../benchmarks/results/20261003-kvik-thread-scaling/README.md)
++have separate frozen sources and validation records; they do not revise the
++PDF's measurements retrospectively.
++The [explicit parallel comparison](../benchmarks/results/20261003-kvik-parallel/README.md)
++and [cache experiment](../benchmarks/results/20261003-kvik-cache/README.md)
++extend that evidence with full-fit timing, memory and numerical audits.
++
+ Table 1. Evidence and provenance used in the manuscript.
+ 
+ | Evidence | Archive under `benchmarks/results/` | Interpretation |
+diff --git a/report/report_manifest.json b/report/report_manifest.json
+index 6cc08c6..dfb194c 100644
+--- a/report/report_manifest.json
++++ b/report/report_manifest.json
+@@ -3,7 +3,7 @@
+   "recorded_at_utc": "2026-10-03T18:06:53.039320+00:00",
+   "package_version": "2.0.0.dev3",
+   "package_baseline_commit": "db2322166530361d63dab04538854cdc6476c1f0",
+-  "revision_state": "Prepared for the 2.0.0.dev3 source commit. The 23 reviewed mixmogam computational modules are unchanged; package version metadata is updated. Recorded benchmark producing versions and snapshots remain historical.",
++  "revision_state": "Historical report delivered in source commit 2fb76dfea95c02afa7a9484fc1bddd075c1cb60e (2.0.0.dev3). The 23 reviewed computational modules were unchanged at that commit. All recorded source hashes, delivery checks and timing results refer to that snapshot, not subsequent computational optimizations. The later KVIK efficiency comparison has its own frozen sources and manifest under benchmarks/results/20261003-kvik-efficiency.",
+   "pdf": {
+     "path": "report/mixmogam_report.pdf",
+     "sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",

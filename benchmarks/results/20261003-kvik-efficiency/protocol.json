@@ -1,0 +1,10 @@
+{
+  "baseline_commit": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+  "design": "Three alternating paired repetitions on each of four fixed phensim HAPNEST workloads; n=10000 or 50000, m=12000; unstructured or confounded with two genotype PCs.",
+  "scope": "Before/after mixmogam implementation comparison. Repetitions measure computational variability, not independent genetic realizations or calibration/power uncertainty.",
+  "precision": "Original posterior formulas, variant order, block sizes, RNG seeds, priors, SLQ settings and convergence tolerances retained. Float64 residuals are refreshed before each storage-precision GEMM.",
+  "workspace_limits": "64 MiB explicit standardization scratch; 16 MiB explicit widening/squaring tiles in prediction, retrospective statistics and HE diagonals. These exclude final stored genotypes, result/work matrices, BLAS scratch and a minimum single row/variant/sample when it exceeds the nominal limit.",
+  "measurement": "Whole-process wall time and kernel peak RSS; fit time separately. Both sources use fresh caches and a separate tiny warm-up. One BLAS/Numba thread, AC power, Low Power Mode off. Heavy validation jobs stopped during formal measurements.",
+  "diagnostic_profile": "baseline_profile_n50000.txt is diagnostic only; concurrent validation may have affected its timing.",
+  "preserved_report": "report/report_manifest.json and the academic PDF describe their historical pre-optimization source and resource tables; this archive supplies new optimization evidence."
+}

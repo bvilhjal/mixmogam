@@ -1,0 +1,1066 @@
+{
+  "checked_utc": "2026-10-03T19:27:46.256943+00:00",
+  "scope": "Lightweight independent source/input hash and JSON summary verification only; no simulation, fitting, genotype algebra or timing was rerun.",
+  "status": "passed",
+  "checked_files_sha256": {
+    "validation/variance/analytic_oracles.json": "a7f8a65793fd84dcc2ecec8ae85e8315dc148a2c70c1b3a85ac2cfac407f42b6",
+    "validation/variance/metadata.json": "5fb12c360cfcc642fd45953d8762e4d3f682f29a9bb5741a6b23836a448b8b39",
+    "validation/variance/records.json": "318118dd1017aae0bb3a424e2fa7965b6ea28d42203e383f126f12eb5d592afa",
+    "validation/variance/summary.json": "d1d40604b636f016fc2c6195e7510fb2a611567fa1cedd5bda2b1374a896dc81",
+    "validation/global-null/metadata.json": "c17006a223c4e59ac66c2c04f802c5c31ac4f73c60ef9e1f05c82912b083a42f",
+    "validation/global-null/records.json": "ae36cca09cc6d4a140c2064e9a66b62a0603a0652e73766df4b9e38c663be1f6",
+    "validation/global-null/summary.json": "dfddaf3564c22ba8d9b7c8cce95ebd1c4cfe9aa23b003ea832e6877531e15086"
+  },
+  "source_hash_counts": {
+    "variance": 37,
+    "global_null": 37,
+    "mixmogam_per_snapshot_matching_main_benchmark": 25
+  },
+  "input_files_checked": 4,
+  "summary_arithmetic": {
+    "method": "Python standard-library fmean and sample stdev; two-sided Student-t 0.975 critical values df=15 and df=47",
+    "absolute_tolerance": 1e-12,
+    "max_absolute_differences": {
+      "variance_n": 0,
+      "variance_mean": 5.551115123125783e-17,
+      "variance_bias": 1.734723475976807e-18,
+      "variance_rmse": 6.938893903907228e-18,
+      "variance_mcse": 3.469446951953614e-18,
+      "variance_ci95": 6.938893903907228e-18,
+      "association_n": 0,
+      "association_mean": 2.220446049250313e-16,
+      "association_mcse": 3.469446951953614e-18,
+      "association_ci95": 1.27675647831893e-14
+    }
+  },
+  "analytic_moments_from_saved_oracles": {
+    "n_conditional_covariance_oracles": 12,
+    "max_abs_expected_vg_error": 1.1786096543175972e-09,
+    "max_abs_expected_ve_error": 1.1087514240060159e-10,
+    "df_by_cell": {
+      "unstructured": [
+        799
+      ],
+      "structured_pc": [
+        797
+      ]
+    },
+    "trace_k_over_df_range": [
+      0.8981764883230802,
+      1.0012515664282347
+    ]
+  },
+  "checks": [
+    {
+      "check": "validation/variance/source/mixmogam/ldscore.py",
+      "passed": true,
+      "actual": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+      "expected": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/results.py",
+      "passed": true,
+      "actual": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+      "expected": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_vb.py",
+      "passed": true,
+      "actual": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+      "expected": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/phenotypes.py",
+      "passed": true,
+      "actual": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+      "expected": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/plotting.py",
+      "passed": true,
+      "actual": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+      "expected": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_loco.py",
+      "passed": true,
+      "actual": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+      "expected": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/simulate.py",
+      "passed": true,
+      "actual": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+      "expected": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/lmm.py",
+      "passed": true,
+      "actual": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+      "expected": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/twostep.py",
+      "passed": true,
+      "actual": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+      "expected": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/__init__.py",
+      "passed": true,
+      "actual": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+      "expected": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_he.py",
+      "passed": true,
+      "actual": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+      "expected": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_cg.py",
+      "passed": true,
+      "actual": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+      "expected": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/association.py",
+      "passed": true,
+      "actual": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+      "expected": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_fast.py",
+      "passed": true,
+      "actual": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+      "expected": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/stepwise.py",
+      "passed": true,
+      "actual": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+      "expected": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/scan.py",
+      "passed": true,
+      "actual": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+      "expected": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/genotypes.py",
+      "passed": true,
+      "actual": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+      "expected": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/_slq.py",
+      "passed": true,
+      "actual": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+      "expected": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/kinship.py",
+      "passed": true,
+      "actual": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+      "expected": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/phenofile.py",
+      "passed": true,
+      "actual": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+      "expected": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/plink.py",
+      "passed": true,
+      "actual": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+      "expected": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/eigenstrat.py",
+      "passed": true,
+      "actual": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+      "expected": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/__init__.py",
+      "passed": true,
+      "actual": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+      "expected": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/hdf5.py",
+      "passed": true,
+      "actual": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+      "expected": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3"
+    },
+    {
+      "check": "validation/variance/source/mixmogam/io/regmap.py",
+      "passed": true,
+      "actual": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+      "expected": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f"
+    },
+    {
+      "check": "validation/variance/source/phensim/_numba.py",
+      "passed": true,
+      "actual": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60",
+      "expected": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60"
+    },
+    {
+      "check": "validation/variance/source/phensim/phenotypes.py",
+      "passed": true,
+      "actual": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda",
+      "expected": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda"
+    },
+    {
+      "check": "validation/variance/source/phensim/io.py",
+      "passed": true,
+      "actual": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1",
+      "expected": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1"
+    },
+    {
+      "check": "validation/variance/source/phensim/_common.py",
+      "passed": true,
+      "actual": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382",
+      "expected": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382"
+    },
+    {
+      "check": "validation/variance/source/phensim/pedigree.py",
+      "passed": true,
+      "actual": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e",
+      "expected": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e"
+    },
+    {
+      "check": "validation/variance/source/phensim/__init__.py",
+      "passed": true,
+      "actual": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7",
+      "expected": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7"
+    },
+    {
+      "check": "validation/variance/source/phensim/sumstats.py",
+      "passed": true,
+      "actual": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60",
+      "expected": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60"
+    },
+    {
+      "check": "validation/variance/source/phensim/_coalescent.py",
+      "passed": true,
+      "actual": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6",
+      "expected": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6"
+    },
+    {
+      "check": "validation/variance/source/phensim/genotypes.py",
+      "passed": true,
+      "actual": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69",
+      "expected": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69"
+    },
+    {
+      "check": "validation/variance/source/phensim/hapnest.py",
+      "passed": true,
+      "actual": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7",
+      "expected": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7"
+    },
+    {
+      "check": "validation/variance/source/phensim/kinship.py",
+      "passed": true,
+      "actual": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864",
+      "expected": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864"
+    },
+    {
+      "check": "validation/variance/runner.py",
+      "passed": true,
+      "actual": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8",
+      "expected": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8"
+    },
+    {
+      "check": "validation/variance input unstructured-0-inputs.npz",
+      "passed": true,
+      "actual": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35",
+      "expected": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35"
+    },
+    {
+      "check": "validation/variance input unstructured-1-inputs.npz",
+      "passed": true,
+      "actual": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0",
+      "expected": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0"
+    },
+    {
+      "check": "validation/variance input structured_pc-0-inputs.npz",
+      "passed": true,
+      "actual": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2",
+      "expected": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2"
+    },
+    {
+      "check": "validation/variance input structured_pc-1-inputs.npz",
+      "passed": true,
+      "actual": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe",
+      "expected": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/ldscore.py",
+      "passed": true,
+      "actual": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+      "expected": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/results.py",
+      "passed": true,
+      "actual": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+      "expected": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_vb.py",
+      "passed": true,
+      "actual": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+      "expected": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/phenotypes.py",
+      "passed": true,
+      "actual": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+      "expected": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/plotting.py",
+      "passed": true,
+      "actual": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+      "expected": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_loco.py",
+      "passed": true,
+      "actual": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+      "expected": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/simulate.py",
+      "passed": true,
+      "actual": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+      "expected": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/lmm.py",
+      "passed": true,
+      "actual": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+      "expected": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/twostep.py",
+      "passed": true,
+      "actual": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+      "expected": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/__init__.py",
+      "passed": true,
+      "actual": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+      "expected": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_he.py",
+      "passed": true,
+      "actual": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+      "expected": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_cg.py",
+      "passed": true,
+      "actual": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+      "expected": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/association.py",
+      "passed": true,
+      "actual": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+      "expected": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_fast.py",
+      "passed": true,
+      "actual": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+      "expected": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/stepwise.py",
+      "passed": true,
+      "actual": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+      "expected": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/scan.py",
+      "passed": true,
+      "actual": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+      "expected": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/genotypes.py",
+      "passed": true,
+      "actual": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+      "expected": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/_slq.py",
+      "passed": true,
+      "actual": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+      "expected": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/kinship.py",
+      "passed": true,
+      "actual": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+      "expected": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/phenofile.py",
+      "passed": true,
+      "actual": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+      "expected": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/plink.py",
+      "passed": true,
+      "actual": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+      "expected": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/eigenstrat.py",
+      "passed": true,
+      "actual": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+      "expected": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/__init__.py",
+      "passed": true,
+      "actual": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+      "expected": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/hdf5.py",
+      "passed": true,
+      "actual": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+      "expected": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3"
+    },
+    {
+      "check": "validation/variance matches main source source/mixmogam/io/regmap.py",
+      "passed": true,
+      "actual": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+      "expected": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/ldscore.py",
+      "passed": true,
+      "actual": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+      "expected": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/results.py",
+      "passed": true,
+      "actual": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+      "expected": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_vb.py",
+      "passed": true,
+      "actual": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+      "expected": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/phenotypes.py",
+      "passed": true,
+      "actual": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+      "expected": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/plotting.py",
+      "passed": true,
+      "actual": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+      "expected": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_loco.py",
+      "passed": true,
+      "actual": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+      "expected": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/simulate.py",
+      "passed": true,
+      "actual": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+      "expected": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/lmm.py",
+      "passed": true,
+      "actual": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+      "expected": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/twostep.py",
+      "passed": true,
+      "actual": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+      "expected": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/__init__.py",
+      "passed": true,
+      "actual": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+      "expected": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_he.py",
+      "passed": true,
+      "actual": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+      "expected": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_cg.py",
+      "passed": true,
+      "actual": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+      "expected": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/association.py",
+      "passed": true,
+      "actual": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+      "expected": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_fast.py",
+      "passed": true,
+      "actual": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+      "expected": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/stepwise.py",
+      "passed": true,
+      "actual": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+      "expected": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/scan.py",
+      "passed": true,
+      "actual": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+      "expected": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/genotypes.py",
+      "passed": true,
+      "actual": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+      "expected": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/_slq.py",
+      "passed": true,
+      "actual": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+      "expected": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/kinship.py",
+      "passed": true,
+      "actual": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+      "expected": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/phenofile.py",
+      "passed": true,
+      "actual": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+      "expected": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/plink.py",
+      "passed": true,
+      "actual": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+      "expected": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/eigenstrat.py",
+      "passed": true,
+      "actual": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+      "expected": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/__init__.py",
+      "passed": true,
+      "actual": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+      "expected": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/hdf5.py",
+      "passed": true,
+      "actual": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+      "expected": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3"
+    },
+    {
+      "check": "validation/global-null/source/mixmogam/io/regmap.py",
+      "passed": true,
+      "actual": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+      "expected": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f"
+    },
+    {
+      "check": "validation/global-null/source/phensim/_numba.py",
+      "passed": true,
+      "actual": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60",
+      "expected": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60"
+    },
+    {
+      "check": "validation/global-null/source/phensim/phenotypes.py",
+      "passed": true,
+      "actual": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda",
+      "expected": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda"
+    },
+    {
+      "check": "validation/global-null/source/phensim/io.py",
+      "passed": true,
+      "actual": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1",
+      "expected": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1"
+    },
+    {
+      "check": "validation/global-null/source/phensim/_common.py",
+      "passed": true,
+      "actual": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382",
+      "expected": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382"
+    },
+    {
+      "check": "validation/global-null/source/phensim/pedigree.py",
+      "passed": true,
+      "actual": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e",
+      "expected": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e"
+    },
+    {
+      "check": "validation/global-null/source/phensim/__init__.py",
+      "passed": true,
+      "actual": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7",
+      "expected": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7"
+    },
+    {
+      "check": "validation/global-null/source/phensim/sumstats.py",
+      "passed": true,
+      "actual": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60",
+      "expected": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60"
+    },
+    {
+      "check": "validation/global-null/source/phensim/_coalescent.py",
+      "passed": true,
+      "actual": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6",
+      "expected": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6"
+    },
+    {
+      "check": "validation/global-null/source/phensim/genotypes.py",
+      "passed": true,
+      "actual": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69",
+      "expected": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69"
+    },
+    {
+      "check": "validation/global-null/source/phensim/hapnest.py",
+      "passed": true,
+      "actual": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7",
+      "expected": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7"
+    },
+    {
+      "check": "validation/global-null/source/phensim/kinship.py",
+      "passed": true,
+      "actual": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864",
+      "expected": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864"
+    },
+    {
+      "check": "validation/global-null/runner.py",
+      "passed": true,
+      "actual": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8",
+      "expected": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8"
+    },
+    {
+      "check": "validation/global-null input unstructured-0-inputs.npz",
+      "passed": true,
+      "actual": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35",
+      "expected": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35"
+    },
+    {
+      "check": "validation/global-null input unstructured-1-inputs.npz",
+      "passed": true,
+      "actual": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0",
+      "expected": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0"
+    },
+    {
+      "check": "validation/global-null input structured_pc-0-inputs.npz",
+      "passed": true,
+      "actual": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2",
+      "expected": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2"
+    },
+    {
+      "check": "validation/global-null input structured_pc-1-inputs.npz",
+      "passed": true,
+      "actual": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe",
+      "expected": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/ldscore.py",
+      "passed": true,
+      "actual": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+      "expected": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/results.py",
+      "passed": true,
+      "actual": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+      "expected": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_vb.py",
+      "passed": true,
+      "actual": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+      "expected": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/phenotypes.py",
+      "passed": true,
+      "actual": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+      "expected": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/plotting.py",
+      "passed": true,
+      "actual": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+      "expected": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_loco.py",
+      "passed": true,
+      "actual": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+      "expected": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/simulate.py",
+      "passed": true,
+      "actual": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+      "expected": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/lmm.py",
+      "passed": true,
+      "actual": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+      "expected": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/twostep.py",
+      "passed": true,
+      "actual": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+      "expected": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/__init__.py",
+      "passed": true,
+      "actual": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+      "expected": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_he.py",
+      "passed": true,
+      "actual": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+      "expected": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_cg.py",
+      "passed": true,
+      "actual": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+      "expected": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/association.py",
+      "passed": true,
+      "actual": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+      "expected": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_fast.py",
+      "passed": true,
+      "actual": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+      "expected": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/stepwise.py",
+      "passed": true,
+      "actual": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+      "expected": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/scan.py",
+      "passed": true,
+      "actual": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+      "expected": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/genotypes.py",
+      "passed": true,
+      "actual": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+      "expected": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/_slq.py",
+      "passed": true,
+      "actual": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+      "expected": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/kinship.py",
+      "passed": true,
+      "actual": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+      "expected": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/phenofile.py",
+      "passed": true,
+      "actual": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+      "expected": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/plink.py",
+      "passed": true,
+      "actual": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+      "expected": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/eigenstrat.py",
+      "passed": true,
+      "actual": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+      "expected": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/__init__.py",
+      "passed": true,
+      "actual": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+      "expected": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/hdf5.py",
+      "passed": true,
+      "actual": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+      "expected": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3"
+    },
+    {
+      "check": "validation/global-null matches main source source/mixmogam/io/regmap.py",
+      "passed": true,
+      "actual": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+      "expected": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f"
+    },
+    {
+      "check": "two validation source manifests match",
+      "passed": true,
+      "actual": {
+        "source/mixmogam/ldscore.py": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+        "source/mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "source/mixmogam/_vb.py": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+        "source/mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "source/mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "source/mixmogam/_loco.py": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+        "source/mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "source/mixmogam/lmm.py": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+        "source/mixmogam/twostep.py": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+        "source/mixmogam/__init__.py": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+        "source/mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "source/mixmogam/_cg.py": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+        "source/mixmogam/association.py": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+        "source/mixmogam/_fast.py": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+        "source/mixmogam/stepwise.py": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+        "source/mixmogam/scan.py": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+        "source/mixmogam/genotypes.py": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+        "source/mixmogam/_slq.py": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+        "source/mixmogam/kinship.py": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+        "source/mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "source/mixmogam/io/plink.py": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+        "source/mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "source/mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "source/mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "source/mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "source/phensim/_numba.py": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60",
+        "source/phensim/phenotypes.py": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda",
+        "source/phensim/io.py": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1",
+        "source/phensim/_common.py": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382",
+        "source/phensim/pedigree.py": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e",
+        "source/phensim/__init__.py": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7",
+        "source/phensim/sumstats.py": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60",
+        "source/phensim/_coalescent.py": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6",
+        "source/phensim/genotypes.py": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69",
+        "source/phensim/hapnest.py": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7",
+        "source/phensim/kinship.py": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864",
+        "runner.py": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8"
+      },
+      "expected": {
+        "source/mixmogam/ldscore.py": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+        "source/mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "source/mixmogam/_vb.py": "13467df1c288fed83a7dc163b6209aa7a604c2d478e6097fadc145c7391f6cfe",
+        "source/mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "source/mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "source/mixmogam/_loco.py": "81b2b4715add9f45bf2126e72196cb00451d898105b19470041fbae9f79e58ce",
+        "source/mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "source/mixmogam/lmm.py": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+        "source/mixmogam/twostep.py": "659af89e00feb411403e1323e9adc0801640048a59338aaf1a1a731a6e90454e",
+        "source/mixmogam/__init__.py": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+        "source/mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "source/mixmogam/_cg.py": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+        "source/mixmogam/association.py": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+        "source/mixmogam/_fast.py": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+        "source/mixmogam/stepwise.py": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+        "source/mixmogam/scan.py": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+        "source/mixmogam/genotypes.py": "4121c3f74f681b3488f33419bf7013710ad0769482bf817a9b2cc545f7e85e9c",
+        "source/mixmogam/_slq.py": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+        "source/mixmogam/kinship.py": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+        "source/mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "source/mixmogam/io/plink.py": "a0212c5adb0031f5847ce5618c2dfb93210bd2c094154d6266e7904c8f54b623",
+        "source/mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "source/mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "source/mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "source/mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "source/phensim/_numba.py": "97190a4790522b5ecf1fe1580dd33f6f863fa0a740aa496170167f4b34f56d60",
+        "source/phensim/phenotypes.py": "4856f80f6806b275ef7329fd4ac551227b9b866b4750cd78400ca8551a735dda",
+        "source/phensim/io.py": "34a11477e5aa621a0196d46f5908706bd8b9c5856f642c11cce967964aee3eb1",
+        "source/phensim/_common.py": "e0101b193986b6e64cd49d932a924e4a6d858a5400bb9751c5fb59478baa6382",
+        "source/phensim/pedigree.py": "af9b801880f2707c0a3cf396834bd1d35b9e45f1e3df2d6720128defb5c1850e",
+        "source/phensim/__init__.py": "e5b4a1fbffb3d79c6a68b496318d10ecc9049fe83ccf3acb9661f3d4ab2b08a7",
+        "source/phensim/sumstats.py": "ce03b8a245700c4799145d97a3a9846f9c3b6898dc83ffc4d6aa0609a5736b60",
+        "source/phensim/_coalescent.py": "6c6f87c297929a7004bab07f6c6f22ca168b7a3e8d9037a2a87807fadfa395c6",
+        "source/phensim/genotypes.py": "09eb799e9638904d0e61417caf7b665f5fba45182e3cd287b4d2147593e1eb69",
+        "source/phensim/hapnest.py": "78529ca28890f098de57f1534f0d403b898aed88cf1ad3081d500ce427d7b6f7",
+        "source/phensim/kinship.py": "be89cf14516123f580b0d86165e528ad614d8370a776a42bbf97d919d3850864",
+        "runner.py": "1c8d825efbbf15683d6c5f9cea5d0c65f49b35f62101d0fbf732770f293a06a8"
+      }
+    },
+    {
+      "check": "global-null input manifest matches variance producer",
+      "passed": true,
+      "actual": {
+        "unstructured-0-inputs.npz": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35",
+        "unstructured-1-inputs.npz": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0",
+        "structured_pc-0-inputs.npz": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2",
+        "structured_pc-1-inputs.npz": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe"
+      },
+      "expected": {
+        "unstructured-0-inputs.npz": "f3dc67693a6e689628e6de39303ad51bae5c2ee8acb5528cba589632fce40e35",
+        "unstructured-1-inputs.npz": "aa2c5133cfc8c220186c3d8729712ea3fb54ec1b8d54b7f0b84be8dec8174fe0",
+        "structured_pc-0-inputs.npz": "253165ada81262688606ce27678b05672d8d16cda4a8b32cec1ceef777079ec2",
+        "structured_pc-1-inputs.npz": "78534faed465cf6748d81478b0bba74944cd921fa652404ad5f7b45f6e4d6dfe"
+      }
+    },
+    {
+      "check": "global-null producer metadata link",
+      "passed": true,
+      "actual": "5fb12c360cfcc642fd45953d8762e4d3f682f29a9bb5741a6b23836a448b8b39",
+      "expected": "5fb12c360cfcc642fd45953d8762e4d3f682f29a9bb5741a6b23836a448b8b39"
+    },
+    {
+      "check": "global-null producer records link",
+      "passed": true,
+      "actual": "318118dd1017aae0bb3a424e2fa7965b6ea28d42203e383f126f12eb5d592afa",
+      "expected": "318118dd1017aae0bb3a424e2fa7965b6ea28d42203e383f126f12eb5d592afa"
+    },
+    {
+      "check": "variance row count",
+      "passed": true,
+      "actual": 288,
+      "expected": 288
+    },
+    {
+      "check": "global-null fit count",
+      "passed": true,
+      "actual": 64,
+      "expected": 64
+    },
+    {
+      "check": "variance rows contain all three finite estimates",
+      "passed": true,
+      "actual": 288,
+      "expected": 288
+    },
+    {
+      "check": "global-null successful fully converged 600-marker fits",
+      "passed": true,
+      "actual": 64,
+      "expected": 64
+    },
+    {
+      "check": "global-null unique paired phenotypes",
+      "passed": true,
+      "actual": 32,
+      "expected": 32
+    },
+    {
+      "check": "variance unique phenotype seeds",
+      "passed": true,
+      "actual": 288,
+      "expected": 288
+    },
+    {
+      "check": "all global-null zero-event absolute intervals unresolved",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "check": "zero-variation interval ('unstructured', 'he', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('unstructured', 'reml', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('unstructured', 'paired_he_minus_reml', 'reject_01')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('unstructured', 'paired_he_minus_reml', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('structured_pc', 'he', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('structured_pc', 'reml', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('structured_pc', 'paired_he_minus_reml', 'reject_001')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "zero-variation interval ('structured_pc', 'paired_he_minus_reml', 'reject_gws')",
+      "passed": true,
+      "actual": null,
+      "expected": null
+    },
+    {
+      "check": "all summary arithmetic within absolute tolerance 1e-12",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    },
+    {
+      "check": "stored analytic expected moments recover coefficients within 2e-9",
+      "passed": true,
+      "actual": true,
+      "expected": true
+    }
+  ],
+  "limitations": [
+    "Hashes establish identity of archived files and producer links, not scientific validity or execution attestation.",
+    "Analytic oracle matrices were not recomputed in this lightweight check; coefficient-error bounds are recalculated from the saved oracle records.",
+    "Monte Carlo uncertainty is conditional on two genotype panels per cell; these intervals do not quantify uncertainty across population histories.",
+    "The global-null exercise has 32 independent phenotype draws evaluated by two paired methods, not 64 independent phenotypes.",
+    "Zero genome-wide-significant events give unresolved rare-tail precision; no genome-wide tail validation is claimed."
+  ]
+}

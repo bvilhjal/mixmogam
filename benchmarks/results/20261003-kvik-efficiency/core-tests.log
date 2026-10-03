@@ -1,0 +1,26 @@
+........................................................................ [ 45%]
+........................................................................ [ 91%]
+..............                                                           [100%]
+=============================== warnings summary ===============================
+tests/test_io.py::test_tped_reader
+  /Users/au507860/REPOS/mixmogam/tests/test_io.py:58: UserWarning: reading legacy mixmogam dosage rows, not PLINK TPED allele pairs
+    back = read_tped(prefix)
+
+tests/test_lmm.py::test_topk_scan_close_on_structured_k
+  /Users/au507860/REPOS/mixmogam/tests/test_lmm.py:133: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    r_topk = topk.scan(G, dtype=np.float64)
+
+tests/test_operator.py::test_operator_lmm_matches_dense_topk
+  /Users/au507860/REPOS/mixmogam/tests/test_operator.py:55: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    rg_d = dense_g.scan(gt, dtype=np.float64)
+
+tests/test_operator.py::test_operator_lmm_matches_dense_topk
+  /Users/au507860/REPOS/mixmogam/tests/test_operator.py:56: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    rg_o = op_g.scan(gt, dtype=np.float64)
+
+tests/test_operator.py::test_operator_auto_routes_to_slq
+  /Users/au507860/REPOS/mixmogam/tests/test_operator.py:72: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    r_op = lmm.scan(gt, dtype=np.float32)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+158 passed, 5 warnings in 62.69s (0:01:02)

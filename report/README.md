@@ -3,9 +3,24 @@
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. This revision
-includes a matched comparison with official LDAK-KVIK, workload measurements
-through 50,000 samples, and HAPNEST-model simulation measurements through
-100,000 samples. Historical evidence retains its original limitations.
+includes a matched comparison with official LDAK-KVIK, optimized workloads at
+50,000 samples and 20,000 variants, and HAPNEST-model simulation measurements
+through 100,000 samples. Historical evidence retains its original limitations.
+
+The manuscript distinguishes the original REML-default workloads from the
+subsequent explicit HE option and computational optimizations. The
+[HE comparison](../benchmarks/results/20261003-kvik-he-efficiency/README.md)
+and [thread-scaling experiment](../benchmarks/results/20261003-kvik-thread-scaling/README.md)
+have separate frozen sources and validation records.
+The [explicit parallel comparison](../benchmarks/results/20261003-kvik-parallel/README.md)
+and [cache experiment](../benchmarks/results/20261003-kvik-cache/README.md)
+extend the 12,000-variant evidence. The
+[20,000-variant study](../benchmarks/results/20261003-kvik-20k/README.md)
+adds 24 thread-comparison fits and 12 paired cache fits on two fixed panels.
+Its system-wide swapping observations limit timing generalization; exact
+cache agreement and small thread-path differences are reported separately.
+The archived sources and measurements are preserved rather than relabelled
+as computations performed by the current development version.
 
 Table 1. Evidence and provenance used in the manuscript.
 
@@ -15,8 +30,12 @@ Table 1. Evidence and provenance used in the manuscript.
 | Matched phensim comparison | `20261003-phensim-kvik` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
 | Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
 | HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
+| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
+| Explicit parallelism and memory | `20261003-kvik-parallel`, `20261003-kvik-cache` | Full 12K fits and numerical audits; optional parallel paths preserve model order but can change rounding |
+| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations, observed swapping |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
-| Current software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
+| Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
+| Development release validation | `20261003-release-dev4` | Current test suites, installed package checks and document verification |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
 | Historical timing and large-sample checks | `20261002T200925Z`, `20261003T001500Z-sim-study-large` | Internal comparisons with workload and measurement limitations |
@@ -44,8 +63,11 @@ rejection probabilities. It records seeds, versions, genotype hashes, and its
 source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
 Its first expanded manuscript was included in `2.0.0.dev2`. This revision
-accompanies `2.0.0.dev3`; these report and benchmark additions preserve the
-reviewed association implementation.
+accompanies `2.0.0.dev4`, which adds optional HE fitting, parallel kernels
+and bounded/reused workspaces. The 20K archive records the timed code as
+`2.0.0.dev3` with uncommitted optimizations frozen in full. Its computational
+modules match this release; the package-version field is updated separately.
+REML and one thread remain the defaults.
 
 ## Rebuild the manuscript
 
@@ -54,6 +76,7 @@ From the repository root, with matplotlib and Tectonic available:
 ```sh
 python report/make_figures.py
 python report/make_kvik_figures.py
+python report/make_efficiency_tables.py
 cd report
 tectonic mixmogam_report.tex
 ```
@@ -61,7 +84,9 @@ tectonic mixmogam_report.tex
 This is a multi-file LaTeX project: its figures and tables must remain beside the
 source. The figure script reads the archived CSVs, excludes the invalid external
 comparison, and writes input/output hashes to `figure_manifest.json`.
-The matched comparison has separate figure and HAPNEST manifests. The new
+The matched comparison has separate figure and HAPNEST manifests. The
+20K tables are regenerated directly from the primary and cache result archives;
+`efficiency_table_manifest.json` records their inputs and output hashes. The earlier
 association results use mixmogam `2.0.0.dev2` at `db232216`, with exact phensim
 extensions frozen per archive; subsequent simulation changes do not retroactively
 validate old results. At large n, input BED files stay local and are ignored by

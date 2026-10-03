@@ -1,0 +1,22 @@
+{
+  "command": [
+    "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "/private/tmp/mixmogam-efficiency/parallel-rounding-diagnostic/runner.py",
+    "--archive",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel",
+    "--out",
+    "/private/tmp/mixmogam-efficiency/parallel-rounding-diagnostic",
+    "--worker",
+    "1",
+    "--capture-products"
+  ],
+  "environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "8"
+  },
+  "numba_cache": "/private/tmp/mixmogam-efficiency/parallel-rounding-diagnostic/jit-cache",
+  "exit_code": 0
+}

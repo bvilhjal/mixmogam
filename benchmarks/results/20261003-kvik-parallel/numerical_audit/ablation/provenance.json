@@ -1,0 +1,258 @@
+{
+  "scope": "Two frozen-source HE fits isolating parallel preparation from large GEMMs.\n\nThe fitted path changes only _GEMM_MIN_SAMPLES at runtime, disabling the large\nGEMM workspace while retaining n_threads=4 preparation and coordinate sweeps.\nOptional bounded product audits evaluate alternatives without changing the\narrays returned to the fit. This is diagnostic work, not formal timing.\n",
+  "archive": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel",
+  "manifest_sha256": "ae281954a9f1e8dd423bcf65cd44a034522ba2d3d527df4c741d309a0088380d",
+  "source": {
+    "directory": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/source",
+    "sha256": {
+      "mixmogam/__init__.py": "b2e1e36be43de601d5f0310fe590a7ed433451692840f97fb13183dc91b29d9b",
+      "mixmogam/_cg.py": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+      "mixmogam/_fast.py": "286a7b411aa92ff9dc8042853034293a4702cedb01fabd689fc7a03b93a52c72",
+      "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+      "mixmogam/_loco.py": "f4ec051a5729196f5fe430f741ed3daaf907f0301a8006e4008b572c52f617d9",
+      "mixmogam/_slq.py": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+      "mixmogam/_standardize.py": "56ec2fe921e673815f758a24913009d277197fe06af6e145a9a32367fe4d4ac1",
+      "mixmogam/_vb.py": "34ad71408a8897842c093b47ebfbe873e6ef71b8dff19d8c608e8f2dad2c1eea",
+      "mixmogam/association.py": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+      "mixmogam/genotypes.py": "a0642f52348621fc903fc5d4fd0a2530158079db5f8827d7ddedec3b1b70f943",
+      "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+      "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+      "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+      "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+      "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+      "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+      "mixmogam/kinship.py": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+      "mixmogam/ldscore.py": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+      "mixmogam/lmm.py": "96873772c2158b30ba05f46411d406053aa288bf1f9437761a9419402137c67e",
+      "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+      "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+      "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+      "mixmogam/scan.py": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+      "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+      "mixmogam/stepwise.py": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+      "mixmogam/twostep.py": "601e0643b92cc83f77b894ef786d944b1a8aea2ffd512480cb02985a52a5d360",
+      "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+      "README.md": "741faef036628d958e76e20c12b4d2136e634034184225fcc4c248906ddfd437"
+    }
+  },
+  "script_sha256": "eeee590c10b7770c3c3cd410e884f6c025fad1d891203985a4353d974fdd083f",
+  "driver_sha256": "9ff4558a9a0bac43bb9793f00e630d6ba18238bff74799fcc5b1b5585bcc22ac",
+  "reference_sha256": {
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case01/rep01/threads01/mixmogam-he/result.npz": "fb545a5cc79808f082a8b49f133ed07150200fc6929062eb76f57c3d1bf64f86",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case01/rep01/threads01/mixmogam-he/diagnostics.json": "08bd394f8345d16c3b5440555bf1d77184c74816937fc683924c22caa33d5cd7",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case01/rep01/threads04/mixmogam-he/result.npz": "c117ae5fdbce21aff53e3f5c8bafa3f1c606b7207aa4c4b3535ac50d0ed21408",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case01/rep01/threads04/mixmogam-he/diagnostics.json": "2af835025f64d66f6b2d8199343477172728d123c656128bc803b709ea2a61ae",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case02/rep01/threads01/mixmogam-he/result.npz": "d43452719bc01eef5fb169abbe8321403a98cfa461332b925c51819bf6644db1",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case02/rep01/threads01/mixmogam-he/diagnostics.json": "68a631fc172006906b72d57840306b357b6c487b44a66191518c87eb23a66bca",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case02/rep01/threads04/mixmogam-he/result.npz": "9508d90c89c8b7c392050399ae39c10846034ac31fa718d00b1b37b6c5b9346b",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/runs/case02/rep01/threads04/mixmogam-he/diagnostics.json": "83b0ebc2fd1888e92176fef1b4605abf1b929974a743e95de108cd3ab0630c83"
+  },
+  "inputs": [
+    {
+      "directory": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/unstructured_mixed",
+      "config": {
+        "cell": "unstructured",
+        "trait": "mixed",
+        "rep": 1,
+        "rho": 0.8,
+        "simulator": "hapnest",
+        "fst": 0,
+        "pcs": false,
+        "genotype_seed": 20262086,
+        "trait_seed": 20262287,
+        "method_seed": 20262486,
+        "n": 50000,
+        "m": 12000,
+        "n_filtered_maf": 0,
+        "causal": [
+          5111,
+          3545,
+          2113,
+          3080,
+          1794,
+          6442,
+          9311,
+          1581,
+          7870,
+          2414
+        ],
+        "component_order": [
+          "u",
+          "q",
+          "e",
+          "structure"
+        ],
+        "component_covariance": [
+          [
+            0.25570407308039667,
+            -0.0020367521792099322,
+            0.00011139794790988171,
+            0.0
+          ],
+          [
+            -0.0020367521792099322,
+            0.2500000000000002,
+            -0.001252296620937426,
+            0.0
+          ],
+          [
+            0.00011139794790988171,
+            -0.001252296620937426,
+            0.5002469931263557,
+            0.0
+          ],
+          [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ]
+        ],
+        "liability_variance": 0.9995957645022783,
+        "mean_loading": 4.0207803222826436e-05,
+        "mean_adjacent_within_population_r2": 0.28138438928712367,
+        "population_sizes": [
+          16667,
+          16667,
+          16666
+        ]
+      },
+      "files": {
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/unstructured_mixed/case.json": {
+          "sha256": "8b0a43ee311a0ad54f5945df95379ec9be37be754f057dd68d3e52c13e402ef1",
+          "bytes": 1073
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/unstructured_mixed/phenotype.txt": {
+          "sha256": "484f1972689493987e6e08954bea9a471bf047573fd13d094ff697d95c9a5633",
+          "bytes": 1446787
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/geno.bed": {
+          "sha256": "e9f6660decc761adeaf98f41aafd4d6e20a45b5ae61c5b09c901826b21210b3c",
+          "bytes": 150000003
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/geno.bim": {
+          "sha256": "8ac8f6c0deda03f793f04f2288b70df8c58ad4c389bb5d5350e907b506ed9d45",
+          "bytes": 346716
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/geno.fam": {
+          "sha256": "cf810451991b0bbef2e8d82e49c241ec7b24ca5c42f6d4d9883da7210696735b",
+          "bytes": 888890
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0_rep01/truth.npz": {
+          "sha256": "adcbe3387e6bbc06dc4bf8928328e5766bccfa90bd6b88f83861ca95f2f83424",
+          "bytes": 282854
+        }
+      }
+    },
+    {
+      "directory": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed",
+      "config": {
+        "cell": "confounded-pc",
+        "trait": "mixed",
+        "rep": 1,
+        "rho": 0.8,
+        "simulator": "hapnest",
+        "fst": 0.05,
+        "pcs": true,
+        "genotype_seed": 20262086,
+        "trait_seed": 20262287,
+        "method_seed": 20262486,
+        "n": 50000,
+        "m": 12000,
+        "n_filtered_maf": 0,
+        "causal": [
+          5111,
+          3545,
+          2113,
+          3080,
+          1794,
+          6442,
+          9311,
+          1581,
+          7870,
+          2414
+        ],
+        "component_order": [
+          "u",
+          "q",
+          "e",
+          "structure"
+        ],
+        "component_covariance": [
+          [
+            0.19341165981830807,
+            -0.0037487638291247597,
+            -0.0014429375106463978,
+            -0.013104127161181058
+          ],
+          [
+            -0.0037487638291247597,
+            0.20000000000000007,
+            0.0006157763687796834,
+            0.027294029161254646
+          ],
+          [
+            -0.0014429375106463978,
+            0.0006157763687796834,
+            0.40019759450108516,
+            -0.0004281663574278963
+          ],
+          [
+            -0.013104127161181058,
+            0.027294029161254646,
+            -0.0004281663574278963,
+            0.20000000000000046
+          ]
+        ],
+        "liability_variance": 1.0119808756627013,
+        "mean_loading": 0.06575493724874351,
+        "mean_adjacent_within_population_r2": 0.24319744144882277,
+        "population_sizes": [
+          16667,
+          16667,
+          16666
+        ]
+      },
+      "files": {
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/case.json": {
+          "sha256": "658f975e10caee85c5bb8624b1fc70d5a2cce1d760d6162a7d04bc0065d304c7",
+          "bytes": 1199
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/phenotype.txt": {
+          "sha256": "fd1bbe06506b763295775a678e062697f0b492556981b8a4deb11c4d3a59ea15",
+          "bytes": 1446520
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno.bed": {
+          "sha256": "45138b954ac313e9fd3a3faec0dfadb105a09e4722f48a7e8e9755ceee380fef",
+          "bytes": 150000003
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno.bim": {
+          "sha256": "8ac8f6c0deda03f793f04f2288b70df8c58ad4c389bb5d5350e907b506ed9d45",
+          "bytes": 346716
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno.fam": {
+          "sha256": "cf810451991b0bbef2e8d82e49c241ec7b24ca5c42f6d4d9883da7210696735b",
+          "bytes": 888890
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/covariates.txt": {
+          "sha256": "b1864188d19408eaa0d8b3e254f03418f8620365d90a553e00b4baaca8e8bfcb",
+          "bytes": 2411139
+        },
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/truth.npz": {
+          "sha256": "07b23058fb7cbba0ff23b9e595503fe8c364e3a35c518de9cfee43870eed827a",
+          "bytes": 1041182
+        }
+      }
+    }
+  ],
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t43%; charging; (no estimate) present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by Claude, powerd, ChatGPT)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "capture_products": true,
+  "comparison_tolerances": {
+    "rtol": 1e-06,
+    "atol": 1e-08
+  },
+  "limits": "Two diagnostic fits, not timing replicates. Disabling large GEMMs isolates their contribution conditional on parallel preparation; any remaining difference is not automatically attributed to preparation without further evidence."
+}

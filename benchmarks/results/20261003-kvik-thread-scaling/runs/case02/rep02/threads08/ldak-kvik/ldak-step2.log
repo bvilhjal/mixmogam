@@ -1,0 +1,61 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 6 pairs of arguments:
+--kvik-step2 reference
+--bfile /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno
+--pheno /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/phenotype.txt
+--max-threads 8
+--random-seed 20262486
+--covar /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/covariates.txt
+
+Note that "--kvik-step2 reference" is equivalent to using either "--linear reference.step2" or "--logistic reference.step2" with "--PRS reference.step1"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Performing linear regression including LOCO PRS as an offset for one phenotype
+
+Will only adjust the most significant predictors for covariates (use "--adjust-predictors YES" to adjust all predictors, or use "--adjust-predictors NO" to not adjust predictors)
+
+Will compute standard test statistics; use "--spa-test YES" to switch to a saddlepoint approximation, 
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+The random number generator seed is set to 20262486
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 50000 samples from /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno.fam
+
+Checking responses for 50000 samples from /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/phenotype.txt
+
+Reading details for 12000 predictors from /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/geno.bim
+
+Data contain 50000 samples and 12000 predictors (will be using 50000 and 12000)
+
+Reading phenotypes for 50000 samples from /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/phenotype.txt
+
+Reading 2 covariates for 50000 samples from /Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed/covariates.txt
+
+Reading LOCO PRS for 50000 samples from reference.step1.loco.prs
+Performing linear regression for Chunk 1 of 12 (Chromosome 1)
+Performing linear regression for Chunk 11 of 12 (Chromosome 6)
+
+Main results saved in reference.step2.assoc, with a summary version in reference.step2.summaries and p-values in reference.step2.pvalues
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Sat Oct  3 21:35:39 2026 and ended at Sat Oct  3 21:35:41 2026
+The elapsed time was 0.00 hours
+Given the command used 8 threads, this means the CPU time was 0.00 hours
+
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

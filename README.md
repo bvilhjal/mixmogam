@@ -4,13 +4,14 @@ Mixed linear models for quantitative-trait genome-wide association,
 with leave-one-chromosome-out (LOCO) testing by default. The core uses
 NumPy and SciPy; Numba accelerates optional kernels.
 
-**Development version 2.0.0.dev3.** The [critical review](docs/review-2026-10-03.md)
+**Development version 2.0.0.dev4.** The [critical review](docs/review-2026-10-03.md)
 records correctness fixes, migration notes, validation, and remaining work.
 The older LDAK binary comparison is withdrawn because its PLINK writer used
 the wrong bit encoding. A new comparison verifies every exported genotype.
 The [revised research report](report/mixmogam_report.pdf) separates current
 correctness checks, known-covariance experiments, matched LDAK-KVIK workloads
-through 50,000 samples, and historical evidence, with a testable research agenda.
+through 50,000 samples and 20,000 variants, and historical evidence, with a
+testable research agenda.
 
 Table 1. Association methods implemented by the current package.
 
@@ -26,6 +27,44 @@ The two-step paths are research implementations with documented departures
 from the original programs, including their variance-component estimators.
 `denominator="spectral"` is a mixmogam extension for the two-step methods.
 Its transfer to mixture and elastic-net statistics is heuristic.
+
+KVIK can reuse its randomized HE products for heritability fitting:
+`gwas(y, gt, method="kvik", heritability_method="he")`. This projected,
+single-component HE option avoids the REML stage and reports unconstrained
+estimates, boundary fits and probe uncertainty in `result.extra["he_variance"]`.
+It differs from LDAK's partitioned HE with large-effect exclusions. The
+existing REML estimator remains the default; use `heritability_method="reml"`
+to select it explicitly. A probe standard error describes trace estimation,
+not a heritability confidence interval.
+
+With the `fast` extra, `gwas(..., method="kvik", n_threads=4)` parallelizes
+genotype preparation and independent candidate-model and LOCO coordinate
+updates. Large fits also distribute residual matrix products across sample
+rows. Model sweeps retain their SNP order; genotype preparation and numerical
+libraries can differ from the default calculation by floating-point rounding.
+The default is one thread. Detected BLAS pools are temporarily limited during
+the parallel matrix products; for Apple Accelerate, set
+`VECLIB_MAXIMUM_THREADS=1` before starting Python to avoid nested threading.
+Numba's configured thread limit must be at least the requested count. Speedup
+depends on the workload. `cache_bytes` budgets the standardized float genotype
+cache, not total memory; `cache_bytes=0` trades that cache for repeated decoding
+from prepared moments and projection coefficients. The int8 input remains in
+memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
+HE/four-thread configuration.
+
+The [20K benchmark](benchmarks/results/20261003-kvik-20k/README.md) measures
+50,000 samples on two fixed phensim HAPNEST panels, with three fresh-process
+timings per setting. Four-thread mixmogam HE took median 33.22 s without
+structure and 32.06 s with structure/confounding and PCs, versus 25.45 s and
+30.09 s for official LDAK-KVIK. In a separate paired experiment, disabling the
+cache cut peak RSS by 52% and 49%, at 31% and 39% longer elapsed time, with
+exactly equal saved numerical results. One- versus four-thread results have
+small rounding differences that exceed the original strict array tolerance;
+the tested significance decisions agree. The archive retains those failures.
+These are different estimators on two biological realizations, not a
+calibration study. System-wide swapping on the 16-GB host also limits timing
+generalization. Timings use explicit HE and exclude initial Numba compilation;
+**REML and one thread remain the defaults**.
 
 ## Install
 
@@ -71,8 +110,9 @@ sample order.
   such confounding. Binary-trait imbalance and rare-variant calibration
   require methods beyond the Gaussian model here.
 - A genome-wide lambda near one can hide miscalibration within SNP groups.
-  Existing simulations motivate stratified checks, but the corrected input
-  handling and permutation scheme need fresh benchmark archives.
+  The corrected-input benchmarks retain stratified diagnostics; larger
+  independent simulation studies and validation of the corrected permutation
+  scheme remain necessary.
 
 Also available: stepwise MLMM, GxE, genotypic tests, residual-coordinate
 permutations, two-kinship fits, and Manhattan/QQ plots. Start with the

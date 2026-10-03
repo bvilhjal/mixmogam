@@ -1,0 +1,47 @@
+Diagnostic cProfile, before the formal measurements. Concurrent validation may affect timings; use measurements.csv for speed comparisons.
+
+Sat Oct  3 20:19:55 2026    /private/tmp/mixmogam-efficiency/baseline50k.prof
+
+         637958 function calls (628720 primitive calls) in 108.767 seconds
+
+   Ordered by: cumulative time
+   List reduced from 3481 to 35 due to restriction <35>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.069    0.069  108.767  108.767 association.py:104(gwas)
+        1    0.012    0.012  108.381  108.381 twostep.py:567(kvik)
+        1    0.000    0.000   61.105   61.105 twostep.py:116(fit_variance_components)
+        1    0.005    0.005   60.141   60.141 lmm.py:676(fit)
+      145    0.000    0.000   52.597    0.363 lmm.py:231(_kdot)
+      145    0.028    0.000   52.597    0.363 twostep.py:112(matmul)
+      145   51.784    0.357   52.569    0.363 _loco.py:153(matmul)
+        1    0.010    0.010   48.123   48.123 lmm.py:518(_slq_pack)
+        1    0.810    0.810   42.710   42.710 _slq.py:120(lanczos_quadrature_batch)
+      102    0.720    0.007   42.067    0.412 lmm.py:441(mv)
+       96    0.178    0.002   38.273    0.399 lmm.py:546(op_defl)
+        2   13.016    6.508   17.914    8.957 _vb.py:222(fit)
+        1    0.001    0.001   17.602   17.602 twostep.py:80(_setup)
+        1    0.461    0.461   17.597   17.597 _loco.py:66(__init__)
+        6   13.386    2.231   15.981    2.663 _loco.py:98(_standardize)
+        1    0.001    0.001   11.995   11.995 lmm.py:792(_gls_beta_cg)
+        1    0.069    0.069    8.992    8.992 _cg.py:46(batched_pcg)
+       38    0.008    0.000    8.813    0.232 lmm.py:800(<lambda>)
+        2    0.002    0.001    8.395    4.198 _slq.py:20(randomized_eigh_op)
+        2    0.102    0.051    8.393    4.196 _slq.py:51(_solve)
+     9894    7.682    0.001    7.682    0.001 {method 'astype' of 'numpy.ndarray' objects}
+     2306    0.005    0.000    6.835    0.003 einsumfunc.py:1244(einsum)
+     2306    6.831    0.003    6.831    0.003 {built-in method numpy._core._multiarray_umath.c_einsum}
+        2    0.172    0.086    4.959    2.480 _vb.py:193(__init__)
+        3    2.667    0.889    4.822    1.607 _vb.py:293(predict)
+      192    3.229    0.017    4.786    0.025 _vb.py:213(_gram)
+        1    0.000    0.000    3.000    3.000 _cg.py:31(__init__)
+        1    0.865    0.865    2.488    2.488 twostep.py:145(_retro_stats)
+        1    2.233    2.233    2.293    2.293 twostep.py:527(_he_alpha)
+        9    1.842    0.205    1.872    0.208 _linalg.py:964(qr)
+     3631    1.475    0.000    1.475    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+       22    0.000    0.000    1.409    0.064 {method 'sum' of 'numpy.ndarray' objects}
+       22    0.000    0.000    1.409    0.064 _methods.py:47(_sum)
+        1    0.001    0.001    1.155    1.155 _loco.py:130(_trace)
+        1    0.000    0.000    0.960    0.960 twostep.py:99(__init__)
+
+

@@ -29,9 +29,9 @@ gt, _ = gt.align_samples(list(samples))
 from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
-result = gwas(y, gt, method="bolt-inf")      # BOLT-LMM-inf, K-free
-result = gwas(y, gt, method="bolt")          # BOLT-LMM Gaussian mixture
-result = gwas(y, gt, method="kvik")          # LDAK-KVIK
+result = gwas(y, gt, method="bolt-inf")      # BOLT-LMM-inf-style, K-free
+result = gwas(y, gt, method="bolt")          # two-Gaussian mixture
+result = gwas(y, gt, method="kvik")          # KVIK-style elastic-net model
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
@@ -47,12 +47,58 @@ Every method tests a SNP against a polygenic model built without its
 own chromosome. More than 25 chromosomes are merged into 25 contiguous
 groups (`max_loco_groups`).
 
-`calibration_cv` is the spread of the ratio between the exact and the
-retrospective test denominators over 30 random SNPs. BOLT-LMM and
-LDAK-KVIK correct that ratio with a single constant. A large spread flags the proportional-denominator approximation. The
-spectral option is an approximation, and its use with mixture or elastic-net
+Where reported, `calibration_cv` is the spread of the ratio between the exact
+and retrospective test denominators over the calibration SNPs (30 by default).
+A large spread flags the proportional-denominator approximation in mixmogam's
+two-step methods. The spectral option is an approximation, and its use with mixture or elastic-net
 statistics is heuristic; use the exact path when feasible and validate
-calibration in the intended population (see `docs/design.md`).
+calibration in the intended population (see the [design notes](design.md)).
+
+## Larger KVIK fits
+
+Install the `fast` extra for Numba, then set thread limits **before starting
+Python**. For example, launch your analysis script with:
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=8 python analysis.py
+```
+
+In that script, after loading and aligning `y` and `gt`:
+
+```python
+result = gwas(
+    y, gt, method="kvik", heritability_method="he",
+    n_threads=4, cache_bytes=4_000_000_000, random_state=0,
+)
+print(result.extra["he_variance"])
+print(result.extra["cv_converged"], result.extra["loco_converged"])
+```
+
+Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
+PCs for population/environmental confounding; the intercept is added internally.
+REML and one thread remain the defaults. Selecting `heritability_method="he"`
+changes the variance estimator to projected single-component randomized HE;
+it is distinct from official LDAK's partitioned HE workflow. The default
+`alpha_method="he"` is required for this option. Inspect HE boundary and
+precision diagnostics and CV/LOCO convergence before interpreting a fit.
+Trace-probe uncertainty is not a heritability confidence interval.
+
+`n_threads=4` parallelizes preparation and independent model updates while
+preserving SNP order within each model. It may change floating-point rounding.
+Detected BLAS pools are limited internally for the parallel matrix products;
+Apple Accelerate needs the `VECLIB_MAXIMUM_THREADS` setting above. The requested
+count cannot exceed Numba's configured limit. Initial Numba compilation adds
+latency to the first use of a kernel.
+
+`cache_bytes` controls only the float32 standardized-genotype cache. At 50,000
+samples and 20,000 variants its 4,000,000,000 bytes fit the default budget
+exactly. Use `cache_bytes=0` to decode blocks repeatedly from prepared moments
+and projection coefficients, reducing memory at a runtime cost. The int8
+input and other workspaces remain resident: this is neither a total-RSS limit
+nor a fully out-of-core fit. The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md)
+records the measured tradeoff, thread-path numerical differences, and timing
+limitations. Preserve `result.extra` separately if needed; CSV does not include it.
 
 ## The mixed model by hand
 

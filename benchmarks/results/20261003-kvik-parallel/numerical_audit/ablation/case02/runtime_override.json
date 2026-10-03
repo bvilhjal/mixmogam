@@ -1,0 +1,424 @@
+{
+  "source_unchanged": true,
+  "override": {
+    "mixmogam._vb._GEMM_MIN_SAMPLES": {
+      "original": 50000,
+      "during_fit": 9223372036854775807,
+      "restored": 50000
+    }
+  },
+  "n_threads": 4,
+  "all_other_fit_options": "identical to archived mixmogam-he run",
+  "capture_products": true,
+  "capture_limit": "first and eighth full-block forward/backward products for P=6 and P=10",
+  "captured_products": [
+    {
+      "direction": "forward",
+      "columns": 10,
+      "call": 1,
+      "left_shape": [
+        128,
+        50000
+      ],
+      "right_shape": [
+        50000,
+        10
+      ],
+      "left_strides": [
+        200000,
+        4
+      ],
+      "right_strides": [
+        40,
+        4
+      ],
+      "input_sha256": {
+        "left": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+        "right": "bd82364a5b1f012001bf1fef34df377df0edb927cf74319475ac95a499d3d9c7"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 1280,
+        "max_absolute_error": 0.004368546455168598,
+        "rms_error": 0.0011869338696579353,
+        "relative_l2_error": 3.3321653701768427e-06,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "scipy_F_work_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 1280,
+        "max_absolute_error": 0.004368546455168598,
+        "rms_error": 0.0011869338696579353,
+        "relative_l2_error": 3.3321653701768427e-06,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "backward",
+      "columns": 10,
+      "call": 1,
+      "left_shape": [
+        50000,
+        128
+      ],
+      "right_shape": [
+        128,
+        10
+      ],
+      "left_strides": [
+        4,
+        200000
+      ],
+      "right_strides": [
+        40,
+        4
+      ],
+      "input_sha256": {
+        "left": "e1e581c663ee544380321a26f7e941f429f4b8ff382397b839157840687760c0",
+        "right": "948de4115e4a3327ee587f2f501c00b6bc19f7879bdf38f3b640f11dc9243272"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 500000,
+        "max_absolute_error": 1.2960197945388607e-07,
+        "rms_error": 1.1598063217352526e-08,
+        "relative_l2_error": 2.034619574830436e-07,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "four_worker_output_row_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 500000,
+        "max_absolute_error": 1.2960197945388607e-07,
+        "rms_error": 1.1598063217352526e-08,
+        "relative_l2_error": 2.034619574830436e-07,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "forward",
+      "columns": 10,
+      "call": 8,
+      "left_shape": [
+        128,
+        50000
+      ],
+      "right_shape": [
+        50000,
+        10
+      ],
+      "left_strides": [
+        200000,
+        4
+      ],
+      "right_strides": [
+        40,
+        4
+      ],
+      "input_sha256": {
+        "left": "23732c6a40e042b2f1bfe6349d73ab02243282864d263279bdea32e2d048945a",
+        "right": "20806d133f4a61e299c175f27bdb975bd9b54237afea3d244385cd63c0b32aca"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 1280,
+        "max_absolute_error": 0.007296656390622047,
+        "rms_error": 0.0012306213669746515,
+        "relative_l2_error": 3.299047496383575e-06,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "scipy_F_work_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 1280,
+        "max_absolute_error": 0.007296656390622047,
+        "rms_error": 0.0012306213669746515,
+        "relative_l2_error": 3.299047496383575e-06,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "backward",
+      "columns": 10,
+      "call": 8,
+      "left_shape": [
+        50000,
+        128
+      ],
+      "right_shape": [
+        128,
+        10
+      ],
+      "left_strides": [
+        4,
+        200000
+      ],
+      "right_strides": [
+        40,
+        4
+      ],
+      "input_sha256": {
+        "left": "3051acf9cec1909041998df4f640cbd70568a2d9b8eddf7f4fb0821aad278713",
+        "right": "9a30c4c0b13fd99431c784996b3043b561ae4fe1480a4ed017a5543cc1b7aad6"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 500000,
+        "max_absolute_error": 1.2707869923023196e-07,
+        "rms_error": 1.2210885653921104e-08,
+        "relative_l2_error": 2.0276673422951405e-07,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "four_worker_output_row_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 500000,
+        "max_absolute_error": 1.2707869923023196e-07,
+        "rms_error": 1.2210885653921104e-08,
+        "relative_l2_error": 2.0276673422951405e-07,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "forward",
+      "columns": 6,
+      "call": 1,
+      "left_shape": [
+        128,
+        50000
+      ],
+      "right_shape": [
+        50000,
+        6
+      ],
+      "left_strides": [
+        200000,
+        4
+      ],
+      "right_strides": [
+        24,
+        4
+      ],
+      "input_sha256": {
+        "left": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+        "right": "b2521640f924e99a818b34c4c252ded1e22949abf045741adde99fd27f32ea20"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 768,
+        "max_absolute_error": 0.003973664078557704,
+        "rms_error": 0.0011648481015849687,
+        "relative_l2_error": 2.9459826205200065e-06,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "scipy_F_work_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 768,
+        "max_absolute_error": 0.003973664078557704,
+        "rms_error": 0.0011648481015849687,
+        "relative_l2_error": 2.9459826205200065e-06,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "backward",
+      "columns": 6,
+      "call": 1,
+      "left_shape": [
+        50000,
+        128
+      ],
+      "right_shape": [
+        128,
+        6
+      ],
+      "left_strides": [
+        4,
+        200000
+      ],
+      "right_strides": [
+        24,
+        4
+      ],
+      "input_sha256": {
+        "left": "e1e581c663ee544380321a26f7e941f429f4b8ff382397b839157840687760c0",
+        "right": "b8ffd96e68688faedb9b9132c2240ebb32e8160aa52bcf6f638394ff8f756c93"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 250000,
+        "max_absolute_error": 1.038481676207681e-07,
+        "rms_error": 1.0736947442438551e-08,
+        "relative_l2_error": 1.9840271399304054e-07,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "four_worker_output_row_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 250000,
+        "max_absolute_error": 1.038481676207681e-07,
+        "rms_error": 1.0736947442438551e-08,
+        "relative_l2_error": 1.9840271399304054e-07,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "forward",
+      "columns": 6,
+      "call": 8,
+      "left_shape": [
+        128,
+        50000
+      ],
+      "right_shape": [
+        50000,
+        6
+      ],
+      "left_strides": [
+        200000,
+        4
+      ],
+      "right_strides": [
+        24,
+        4
+      ],
+      "input_sha256": {
+        "left": "23732c6a40e042b2f1bfe6349d73ab02243282864d263279bdea32e2d048945a",
+        "right": "1d99902f96f4e891e160451a1ac33a7a5df19fcebb579ce856520bd2907ad90c"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 768,
+        "max_absolute_error": 0.0050395475687992075,
+        "rms_error": 0.001254061189662717,
+        "relative_l2_error": 3.039511555923599e-06,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "scipy_F_work_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 768,
+        "max_absolute_error": 0.0050395475687992075,
+        "rms_error": 0.001254061189662717,
+        "relative_l2_error": 3.039511555923599e-06,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    },
+    {
+      "direction": "backward",
+      "columns": 6,
+      "call": 8,
+      "left_shape": [
+        50000,
+        128
+      ],
+      "right_shape": [
+        128,
+        6
+      ],
+      "left_strides": [
+        4,
+        200000
+      ],
+      "right_strides": [
+        24,
+        4
+      ],
+      "input_sha256": {
+        "left": "3051acf9cec1909041998df4f640cbd70568a2d9b8eddf7f4fb0821aad278713",
+        "right": "b3d5544c27436f680c942e816eff982919f9653368948a184d5aafaf3b3ec8d7"
+      },
+      "serial_vs_float64": {
+        "array_equal": false,
+        "different_elements": 250000,
+        "max_absolute_error": 1.456952529732547e-07,
+        "rms_error": 1.1737609754914112e-08,
+        "relative_l2_error": 2.0690538747944438e-07,
+        "allclose_original_tolerance": false
+      },
+      "alternate": "four_worker_output_row_gemm",
+      "alternate_vs_serial": {
+        "array_equal": true,
+        "different_elements": 0,
+        "max_absolute_error": 0.0,
+        "rms_error": 0.0,
+        "relative_l2_error": 0.0,
+        "allclose_original_tolerance": true
+      },
+      "alternate_vs_float64": {
+        "array_equal": false,
+        "different_elements": 250000,
+        "max_absolute_error": 1.456952529732547e-07,
+        "rms_error": 1.1737609754914112e-08,
+        "relative_l2_error": 2.0690538747944438e-07,
+        "allclose_original_tolerance": false
+      },
+      "fit_return_unchanged": true
+    }
+  ]
+}

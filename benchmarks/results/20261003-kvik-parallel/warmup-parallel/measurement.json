@@ -1,0 +1,33 @@
+{
+  "command": [
+    "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/kvik_efficiency.py",
+    "--source",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/source",
+    "--result-dir",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-kvik-parallel/warmup-parallel",
+    "--heritability-method",
+    "he",
+    "--warmup",
+    "--kvik-threads",
+    "2"
+  ],
+  "exit_code": 0,
+  "wall_seconds": 3.775769957981538,
+  "peak_rss_bytes": 237076480,
+  "user_seconds": 2.7904839999999997,
+  "system_seconds": 0.43849,
+  "threads": 2,
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t50%; charging; (no estimate) present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by powerd, Claude, ChatGPT, caffeinate, caffeinate)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "8"
+  },
+  "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+}

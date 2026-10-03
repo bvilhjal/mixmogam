@@ -1,0 +1,136 @@
+{
+  "source_sha256": {
+    "/private/tmp/mixmogam-efficiency/audit_prepared_decode.py": "1479cceb9ebf7a164f8b3b5eb1ed75713a69f9f76e6cff9f32f53faa82f471f1",
+    "/Users/au507860/REPOS/mixmogam/mixmogam/_loco.py": "fb8cbd6ba2666dddcb37f4ca548e56bdcd6b06161c229a95840e42141b8505d0",
+    "/Users/au507860/REPOS/mixmogam/mixmogam/_standardize.py": "56ec2fe921e673815f758a24913009d277197fe06af6e145a9a32367fe4d4ac1",
+    "/Users/au507860/REPOS/mixmogam/mixmogam/_vb.py": "4670b993b634d444f3a3227b4e2b889d78c4e069fd6d5a25883394338dfb815d",
+    "/Users/au507860/REPOS/mixmogam/mixmogam/genotypes.py": "a0642f52348621fc903fc5d4fd0a2530158079db5f8827d7ddedec3b1b70f943"
+  },
+  "case": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261003-hapnest-kvik-n50000/rho0.8_fst0.05_rep01/confounded-pc_mixed",
+  "case_config": {
+    "cell": "confounded-pc",
+    "trait": "mixed",
+    "rep": 1,
+    "rho": 0.8,
+    "simulator": "hapnest",
+    "fst": 0.05,
+    "pcs": true,
+    "genotype_seed": 20262086,
+    "trait_seed": 20262287,
+    "method_seed": 20262486,
+    "n": 50000,
+    "m": 12000,
+    "n_filtered_maf": 0,
+    "causal": [
+      5111,
+      3545,
+      2113,
+      3080,
+      1794,
+      6442,
+      9311,
+      1581,
+      7870,
+      2414
+    ],
+    "component_order": [
+      "u",
+      "q",
+      "e",
+      "structure"
+    ],
+    "component_covariance": [
+      [
+        0.19341165981830807,
+        -0.0037487638291247597,
+        -0.0014429375106463978,
+        -0.013104127161181058
+      ],
+      [
+        -0.0037487638291247597,
+        0.20000000000000007,
+        0.0006157763687796834,
+        0.027294029161254646
+      ],
+      [
+        -0.0014429375106463978,
+        0.0006157763687796834,
+        0.40019759450108516,
+        -0.0004281663574278963
+      ],
+      [
+        -0.013104127161181058,
+        0.027294029161254646,
+        -0.0004281663574278963,
+        0.20000000000000046
+      ]
+    ],
+    "liability_variance": 1.0119808756627013,
+    "mean_loading": 0.06575493724874351,
+    "mean_adjacent_within_population_r2": 0.24319744144882277,
+    "population_sizes": [
+      16667,
+      16667,
+      16666
+    ]
+  },
+  "selection": "first 129 variants; original calls unchanged",
+  "G_storage_sha256": "fbeb5cc09b50d10ffd9e61b74a729c5859c08bd5ef4b0aaca6bd35958185ff1d",
+  "numpy": "2.4.6",
+  "n": 50000,
+  "m": 129,
+  "checks": [
+    {
+      "q": 1,
+      "dtype": "float32",
+      "cached_threads": 2,
+      "uncached_threads": 4,
+      "cached_vs_uncached_max_abs": 0.0,
+      "rows_and_trace_exact": true,
+      "first8_numpy_oracle_max_abs": 0.0,
+      "first8_numpy_oracle_bound": 1.4413537886439178e-06,
+      "first8_sd_max_abs": 2.368105711525459e-13,
+      "projection_storage_bytes": 1032,
+      "largest_returned_block_bytes": 6200000
+    },
+    {
+      "q": 1,
+      "dtype": "float64",
+      "cached_threads": 2,
+      "uncached_threads": 4,
+      "cached_vs_uncached_max_abs": 0.0,
+      "rows_and_trace_exact": true,
+      "first8_numpy_oracle_max_abs": 5.808686864838819e-13,
+      "first8_numpy_oracle_bound": 2.1445888030186236e-09,
+      "first8_sd_max_abs": 2.368105711525459e-13,
+      "projection_storage_bytes": 1032,
+      "largest_returned_block_bytes": 12400000
+    },
+    {
+      "q": 3,
+      "dtype": "float32",
+      "cached_threads": 2,
+      "uncached_threads": 4,
+      "cached_vs_uncached_max_abs": 0.0,
+      "rows_and_trace_exact": true,
+      "first8_numpy_oracle_max_abs": 5.960464477539063e-08,
+      "first8_numpy_oracle_bound": 1.5652150585254883e-06,
+      "first8_sd_max_abs": 2.368105711525459e-13,
+      "projection_storage_bytes": 3096,
+      "largest_returned_block_bytes": 6200000
+    },
+    {
+      "q": 3,
+      "dtype": "float64",
+      "cached_threads": 2,
+      "uncached_threads": 4,
+      "cached_vs_uncached_max_abs": 0.0,
+      "rows_and_trace_exact": true,
+      "first8_numpy_oracle_max_abs": 6.674660824046441e-13,
+      "first8_numpy_oracle_bound": 4.6508438678340955e-09,
+      "first8_sd_max_abs": 2.368105711525459e-13,
+      "projection_storage_bytes": 3096,
+      "largest_returned_block_bytes": 12400000
+    }
+  ]
+}

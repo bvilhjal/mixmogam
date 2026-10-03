@@ -1,16 +1,23 @@
 # mixmogam engine design
 
-The tables below describe archived development runs. The
-[2026-10-03 review](review-2026-10-03.md) identifies input-encoding, MAC,
-prediction, and permutation corrections. In particular, the external LDAK
-comparison is withdrawn pending a corrected rerun.
+These notes describe the current implementation and label historical evidence
+separately. The [2026-10-03 review](review-2026-10-03.md) identifies input-encoding,
+MAC, prediction, and permutation corrections. The original external LDAK
+comparison remains withdrawn. The verified [20K workload comparison](../benchmarks/results/20261003-kvik-20k/README.md)
+uses new phensim inputs and frozen sources; the [research report](../report/README.md)
+sets out the statistical evidence and research agenda.
 
 Numerical design and historical derivations with pseudocode: [methods.pdf](methods.pdf). The PDF predates the review; current API contracts are in the docstrings
 and quickstart.
 
 ## Model
 
-y = X beta + u + e,  u ~ N(0, vg K),  e ~ N(0, ve I),  delta = ve / vg.
+Equation (1). Gaussian mixed model and variance ratio.
+
+\[
+y = X\beta + u + e,\qquad u\sim N(0,v_gK),\qquad
+e\sim N(0,v_eI),\qquad \delta=v_e/v_g.
+\]
 
 Covariates X always include an intercept. `K = None` gives the ordinary
 linear model on the same machinery.
@@ -37,11 +44,10 @@ Table 1. Association paths and calibration.
 
 `auto` uses `exact` up to n = 5,000 and `bolt-inf` above.
 
-A kinship alone does not absorb a strong environment that tracks
-ancestry. sigma_g^2 K + sigma_e^2 I gives every eigen-direction the
-variance sigma_g^2 lambda_k + sigma_e^2, so an environment that moves the
-phenotype far along the ancestry axis cannot be represented: pass the
-top principal components as covariates (`X`). In sim study S2 (two
+A kinship alone does not guarantee control of an environment that tracks
+ancestry. It models covariance, whereas a systematic environmental mean
+along an ancestry axis may require explicit covariates (`X`), such as the
+top principal components. In historical sim study S2 (two
 demes, F_ST 0.02, an environment on deme with 50% of the variance),
 exact LOCO gave lambda_GC 1.27, and null SNPs in the top 1% of loading
 on the environment had mean chi2 2.27. With PC1 these became 1.11 and
@@ -69,34 +75,77 @@ proximal-contamination deflation.
 
 - **Streaming LOCO operator** (`_loco.LocoGenotypes`): standardized,
   covariate-projected SNP blocks that never straddle a group. One pass
-  applies every K_{-g} to its own column, so BOLT-LMM's G LOCO solves,
+  applies every K_{-g} to its own column, so the BOLT-style G LOCO solves,
   the 30 calibration solves and the LOCO eigenbases share GEMMs.
+  Called-genotype means and standard deviations are prepared once; the
+  unweighted trace is accumulated during that pass and a weighted trace is
+  evaluated only when needed. Genotypes must remain unchanged during a fit.
 - **Conjugate gradients** (`_cg`): batched over columns, preconditioned
   by the top-64 kinship eigenpairs plus a flat bulk. Strong structure
   puts a few eigenvalues far above the bulk; without the preconditioner
   CG slows down.
-- **Variational Bayes** (`_vb`): BOLT-LMM's iterated conditional
+- **Variational Bayes** (`_vb`): iterated conditional
   posterior means, for every cross-validation fold x hyperparameter or
   every LOCO group at once. Within a 128-SNP block, residual products
   come from one GEMM and are corrected through the block's Gram matrix
-  as earlier SNPs move. The sequential B x B x columns loop is Numba;
-  the rest is BLAS.
-- **Variance components**: deflated stochastic Lanczos quadrature REML
-  on the operator (BOLT-LMM uses Monte Carlo REML, LDAK-KVIK randomized
-  Haseman-Elston regression). It matched the exact fit's delta to 0.09%
-  at n = 10,000. The y rule and the 12 trace probes run as one batched
-  Lanczos process, one pass over the genotypes per step (96 passes per
-  fit instead of 1,248).
+  as earlier SNPs move. Gram matrices are shared across fits and only
+  requested fold matrices are prepared. Reused workspaces avoid repeatedly
+  widening whole genotype blocks; residual accumulation remains float64.
+  The coordinate loop has an optional Numba implementation.
+- **Default variance fitting**: deflated stochastic Lanczos quadrature REML
+  on the operator. The phenotype rule and trace probes share batched Lanczos
+  products. The two-step caller requests variance components alone, avoiding
+  unused fixed-effect solves and scan preparation; public `LMM.fit()` still
+  produces a complete fit.
+
+KVIK normally selects the frequency-weight exponent `alpha` by randomized
+single-component HE, then fits heritability by REML. Explicit
+`heritability_method="he"` reuses the selected alpha's products to fit
+`vg K + ve (I - QQ')`, with nonnegative variance components in the covariate
+residual space. It avoids the REML stage **by changing the estimator**, not
+by accelerating the same optimization. `extra["he_variance"]` retains
+unconstrained estimates, boundary status and trace-probe precision;
+unidentified or numerically invalid fits raise. The existing variational
+noise floor of 0.001 on the unit-variance phenotype scale is reported for
+HE fits. Probe precision is not sampling uncertainty in heritability.
 
 Where mixmogam departs from the reference implementations, the
 docstrings of `mixmogam.twostep` say so. The departures: REML instead
-of MC REML for BOLT-LMM; KVIK's alpha by single-component (not
-partitioned) randomized HE regression, then REML h2 (`alpha_method=
-"reml"` scans REML likelihoods instead); no LD thinning in the
+of MC REML for BOLT-LMM; KVIK's single-component HE rather than LDAK's
+partitioned HE with large-effect exclusions, followed by REML h2 by default
+(`alpha_method="reml"` scans REML likelihoods instead); no LD thinning in the
 LDAK-Thin weights; a 1% relative CV R^2 margin
 before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
 median matching instead of the LDSC intercept when LD scores do not
 vary (coefficient of variation < 0.2).
+
+### Optional KVIK parallelism and memory budgets
+
+`n_threads=1` remains the default. Above one, the `fast` extra parallelizes
+genotype preparation over variants and coordinate updates over independent
+candidate models or LOCO columns. Each model retains its sequential SNP
+order. For large fits (at least 50,000 samples and six model columns), a
+bounded BLAS workspace and a pool of at most four workers distribute suitable
+residual matrix products over sample rows. Smaller products retain the
+ordinary matrix-product path. Temporary Numba and detected BLAS limits are
+restored on exit. Apple Accelerate needs `VECLIB_MAXIMUM_THREADS=1` before
+Python starts; it is not detected by threadpoolctl. See the
+[quickstart](quickstart.md#larger-kvik-fits) for a complete configuration.
+
+The genotype cache retains float32 projected blocks when
+`4 * n * m <= cache_bytes`, inclusively. Its default 4e9-byte budget is not a total-memory
+limit. The int8 genotype input, Gram matrices, residuals and workspaces are
+separate allocations. `cache_bytes=0` retains no projected blocks and reuses
+prepared moments; the parallel route also reuses float64 projection
+coefficients and decodes directly into bounded storage. Variational fitting
+decodes 128-SNP blocks on that route rather than the larger operator blocks.
+PLINK input decoding and genotype validation also use bounded tiles. None of
+these changes makes the full analysis out of core.
+
+Parallel preparation and matrix products change reduction order, so a fixed
+seed does not imply bitwise identity across thread counts. This is separate
+from the choice between HE and REML. Defaults, model order and convergence
+criteria have not been changed to obtain the speedups.
 
 ## Structure-aware denominator (mixmogam extension)
 
@@ -105,14 +154,22 @@ calibration factor. This is not a universal description of REGENIE or
 SAIGE and their available analysis modes. That is exact only if the prospective
 denominator z_j' V_{-g}^{-1} z_j is proportional to z_j' z_j. Under
 strong structure it is not: SNPs aligned with the leading kinship
-eigenvectors have smaller denominators. Each two-step result reports
-`calibration_cv`, the spread of the ratio over the 30 calibration SNPs.
-It was 0.5% without structure, 23% at simulated F_ST = 0.3, and 13% on
+eigenvectors have smaller denominators. When prospective calibration is
+performed, `calibration_cv` reports the spread of the ratio over the calibration
+SNPs (30 by default). In historical experiments,
+it was 0.5% without structure, 23% at simulated F_ST = 0.3, and 13% on
 *A. thaliana* (spectral: 0.4%, 0.3%, 3%).
 
-`denominator="spectral"` replaces the constant by
-c' vg [ |(L_g + delta)^{-1/2} U_g' z|^2 + (z'z - |U_g' z|^2) / (lam_g + delta) ]
-on the top-k eigenpairs (U_g, L_g) of the SNP's **own LOCO** kinship,
+`denominator="spectral"` replaces the constant using the top-k eigenpairs
+(U_g, L_g) of the SNP's **own LOCO** kinship. The approximation is
+
+Equation (2). Spectral denominator with a flat residual spectrum.
+
+\[
+c'v_g\left[\left\|(L_g+\delta I)^{-1/2}U_g'z\right\|^2
++\frac{z'z-\|U_g'z\|^2}{\bar\lambda_g+\delta}\right],
+\]
+
 with c' calibrated on the same 30 SNPs. The width is adaptive: k doubles
 from 64 to at most 512 until the calibration spread falls below 3%. The
 bulk of an LD-rich kinship is not flat. In a coalescent sample without
@@ -124,16 +181,16 @@ inside the full kinship.
 
 Replicated null-chromosome benchmark (6 replicates; lambda_GC on null
 SNPs by structure-loading quintile, the share of z_j in the top-10
-kinship eigenvectors; archive 20261003T081812Z-structure-calibration
-and, for the LDAK binary, 20261003T083746Z-kvik-reference):
+kinship eigenvectors; archive 20261003T081812Z-structure-calibration).
+These are historical mixmogam results, not official-program comparisons:
 
 Table 2. Historical null calibration by dataset.
 
-| data | exact LOCO | BOLT-LMM-inf | + spectral | LDAK-KVIK | + spectral |
+| data | exact LOCO | `bolt-inf` | + spectral | `kvik` | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
-| *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 (binary: 1.21 → 0.92) | 0.97-1.03 |
+| *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 | 0.97-1.03 |
 
 FPR at p < 0.01 follows suit (strong simulated structure: BOLT-LMM-inf
 2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through KVIK's
@@ -174,18 +231,49 @@ Table 3. Historical truncated-spectrum calibration.
 Truncated scans therefore warn; large-n association uses the two-step
 statistics.
 
-## Measured speed (development laptop, 4 BLAS threads, AC power)
+## Measured resources and numerical agreement
 
-Table 4. Historical development timings.
+The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md) uses two
+fixed phensim HAPNEST panels, each with 50,000 samples and exactly 20,000
+retained variants across six LOCO groups. One panel is unstructured; the
+other has population structure, environmental confounding and two PC
+covariates. Three fresh-process repetitions per setting measure time, not
+biological replication. Official timing sums its two native steps; local
+timing includes imports, input reading, fitting and result writing. Common
+preparation and initial Numba compilation are excluded.
 
-| workload | result |
-|---|---|
-| exact scan vs the v1-style per-SNP loop (n = 2,000, m = 10k, f32) | 123x (0.27 s vs 33.7 s) |
-| exact scan throughput, n = 2,000, m = 100k, f32 | ~4.8e4 SNPs/s |
-| `gwas` exact LOCO, n = 1,307, m = 53k, 5 chromosomes | ~4 s |
-| `gwas` bolt-inf, same data | ~28 s (spectral +2 s; the K-free path is for large n) |
-| `gwas` kvik, same data | ~15 s (REML alpha selection ~41 s; the LDAK binary ~9 s) |
+Table 4. Median full-fit time and four-thread peak RSS in the primary 20K experiment.
 
-The scan speedup compares mixmogam with its own legacy-style loop.
-There is no validated comparison here against GEMMA, BOLT-LMM or REGENIE;
-the archived LDAK comparison needs a corrected PLINK export and rerun.
+| Panel | Method | 1 thread (s) | 4 threads (s) | 4-thread RSS (GiB) |
+|---|---|---:|---:|---:|
+| Unstructured | mixmogam HE | 58.84 | 33.22 | 4.369 |
+| Unstructured | Official LDAK-KVIK | 33.49 | 25.45 | 0.652 |
+| Structure/confounding + PCs | mixmogam HE | 39.00 | 32.06 | 4.228 |
+| Structure/confounding + PCs | Official LDAK-KVIK | 39.63 | 30.09 | 0.653 |
+
+The matched [cache experiment](../benchmarks/results/20261003-kvik-20k/cache/README.md)
+reduces peak RSS by median paired 52% and 49%, at 31% and 39% longer elapsed
+time. Every cached fit retains exactly 4,000,000,000 float32 bytes; uncached
+fits retain zero float-cache bytes but still hold the 1 GB int8 input. All
+six cache pairs have exactly equal saved association arrays, VB coefficients
+and fit diagnostics.
+
+All local CV and LOCO fits converged. Same-setting repetitions are exact,
+but all six local one-versus-four-thread comparisons exceed the original
+array tolerance (`rtol=1e-6`, `atol=1e-8`); those failures remain archived.
+Selected priors, iteration counts and convergence agree. Maximum absolute
+changes are 1.4312e-6 in p and 9.7892e-9 in association beta. No variant
+decision changes at p < 0.05, 0.01, 0.001, 0.05/20,000 or 5e-8. This is
+numerical evidence for these panels, not proof of equivalence across inputs
+or statistical identity with official LDAK.
+
+AC and Low Power Mode guards passed, but system-wide swap counters increased
+during the observation interval on the 16-GB Apple M2 Pro. They cannot
+attribute paging to a program or individual fit. The archive retains full
+ranges and raw observations; these are workstation workload measurements,
+not clean hardware-scaling estimates. The official Mac binary links
+Accelerate without observed OpenMP linkage, so this does not compare against
+the Linux OpenMP/MKL build. An idle host with more RAM, a pinned Linux build,
+and independently replicated calibration/power experiments are the next
+useful checks. Earlier internal scan timings and the withdrawn external
+comparison remain historical evidence in the research report.

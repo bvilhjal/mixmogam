@@ -1,0 +1,1938 @@
+[
+  {
+    "case_index": 1,
+    "B": 128,
+    "P": 6,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "a4dbbfbd2b5d399ff174e777de0c93ddc136860c94ea2bfbb5d375fc32aa579d",
+      "work": "b186981eaa443f826f45a5e380b296d4c7b77232cf6670a9cf6a326599f0f157"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 768,
+      "max_absolute_error": 0.005139754697438548,
+      "rms_error": 0.00143391440306477,
+      "relative_l2_error": 3.368762925708522e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.00143391440306477,
+          "relative_l2_error": 3.368762925708522e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.00537109375,
+          "rms_error": 0.0014580010357678405,
+          "relative_l2_error": 3.4253495825125055e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.0005497421360587396,
+          "rms_error": 0.0002092197782880813,
+          "relative_l2_error": 4.915299204160435e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.00143391440306477,
+          "relative_l2_error": 3.368762925708522e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.00143391440306477,
+          "relative_l2_error": 3.368762925708522e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 128,
+    "P": 6,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "a4dbbfbd2b5d399ff174e777de0c93ddc136860c94ea2bfbb5d375fc32aa579d",
+      "work": "75493584f365fb3e70625be8ae7d7055d664207b7c42a6ad8b986720d18f86c2"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 768,
+      "max_absolute_error": 0.007511803122042693,
+      "rms_error": 0.0015647726467812476,
+      "relative_l2_error": 3.272655847842592e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.007511803122042693,
+          "rms_error": 0.0015647726467812476,
+          "relative_l2_error": 3.272655847842592e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 758,
+          "max_absolute_error": 0.0079345703125,
+          "rms_error": 0.0016043355846766722,
+          "relative_l2_error": 3.3554007106548915e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.0009667185502166831,
+          "rms_error": 0.00027250362424166715,
+          "relative_l2_error": 5.699298113801103e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.007511803122042693,
+          "rms_error": 0.0015647726467812476,
+          "relative_l2_error": 3.272655847842592e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.007511803122042693,
+          "rms_error": 0.0015647726467812476,
+          "relative_l2_error": 3.272655847842592e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 128,
+    "P": 10,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "a4dbbfbd2b5d399ff174e777de0c93ddc136860c94ea2bfbb5d375fc32aa579d",
+      "work": "24031932ce6b25ecf1537f48131ab3413a44608e2a702536abe19a67c7394eff"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 1280,
+      "max_absolute_error": 0.005139754697438548,
+      "rms_error": 0.0014339144030647703,
+      "relative_l2_error": 3.3687629257085222e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.0014339144030647703,
+          "relative_l2_error": 3.3687629257085222e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.00537109375,
+          "rms_error": 0.0014580010357678405,
+          "relative_l2_error": 3.425349432242542e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.0005497421360587396,
+          "rms_error": 0.0002092197782880813,
+          "relative_l2_error": 4.915299204160436e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.0014339144030647703,
+          "relative_l2_error": 3.3687629257085222e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.005139754697438548,
+          "rms_error": 0.0014339144030647703,
+          "relative_l2_error": 3.3687629257085222e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 128,
+    "P": 10,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "a4dbbfbd2b5d399ff174e777de0c93ddc136860c94ea2bfbb5d375fc32aa579d",
+      "work": "b3d1b7c20eed852add5962386a2dc840386c76a2e535edeace7f9cc9582f8bd3"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 1280,
+      "max_absolute_error": 0.008769161256850566,
+      "rms_error": 0.0016701591258818978,
+      "relative_l2_error": 3.3747477284411144e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.008769161256850566,
+          "rms_error": 0.0016701591258818978,
+          "relative_l2_error": 3.3747477284411144e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 1272,
+          "max_absolute_error": 0.008544921875,
+          "rms_error": 0.0016866707361550487,
+          "relative_l2_error": 3.408111767841556e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.0010304048040836733,
+          "rms_error": 0.00027538468675416205,
+          "relative_l2_error": 5.564462880627302e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.008769161256850566,
+          "rms_error": 0.0016701591258818978,
+          "relative_l2_error": 3.3747477284411144e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.008769161256850566,
+          "rms_error": 0.0016701591258818978,
+          "relative_l2_error": 3.3747477284411144e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 80,
+    "P": 6,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "8ae8d393b9d7321b1ad871cf32140cdd0ecde64d88a733f2cd1d477ebcdd0dd6",
+      "work": "b186981eaa443f826f45a5e380b296d4c7b77232cf6670a9cf6a326599f0f157"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 480,
+      "max_absolute_error": 0.004135252721084726,
+      "rms_error": 0.001393461746053379,
+      "relative_l2_error": 3.66269691618333e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688290587304292e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.349364296796721e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004150390625,
+          "rms_error": 0.0014069569191264648,
+          "relative_l2_error": 3.698171626211892e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.00048155695640161866,
+          "rms_error": 0.00019533648236949415,
+          "relative_l2_error": 5.134395211201147e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688290587304292e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.349364296796721e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688290587304292e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.349364296796721e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 80,
+    "P": 6,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "8ae8d393b9d7321b1ad871cf32140cdd0ecde64d88a733f2cd1d477ebcdd0dd6",
+      "work": "ee8eac82ea8f820da1fd180f46d4ac9a7fc643704c056a8bb0b5279ae1171525"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 480,
+      "max_absolute_error": 0.007603040092817537,
+      "rms_error": 0.0016686130750943522,
+      "relative_l2_error": 3.904549343135447e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00714111328125,
+          "rms_error": 0.0006874998214748759,
+          "relative_l2_error": 1.6087479799660943e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.007603040092817537,
+          "rms_error": 0.0015262280135535339,
+          "relative_l2_error": 3.5713687473403036e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 477,
+          "max_absolute_error": 0.00762939453125,
+          "rms_error": 0.0017010298991359334,
+          "relative_l2_error": 3.980405999562672e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.0011597920137660367,
+          "rms_error": 0.0002654267138539718,
+          "relative_l2_error": 6.210976748881847e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00714111328125,
+          "rms_error": 0.0006874998214748759,
+          "relative_l2_error": 1.6087479799660943e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.007603040092817537,
+          "rms_error": 0.0015262280135535339,
+          "relative_l2_error": 3.5713687473403036e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00714111328125,
+          "rms_error": 0.0006874998214748759,
+          "relative_l2_error": 1.6087479799660943e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.007603040092817537,
+          "rms_error": 0.0015262280135535339,
+          "relative_l2_error": 3.5713687473403036e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 80,
+    "P": 10,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "8ae8d393b9d7321b1ad871cf32140cdd0ecde64d88a733f2cd1d477ebcdd0dd6",
+      "work": "24031932ce6b25ecf1537f48131ab3413a44608e2a702536abe19a67c7394eff"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 800,
+      "max_absolute_error": 0.004135252721084726,
+      "rms_error": 0.001393461746053379,
+      "relative_l2_error": 3.662696916183331e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688289606024748e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.3493642967967215e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004150390625,
+          "rms_error": 0.0014069569191264648,
+          "relative_l2_error": 3.6981713948966867e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.00048155695640161866,
+          "rms_error": 0.00019533648236949415,
+          "relative_l2_error": 5.134395211201147e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688289606024748e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.3493642967967215e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00384521484375,
+          "rms_error": 0.0005968557228287402,
+          "relative_l2_error": 1.5688289606024748e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004135252721084726,
+          "rms_error": 0.0012742553173213738,
+          "relative_l2_error": 3.3493642967967215e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 1,
+    "B": 80,
+    "P": 10,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "8ae8d393b9d7321b1ad871cf32140cdd0ecde64d88a733f2cd1d477ebcdd0dd6",
+      "work": "3a757ac821d2e0b22de0aaf88622529a54b2c53dc9281cb8767becb507069c52"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 800,
+      "max_absolute_error": 0.0063338894477737995,
+      "rms_error": 0.0015234102407204663,
+      "relative_l2_error": 3.58922146836912e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 159,
+          "max_absolute_error": 0.006317138671875,
+          "rms_error": 0.0006879620565799381,
+          "relative_l2_error": 1.6208682072418906e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006054918970448853,
+          "rms_error": 0.0013664875846848318,
+          "relative_l2_error": 3.2195047953013095e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 794,
+          "max_absolute_error": 0.006317138671875,
+          "rms_error": 0.0015368486555199172,
+          "relative_l2_error": 3.6208815606173353e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.0007682389302061665,
+          "rms_error": 0.00025344203378723743,
+          "relative_l2_error": 5.971205682758699e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 159,
+          "max_absolute_error": 0.006317138671875,
+          "rms_error": 0.0006879620565799381,
+          "relative_l2_error": 1.6208682072418906e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006054918970448853,
+          "rms_error": 0.0013664875846848318,
+          "relative_l2_error": 3.2195047953013095e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 159,
+          "max_absolute_error": 0.006317138671875,
+          "rms_error": 0.0006879620565799381,
+          "relative_l2_error": 1.6208682072418906e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006054918970448853,
+          "rms_error": 0.0013664875846848318,
+          "relative_l2_error": 3.2195047953013095e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 128,
+    "P": 6,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+      "work": "b2521640f924e99a818b34c4c252ded1e22949abf045741adde99fd27f32ea20"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 768,
+      "max_absolute_error": 0.003973664078557704,
+      "rms_error": 0.0011648481015849687,
+      "relative_l2_error": 2.945982620520006e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849687,
+          "relative_l2_error": 2.945982620520006e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 762,
+          "max_absolute_error": 0.0037841796875,
+          "rms_error": 0.0011966210576020858,
+          "relative_l2_error": 3.02633705430834e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.0005050523888456837,
+          "rms_error": 0.00017798598227753622,
+          "relative_l2_error": 4.501390436850499e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849687,
+          "relative_l2_error": 2.945982620520006e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849687,
+          "relative_l2_error": 2.945982620520006e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 128,
+    "P": 6,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+      "work": "7f180046652557f5813f216094eccb17fa26f2536440a3bb4e05ec4c1fbe9261"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 768,
+      "max_absolute_error": 0.009520828014728977,
+      "rms_error": 0.0016028584247881384,
+      "relative_l2_error": 3.5053525168400293e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.009520828014728977,
+          "rms_error": 0.0016028584247881384,
+          "relative_l2_error": 3.5053525168400293e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 761,
+          "max_absolute_error": 0.009521484375,
+          "rms_error": 0.001638778280153276,
+          "relative_l2_error": 3.583906872959506e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.0007535877400641766,
+          "rms_error": 0.00024622944194458286,
+          "relative_l2_error": 5.384886030434314e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.009520828014728977,
+          "rms_error": 0.0016028584247881384,
+          "relative_l2_error": 3.5053525168400293e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 768,
+          "max_absolute_error": 0.009520828014728977,
+          "rms_error": 0.0016028584247881384,
+          "relative_l2_error": 3.5053525168400293e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 128,
+    "P": 10,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+      "work": "0b7abd968d74659a4dd9fbb249ef16ceb930eb27eebb39fcd2b9f8496a8dbc1a"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 1280,
+      "max_absolute_error": 0.003973664078557704,
+      "rms_error": 0.0011648481015849685,
+      "relative_l2_error": 2.9459826205200065e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849685,
+          "relative_l2_error": 2.9459826205200065e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 1270,
+          "max_absolute_error": 0.0037841796875,
+          "rms_error": 0.0011966210576020858,
+          "relative_l2_error": 3.0263372882814867e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.0005050523888456837,
+          "rms_error": 0.00017798598227753622,
+          "relative_l2_error": 4.501390436850498e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849685,
+          "relative_l2_error": 2.9459826205200065e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.003973664078557704,
+          "rms_error": 0.0011648481015849685,
+          "relative_l2_error": 2.9459826205200065e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 128,
+    "P": 10,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      0,
+      128
+    ],
+    "Z_shape": [
+      128,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      512
+    ],
+    "leading_output_strides": [
+      4,
+      512
+    ],
+    "leading_view_reused": true,
+    "input_sha256": {
+      "Z": "4a5812e91477bf4cbd175c48cc870a6481b8bdbbe46fc607748773689e2f6df5",
+      "work": "905dabdd463eb1a001ef6d569e1c23cd906e8aee046ecb79f3d55d4830f4af96"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 1280,
+      "max_absolute_error": 0.013555041333916051,
+      "rms_error": 0.0015569175854679078,
+      "relative_l2_error": 3.4743886568023584e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.013555041333916051,
+          "rms_error": 0.0015569175854679078,
+          "relative_l2_error": 3.4743886568023584e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 1267,
+          "max_absolute_error": 0.0140380859375,
+          "rms_error": 0.0015904838216708257,
+          "relative_l2_error": 3.5492938773297565e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.0009747182357102702,
+          "rms_error": 0.00024389590581021153,
+          "relative_l2_error": 5.442736189101914e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.013555041333916051,
+          "rms_error": 0.0015569175854679078,
+          "relative_l2_error": 3.4743886568023584e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": true,
+          "different_elements": 0,
+          "max_absolute_error": 0.0,
+          "rms_error": 0.0,
+          "relative_l2_error": 0.0,
+          "allclose_original_tolerance": true
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 1280,
+          "max_absolute_error": 0.013555041333916051,
+          "rms_error": 0.0015569175854679078,
+          "relative_l2_error": 3.4743886568023584e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 80,
+    "P": 6,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "7efe9082343356e2991e1a120c40970ecde8c52ca62a71c1e6874db0c482c46b",
+      "work": "b2521640f924e99a818b34c4c252ded1e22949abf045741adde99fd27f32ea20"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 480,
+      "max_absolute_error": 0.004404444112708461,
+      "rms_error": 0.0013748352367813318,
+      "relative_l2_error": 3.882272300145786e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.14537682226046e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.00439453125,
+          "rms_error": 0.0013743206361970497,
+          "relative_l2_error": 3.880815983482802e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.0004617951150294175,
+          "rms_error": 0.00017381399016424827,
+          "relative_l2_error": 4.908175331410999e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.14537682226046e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 96,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.14537682226046e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 80,
+    "P": 6,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      24,
+      4
+    ],
+    "numpy_output_strides": [
+      24,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "7efe9082343356e2991e1a120c40970ecde8c52ca62a71c1e6874db0c482c46b",
+      "work": "bfec6afa2315c843e38ecffcf84d48c9a0a4a6a1c76e0bdab47be7ff1f893815"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 480,
+      "max_absolute_error": 0.0073201353359309,
+      "rms_error": 0.0014489157169467802,
+      "relative_l2_error": 3.4564876550558005e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 95,
+          "max_absolute_error": 0.00439453125,
+          "rms_error": 0.0007045572323974846,
+          "relative_l2_error": 1.6807695103550493e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.0073201353359309,
+          "rms_error": 0.0012751150675437215,
+          "relative_l2_error": 3.041874305172166e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 476,
+          "max_absolute_error": 0.007568359375,
+          "rms_error": 0.0014731568723163968,
+          "relative_l2_error": 3.5143165680577667e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.001041998887558293,
+          "rms_error": 0.0002471995407286614,
+          "relative_l2_error": 5.897114310172578e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 95,
+          "max_absolute_error": 0.00439453125,
+          "rms_error": 0.0007045572323974846,
+          "relative_l2_error": 1.6807695103550493e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.0073201353359309,
+          "rms_error": 0.0012751150675437215,
+          "relative_l2_error": 3.041874305172166e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 95,
+          "max_absolute_error": 0.00439453125,
+          "rms_error": 0.0007045572323974846,
+          "relative_l2_error": 1.6807695103550493e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 480,
+          "max_absolute_error": 0.0073201353359309,
+          "rms_error": 0.0012751150675437215,
+          "relative_l2_error": 3.041874305172166e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 80,
+    "P": 10,
+    "work_kind": "projected_phenotype",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "7efe9082343356e2991e1a120c40970ecde8c52ca62a71c1e6874db0c482c46b",
+      "work": "0b7abd968d74659a4dd9fbb249ef16ceb930eb27eebb39fcd2b9f8496a8dbc1a"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 800,
+      "max_absolute_error": 0.004404444112708461,
+      "rms_error": 0.0013748352367813318,
+      "relative_l2_error": 3.882272300145787e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.1453767519906875e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.00439453125,
+          "rms_error": 0.0013743206361970497,
+          "relative_l2_error": 3.8808158563703746e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.0004617951150294175,
+          "rms_error": 0.0001738139901642483,
+          "relative_l2_error": 4.908175331411001e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.1453767519906875e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00360107421875,
+          "rms_error": 0.0007597463141257612,
+          "relative_l2_error": 2.1453767519906875e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.004404444112708461,
+          "rms_error": 0.0011311114322866956,
+          "relative_l2_error": 3.194042794702752e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  },
+  {
+    "case_index": 2,
+    "B": 80,
+    "P": 10,
+    "work_kind": "phenotype_plus_algebra_noise",
+    "indices": [
+      1920,
+      2000
+    ],
+    "Z_shape": [
+      80,
+      50000
+    ],
+    "Z_strides": [
+      200000,
+      4
+    ],
+    "work_strides": [
+      40,
+      4
+    ],
+    "numpy_output_strides": [
+      40,
+      4
+    ],
+    "prefix_output_strides": [
+      4,
+      320
+    ],
+    "leading_output_strides": [
+      4,
+      320
+    ],
+    "leading_view_reused": false,
+    "input_sha256": {
+      "Z": "7efe9082343356e2991e1a120c40970ecde8c52ca62a71c1e6874db0c482c46b",
+      "work": "d0dbf748f042fb3f5d2633963d8471b9f6df5060f21a78f6fdbed688f36b85c3"
+    },
+    "numpy_vs_float64": {
+      "array_equal": false,
+      "different_elements": 800,
+      "max_absolute_error": 0.007071246162809075,
+      "rms_error": 0.0015532278439613844,
+      "relative_l2_error": 3.7018221049388323e-06,
+      "allclose_original_tolerance": false
+    },
+    "alternatives": {
+      "production_scipy_F_prefix": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00701904296875,
+          "rms_error": 0.0008648781745999893,
+          "relative_l2_error": 2.061272124898832e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006035747855207774,
+          "rms_error": 0.0013113279268883464,
+          "relative_l2_error": 3.1252998234942656e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "numpy_F_work": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 794,
+          "max_absolute_error": 0.00701904296875,
+          "rms_error": 0.0015791295208781764,
+          "relative_l2_error": 3.7635539415669674e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.000800045497840074,
+          "rms_error": 0.00024397917535824132,
+          "relative_l2_error": 5.814777967039455e-07,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_fresh_output": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00701904296875,
+          "rms_error": 0.0008648781745999893,
+          "relative_l2_error": 2.061272124898832e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006035747855207774,
+          "rms_error": 0.0013113279268883464,
+          "relative_l2_error": 3.1252998234942656e-06,
+          "allclose_original_tolerance": false
+        }
+      },
+      "scipy_F_128_row_view": {
+        "vs_numpy": {
+          "array_equal": false,
+          "different_elements": 160,
+          "max_absolute_error": 0.00701904296875,
+          "rms_error": 0.0008648781745999893,
+          "relative_l2_error": 2.061272124898832e-06,
+          "allclose_original_tolerance": false
+        },
+        "vs_float64": {
+          "array_equal": false,
+          "different_elements": 800,
+          "max_absolute_error": 0.006035747855207774,
+          "rms_error": 0.0013113279268883464,
+          "relative_l2_error": 3.1252998234942656e-06,
+          "allclose_original_tolerance": false
+        }
+      }
+    }
+  }
+]
