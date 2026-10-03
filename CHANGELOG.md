@@ -16,6 +16,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   footprint. `LMM.fit_result` now stores the fit without the back
   reference and returns it bound to the model; a fit returned by
   `fit()` still keeps its model alive.
+- The simulation study's S2 confounder was phensim's
+  `simulate_confounded_trait` axis, the leading eigenvector of the
+  tested SNPs' GRM: in a panmictic sample a weighted sum of those SNPs,
+  so S2 could not compare LOCO with non-LOCO. S2 now samples two demes
+  with msprime and puts the confounder on an environment that differs
+  between them (archive 20261003T122520Z-sim-study).
+- The simulation study cut phensim's contiguous coalescent segment into
+  "chromosomes" every 200 SNPs, through strong LD: every S1 false locus
+  was a QTL tag in the neighbouring block. S1, S3 and S4 blocks are now
+  ldpred3's LD split (bigsnpr's `snp_ldsplit`) into the same number of
+  blocks of 100-400 SNPs.
 - `GwasResult.genomic_control` returned median(p)/0.5, which is not
   lambda_GC and runs the other way (below 1 meant inflation). It now
   returns the median 1-df chi-square over 0.455. The archived sim-study

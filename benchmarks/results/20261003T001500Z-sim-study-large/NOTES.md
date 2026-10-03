@@ -44,3 +44,9 @@ non-causal SNPs at n = 10k, max |delta log10 p| = 17), and the exact
 non-LOCO scans were deflated by proximal contamination. The truncated
 scan is no longer a default path; large-n association uses the
 two-step BOLT-LMM / LDAK-KVIK statistics with LOCO. See CHANGELOG.md.
+
+## Superseded S2 (2026-10-03)
+
+Finding 4's genomic-control numbers come from the S2 confounder on the
+GRM's leading eigenvector, a function of the tested SNPs. The S2
+redesign is in 20261003T122520Z-sim-study.
