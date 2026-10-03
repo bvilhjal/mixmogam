@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Research report (2.0.0.dev2)
+
+- Expand the manuscript with model and calibration derivations, explicit
+  evidence boundaries, and six testable research priorities. Withdraw the
+  invalid external-program results and qualify historical QTL-free loci.
+- Add a reproducible known-covariance denominator experiment with held-out
+  audit variants, analytic tail probabilities, and phenotype-replicate
+  uncertainty; regenerate the report figures with provenance hashes.
+
 ### Critical review (2.0.0.dev1)
 
 - Correct PLINK BED bit encoding/decoding against a specification fixture;

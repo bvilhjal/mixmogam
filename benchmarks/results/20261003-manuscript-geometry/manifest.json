@@ -1,0 +1,84 @@
+{
+  "purpose": "conditional known-covariance denominator illustration, not end-to-end GWAS validation",
+  "source_sha256": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
+  "package_commit": "729c8532ff36878d9b6f62c20ebd2eb72a86c6db",
+  "package_version": "2.0.0.dev1",
+  "python": "3.14.6",
+  "numpy": "2.4.6",
+  "scipy": "1.18.0",
+  "replicates": 2000,
+  "threads_requested": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "cases": [
+    {
+      "theta": 0.0,
+      "seed": 20261003,
+      "genotype_sha256": "53ccc958fa2a14a9537c95b17571472fc4617f195b826bc94237654eb7d0e131",
+      "selected_k": 4,
+      "width_diagnostics": {
+        "4": {
+          "calibration_cv": 0.01371637975441129,
+          "audit_relative_rmse": 0.015260829842957319
+        }
+      },
+      "n_samples": 256,
+      "n_background": 2000,
+      "n_test": 1000,
+      "dropped_monomorphic": {
+        "background": 0,
+        "test": 0
+      },
+      "n_calibration": 30,
+      "n_audit": 970,
+      "delta": 1.0
+    },
+    {
+      "theta": 0.05,
+      "seed": 20261004,
+      "genotype_sha256": "2d354b75a9741250be6934ce6e2be63b2dec0faf912df7b38fac0be4bdedd439",
+      "selected_k": 4,
+      "width_diagnostics": {
+        "4": {
+          "calibration_cv": 0.014704932957994276,
+          "audit_relative_rmse": 0.014892007358348674
+        }
+      },
+      "n_samples": 256,
+      "n_background": 2000,
+      "n_test": 1000,
+      "dropped_monomorphic": {
+        "background": 0,
+        "test": 0
+      },
+      "n_calibration": 30,
+      "n_audit": 970,
+      "delta": 1.0
+    },
+    {
+      "theta": 0.2,
+      "seed": 20261005,
+      "genotype_sha256": "badff54f0316533b7b6e8b52e7b6806148f638561ea6da3c6c4c96a3422ba055",
+      "selected_k": 4,
+      "width_diagnostics": {
+        "4": {
+          "calibration_cv": 0.016092326195735532,
+          "audit_relative_rmse": 0.013634691427800405
+        }
+      },
+      "n_samples": 256,
+      "n_background": 1999,
+      "n_test": 1000,
+      "dropped_monomorphic": {
+        "background": 1,
+        "test": 0
+      },
+      "n_calibration": 30,
+      "n_audit": 970,
+      "delta": 1.0
+    }
+  ]
+}

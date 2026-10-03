@@ -4,11 +4,12 @@ Mixed linear models for quantitative-trait genome-wide association,
 with leave-one-chromosome-out (LOCO) testing by default. The core uses
 NumPy and SciPy; Numba accelerates optional kernels.
 
-**Development version 2.0.0.dev1.** The [critical review](docs/review-2026-10-03.md)
+**Development version 2.0.0.dev2.** The [critical review](docs/review-2026-10-03.md)
 records correctness fixes, migration notes, validation, and remaining work.
 In particular, the older LDAK binary comparison must be rerun: the PLINK
-writer used the wrong bit encoding. The existing PDFs and benchmark archives
-are historical evidence, not validation of this revision.
+writer used the wrong bit encoding. The [revised research report](report/mixmogam_report.pdf)
+separates current correctness checks, a new known-covariance experiment,
+and historical benchmarks, and develops a testable research agenda.
 
 Table 1. Association methods implemented by the current package.
 
@@ -75,7 +76,8 @@ sample order.
 Also available: stepwise MLMM, GxE, genotypic tests, residual-coordinate
 permutations, two-kinship fits, and Manhattan/QQ plots. Start with the
 [quickstart](docs/quickstart.md); use [design notes](docs/design.md) for
-implementation details. The [technical PDF](docs/methods.pdf) and
-[report PDF](report/mixmogam_report.pdf) predate this review; read the
-[review's corrections](docs/review-2026-10-03.md) before citing them.
+implementation details. The [research report](report/README.md) gives the
+statistical argument, evidence boundaries, and reproduction commands.
+The older [technical PDF](docs/methods.pdf) predates the review; read the
+[review's corrections](docs/review-2026-10-03.md) before citing it.
 The Python-2-era package remains under the `v1.0-legacy` Git tag.
