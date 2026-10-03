@@ -152,17 +152,20 @@ def test_permutations_match_sequential_raw(setup):
 
 
 def test_permutations_match_sequential_whitened(setup):
-    """Whitened scheme: each permutation is the scan of y_b = V^{1/2} P r."""
+    """Whitened scheme: compare to an explicit orthonormal residual basis."""
     gt, K, y = setup
     model = LMM(y, K=K)
     fit = model.fit()
     out = permutation_min_p(model, gt, n_perm=4, block=10**9, dtype=np.float64, seed=9)
-    perms = np.argsort(np.random.default_rng(9).random((300, 4)), axis=0)
-    r = model._scan_factors(np.float64)["r"]
+    fac = model._scan_factors(np.float64)
+    basis = linalg.qr(fac["Q"], mode="full")[0][:, model.q:]
+    xi = basis.T @ fac["r"]
+    perms = np.argsort(np.random.default_rng(9).random((xi.size, 4)), axis=0)
     eig = model.eigen()
     U, lam = eig["vectors"], np.maximum(eig["values"], 0.0)
     for b in range(4):
-        y_b = U @ (np.sqrt(lam + fit.delta) * (U.T @ r[perms[:, b]]))
+        rp = basis @ xi[perms[:, b]]
+        y_b = U @ (np.sqrt(lam + fit.delta) * (U.T @ rp))
         lmm_b = LMM(y_b, K=K)
         lmm_b._eig = model._eig
         lmm_b.fit_result = fit

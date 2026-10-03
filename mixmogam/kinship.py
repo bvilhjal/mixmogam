@@ -21,11 +21,24 @@ __all__ = [
     "loco_kinships",
     "windowed_kinships",
     "chromosome_counts",
+    "GenotypeKinship",
 ]
 
 
 def _as_genotypes(G: Union[Genotypes, np.ndarray]) -> Genotypes:
     return G if isinstance(G, Genotypes) else Genotypes(G)
+
+
+def _validate_weights(weights, m):
+    if m == 0:
+        raise ValueError("kinship requires at least one variant")
+    if weights is None:
+        return None
+    weights = np.asarray(weights, dtype=np.float64)
+    if (weights.shape != (m,) or not np.isfinite(weights).all()
+            or np.any(weights < 0) or weights.sum() <= 0):
+        raise ValueError("weights must be finite, non-negative, one per variant, with positive sum")
+    return weights
 
 
 def _standardized_blocks(gt: Genotypes, block: int, dtype, weights=None):
@@ -35,6 +48,8 @@ def _standardized_blocks(gt: Genotypes, block: int, dtype, weights=None):
     0 in the standardized space (contribute nothing to any accumulator).
     """
     G = gt.G
+    if not isinstance(block, (int, np.integer)) or block <= 0:
+        raise ValueError("block must be a positive integer")
     m = G.shape[1]
     for i in range(0, m, block):
         s = slice(i, min(i + block, m))
@@ -77,6 +92,7 @@ def realized_relationship(
         snp_subset = np.asarray(snp_subset)
         gt = gt.variant_mask(snp_subset)
         weights = None if weights is None else np.asarray(weights)[snp_subset]
+    weights = _validate_weights(weights, gt.n_variants)
     for Z, w in _standardized_blocks(gt, block, dtype, weights):
         ZW = Z * w[:, None]
         K += (Z.T.astype(np.float64)) @ (ZW.T.astype(np.float64)).T
@@ -119,10 +135,14 @@ def ibs_kinship(
 def scale_k(K: np.ndarray) -> np.ndarray:
     """EMMAX scaling: mean off-diagonal 0, mean diagonal 1 (v1 semantics)."""
     K = np.asarray(K, dtype=np.float64)
+    if K.ndim != 2 or K.shape[0] != K.shape[1] or K.shape[0] < 2 or not np.isfinite(K).all():
+        raise ValueError("K must be a finite square matrix with at least two samples")
     n = K.shape[0]
     off = (K.sum() - np.trace(K)) / (n * (n - 1))
     Kc = K - off
     dmean = np.trace(Kc) / n
+    if dmean <= 0:
+        raise ValueError("K has no positive variation to scale; check genotype polymorphism")
     return Kc / dmean
 
 
@@ -157,6 +177,8 @@ def loco_kinships(
     gt = _as_genotypes(G)
     n = gt.n_samples
     chroms, _ = chromosome_counts(gt)
+    if chroms.size < 2:
+        raise ValueError("LOCO needs variants on at least two chromosomes")
     per_chrom = {c: np.zeros((n, n), dtype=np.float64) for c in chroms}
     idx = 0
     for Z, _ in _standardized_blocks(gt, block, dtype):
@@ -193,27 +215,21 @@ def windowed_kinships(
     kinships.
     """
     gt = _as_genotypes(G)
-    n = gt.n_samples
     m = gt.n_variants
-    windows = [
-        (start, min(start + window_size, m)) for start in range(0, m, jump_size)
-    ]
-    K_parts = {w: np.zeros((n, n), dtype=np.float64) for w in windows}
-    idx = 0
-    for Z, _ in _standardized_blocks(gt, block, dtype):
-        k = Z.shape[0]
-        Zd = Z.T.astype(np.float64)
-        for (start, stop), acc in K_parts.items():
-            lo = max(start, idx) - idx
-            hi = min(stop, idx + k) - idx
-            if hi > lo:
-                acc += Zd[:, lo:hi] @ Zd[:, lo:hi].T
-        idx += k
-    Kfull = sum(K_parts.values())
-    for wi, (start, stop) in enumerate(windows):
+    if (not isinstance(window_size, (int, np.integer)) or window_size <= 0
+            or not isinstance(jump_size, (int, np.integer)) or jump_size <= 0):
+        raise ValueError("window_size and jump_size must be positive integers")
+    if window_size >= m:
+        raise ValueError("a window must leave variants in the global complement")
+    # Each SNP enters the full sum exactly once, even when windows overlap
+    # or leave gaps. Only the current local matrix is retained.
+    full_sum = m * realized_relationship(gt, block=block, dtype=dtype, scale=False)
+    for wi, start in enumerate(range(0, m, jump_size)):
+        stop = min(start + window_size, m)
         span = stop - start
-        Kloc = K_parts[(start, stop)] / span
-        Krest = (Kfull / m - K_parts[(start, stop)] / m) * (m / (m - span))
+        local = Genotypes(gt.G[:, start:stop])
+        Kloc = realized_relationship(local, block=block, dtype=dtype, scale=False)
+        Krest = (full_sum - span * Kloc) / (m - span)
         if scale:
             Kloc = scale_k(Kloc)
             Krest = scale_k(Krest)
@@ -243,13 +259,19 @@ class GenotypeKinship:
     """
 
     def __init__(self, gt, weights=None, snp_subset=None, block: int = 8192,
-                 dtype=np.float32, normalize: bool = True):
+                 dtype=np.float32, normalize: bool = True,
+                 cache_bytes: float = 256 * 1024**2):
         gt = _as_genotypes(gt)
         if snp_subset is not None:
             gt = gt.variant_mask(np.asarray(snp_subset))
             weights = None if weights is None else np.asarray(weights)[snp_subset]
         self.gt = gt
-        self.weights = weights
+        self.weights = _validate_weights(weights, gt.n_variants)
+        self._weight_total = (float(gt.n_variants) if self.weights is None
+                              else float(self.weights.sum()))
+        if not np.isfinite(cache_bytes) or cache_bytes < 0:
+            raise ValueError("cache_bytes must be finite and non-negative")
+        self.cache_bytes = cache_bytes
         self.block = block
         self.dtype = dtype
         self.normalize = normalize
@@ -268,31 +290,32 @@ class GenotypeKinship:
             tr = float(diag.sum())
             c = (total - tr) / (n * (n - 1))
             d = tr / n - c
+            if not np.isfinite(d) or d <= 0:
+                raise ValueError("kinship has no positive variation to scale")
             self._norm = (c, d)
         return self._norm
 
     def _standardized(self):
-        """Standardized SNP blocks, built once and reused by every product.
-
-        Re-standardizing (and re-converting dtype) per matvec turned each
-        of the ~10^3 Lanczos/solver matvecs into a full memory-bandwidth
-        pass; the cache makes them pure GEMMs.
-        """
-        if self._Z_cache is None:
-            self._Z_cache = [
-                Z
-                for Z, _ in _standardized_blocks(
-                    self.gt, self.block, self.dtype, self.weights
-                )
-            ]
-        return self._Z_cache
+        """Weighted blocks, cached only within the configured memory budget."""
+        if self._Z_cache is not None:
+            yield from self._Z_cache
+            return
+        cache = self.n * self.n_variants * np.dtype(self.dtype).itemsize <= self.cache_bytes
+        blocks = [] if cache else None
+        for Z, w in _standardized_blocks(self.gt, self.block, self.dtype, self.weights):
+            Z *= np.sqrt(w)[:, None]
+            if cache:
+                blocks.append(Z)
+            yield Z
+        if cache:
+            self._Z_cache = blocks
 
     def _apply_raw(self, X: np.ndarray) -> np.ndarray:
         Xw = np.asarray(X, dtype=self.dtype)
         out = np.zeros(Xw.shape, dtype=np.float64)
         for Z in self._standardized():
             out += (Z.T @ (Z @ Xw)).astype(np.float64)
-        return out / self.n_variants
+        return out / self._weight_total
 
     def matmul(self, X: np.ndarray) -> np.ndarray:
         """Apply K to a vector or column block: Z (Z' X) / m."""
@@ -314,7 +337,7 @@ class GenotypeKinship:
         for Z in self._standardized():
             Zd = Z.T.astype(np.float64)
             out += np.einsum("ij,ij->i", Zd, Zd)
-        return out / self.n_variants
+        return out / self._weight_total
 
     def diagonal(self) -> np.ndarray:
         """diag(K); with normalization, (raw diagonal - c) / d."""
@@ -326,11 +349,8 @@ class GenotypeKinship:
 
     def _grand_sum(self) -> float:
         """sum(K) = |Z' 1|^2 / m in one streaming pass."""
-        acc = np.zeros(self.n_variants)
-        i = 0
-        for Z, _ in _standardized_blocks(self.gt, self.block, self.dtype,
-                                         self.weights):
-            k = Z.shape[0]
-            acc[i : i + k] = Z.sum(axis=1)
-            i += k
-        return float(acc @ acc) / self.n_variants
+        total = 0.0
+        for Z in self._standardized():
+            sums = Z.sum(axis=1, dtype=np.float64)
+            total += float(sums @ sums)
+        return total / self._weight_total

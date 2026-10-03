@@ -40,6 +40,7 @@ Haseman-Elston regression).
 from __future__ import annotations
 
 from dataclasses import dataclass
+import warnings
 
 import numpy as np
 from scipy import linalg, stats
@@ -135,7 +136,10 @@ def _loco_solve(st: _Setup, delta: float, rhs: np.ndarray, col_group: np.ndarray
     def apply(P, cols):
         return st.lg.matmul_loco(P, col_group[cols], weights) + delta * P
 
-    return batched_pcg(apply, rhs, lambda R: pre(R, delta), tol=tol, max_iter=2000)
+    solution, info = batched_pcg(apply, rhs, lambda R: pre(R, delta), tol=tol, max_iter=2000)
+    if not info["converged"]:
+        raise RuntimeError("LOCO conjugate-gradient solve did not converge; association statistics unavailable")
+    return solution, info
 
 
 def _retro_stats(st: _Setup, W: np.ndarray) -> dict:
@@ -165,8 +169,12 @@ def _calibrate_inf(st: _Setup, vg: float, delta: float, U: np.ndarray, rs: dict,
     how far the proportional-denominator assumption is from holding.
     """
     cand = np.nonzero((rs["chi2"] < 5.0) & (rs["zz"] > 0))[0]
+    if not isinstance(n_cal, (int, np.integer)) or n_cal < 1:
+        raise ValueError("n_calibration must be a positive integer")
     if cand.size == 0:
         cand = np.nonzero(rs["zz"] > 0)[0]
+    if cand.size == 0:
+        raise ValueError("calibration needs polymorphic SNPs outside the covariate span")
     sel = np.sort(rng.choice(cand, size=min(n_cal, cand.size), replace=False))
     Zc = st.lg.rows(sel)  # (k, n)
     gsel = st.lg.groups[sel]
@@ -244,6 +252,9 @@ def _spectral_quadform(st: _Setup, bases: list, delta: float) -> np.ndarray:
 
 
 def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict) -> GwasResult:
+    if any(extra.get(key) is False for key in ("cv_converged", "loco_converged")):
+        warnings.warn("variational fit did not converge; inspect cv_converged/loco_converged before using results",
+                      RuntimeWarning, stacklevel=3)
     sd = st.lg.sd
     with np.errstate(divide="ignore", invalid="ignore"):
         beta = np.where(sd > 0, beta_z / sd, np.nan)
@@ -258,6 +269,7 @@ def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict) -> GwasResult:
         beta=beta,
         se=se,
         af=st.lg.mean / 2.0,
+        effect_allele=gt.allele1, other_allele=gt.allele2,
     )
     res.extra.update({"statistic": "chi2", "n": st.lg.n,
                       "n_loco_groups": st.lg.n_groups, "loco_groups": st.labels})
@@ -286,10 +298,11 @@ def _spectral_denominator(st: _Setup, vg: float, delta: float, cal: dict,
     much of it the basis misses. An integer fixes k.
     """
     widths = (SPECTRAL_WIDTHS if n_spectral == "auto" else (int(n_spectral),))
+    if min(widths) < 1:
+        raise ValueError("n_spectral must be a positive integer or 'auto'")
+    widths = tuple(dict.fromkeys(min(k, st.lg.n - 2) for k in widths))
     best = None
     for k in widths:
-        if k >= st.lg.n - 2:
-            break
         bases = _loco_eigh(st, k, weights=weights)
         A = _spectral_quadform(st, bases, delta)
         ratio = cal["d_prosp"] / (vg * A[cal["snps"]])
@@ -434,7 +447,8 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              "calibration_inf": inf["cal"]["c"], "calibration_cv": inf["cal"]["cv"],
              "calibration_ratios": inf["cal"]["ratios"], "spectral_k": inf["cal"].get("k"),
              "cv_grid": list(grid), "cv_r2": r2, "cv_best": grid[best],
-             "cv_iterations": cv["iterations"], "use_mixture": bool(use_mixture)}
+             "cv_iterations": cv["iterations"], "cv_converged": cv["converged"],
+             "use_mixture": bool(use_mixture)}
     if not use_mixture:
         extra["note"] = "mixture did not beat the infinitesimal model in CV; BOLT-LMM-inf statistics"
         return _result(st, gt, inf["chi2"], inf["beta_z"], inf["se_z"], extra)
@@ -585,6 +599,8 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, cache_bytes)
     n, G = st.lg.n, st.lg.n_groups
+    if denominator not in ("constant", "spectral"):
+        raise ValueError(f"unknown denominator {denominator!r}")
     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
     ys = st.y_p / sy
 
@@ -642,6 +658,7 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
              "alpha_method": alpha_method, "alpha_scores": alpha_scores,
              "structure": struct,
              "cv_grid": list(grid), "cv_mse": mse, "cv_best": grid[best],
+             "cv_converged": cv["converged"],
              "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}
     lam = 1.0
     if struct["strong"]:

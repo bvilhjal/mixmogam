@@ -1,8 +1,12 @@
 # mixmogam engine design
 
-Numerical design and the evidence behind it. Full derivations with
-pseudocode: [methods.pdf](methods.pdf). Every claim here is backed by a
-test in `tests/` or an archive in `benchmarks/results/`.
+The tables below describe archived development runs. The
+[2026-10-03 review](review-2026-10-03.md) identifies input-encoding, MAC,
+prediction, and permutation corrections. In particular, the external LDAK
+comparison is withdrawn pending a corrected rerun.
+
+Numerical design and historical derivations with pseudocode: [methods.pdf](methods.pdf). The PDF predates the review; current API contracts are in the docstrings
+and quickstart.
 
 ## Model
 
@@ -22,9 +26,11 @@ simulation, read on the corrected scale), and LOCO raised locus-level
 power at n = 4,000 from 0.33 to 0.51 (sim study S3). More than 25
 chromosomes are merged into 25 contiguous groups of balanced size.
 
+Table 1. Association paths and calibration.
+
 | method | residual tested against | calibration |
 |---|---|---|
-| `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | exact F test |
+| `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | plug-in F test |
 | `bolt-inf` | V_{-g}^{-1} y by batched CG | one constant from 30 exact prospective statistics |
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
 | `kvik` | y minus the elastic-net LOCO score | lambda = 1, or KVIK's rule under strong structure |
@@ -45,7 +51,7 @@ proximal-contamination deflation.
 ## Exact engine
 
 - Variance components: EMMA REML/ML from one eigendecomposition of K
-  (matrix determinant lemma for the REML terms), vectorized grid plus
+  (matrix determinant lemma for the REML terms), profile grid plus
   Brent.
 - Scan: the EMMAX statistic as BLAS-3, per SNP block
   G~ = (I - QQ') V^{-1/2} G' (two GEMMs against the eigenbasis and one
@@ -94,8 +100,9 @@ vary (coefficient of variation < 0.2).
 
 ## Structure-aware denominator (mixmogam extension)
 
-All two-step statistics, like REGENIE's and SAIGE's, scale a score by
-one genome-wide constant. That is exact only if the prospective
+The constant-denominator paths evaluated here use a genome-wide
+calibration factor. This is not a universal description of REGENIE or
+SAIGE and their available analysis modes. That is exact only if the prospective
 denominator z_j' V_{-g}^{-1} z_j is proportional to z_j' z_j. Under
 strong structure it is not: SNPs aligned with the leading kinship
 eigenvectors have smaller denominators. Each two-step result reports
@@ -120,6 +127,8 @@ SNPs by structure-loading quintile, the share of z_j in the top-10
 kinship eigenvectors; archive 20261003T081812Z-structure-calibration
 and, for the LDAK binary, 20261003T083746Z-kvik-reference):
 
+Table 2. Historical null calibration by dataset.
+
 | data | exact LOCO | BOLT-LMM-inf | + spectral | LDAK-KVIK | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
@@ -136,11 +145,14 @@ about 7% overall inflation under strong simulated structure.
 - **GxE**: the 1-df interaction test is conditional on the SNP main
   effect with E among the covariates. `polygenic_gxe=True` adds a
   K * (EE') variance component (Sul et al. 2016).
-- **Permutations**: GLS-whitened null residuals are permuted (Abney
-  2015). Raw-phenotype permutation (v1) gave a 7.6% family-wise error
+- **Permutations**: GLS-whitened null residuals are rotated into an
+  orthonormal residual basis, permuted there, and rotated back (Abney
+  2015). Whitening alone does not make fitted residual entries exchangeable.
+  `scheme="projected"` reproduces the pre-review approximation. Raw-phenotype permutation (v1) gave a 7.6% family-wise error
   at a nominal 5% under structure. All permutations share each
-  SNP-block GEMM. In the sim study the 5% threshold is 4.4e-6 against
-  Bonferroni's 2.5e-6 (the raw scheme gave 8.6e-5).
+  SNP-block GEMM. The historical projected scheme gave a 5% threshold of
+  4.4e-6 against Bonferroni's 2.5e-6 (raw: 8.6e-5). These values do not
+  validate the corrected residual-coordinate scheme.
 - **MLMM**: forward inclusion with REML refits, backward elimination,
   selection by EBIC or mBonf on ML likelihoods (Segura et al. 2012).
 - **Kinships**: GRM (called-only standardization), IBS, exact LOCO by
@@ -152,6 +164,8 @@ A randomized top-k basis with the discarded spectrum treated as a flat
 bulk at its mean is mixmogam's own approximation. On the corrected
 lambda_GC scale:
 
+Table 3. Historical truncated-spectrum calibration.
+
 | n | k | lambda_GC (exact non-LOCO scan) |
 |---|---|---|
 | 4,000 | 128 / 512 / 1,024 | 2.13 / 1.28 / 0.95 (0.91) |
@@ -162,6 +176,8 @@ statistics.
 
 ## Measured speed (development laptop, 4 BLAS threads, AC power)
 
+Table 4. Historical development timings.
+
 | workload | result |
 |---|---|
 | exact scan vs the v1-style per-SNP loop (n = 2,000, m = 10k, f32) | 123x (0.27 s vs 33.7 s) |
@@ -170,5 +186,6 @@ statistics.
 | `gwas` bolt-inf, same data | ~28 s (spectral +2 s; the K-free path is for large n) |
 | `gwas` kvik, same data | ~15 s (REML alpha selection ~41 s; the LDAK binary ~9 s) |
 
-These compare mixmogam with itself. It has not been benchmarked against
-GEMMA, BOLT-LMM, REGENIE or LDAK.
+The scan speedup compares mixmogam with its own legacy-style loop.
+There is no validated comparison here against GEMMA, BOLT-LMM or REGENIE;
+the archived LDAK comparison needs a corrected PLINK export and rerun.

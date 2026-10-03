@@ -23,9 +23,15 @@ def write_hdf5(gt: Genotypes, path: str, chunk: int = 4096, compression="lzf") -
         fh.create_dataset("genotypes", data=gt.G, chunks=(min(gt.n_samples, 1024), min(gt.n_variants, chunk)), compression=compression)
         fh.create_dataset("samples", data=np.asarray(gt.sample_ids, dtype=h5py.string_dtype()))
         v = fh.create_group("variants")
-        v.create_dataset("chromosome", data=gt.chromosome)
+        chrom = gt.chromosome
+        if chrom.dtype.kind in "UO":
+            chrom = np.asarray(chrom, dtype=h5py.string_dtype())
+        v.create_dataset("chromosome", data=chrom)
         v.create_dataset("position", data=gt.position)
         v.create_dataset("id", data=np.asarray(gt.variant_ids, dtype=h5py.string_dtype()))
+        for name in ("allele1", "allele2"):
+            if getattr(gt, name) is not None:
+                v.create_dataset(name, data=np.asarray(getattr(gt, name), dtype=h5py.string_dtype()))
 
 
 def read_hdf5(path: str) -> Genotypes:
@@ -40,9 +46,13 @@ def read_hdf5(path: str) -> Genotypes:
         G = fh["genotypes"][:]
         samples = fh["samples"][:].astype(str)
         chrom = fh["variants/chromosome"][:]
+        if chrom.dtype.kind in "SO":
+            chrom = chrom.astype(str)
         pos = fh["variants/position"][:]
         vid = fh["variants/id"][:].astype(str)
-    return Genotypes(G, sample_ids=samples, chromosome=chrom, position=pos, variant_ids=vid)
+        alleles = {name: fh[f"variants/{name}"][:].astype(str)
+                   for name in ("allele1", "allele2") if name in fh["variants"]}
+    return Genotypes(G, sample_ids=samples, chromosome=chrom, position=pos, variant_ids=vid, **alleles)
 
 
 def read_hdf5_v1(path: str) -> Genotypes:

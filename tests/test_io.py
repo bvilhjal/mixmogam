@@ -10,8 +10,6 @@ from mixmogam.io.regmap import read_regmap
 from mixmogam.io.hdf5 import read_hdf5, read_hdf5_v1, write_hdf5
 from mixmogam.io.phenofile import read_phenotypes
 
-h5py = pytest.importorskip("h5py")
-
 
 @pytest.fixture(scope="module")
 def toy():
@@ -105,6 +103,7 @@ def test_regmap_nucleotides(tmp_path):
 
 
 def test_hdf5_roundtrip(toy, tmp_path):
+    pytest.importorskip("h5py")
     path = str(tmp_path / "toy.h5")
     write_hdf5(toy, path)
     back = read_hdf5(path)
@@ -113,6 +112,7 @@ def test_hdf5_roundtrip(toy, tmp_path):
 
 
 def test_hdf5_v1_reader(tmp_path):
+    h5py = pytest.importorskip("h5py")
     path = str(tmp_path / "v1.h5")
     rng = np.random.default_rng(5)
     raw = rng.integers(0, 3, size=(20, 15)).astype(np.int8)
@@ -137,14 +137,13 @@ def test_phenotype_long_format(tmp_path):
     path.write_text(
         "phenotype_id,phenotype_name,ecotype_id,value,replicate_id\n"
         "FT,flowering,acc1,10.0,1\n"
-        "FT,flowering,acc1,12.0,2\n"
         "FT,flowering,acc2,NA,1\n"
         "BD,bolting,acc1,5.0,1\n"
     )
     ph = read_phenotypes(str(path))
     assert "FT" in ph and "BD" in ph
     v = ph.align(["acc1", "acc2"], "FT")
-    assert v[0] == 10.0 or v[0] == 12.0  # first record kept
+    assert v[0] == 10.0
     assert np.isnan(v[1])
 
 

@@ -8,7 +8,7 @@ accession. ``data_format`` selects the cell coding:
   reference accession)
 - ``binary``: 0/1 haploid calls
 - ``int``/``diploid_int``: 0/1/2 dosages
-- ``float``: arbitrary numeric values (kept as dosages)
+- ``float``: integral numeric hard calls (fractional dosages are unsupported)
 """
 
 from __future__ import annotations
@@ -58,7 +58,12 @@ def read_regmap(
                 header = None
         if header is None:
             raise ValueError(f"{path}: missing header row (first cell 'Chromosome')")
-        cols = list(header) if sample_ids is None else [s for s in header if s in set(sample_ids)]
+        if len(set(header)) != len(header):
+            raise ValueError(f"{path}: duplicate sample IDs")
+        cols = (list(sample_ids) if sample_ids is not None else list(header)) if not ids else ids
+        absent = set(cols) - set(header)
+        if absent:
+            raise ValueError(f"{path}: requested samples absent: {sorted(absent)[:5]}")
         col_idx = [header.index(c) for c in cols]
         keep_rows = lines[::stride] if stride > 1 else lines
         if max_variants is not None:
@@ -84,7 +89,9 @@ def read_regmap(
         poss.append(pos)
         blocks.append(G_ch)
         ids = cols
-    G = np.hstack(blocks)  # (m, n) SNP-major -> transpose below
+    if not blocks:
+        raise ValueError("no genotype variants were read")
+    G = np.vstack(blocks)  # (m, n) SNP-major -> transpose below
     all_ch = np.concatenate(chroms)
     all_pos = np.concatenate(poss)
     return Genotypes(
@@ -102,9 +109,9 @@ def _decode_numeric(arr: np.ndarray) -> np.ndarray:
     """Vectorized decode of numeric cells (NA/blank -> MISSING)."""
     m, n = arr.shape
     flat = np.array([v if v not in ("NA", "N", "-", "") else "nan" for row in arr for v in row], dtype=np.float64)
-    out = flat.reshape(m, n).astype(np.int8)
-    out[np.isnan(flat.reshape(m, n))] = MISSING
-    return out
+    flat[np.isnan(flat)] = MISSING
+    # The container validates hard calls before the narrowing conversion.
+    return flat.reshape(m, n)
 
 
 def _decode(arr: np.ndarray, data_format: str, reference, cols) -> np.ndarray:

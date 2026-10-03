@@ -68,7 +68,9 @@ def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
     groups, labels = (loco_groups(gt.chromosome, max_loco_groups) if loco
                       else (np.zeros(m, dtype=np.int64), [tuple(np.unique(gt.chromosome))]))
     all_idx = np.arange(m)
-    S_all = _grm_sum(gt, all_idx, kin_block, np.float32)
+    if loco and len(labels) < 2:
+        raise ValueError("LOCO needs variants on at least two chromosomes/groups")
+    S_all = _grm_sum(gt, all_idx, kin_block, dtype)
     p = np.full(m, np.nan)
     f = np.full(m, np.nan)
     beta = np.full(m, np.nan)
@@ -77,7 +79,7 @@ def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
     for g in range(len(labels)):
         idx = np.nonzero(groups == g)[0]
         if loco:
-            S = S_all - _grm_sum(gt, idx, kin_block, np.float32)
+            S = S_all - _grm_sum(gt, idx, kin_block, dtype)
             K = scale_k(S / (m - idx.size))
         else:
             K = scale_k(S_all / m)
@@ -88,10 +90,11 @@ def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
         scan = lmm.scan(_Subset(gt, idx), block=block, dtype=dtype, with_betas=True)
         p[idx], f[idx] = scan["ps"], scan["f_stats"]
         beta[idx], se[idx] = scan["betas"], scan["ses"]
-        del K, lmm
+        del K, lmm, fit
     res = GwasResult(chromosome=np.asarray(gt.chromosome), position=np.asarray(gt.position),
                      p=p, variant_ids=np.asarray(gt.variant_ids), f_stat=f,
-                     beta=beta, se=se, af=gt.allele_freqs())
+                     beta=beta, se=se, af=gt.allele_freqs(),
+                     effect_allele=gt.allele1, other_allele=gt.allele2)
     res.extra.update({"method": "exact", "statistic": "F", "loco": loco, "n": n,
                       "n_loco_groups": len(labels), "loco_groups": labels,
                       "pseudo_heritability": np.array(h2), "delta": np.array(delta)})
@@ -106,7 +109,7 @@ def gwas(
     loco: bool = True,
     max_loco_groups: int = 25,
     block: int = 2048,
-    dtype=np.float32,
+    dtype=None,
     **kwargs,
 ) -> GwasResult:
     """Mixed-model GWAS of phenotype ``y`` on genotypes ``gt``.
@@ -123,12 +126,25 @@ def gwas(
     kwargs : passed to the two-step method (see :mod:`mixmogam.twostep`)
     """
     y = np.asarray(y, dtype=np.float64).ravel()
+    if y.size != gt.n_samples or y.size == 0:
+        raise ValueError("y and genotypes disagree on the sample count or are empty")
+    if gt.n_variants == 0:
+        raise ValueError("GWAS requires at least one variant after filtering")
+    if not isinstance(block, (int, np.integer)) or block <= 0:
+        raise ValueError("block must be a positive integer")
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     if method == "auto":
         method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
     if method == "exact":
+        if kwargs:
+            raise TypeError(f"unexpected options for method='exact': {', '.join(sorted(kwargs))}")
+        dtype = np.float32 if dtype is None else dtype
+        if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError("dtype must be float32 or float64")
         return _gwas_exact(y, gt, X, loco, max_loco_groups, block, dtype)
+    if dtype is not None:
+        raise TypeError("dtype is an exact-scan option; two-step methods use float32 storage")
     if not loco:
         raise ValueError(f"method {method!r} is LOCO by construction")
     from mixmogam import twostep
@@ -136,4 +152,4 @@ def gwas(
     fn = {"bolt-inf": twostep.bolt_inf, "bolt": twostep.bolt, "kvik": twostep.kvik}.get(method)
     if fn is None:
         raise ValueError(f"unknown method {method!r}")
-    return fn(y, gt, X, max_loco_groups=max_loco_groups, **kwargs)
+    return fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)

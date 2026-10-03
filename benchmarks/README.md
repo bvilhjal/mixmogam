@@ -4,6 +4,18 @@ Measured-evidence suite (family convention: run archives under
 `results/<run-id>/` with a source snapshot). Runners refuse to start on
 battery power like the sibling packages.
 
+**Review correction, 2026-10-03 (`2.0.0.dev1`).** Archives through
+`20261003T122520Z` precede the current fixes. The LDAK reference run
+`20261003T083746Z-kvik-reference` used the incorrect BED writer: inbred
+0/2 calls were exported as A1 homozygotes/heterozygotes. It is not a
+matched-input comparison and its agreement/calibration claims require a
+rerun. The updated harness preserves homozygous 0/2 calls and missingness,
+uses corrected diploid MAC, and reports finite tested counts instead of
+counting missing results as nonsignificant. The default permutation scheme
+also changed; previous thresholds belong to `scheme="projected"`.
+The archived sources/results remain intact. See the
+[critical review](../docs/review-2026-10-03.md).
+
 ```sh
 OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
     python benchmarks/run_benchmarks.py [--quick]

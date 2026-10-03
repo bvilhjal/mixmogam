@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Critical review (2.0.0.dev1)
+
+- Correct PLINK BED bit encoding/decoding against a specification fixture;
+  preserve counted A1/A2 alleles, accept standard TPED allele pairs, and keep
+  distinct chromosome labels. Legacy dosage TPED files warn on import.
+- Count diploid MAC in allele copies, retain counted-allele frequency, reject
+  invalid hard calls/duplicate IDs, and represent absent aligned samples as
+  missing. Merge RegMap chromosomes on the variant axis in a common sample
+  order. Reject silently overwritten phenotype replicates.
+- Correct the extra genetic-variance factor in BLUP and include the genetic
+  component in operator predictions. Use ML's n denominator, respect changes
+  to fitting options, provide an OLS fit when K is absent, and stabilize
+  likelihood quadratics against large fixed effects.
+- Reject phenotypes explained entirely by covariates and operations on a
+  superseded fit, rather than reporting projection roundoff or new parameters.
+- Apply weights in streaming kinships, bound their genotype cache, correct
+  overlapping/gapped window complements, and remove the extra group axis
+  from LOCO product storage. Reject nonconverged CG association solves.
+- Permute independent residual coordinates for the default whitened scheme;
+  retain the prior approximation explicitly as `scheme="projected"`.
+  Mean-impute missing genotypic contrasts and mark non-estimable SNPs NaN.
+- Replace the invalid RSS-based pseudo-posterior with a normal-approximation
+  Bayes factor requiring explicit `prior_variance` and beta/se. This is an
+  intentional API correction; the old values are not posterior probabilities.
+- Preserve IDs, effects, standard errors, alleles and precision through CSV;
+  include test oracles in source distributions and declare the pandas extra.
+  CI now covers Python 3.10 without optional analysis dependencies.
+- Fix small-sample spectral scans, forward block size, reject ignored options,
+  and expose incomplete variational fits. SWLM no longer uses an inapplicable
+  genetic-variance stopping rule; MLMM resets its consecutive-low-h2 counter.
+- Mark old reports as historical and withdraw the matched-input LDAK
+  comparison pending a rerun with corrected encoding, MAC and missingness.
+  See `docs/review-2026-10-03.md` for evidence and remaining priorities.
+
 ### Fixed
 
 - `LMM` and its cached `LMFit` referenced each other, so a dropped model

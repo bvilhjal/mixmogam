@@ -11,7 +11,7 @@ from __future__ import annotations
 import warnings
 
 import numpy as np
-from scipy import stats
+from scipy import linalg, stats
 
 from mixmogam.lmm import LMM, LMFit
 
@@ -25,7 +25,7 @@ __all__ = [
 
 def _model(lmm) -> LMM:
     """Accept either an LMM or its LMFit."""
-    return lmm.model if isinstance(lmm, LMFit) else lmm
+    return lmm._current_model() if isinstance(lmm, LMFit) else lmm
 
 
 def scan_genotypic(
@@ -59,15 +59,22 @@ def scan_genotypic(
             D = np.zeros((levels.size, g.size))
             for li, lv in enumerate(levels):
                 D[li] = ((g == lv) & ok).astype(np.float64)
+                D[li, ~ok] = np.mean(g[ok] == lv)
             Dt = lmm._apply_inv_sqrt(D.T, fac["delta"], np.float64).T
             Dt = Dt - (Dt @ Q) @ Q.T
             b = Dt @ r
-            A = Dt @ Dt.T
-            beta = np.linalg.solve(A, b)
+            beta, _, rank, _ = linalg.lstsq(Dt.T, r)
+            if rank < levels.size:
+                ps.append(np.nan)
+                fs.append(np.nan)
+                dfs.append(0)
+                continue
             reduction = float(beta @ b)
             rss = max(rss0 - reduction, 0.0)
             df1 = levels.size
             df2 = df0 - df1
+            if df2 <= 0:
+                raise ValueError("genotypic tests require positive residual degrees of freedom")
             f = (reduction / df1) / (rss / df2)
             ps.append(stats.f.sf(f, df1, df2))
             fs.append(f)
@@ -198,6 +205,31 @@ def _has_intercept(X: np.ndarray) -> bool:
     return X.shape[1] > 0 and np.allclose(X[:, 0], 1.0)
 
 
+def _permuted_residuals(Q, r, n_perm, rng):
+    """Permute independent residual coordinates without forming an n x n basis.
+
+    QR Householder reflectors represent an orthogonal matrix [Q0, U],
+    where U spans the residual space. Return U P U' r (Abney 2015).
+    Storage for the basis is O(n q); responses still require O(n n_perm).
+    """
+    (raw, tau), _ = linalg.qr(np.asarray(Q, dtype=np.float64), mode="raw")
+    n, q = Q.shape
+
+    def rotate(A, transpose):
+        A = np.array(A, dtype=np.float64, copy=True)
+        order = range(q) if transpose else range(q - 1, -1, -1)
+        for i in order:
+            v = np.r_[1.0, raw[i + 1:, i]]
+            A[i:] -= tau[i] * np.outer(v, v @ A[i:])
+        return A
+
+    xi = rotate(np.asarray(r)[:, None], True)[q:, 0]
+    perms = np.argsort(rng.random((n - q, n_perm)), axis=0)
+    coords = np.zeros((n, n_perm))
+    coords[q:] = xi[perms]
+    return rotate(coords, False)
+
+
 def permutation_min_p(
     lmm: LMM,
     gt,
@@ -209,12 +241,17 @@ def permutation_min_p(
 ) -> dict:
     """Genome-wide minimum p-value distribution under permutation.
 
-    ``scheme="whitened"`` (default) permutes the GLS-whitened null
-    residuals r = (I - Q Q') V^{-1/2} y at the fitted variance components
-    and re-residualizes them (the MVNpermute construction of Abney 2015,
-    Genet Epidemiol): under the null model these residuals are close to
-    exchangeable, so the permuted copies are draws from the null
-    distribution of the EMMAX statistic. ``scheme="raw"`` reproduces v1:
+    ``scheme="whitened"`` (default) rotates GLS-whitened null residuals
+    into an orthonormal basis of the n-q dimensional residual space,
+    permutes those coordinates, and rotates back (Abney 2015,
+    MVNpermute). The coordinates are exchangeable for Gaussian errors
+    with known covariance. Estimated variance components make this a
+    plug-in procedure, not an exact finite-sample test.
+
+    ``scheme="projected"`` reproduces the earlier approximation that
+    permuted the n correlated residual entries and projected again;
+    those entries are not generally exchangeable with covariates.
+    ``scheme="raw"`` reproduces v1:
     permute the raw phenotype and then whiten. That breaks the covariance
     the kinship models, so with population structure or relatedness its
     threshold is anti-conservative; it is kept only to reproduce old
@@ -225,20 +262,23 @@ def permutation_min_p(
     "threshold_05"}``; the threshold is the 5th percentile of the minimum
     p-values (the genome-wide 5% significance threshold).
     """
-    if scheme not in ("whitened", "raw"):
-        raise ValueError(f"unknown scheme {scheme!r}; use 'whitened' or 'raw'")
+    if scheme not in ("whitened", "projected", "raw"):
+        raise ValueError(f"unknown scheme {scheme!r}; use 'whitened', 'projected' or 'raw'")
+    if not isinstance(n_perm, (int, np.integer)) or n_perm <= 0:
+        raise ValueError("n_perm must be a positive integer")
     lmm = _model(lmm)
     rng = np.random.default_rng(seed)
     fac = lmm._scan_factors(dtype)
     Q, df = fac["Q"], fac["df"]
     tiny = np.finfo(dtype).tiny
 
-    perms = np.argsort(rng.random((lmm.n, n_perm)), axis=0)
     if scheme == "whitened":
-        Rp = np.asarray(fac["r"], dtype=dtype)[perms]  # (n, B)
+        Rp = _permuted_residuals(Q, fac["r"], n_perm, rng).astype(dtype)
     else:
-        Rp = lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype)
-    Rp -= Q @ (Q.T @ Rp)
+        perms = np.argsort(rng.random((lmm.n, n_perm)), axis=0)
+        Rp = (np.asarray(fac["r"], dtype=dtype)[perms] if scheme == "projected"
+              else lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype))
+        Rp -= Q @ (Q.T @ Rp)
     rss0_p = np.einsum("ij,ij->j", Rp, Rp)  # (B,)
     min_ps = np.ones(n_perm)
     max_fs = np.zeros(n_perm)

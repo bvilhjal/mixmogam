@@ -1,0 +1,123 @@
+{
+  "date": "2026-10-03",
+  "recorded_at_utc": "2026-10-03T14:26:42.348353+00:00",
+  "baseline_commit": "2b8d6b71ade001e94dae74382297915eb0d653c9",
+  "branch": "bolt-kvik-structure-calibration",
+  "package_version": "2.0.0.dev1",
+  "tree_state": "uncommitted review changes; no push or release",
+  "requested_threads": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1"
+  },
+  "full_suite": {
+    "command": "python -m pytest -q --tb=short",
+    "working_directory": "repository root",
+    "python": "3.14.6",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "passed": 117,
+    "skipped": 0,
+    "warnings": 5,
+    "seconds": 55.51,
+    "warnings_expected": [
+      "legacy dosage TPED reader (1)",
+      "approximate truncated-spectrum scan (4)"
+    ]
+  },
+  "installed_wheel_core_suite": {
+    "command": "python -I -m pytest tests/test_review_regressions.py tests/test_lmm.py tests/test_io.py tests/test_data.py tests/test_results.py -q --tb=short",
+    "working_directory": "temporary directory outside the checkout; tests copied from the source distribution",
+    "python": "3.10.20",
+    "numpy": "1.26.4",
+    "scipy": "1.11.4",
+    "passed": 71,
+    "skipped": 5,
+    "warnings": 2,
+    "seconds": 4.59,
+    "skips": "optional HDF5 and plotting tests; numba, h5py, matplotlib and pandas confirmed absent",
+    "import_guard": "conftest asserts mixmogam resolves inside the temporary environment, not the source checkout",
+    "version_metadata_matches": true,
+    "all_public_exports_resolved": true,
+    "pip_check": "passed"
+  },
+  "packaging": {
+    "build": "isolated sdist followed by isolated wheel build from that sdist",
+    "wheel_modules_verified_against_source": 24,
+    "sdist_includes_test_oracles": true,
+    "wheel_excludes_tests_benchmarks_data": true,
+    "artifacts": {
+      "mixmogam-2.0.0.dev1-py3-none-any.whl": {
+        "sha256": "27e9a29da1373efa73e17e6ed70f935cb31a9fccd820253d19d840a0389a8532",
+        "bytes": 80780
+      },
+      "mixmogam-2.0.0.dev1.tar.gz": {
+        "sha256": "146e204bc1067ecfaa7552d619f074578c7a387c9dac7fb1763a654be5941887",
+        "bytes": 108956
+      }
+    }
+  },
+  "lint": "ruff check . passed (pyflakes-only repository configuration)",
+  "whitespace": "git diff --check passed",
+  "source_sha256": {
+    ".github/workflows/ci.yml": "dbdf0c62bf4d07234ad3d4c115a2dbb6928406ce84ec58d5e5effdcee43dbd92",
+    "CHANGELOG.md": "644686dcf466371e2c234c53da0301db70d89d37ddbe228b3ff1739a742543bd",
+    "MANIFEST.in": "f4c9a53468da895f3c37618b151cfe316436e71c7eedb1d5cb820e45f15a1726",
+    "README.md": "9fd9f59bdd5bbdf083c586f90806c36d1edfeeaa8a0021e43917bf2a50304734",
+    "benchmarks/kvik_reference.py": "3392589ed13e5108470327ec935912ab5eb629bf050271b0b0ce4b33e9997ed3",
+    "benchmarks/review_memory.py": "7f82e67e84f3ab2687f48634ef5419d3fb3a98a0cb515efc646b4aefc5bde7d1",
+    "benchmarks/structure_calibration.py": "6f69959ade9349983bc4a5821425fac9a73ca01ef7c28606db4d489d2fe21155",
+    "docs/design.md": "268a509237d252187e240f62eea85511aa09b43e27f7d470e940f6f098620aba",
+    "docs/quickstart.md": "fe7f10f570e3a9c241f06e98a1ed22c82f1af02505c5a9d644738d22a502f8e6",
+    "docs/review-2026-10-03.md": "59b5958970de05ed4403d353d2677394fe5c4f37e160767c00a23e748216acd2",
+    "mixmogam/__init__.py": "063df26796a90b610930b3e979a1118659b0f15fbd6c21c75862c1dcbeb8715a",
+    "mixmogam/_cg.py": "f2da8bb26e578e48de6bcfb20c9a0c7ee20133364654c4c529a558dd47de99fb",
+    "mixmogam/_fast.py": "ba5e236dd17feec0ea52fff9e9f7d0babf433617433006815c59d0a9f4df9d50",
+    "mixmogam/_loco.py": "8cc7b8de9da42fc37c2d23b9f762e6ed735e5098064c32c6e321f7814f5be216",
+    "mixmogam/_slq.py": "524650b7f1bd99a270601d694287000bee339e8c1b905d773d4bbd928c546edf",
+    "mixmogam/_vb.py": "57feffb0bda12cf0a4ca1f6b1cab211ac78cf313568c7671f90aaabcc404a320",
+    "mixmogam/association.py": "4d00a488df78f788dcad58a12d1048863f68701af6713b6c6f90cb7e6b098911",
+    "mixmogam/genotypes.py": "4e7a71b4614239df6f26ac68f06bc088e613e5bbd64b391317fd73b58174714a",
+    "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+    "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+    "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+    "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+    "mixmogam/io/plink.py": "80bf9920079bf0b0897e31101c9d5f970ef216f917a02da7de6508f398a76c0a",
+    "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+    "mixmogam/kinship.py": "4241a9be27e41fe06fe36d07973a93e54b429c461971383970da18baa088c243",
+    "mixmogam/ldscore.py": "3651f83116db542e00f8d975036b8df4502406acff3de5e02dff68051d003cb6",
+    "mixmogam/lmm.py": "9c2bf0a489246b324e32c7bbb3b4ee58467470505e0f6f975eba4637b31a335c",
+    "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+    "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+    "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+    "mixmogam/scan.py": "5dac30b78bbd541b1ff27e80f1c909200660393e8e049be82ff14313ac0bf388",
+    "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+    "mixmogam/stepwise.py": "19f0d1bde8868cb265700e1aa59a496a4d690bd048afbebe103d0488a3bfb580",
+    "mixmogam/twostep.py": "d8c54cbff8ad7d1298612f9fda1febb73eac7700b7a3b8ba7787e1ca58d49c5c",
+    "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+    "tests/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "tests/_reference.py": "ff6be7efb48a750e15a1330ed5745a485a37865cd2cf1d0c57b5d8ad41a225b2",
+    "tests/test_association.py": "c3145615416ad0fa5fc44ababce84ee9e1a33d5009e6ac7b99f4081f1ca456cc",
+    "tests/test_calibration.py": "aee8349512b329e9a8277bda18cccdc1576fee80be16a6226025b10586e83f1f",
+    "tests/test_data.py": "b35edaa99addd14c3b63f5479caf8fafb324e6b76397f88f66270a64b6407f3a",
+    "tests/test_integration_at.py": "b69c9da12938b2277eeabe02ecd37ee28ee486bd5db589a53e1cebaafd8c284c",
+    "tests/test_io.py": "af72b7ffde5bf733c93bbf3fe6e9d1f063a9be021b4da6b43dc471bfbb7a8fcd",
+    "tests/test_lmm.py": "1d241ad04f76cf085e5fb18a18ad8f8cccfd132addab6d847d090c7775489ba2",
+    "tests/test_operator.py": "08f9c12ca1074e96ff0068fc2bc44f060a41fd60397a573d8d92c47355bd2a67",
+    "tests/test_results.py": "6c6f53a001bc77e044bf90f8c8a8d97aab61e93264326bc4a617e7b5042f16d8",
+    "tests/test_review_regressions.py": "ba356515d41c7eaf5145a8414a19be9f3a689c3463ae4efacb6228bcfb571e31",
+    "tests/test_scan_extras.py": "899452d9fa2e50efa29b39d89b646e64f5eb6da6893429d33dde36de4f3da5be",
+    "tests/test_stepwise.py": "081ca9a302e4d75f0f715af45a4a1c27feaefac8bbb2179b533abd3ce5bcc93d",
+    "tests/test_twostep.py": "e8de3fee957364f013a5d694c5cca03ab165df0ad25b2aedade42be32965c180",
+    "benchmarks/README.md": "e51b398047590561c57d1dab317c5ce24ac7adf6da6cfe0d6df882aae35c4063",
+    "report/README.md": "a459234b10d57cd2969f631df7c59118f0c66379f41e688f5ad1ae5b8990661c"
+  },
+  "boundaries": [
+    "No new large-cohort scientific calibration benchmark was run.",
+    "No external LDAK, BOLT-LMM or GEMMA comparison was rerun.",
+    "The memory microbenchmark measures tracked temporary allocations, not process RSS.",
+    "Historical benchmark archives and PDFs were not regenerated.",
+    "GitHub Actions configuration was inspected and parsed locally; no remote CI run is claimed."
+  ]
+}

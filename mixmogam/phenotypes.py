@@ -84,6 +84,8 @@ class Phenotypes:
 
     def align(self, sample_ids: Sequence[str], pid: str):
         """Values for ``sample_ids`` (NaN where absent or missing)."""
+        if np.unique(self.sample_ids).size != self.sample_ids.size:
+            raise ValueError("duplicate sample IDs; aggregate replicates before alignment")
         order = {s: i for i, s in enumerate(self.sample_ids)}
         out = np.full(len(sample_ids), np.nan)
         for j, s in enumerate(sample_ids):
@@ -176,13 +178,19 @@ class Phenotypes:
     # ------------------------------------------------------------------
 
     def convert_to_averages(self, pid: str) -> None:
-        """Average values over replicate groups in place."""
+        """Average a single untransformed trait over replicate groups.
+
+        Multiple traits share a sample axis and cannot be shortened one
+        at a time. Aggregate those inputs explicitly before construction.
+        """
         if self.replicates is None:
             raise ValueError("no replicate ids recorded")
+        if len(self.data) != 1 or self.data[pid]["raw_values"] is not None:
+            raise ValueError("replicate averaging requires a single untransformed trait")
         v = self.values(pid)
         reps = self.replicates
         uniq, inv = np.unique(reps, return_inverse=True)
-        sums = np.bincount(inv, weights=np.nan_to_num(v))
+        sums = np.bincount(inv, weights=np.where(np.isfinite(v), v, 0.0))
         cnts = np.bincount(inv, weights=np.isfinite(v).astype(float))
         with np.errstate(invalid="ignore", divide="ignore"):
             means = np.where(cnts > 0, sums / np.maximum(cnts, 1), np.nan)

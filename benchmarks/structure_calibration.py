@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Per-SNP calibration of two-step mixed-model statistics under structure.
 
-Question: BOLT-LMM, LDAK-KVIK (and REGENIE, SAIGE, GRAMMAR-Gamma) calibrate
+Question: the BOLT-LMM and LDAK-KVIK paths evaluated here calibrate
 a retrospective score statistic with ONE genome-wide constant, which is
 exact only if the prospective denominator z' V^{-1} z is proportional to
 z' z across SNPs. BOLT-LMM's authors flag this as untested outside human
@@ -84,6 +84,10 @@ def load_dataset(name: str, quick: bool) -> Genotypes:
             with zf.open("all_chromosomes_binary.csv") as src, open(csvp, "wb") as dst:
                 shutil.copyfileobj(src, dst)
     gt = read_regmap([str(csvp)], data_format="binary", stride=16 if quick else 4)
+    # Inbred binary calls represent homozygotes, not heterozygous dosages.
+    calls = np.where(gt.G == -1, -1, 2 * gt.G)
+    gt = Genotypes(calls, sample_ids=gt.sample_ids, chromosome=gt.chromosome,
+                   position=gt.position, variant_ids=gt.variant_ids)
     return gt.filter_variants(min_mac=10, max_missing=0.1)
 
 
@@ -102,7 +106,7 @@ def structure_loading(gt, k: int = 10) -> np.ndarray:
 
 
 def simulate_phenotype(gt, null_chrom, rng, h2_poly=0.4, h2_qtl=0.1, n_qtl=10):
-    G = gt.G.astype(np.float64)
+    G = gt.snp_major(dtype=np.float64, impute="mean").T
     G = (G - G.mean(0)) / np.where(G.std(0) > 0, G.std(0), 1.0)
     causal_pool = np.nonzero(gt.chromosome != null_chrom)[0]
     g = G[:, causal_pool] @ rng.standard_normal(causal_pool.size)

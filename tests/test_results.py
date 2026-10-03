@@ -8,8 +8,6 @@ from mixmogam.plotting import plot_manhattan, plot_qq, qq_quantiles
 from mixmogam.results import GwasResult
 from mixmogam.simulate import simulate_genotypes, simulate_kinship, simulate_traits
 
-matplotlib = pytest.importorskip("matplotlib")
-
 
 @pytest.fixture(scope="module")
 def scan_result():
@@ -83,9 +81,9 @@ def test_ppa(scan_result):
     res, sim = scan_result
     priors = np.full(len(res), 1e-4)
     priors[sim["causal"]] = 0.1
-    res2 = res.posterior_probabilities(priors)
+    res2 = res.posterior_probabilities(priors, prior_variance=0.04)
     assert "ppa" in res2.extra
-    assert ((res2.extra["ppa"] > 0) & (res2.extra["ppa"] < 1)).all()
+    assert ((res2.extra["ppa"] >= 0) & (res2.extra["ppa"] <= 1)).all()
     assert res2.extra["ppa"][sim["causal"]].mean() > res2.extra["ppa"].mean()
 
 
@@ -99,6 +97,7 @@ def test_csv_roundtrip(scan_result, tmp_path):
 
 
 def test_plots(scan_result, tmp_path):
+    pytest.importorskip("matplotlib")
     res, _ = scan_result
     exp, obs = qq_quantiles(res.p)
     assert exp.size == obs.size

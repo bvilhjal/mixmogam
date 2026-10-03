@@ -42,7 +42,7 @@ _DEFAULT_TOP_K = 1024
 
 @dataclass(frozen=True)
 class LMFit:
-    """Null-model fit of a linear (mixed) model."""
+    """Null-model fit; bound operations require it to remain the current fit."""
 
     method: str
     delta: float  # ve / vg ratio
@@ -58,20 +58,21 @@ class LMFit:
     solver: str = "exact"
     model: Optional["LMM"] = field(default=None, repr=False, compare=False)
 
-    def scan(self, snps, **kwargs) -> dict:
+    def _current_model(self):
         if self.model is None:
             raise ValueError("LMFit was constructed without a model reference")
-        return self.model.scan(snps, **kwargs)
+        if self.model._fit is None or self.beta is not self.model._fit.beta:
+            raise ValueError("this LMFit was superseded by a refit; use the current fit")
+        return self.model
+
+    def scan(self, snps, **kwargs) -> dict:
+        return self._current_model().scan(snps, **kwargs)
 
     def blup(self) -> np.ndarray:
-        if self.model is None:
-            raise ValueError("LMFit was constructed without a model reference")
-        return self.model.blup()
+        return self._current_model().blup()
 
     def predict(self, X=None) -> np.ndarray:
-        if self.model is None:
-            raise ValueError("LMFit was constructed without a model reference")
-        return self.model.predict(X)
+        return self._current_model().predict(X)
 
 
 def _as_1d_float(a: Sequence[float], name: str, dtype=np.float64) -> np.ndarray:
@@ -91,6 +92,8 @@ def _design_matrix(
         X = np.asarray(X, dtype=np.float64)
         if X.ndim == 1:
             X = X[:, None]
+        if X.ndim != 2 or not np.isfinite(X).all():
+            raise ValueError("covariates must be a finite one- or two-dimensional array")
         if X.shape[0] != n:
             raise ValueError(
                 f"covariates have {X.shape[0]} rows, y has {n} observations"
@@ -98,7 +101,13 @@ def _design_matrix(
         cols.append(X)
     if not cols:
         raise ValueError("empty design matrix; keep the intercept or pass X")
-    return np.hstack(cols)
+    design = np.hstack(cols)
+    if design.shape[1] >= n:
+        raise ValueError("the design must leave positive residual degrees of freedom")
+    norms = np.linalg.norm(design, axis=0)
+    if np.any(norms == 0) or np.linalg.matrix_rank(design / norms) < design.shape[1]:
+        raise ValueError("covariates must have full column rank (an intercept is added by default)")
+    return design
 
 
 def _separated_extremes(values: np.ndarray, vectors: np.ndarray,
@@ -174,6 +183,10 @@ class LMM:
                     raise ValueError(
                         f"K has shape {K.shape}, expected {(self.n, self.n)}"
                     )
+                if not np.isfinite(K).all():
+                    raise ValueError("K must be finite")
+                if not np.allclose(K, K.T, rtol=1e-7, atol=1e-10):
+                    raise ValueError("K must be symmetric")
                 self.K = 0.5 * (K + K.T)
         if n_eig == "auto":
             dense_ok = self.K is not None and self.n <= _EXACT_N_MAX
@@ -181,6 +194,7 @@ class LMM:
         self.n_eig = int(n_eig)
         self.random_state = random_state
         self._fit: Optional[LMFit] = None  # see fit_result
+        self._fit_options = None
         self._basis_cache: dict = {}  # dtype -> cast eigenbasis
 
     @property
@@ -205,6 +219,14 @@ class LMM:
         if self._resid_projector is None:
             self._resid_projector = linalg.qr(self.X, mode="economic")[0]
         return self._resid_projector
+
+    def _residualized_y(self) -> np.ndarray:
+        Q = self.resid_projector
+        residual = self.y - Q @ (Q.T @ self.y)
+        # Reject projection roundoff as evidence of residual variation.
+        if linalg.norm(residual) <= 10 * np.finfo(float).eps * linalg.norm(self.y):
+            raise ValueError("phenotype has no residual variation after covariate adjustment")
+        return residual
 
     def _kdot(self, X: np.ndarray) -> np.ndarray:
         """K @ X through the dense matrix or the streaming operator."""
@@ -240,6 +262,9 @@ class LMM:
                     values, vectors = linalg.eigh(
                         self.K, check_finite=False, driver="evd"
                     )
+                if values[0] < -1e-7 * max(float(np.max(np.abs(values))), 1.0):
+                    raise ValueError("K must be positive semidefinite")
+                values = np.maximum(values, 0.0)
                 self._eig = {
                     "values": values[::-1],
                     "vectors": vectors[:, ::-1],
@@ -331,10 +356,10 @@ class LMM:
         delta^-1/2 A + U_k (diag((lam_k + delta)^-1/2 - delta^-1/2)) U_k' A,
         exact when the dropped eigenvalues are zero.
         """
-        eig = self.eigen()
         key = np.dtype(dtype)
         if self.K is None and self._kop is None:
-            return np.asarray(A, dtype=key) / key.type(np.sqrt(np.float64(delta)))
+            return np.array(A, dtype=key, copy=True)
+        eig = self.eigen()
         # the eigenbasis is cast once per dtype and cached, so float32
         # scans run genuine float32 GEMMs end-to-end (scales stay in
         # float64 until the final cast, preserving accuracy)
@@ -449,100 +474,44 @@ class LMM:
                 )
             lam = vals[::-1]
             U = vecs[:, ::-1]
-        W = U.T @ self.X  # (n, q)
-        w = U.T @ self.y  # (n,)
+        W = U.T @ self.X
+        # Remove an arbitrary fixed-effect component before spectral
+        # projection. The likelihood is unchanged, but a large intercept
+        # can no longer destroy RSS through subtraction of large squares.
+        y0 = self._residualized_y()
+        w = U.T @ y0
         XtX_logdet = float(np.linalg.slogdet(self.X.T @ self.X)[1])
-        p = self.n - self.q
+        df = self.n if method == "ml" else self.n - self.q
 
-        if method == "ml":
+        def pieces(d):
+            v = lam + d
+            D = 1.0 / v
+            A = W.T @ (D[:, None] * W)
+            chol = linalg.cho_factor(A, check_finite=False)
+            beta = linalg.cho_solve(chol, W.T @ (D * w), check_finite=False)
+            e = w - W @ beta
+            rss = float(e @ (D * e))
+            return v, D, chol, e, rss
 
-            def s1_at(d):
-                D = 1.0 / (lam + d)
-                Dw = D * w
-                A = W.T @ (D[:, None] * W)
-                b = W.T @ Dw
-                return float(w @ Dw - b @ np.linalg.solve(A, b))
+        def s1_at(d):
+            return pieces(d)[-1]
 
-            def ll_at(d):
-                # ML: profiled over sigma^2, determinant lemma on the full space
-                D = 1.0 / (lam + d)
-                Dw = D * w
-                A = W.T @ (D[:, None] * W)
-                b = W.T @ Dw
-                rss = float(w @ Dw - b @ np.linalg.solve(A, b))
-                return float(
-                    0.5
-                    * (
-                        self.n
-                        * (np.log(self.n / (2.0 * np.pi)) - 1.0 - np.log(rss))
-                        - np.sum(np.log(lam + d))
-                    )
-                )
+        def ll_at(d):
+            v, _, chol, _, rss = pieces(d)
+            logdet = float(np.log(v).sum())
+            if method == "reml":
+                logdet += 2 * np.log(np.diag(chol[0])).sum() - XtX_logdet
+            return float(0.5 * (df * (np.log(df / (2 * np.pi)) - 1 - np.log(rss)) - logdet))
 
-            def dll_at(d):
-                v = lam + d
-                D = 1.0 / v
-                D2 = D * D
-                Dw = D * w
-                A = W.T @ (D[:, None] * W)
-                Ainv = np.linalg.inv(A)
-                b = W.T @ Dw
-                Ainv_b = Ainv @ b
-                rss = float(w @ Dw - b @ Ainv_b)
-                c1 = float(-w @ (D2 * w))
-                b1 = -W.T @ (D2 * w)
-                A1 = -W.T @ (D2[:, None] * W)
-                rss1 = c1 - 2.0 * b @ (Ainv @ b1) + Ainv_b @ (A1 @ Ainv_b)
-                n = self.n
-                return float(
-                    0.5 * (-n * rss1 / rss - np.sum(1.0 / v))
-                )
-
-        else:
-
-            def _pieces(d):
-                v = lam + d
-                D = 1.0 / v
-                D2 = D * D
-                Dw = D * w
-                A = W.T @ (D[:, None] * W)
-                Ainv = np.linalg.inv(A)
-                b = W.T @ Dw
-                Ainv_b = Ainv @ b
-                rss = float(w @ Dw - b @ Ainv_b)
-                return v, D, D2, Dw, A, Ainv, b, Ainv_b, rss
-
-            def s1_at(d):
-                _, _, _, Dw, A, _, b, Ainv_b, _ = _pieces(d)
-                return float(w @ Dw - b @ Ainv_b) if False else float(
-                    w @ Dw - b @ (np.linalg.solve(A, b))
-                )
-
-            def ll_at(d):
-                _, _, _, _, A, _, _, _, rss = _pieces(d)
-                logdet_A = float(np.linalg.slogdet(A)[1])
-                return float(
-                    0.5
-                    * (
-                        p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(rss))
-                        - (np.sum(np.log(lam + d)) + logdet_A - XtX_logdet)
-                    )
-                )
-
-            def dll_at(d):
-                v, D, D2, Dw, A, Ainv, b, Ainv_b, rss = _pieces(d)
-                c1 = float(-w @ (D2 * w))
-                b1 = -W.T @ (D2 * w)
-                A1 = -W.T @ (D2[:, None] * W)
-                rss1 = c1 - 2.0 * b @ (Ainv @ b1) + Ainv_b @ (A1 @ Ainv_b)
-                logdetA1 = float(np.trace(Ainv @ A1))
-                return float(
-                    0.5
-                    * (
-                        -p * rss1 / rss
-                        - (np.sum(1.0 / v) + logdetA1)
-                    )
-                )
+        def dll_at(d):
+            _, D, chol, e, rss = pieces(d)
+            trace = float(D.sum())
+            if method == "reml":
+                B = W.T @ ((D * D)[:, None] * W)
+                trace -= float(np.trace(linalg.cho_solve(chol, B, check_finite=False)))
+            # Envelope theorem: the derivative of the profiled RSS is
+            # -e' V^{-2} e. No subtraction of nearly equal quadratics.
+            return float(0.5 * (df * np.sum((D * e) ** 2) / rss - trace))
 
         return ll_at, dll_at, s1_at
 
@@ -727,7 +696,26 @@ class LMM:
         """
         if method not in ("reml", "ml"):
             raise ValueError(f"unknown method {method!r}; use 'reml' or 'ml'")
-        if self.fit_result is not None and not recompute:
+        if solver not in ("auto", "exact", "slq"):
+            raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
+        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate)
+        if self._fit is not None and self._fit_options == options and not recompute:
+            return self.fit_result
+        if (not isinstance(ngrids, (int, np.integer)) or ngrids < 1
+                or not np.isfinite([llim, ulim, tol]).all() or llim >= ulim or tol <= 0):
+            raise ValueError("fit requires a positive grid size, llim < ulim and positive tol")
+        y0 = self._residualized_y()
+        if self.K is None and self._kop is None:
+            beta = linalg.lstsq(self.X, self.y)[0]
+            rss = float(y0 @ y0)
+            df = self.n if method == "ml" else self.n - self.q
+            if rss <= np.finfo(float).tiny:
+                raise ValueError("phenotype has no residual variation after covariate adjustment")
+            ve = rss / df
+            ll = -0.5 * df * (np.log(2 * np.pi * ve) + 1)
+            self.fit_result = LMFit(method, np.inf, 0.0, ve, ll, 0.0, beta,
+                                    rss, 0, False, solver="ols")
+            self._fit_options = options
             return self.fit_result
         if solver == "auto":
             can_exact = self._kop is None and (
@@ -748,11 +736,13 @@ class LMM:
             deltas, lls, dlls, ll_at, dll_at, tol
         )
 
-        p = self.n - self.q
-        vg = s1_at(opt_delta) / p
+        df = self.n if method == "ml" else self.n - self.q
+        vg = s1_at(opt_delta) / df
         ve = vg * opt_delta
+        if not np.isfinite([opt_ll, vg, ve]).all() or vg <= 0:
+            raise ValueError("variance fit failed: phenotype must have residual variation")
 
-        if self._kop is not None:
+        if self._kop is not None or not self.eigen()["full"]:
             # streaming kinship: GLS by conjugate gradients, so a fit never
             # triggers the truncated eigendecomposition the scan would use
             beta = self._gls_beta_cg(opt_delta)
@@ -782,10 +772,13 @@ class LMM:
             solver=solver,
             model=self,
         )
+        self._fit_options = options
         return self.fit_result
 
     def _operator_trace(self) -> float:
         """trace(K) of the streaming operator (exact when it exposes one)."""
+        if self.K is not None:
+            return float(np.trace(self.K))
         tr = getattr(self._kop, "trace", None)
         if tr is not None:
             return float(tr)
@@ -804,8 +797,10 @@ class LMM:
                                      k=min(64, self.n - 2),
                                      random_state=self.random_state)
         rhs = np.column_stack([self.X, self.y])
-        W, _ = batched_pcg(lambda P, cols: self._kdot(P) + delta * P, rhs,
+        W, info = batched_pcg(lambda P, cols: self._kdot(P) + delta * P, rhs,
                            lambda R: pre(R, delta), tol=1e-8, max_iter=1000)
+        if not info["converged"]:
+            raise RuntimeError("GLS conjugate-gradient solve did not converge")
         WX, Wy = W[:, : self.q], W[:, self.q]
         return linalg.solve(self.X.T @ WX, self.X.T @ Wy, assume_a="pos")
 
@@ -817,13 +812,21 @@ class LMM:
         """Precomputed pieces of the batched scan for the fitted delta."""
         if (self.K is not None or self._kop is not None) and self.fit_result is None:
             raise ValueError("call fit() before scan() on a mixed model")
+        if self.n - self.q - 1 <= 0:
+            raise ValueError("association tests require positive residual degrees of freedom")
+        if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
+            raise ValueError("scan dtype must be float32 or float64")
         delta = self.fit_result.delta if self.fit_result is not None else 1.0
         Xt = self._apply_inv_sqrt(self.X, delta, dtype)
-        yt = self._apply_inv_sqrt(self.y, delta, dtype)
+        # Remove fixed effects in float64 before the optional float32 scan.
+        y0 = self._residualized_y()
+        yt = self._apply_inv_sqrt(y0, delta, dtype)
         Q, _ = linalg.qr(Xt, mode="economic", check_finite=False)
         Q = Q.astype(dtype, copy=False)
         r = yt - Q @ (Q.T @ yt)
         rss0 = float(r @ r)
+        if rss0 <= np.finfo(dtype).tiny:
+            raise ValueError("phenotype has no residual variation after covariate adjustment")
         return {
             "delta": delta,
             "Q": Q,
@@ -881,12 +884,20 @@ class LMM:
         ps, f_stats, rss_list, var_perc = [], [], [], []
         betas, ses = [], []
         done = 0
-        for S in _iter_snp_blocks(snps, block):
+        if not isinstance(block, (int, np.integer)) or block <= 0:
+            raise ValueError("block must be a positive integer")
+        for S in _iter_snp_blocks(snps, block, dtype):
             S32 = np.asarray(S, dtype=dtype)
+            if S32.ndim != 2 or S32.shape[1] != self.n or not np.isfinite(S32).all():
+                raise ValueError("SNP blocks must be finite and match the phenotype sample count")
             G = self._apply_inv_sqrt(S32.T, fac["delta"], dtype)
+            norm0 = np.einsum("ij,ij->j", G, G)
             G -= Q @ (Q.T @ G)  # residualize against covariates
             num = G.T @ r  # (k,)
             den = np.einsum("ij,ij->j", G, G)
+            # A SNP in the covariate span has no identifiable effect.
+            ok = den > np.maximum(tiny, (32 * np.finfo(dtype).eps) ** 2 * norm0)
+            den = np.where(ok, den, np.nan)
             with np.errstate(divide="ignore", invalid="ignore"):
                 t2 = (num * num) / np.maximum(den, tiny)
                 rss = np.maximum(rss0 - t2, 0.0)
@@ -905,15 +916,20 @@ class LMM:
             if callback is not None:
                 callback(done)
 
+        def join(arrays):
+            return np.concatenate(arrays) if arrays else np.empty(0)
+
         out = {
-            "ps": np.concatenate(ps),
-            "f_stats": np.concatenate(f_stats),
-            "rss": np.concatenate(rss_list),
-            "var_perc": np.concatenate(var_perc),
+            "ps": join(ps),
+            "f_stats": join(f_stats),
+            "rss": join(rss_list),
+            "var_perc": join(var_perc),
+            "h0_rss": rss0,
+            "n": self.n,
         }
         if with_betas:
-            out["betas"] = np.concatenate(betas)
-            out["ses"] = np.concatenate(ses)
+            out["betas"] = join(betas)
+            out["ses"] = join(ses)
         return out
 
     # ------------------------------------------------------------------
@@ -922,6 +938,14 @@ class LMM:
 
     def _v_inv_vec(self, v: np.ndarray, delta: float) -> np.ndarray:
         """Apply (K + delta I)^-1 to a vector through the eigenbasis."""
+        if self._kop is not None or not self.eigen()["full"]:
+            from mixmogam._cg import batched_pcg
+
+            out, info = batched_pcg(lambda P, cols: self._kdot(P) + delta * P,
+                                    v, tol=1e-8, max_iter=2000)
+            if not info["converged"]:
+                raise RuntimeError("prediction conjugate-gradient solve did not converge")
+            return out
         eig = self.eigen()
         lam = np.maximum(eig["values"], 0.0)
         U = eig["vectors"]
@@ -934,30 +958,31 @@ class LMM:
 
     def blup(self) -> np.ndarray:
         """gBLUP of breeding values u ~ N(0, vg K) at the fitted delta."""
-        fit = self.fit()
+        fit = self.fit_result if self._fit is not None else self.fit()
         if self.K is None and self._kop is None:
             return np.zeros(self.n)
         r = self.y - self.X @ fit.beta
         w = self._v_inv_vec(r, fit.delta)
-        return fit.vg * self._kdot(w)
+        # vg K (vg K + ve I)^-1 r = K (K + delta I)^-1 r.
+        return self._kdot(w)
 
     def predict(self, X=None) -> np.ndarray:
         """Predict E[y] = X beta (plus gBLUP if a kinship was fitted)."""
-        fit = self.fit()
+        fit = self.fit_result if self._fit is not None else self.fit()
         Xn = (
             _design_matrix(X, self.n, add_intercept=False)
             if X is not None
             else self.X
         )
         pred = Xn @ fit.beta
-        if self.K is not None:
+        if self.K is not None or self._kop is not None:
             pred = pred + self.blup()
         return pred
 
 
-def _iter_snp_blocks(snps, block: int):
+def _iter_snp_blocks(snps, block: int, dtype=np.float32):
     if hasattr(snps, "iter_snp_blocks"):
-        yield from snps.iter_snp_blocks(block)
+        yield from snps.iter_snp_blocks(block=block, dtype=dtype)
         return
     if isinstance(snps, np.ndarray):
         for i in range(0, snps.shape[0], block):

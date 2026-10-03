@@ -38,7 +38,7 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 
 from mixmogam import __version__, gwas  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
-from mixmogam.io.plink import write_plink  # noqa: E402
+from mixmogam.io.plink import read_plink, write_plink  # noqa: E402
 from structure_calibration import (  # noqa: E402
     _on_battery, load_dataset, simulate_phenotype, structure_loading)
 
@@ -70,9 +70,10 @@ def main():
     work.mkdir(parents=True)
     gt01 = load_dataset("at_regmap", quick=False)
     vid = np.array([f"c{c}_{p}" for c, p in zip(gt01.chromosome, gt01.position)])
-    gt = Genotypes(gt01.G * 2, chromosome=gt01.chromosome, position=gt01.position,
+    gt = Genotypes(gt01.G, chromosome=gt01.chromosome, position=gt01.position,
                    sample_ids=[str(s) for s in gt01.sample_ids], variant_ids=vid)
     write_plink(gt, str(work / "at"))
+    np.testing.assert_array_equal(read_plink(str(work / "at")).G, gt.G)
     fam = [line.split()[:2] for line in open(work / "at.fam")]
     load = structure_loading(gt)
     bins = np.digitize(load, np.quantile(load, [0.2, 0.4, 0.6, 0.8]))
@@ -96,15 +97,21 @@ def main():
         chi["bolt-inf-spectral"] = gwas(y, gt, method="bolt-inf", denominator="spectral").f_stat
         chi["kvik (mixmogam)"] = gwas(y, gt, method="kvik").f_stat
         for name, c in chi.items():
+            valid_exact = np.isfinite(c) & np.isfinite(chi["exact"])
+            valid_ref = np.isfinite(c) & np.isfinite(chi["ldak-kvik (reference)"])
             row = {"rep": rep, "method": name,
-                   "corr_exact": float(np.corrcoef(np.nan_to_num(c), chi["exact"])[0, 1]),
+                   "n_tested": int(np.isfinite(c).sum()),
+                   "n_reference_pairs": int(valid_ref.sum()),
+                   "corr_exact": float(np.corrcoef(c[valid_exact], chi["exact"][valid_exact])[0, 1]),
                    "corr_reference": float(np.corrcoef(
-                       np.nan_to_num(c), np.nan_to_num(chi["ldak-kvik (reference)"]))[0, 1]),
+                       c[valid_ref], chi["ldak-kvik (reference)"][valid_ref])[0, 1]),
                    "mean_chi2_qtl": float(np.nanmean(c[qtl]))}
             for b in [-1] + list(range(5)):
                 sel = null if b < 0 else null[bins[null] == b]
+                sel = sel[np.isfinite(c[sel])]
                 tag = "all" if b < 0 else f"q{b + 1}"
                 row[f"lambda_{tag}"] = float(np.nanmedian(c[sel]) / CHI2_MED)
+                row[f"n_{tag}"] = int(sel.size)
                 row[f"fpr01_{tag}"] = float(np.nanmean(stats.chi2.sf(c[sel], 1) < 0.01))
             rows.append(row)
         print(f"rep {rep} done", flush=True)

@@ -28,7 +28,7 @@ def small_gt():
 
 
 def test_genotypes_stats_and_filters(small_gt):
-    af = small_gt.allele_freqs()
+    af = small_gt.allele_freqs(minor=True)
     assert af.shape == (200,)
     assert np.isfinite(af).all()
     assert ((af >= 0) & (af <= 0.5)).all()

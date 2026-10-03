@@ -35,7 +35,7 @@ result = gwas(y, gt, method="kvik")          # LDAK-KVIK
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
-result.extra["calibration_cv"]               # two-step methods: see below
+result.extra.get("calibration_cv")            # available when calibration is performed
 result.write_csv("gwas.csv")
 
 from mixmogam.plotting import plot_manhattan, plot_qq
@@ -49,10 +49,10 @@ groups (`max_loco_groups`).
 
 `calibration_cv` is the spread of the ratio between the exact and the
 retrospective test denominators over 30 random SNPs. BOLT-LMM and
-LDAK-KVIK correct that ratio with a single constant. When the spread
-exceeds a few percent (strong population structure), no single
-constant calibrates every SNP: use `denominator="spectral"`, or the
-exact path when n allows (see `docs/design.md`).
+LDAK-KVIK correct that ratio with a single constant. A large spread flags the proportional-denominator approximation. The
+spectral option is an approximation, and its use with mixture or elastic-net
+statistics is heuristic; use the exact path when feasible and validate
+calibration in the intended population (see `docs/design.md`).
 
 ## The mixed model by hand
 
@@ -79,3 +79,27 @@ scan_gxe(fit, gt, E, polygenic_gxe=True)     # + polygenic K*(EE') component
 permutation_min_p(fit, gt, n_perm=1000)      # whitened-residual permutations
 fit_two_kinships(y, K_close, K_structure)     # mixture weights + shares
 ```
+
+## Input and inference contracts
+
+- Align phenotype and covariate rows by sample ID before scanning. Duplicate
+  genotype IDs and repeated phenotype observations are rejected. Aggregate
+  replicates explicitly; the loader no longer silently keeps the last row.
+- Refitting an `LMM` supersedes its previous `LMFit`. Keep the new fit for
+  scanning or prediction; operations on a superseded fit now raise an error.
+- Calls are diploid hard calls in 0/1/2, with -1 missing. PLINK loads count
+  BIM A1 and preserve A1/A2. Recode haploid inbred 0/1 calls to 0/2 before
+  interpreting diploid MAC or allele frequency. `allele_freqs()` returns the
+  counted-allele frequency; `allele_freqs(minor=True)` returns MAF.
+- `gwas(..., dtype=...)` controls exact-scan arithmetic only. Two-step methods
+  use float32 genotype storage. Unknown exact-method options now raise an
+  error rather than silently disappearing.
+- `permutation_min_p(..., scheme="whitened")` permutes coordinates in the
+  residual subspace. The older projected-residual approximation is available
+  as `scheme="projected"`; old thresholds do not certify the corrected scheme.
+- Posterior association probabilities require an explicit effect-size prior:
+  `result.posterior_probabilities(priors, prior_variance=W)`, where `W` is a
+  variance in squared phenotype-units per counted allele. This uses a normal
+  approximation from `beta` and `se`, and is not a fine-mapping probability.
+- CSV preserves variant columns and full float precision, including effect
+  alleles. Fit/calibration metadata in `result.extra` is not serialized.

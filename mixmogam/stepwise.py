@@ -160,6 +160,8 @@ def mlmm(
     rec = record("start", cofs, model, 0.0)
     low_h2 = 0
     for _ in range(max_steps):
+        if n - model.lmm.q <= 1:
+            break
         scan = model.lmm.scan(gt, dtype=dtype)
         ps = np.asarray(scan["ps"], dtype=np.float64).copy()
         ps[cofs] = np.nan
@@ -172,10 +174,12 @@ def mlmm(
         model = _Model(y, X0, cols, K, base)
         cof_p = model.cofactor_pvalues(len(cofs))
         rec = record("+", cofs, model, float(cof_p.max()))
-        if model.fit.pseudo_heritability < h2_stop:
+        if K is not None and model.fit.pseudo_heritability < h2_stop:
             low_h2 += 1
             if low_h2 >= 2:
                 break
+        else:
+            low_h2 = 0
 
     if backward:
         while len(cofs) > 1:

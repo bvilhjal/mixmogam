@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
-from scipy import stats
+from scipy import special, stats
 
 __all__ = ["GwasResult"]
 
@@ -28,6 +29,21 @@ class GwasResult:
     af: Optional[np.ndarray] = None
     var_perc: Optional[np.ndarray] = None
     extra: dict = field(default_factory=dict)
+    effect_allele: Optional[np.ndarray] = None
+    other_allele: Optional[np.ndarray] = None
+
+    def __post_init__(self):
+        self.p = np.asarray(self.p, dtype=float)
+        if self.p.ndim != 1:
+            raise ValueError("p must be one-dimensional")
+        for name in ("chromosome", "position", "variant_ids", "f_stat", "beta", "se",
+                     "rss", "af", "var_perc", "effect_allele", "other_allele"):
+            value = getattr(self, name)
+            if value is not None:
+                value = np.asarray(value)
+                if value.shape != self.p.shape:
+                    raise ValueError(f"{name} must have one entry per p-value")
+                setattr(self, name, value)
 
     @classmethod
     def from_scan(cls, scan: dict, gt, fit=None) -> "GwasResult":
@@ -42,7 +58,12 @@ class GwasResult:
             beta=scan.get("betas"),
             se=scan.get("ses"),
             variant_ids=np.asarray(gt.variant_ids),
+            af=gt.allele_freqs(),
+            effect_allele=gt.allele1, other_allele=gt.allele2,
         )
+        for name in ("n", "h0_rss"):
+            if name in scan:
+                res.extra[name] = scan[name]
         if fit is not None:
             res.extra["pseudo_heritability"] = fit.pseudo_heritability
             res.extra["delta"] = fit.delta
@@ -83,9 +104,14 @@ class GwasResult:
         return self.take(idx)
 
     def take(self, idx) -> "GwasResult":
+        idx = np.atleast_1d(idx)
         def sel(a):
             return None if a is None else np.asarray(a)[idx]
 
+        extra = dict(self.extra)
+        for key in ("ppa", "log_bf", "priors", "prior_variance"):
+            if key in extra:
+                extra[key] = np.asarray(extra[key])[idx]
         return GwasResult(
             chromosome=sel(self.chromosome),
             position=sel(self.position),
@@ -97,7 +123,8 @@ class GwasResult:
             rss=sel(self.rss),
             af=sel(self.af),
             var_perc=sel(self.var_perc),
-            extra=dict(self.extra),
+            extra=extra,
+            effect_allele=sel(self.effect_allele), other_allele=sel(self.other_allele),
         )
 
     def power_analysis(self, causal, window: int = 0, alpha=None) -> dict:
@@ -183,30 +210,44 @@ class GwasResult:
     # Bayesian priors (v1 snp_priors / PPA machinery)
     # ------------------------------------------------------------------
 
-    def posterior_probabilities(
-        self, priors: np.ndarray, use_f: bool = True
-    ) -> "GwasResult":
-        """Attach Bayes factors / posterior probabilities from SNP priors.
+    def posterior_probabilities(self, priors, use_f=None, *, prior_variance=None) -> "GwasResult":
+        """Marginal association probabilities under a normal effect prior.
 
-        Follows v1: log BF_j = (n/2) log(RSS0 / RSS_j); posterior odds =
-        BF * prior_odds. Requires the scan's ``rss`` and the null RSS in
-        ``extra['h0_rss']``.
+        The alternative is beta_j ~ N(0, W_j), with W supplied explicitly
+        in squared phenotype-units per counted-allele. Using the normal
+        approximation beta_hat | beta ~ N(beta, se^2), the Bayes factor is
+        the ratio N(beta_hat; 0, se^2 + W) / N(beta_hat; 0, se^2).
+        These are single-variant association probabilities, not joint
+        fine-mapping probabilities. Untestable variants retain NaN.
+
+        The former RSS likelihood ratio was not a Bayes factor and its
+        cross-variant rescaling changed posterior odds. It is no longer
+        used; calls must supply ``prior_variance`` and beta/se estimates.
         """
-        if self.rss is None or "h0_rss" not in self.extra:
-            raise ValueError("posterior probabilities need rss and extra['h0_rss']")
-        h0 = self.extra["h0_rss"]
-        log_bf = 0.5 * self.n_samples_log() * np.log(h0 / self.rss)
-        bf = np.exp(log_bf - log_bf.max())  # stabilized
-        prior_odds = np.asarray(priors) / np.maximum(1 - np.asarray(priors), 1e-12)
-        odds = bf * prior_odds
-        ppa = odds / (1.0 + odds)
-        out = self  # store in extra to keep the dataclass lean
-        out.extra["log_bf"] = log_bf
-        out.extra["ppa"] = ppa
-        return out
-
-    def n_samples_log(self) -> float:
-        return float(self.extra.get("n", 0.0))
+        if prior_variance is None:
+            raise ValueError("prior_variance is required: specify the normal effect-prior variance")
+        if use_f is not None:
+            raise ValueError("use_f is no longer supported; supply beta, se and prior_variance")
+        if self.beta is None or self.se is None:
+            raise ValueError("posterior probabilities require beta and se")
+        prior = np.broadcast_to(np.asarray(priors, dtype=float), self.p.shape)
+        W = np.broadcast_to(np.asarray(prior_variance, dtype=float), self.p.shape)
+        if not np.isfinite(prior).all() or np.any((prior < 0) | (prior > 1)):
+            raise ValueError("priors must be finite probabilities in [0, 1]")
+        if not np.isfinite(W).all() or np.any(W < 0):
+            raise ValueError("prior_variance must be finite and non-negative")
+        ok = np.isfinite(self.beta) & np.isfinite(self.se) & (self.se > 0)
+        log_bf = np.full(self.p.shape, np.nan)
+        V = self.se[ok] ** 2
+        ratio = W[ok] / V
+        log_bf[ok] = 0.5 * (-np.log1p(ratio) + (self.beta[ok] / self.se[ok]) ** 2 * ratio / (1 + ratio))
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ppa = special.expit(log_bf + np.log(prior) - np.log1p(-prior))
+        ppa[ok & (prior == 0)] = 0
+        ppa[ok & (prior == 1)] = 1
+        self.extra.update(log_bf=log_bf, ppa=ppa, prior_variance=W.copy(),
+                          priors=prior.copy(), posterior_method="normal-approximation")
+        return self
 
     # ------------------------------------------------------------------
     # IO
@@ -227,55 +268,57 @@ class GwasResult:
             ("se", self.se),
             ("af", self.af),
             ("var_perc", self.var_perc),
+            ("rss", self.rss),
+            ("effect_allele", self.effect_allele),
+            ("other_allele", self.other_allele),
         ]:
             if arr is not None:
                 data[key] = arr
         return pd.DataFrame(data)
 
     def write_csv(self, path: str) -> None:
-        cols = ["chromosome", "position", "p"]
-        arrays = [self.chromosome, self.position, self.p]
-        for key, arr in [
-            ("f_stat", self.f_stat),
-            ("beta", self.beta),
-            ("se", self.se),
-            ("af", self.af),
-            ("var_perc", self.var_perc),
-        ]:
+        """Write variant columns with round-trip precision; ``extra`` is not serialized."""
+        columns = {"chromosome": self.chromosome, "position": self.position, "p": self.p}
+        for header, name in _CSV_OPTIONAL.items():
+            arr = getattr(self, name)
             if arr is not None:
-                cols.append(key)
-                arrays.append(arr)
-        with open(path, "w") as fh:
-            fh.write(",".join(cols) + "\n")
-            for row in zip(*arrays):
-                fh.write(",".join(_fmt(v) for v in row) + "\n")
+                columns[header] = arr
+        with open(path, "w", newline="") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(columns)
+            writer.writerows(zip(*columns.values()))
 
     @classmethod
     def read_csv(cls, path: str) -> "GwasResult":
-        data = np.genfromtxt(
-            path, delimiter=",", names=True, dtype=None, encoding="utf-8"
-        )
-        names = data.dtype.names
-        # v1 header normalization (chromosome->chromosomes, maf->macs)
-        def col(*cands):
-            for c in cands:
-                if c in names:
-                    return data[c]
-            return None
+        """Read current columns and the legacy chromosome/position/p aliases."""
+        with open(path, newline="") as fh:
+            reader = csv.DictReader(fh)
+            names = reader.fieldnames or []
+            rows = list(reader)
 
-        return cls(
-            chromosome=col("chromosomes", "chromosome"),
-            position=col("position", "positions"),
-            p=col("p", "ps", "scores"),
-            f_stat=col("f_stat", "f_stats"),
-            af=col("af", "mafs"),
-            var_perc=col("var_perc"),
-        )
+        def col(*candidates, dtype=float, required=False):
+            name = next((c for c in candidates if c in names), None)
+            if name is None:
+                if required:
+                    raise ValueError(f"CSV is missing {candidates[0]}")
+                return None
+            return np.array([row[name] for row in rows], dtype=dtype)
+
+        chrom = col("chromosome", "chromosomes", dtype=str, required=True)
+        if chrom.size and all(c.lstrip("-").isdigit() for c in chrom):
+            chrom = chrom.astype(np.int64)
+        kwargs = {name: col(header, dtype=str if name in
+                  ("variant_ids", "effect_allele", "other_allele") else float)
+                  for header, name in _CSV_OPTIONAL.items()}
+        kwargs["f_stat"] = col("f_stat", "f_stats")
+        kwargs["af"] = col("af", "mafs")
+        return cls(chromosome=chrom,
+                   position=col("position", "positions", dtype=np.int64, required=True),
+                   p=col("p", "ps", "scores", required=True), **kwargs)
 
 
-def _fmt(v) -> str:
-    if isinstance(v, (str, np.str_)):
-        return str(v)
-    if isinstance(v, (float, np.floating)):
-        return f"{v:.6g}"
-    return str(v)
+_CSV_OPTIONAL = {
+    "variant_id": "variant_ids", "f_stat": "f_stat", "beta": "beta",
+    "se": "se", "rss": "rss", "af": "af", "var_perc": "var_perc",
+    "effect_allele": "effect_allele", "other_allele": "other_allele",
+}

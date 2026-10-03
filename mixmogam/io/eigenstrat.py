@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from mixmogam.genotypes import Genotypes, MISSING
+from mixmogam.io.plink import _chromosomes
 
 __all__ = ["read_eigenstrat"]
 
@@ -12,8 +13,7 @@ __all__ = ["read_eigenstrat"]
 def read_eigenstrat(prefix: str) -> Genotypes:
     """Read EIGENSTRAT genotype files (0/1/2, 9 = missing).
 
-    Returns sample-major genotypes; the .snp chromosome column is mapped
-    to integers where numeric (X/Y/MT become -1).
+    Returns sample-major genotypes; chromosome labels are preserved.
     """
     with open(f"{prefix}.ind") as fh:
         samples = [line.split()[0] for line in fh if line.strip()]
@@ -39,9 +39,7 @@ def read_eigenstrat(prefix: str) -> Genotypes:
         g = (row - ord("0")).astype(np.int8)
         g[g == 9] = MISSING
         G[:, j] = g
-    chrom = np.array(
-        [int(c) if str(c).lstrip("chrCHR").isdigit() else -1 for c in chrom_l]
-    )
+    chrom = _chromosomes(chrom_l)
     return Genotypes(
         G,
         sample_ids=np.array(samples),

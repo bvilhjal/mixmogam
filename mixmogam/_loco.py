@@ -30,6 +30,9 @@ def loco_groups(chromosome, max_groups: int = 25) -> tuple[np.ndarray, list]:
     into segments. Each label is the tuple of chromosomes in the group.
     """
     chromosome = np.asarray(chromosome)
+    if (not isinstance(max_groups, (int, np.integer)) or max_groups < 2
+            or chromosome.ndim != 1 or chromosome.size == 0):
+        raise ValueError("LOCO needs a non-empty chromosome vector and at least two allowed groups")
     chroms, inverse, counts = np.unique(chromosome, return_inverse=True,
                                         return_counts=True)
     if chroms.size <= max_groups:
@@ -132,19 +135,20 @@ class LocoGenotypes:
         return tot / max(self.m, 1)
 
     # ------------------------------------------------------------------
-    def _products(self, P: np.ndarray, weights: Optional[np.ndarray]):
-        """Total and per-group products Z_g' W_g (Z_g P)."""
+    def _products(self, P: np.ndarray, col_group: np.ndarray, weights: Optional[np.ndarray]):
+        """Total and own-group products; memory is O(n * columns)."""
         P32 = np.asarray(P, dtype=self.dtype)
         total = np.zeros(P.shape, dtype=np.float64)
-        per = np.zeros((self.n_groups,) + P.shape, dtype=np.float64)
+        own = np.zeros(P.shape, dtype=np.float64)
         for idx, g, Z in self.blocks():
             T = Z @ P32
             if weights is not None:
                 T *= weights[idx, None].astype(self.dtype)
             contrib = (Z.T @ T).astype(np.float64)
             total += contrib
-            per[g] += contrib
-        return total, per
+            selected = col_group == g
+            own[:, selected] += contrib[:, selected]
+        return total, own
 
     def matmul(self, P: np.ndarray, weights: Optional[np.ndarray] = None) -> np.ndarray:
         """K P with K = Z' W Z / sum(W) over all variants (W = 1 by default)."""
@@ -165,8 +169,7 @@ class LocoGenotypes:
         """Column r of the result is K_{-g} P[:, r] with g = col_group[r]."""
         P = np.asarray(P, dtype=np.float64)
         col_group = np.asarray(col_group, dtype=np.int64)
-        total, per = self._products(P, weights)
-        own = per[col_group, :, np.arange(P.shape[1])].T  # (n, R)
+        total, own = self._products(P, col_group, weights)
         if weights is None:
             denom = self.m - self.m_group[col_group]
         else:

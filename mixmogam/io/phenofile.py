@@ -20,6 +20,9 @@ def read_phenotypes(path: str, delimiter: Optional[str] = None) -> Phenotypes:
 
     Wide format: first column is the sample/ecotype id, remaining columns
     are named traits; missing values as NA/NaN/blank.
+    Repeated sample/trait records are rejected: choose an explicit
+    replicate-aggregation rule before loading rather than retaining the
+    last row silently.
     """
     with open(path) as fh:
         header_line = fh.readline().rstrip("\n")
@@ -58,6 +61,8 @@ def _parse_long(header, lower, rows, delimiter) -> Phenotypes:
         val = _num(row[i_val])
         if sid not in order:
             order[sid] = len(order)
+        if sid in pids.get(pid, {}):
+            raise ValueError(f"duplicate observation for sample {sid!r}, trait {pid!r}; aggregate replicates explicitly")
         pids.setdefault(pid, {})[sid] = val
         if i_rep is not None:
             reps.setdefault(pid, {})[sid] = row[i_rep].strip()
@@ -71,6 +76,8 @@ def _parse_long(header, lower, rows, delimiter) -> Phenotypes:
 
 def _parse_wide(header, rows) -> Phenotypes:
     samples = [r[0].strip() for r in rows]
+    if len(samples) != len(set(samples)):
+        raise ValueError("duplicate sample IDs; aggregate replicates explicitly")
     ph = Phenotypes(samples)
     for j in range(1, len(header)):
         vals = [_num(r[j]) if j < len(r) else np.nan for r in rows]
