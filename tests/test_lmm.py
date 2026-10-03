@@ -98,6 +98,28 @@ def test_blup_and_predict(problem):
     assert np.var(y - pred) < np.var(y)  # gBLUP shrinks, never inflates
 
 
+def test_fit_leaves_no_reference_cycle(problem):
+    """A dropped model is freed by reference counting, not left with its K
+    and eigendecomposition for the cyclic GC: through an LMM <-> LMFit
+    cycle, one exact LOCO gwas() stranded 25 models (~8 GB at n = 4,000)."""
+    import gc
+    import weakref
+
+    G, K, y, _ = problem
+    gc.disable()
+    try:
+        lmm = LMM(y, K=K)
+        fit = lmm.fit()
+        assert fit.model is lmm and lmm.fit_result.model is lmm
+        ref = weakref.ref(lmm)
+        del lmm
+        assert ref() is not None  # the returned fit keeps its model
+        del fit
+        assert ref() is None
+    finally:
+        gc.enable()
+
+
 def test_topk_scan_close_on_structured_k():
     G = simulate_genotypes(n=400, m=3000, n_pop=8, pop_fst=0.4, seed=9)
     K = simulate_kinship(G)

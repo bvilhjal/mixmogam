@@ -15,7 +15,14 @@ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
 - `sim_study.py`: phensim coalescent datasets crossed with the method
   variants (exact vs SLQ fits; exact scans with and without LOCO;
   K-free BOLT-LMM-inf; the truncated-spectrum scan; LM vs LMM; batched
-  permutations). Power and false discoveries are counted per locus.
+  permutations). Power and false discoveries are counted per locus, each
+  LD block being its own "chromosome": ldpred3's LD split of the
+  coalescent segment (fixed 200-SNP cuts before 20261003T122520Z leaked
+  QTL tags into neighbouring blocks). The confounding scenario (S2)
+  samples two demes with msprime and puts the confounder on an
+  environment that differs between them; earlier archives put it on the
+  leading eigenvector of the tested SNPs' GRM, and their S2 results are
+  superseded.
 - `structure_calibration.py`: per-SNP calibration of the two-step
   statistics (BOLT-LMM-inf, BOLT-LMM, LDAK-KVIK, each with and without
   the structure-aware denominator) against exact LOCO EMMAX on SNPs that
@@ -26,3 +33,4 @@ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
 Archives before 2026-10-03 printed `lambda_gc` as median(p)/0.5, which
 runs the other way from lambda_GC, and counted LD tags of causal
 variants as false positives. Their NOTES.md files carry dated errata.
+Sim-study ids before 20261003T122520Z are local time (CEST) labelled Z.

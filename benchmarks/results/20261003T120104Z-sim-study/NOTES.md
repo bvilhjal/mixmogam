@@ -47,3 +47,12 @@
   sample (n = 1,500), the constant left a 1.11 -> 0.93 chi2 gradient vs
   exact by loading quintile. The spectral denominator removes it at
   k = 256 (now chosen adaptively).
+
+## Superseded S2 (2026-10-03)
+
+S2 was rebuilt with a confounder independent of the tested SNPs (two
+demes, environment on deme) and rerun in 20261003T122520Z-sim-study.
+Its S1 and S3 use the same data as here, cut into LD-split blocks: the
+fixed 200-SNP cuts here leave strong LD across "chromosome" boundaries,
+and every S1 false locus here is a QTL tag in the neighbouring block.
+This archive's id is local time (CEST) labelled Z (10:01 UTC).

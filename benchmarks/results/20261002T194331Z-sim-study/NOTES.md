@@ -46,3 +46,9 @@ SNP that is not itself causal, LD tags of causal variants included, so
 it is not a false-positive count. Finding 5's permutation threshold used
 raw-phenotype permutation, which is anti-conservative under structure
 (fixed 2026-10-03: whitened-residual permutation). See CHANGELOG.md.
+
+## Superseded S2 (2026-10-03)
+
+Finding 1 rests on the S2 confounder on the GRM's leading eigenvector,
+a function of the tested SNPs that the kinship contains by construction.
+The S2 redesign is in 20261003T122520Z-sim-study.
