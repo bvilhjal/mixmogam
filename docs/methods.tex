@@ -19,6 +19,7 @@
 \newcommand{\U}{\mathbf{U}}
 \newcommand{\V}{\mathbf{V}}
 \newcommand{\G}{\mathbf{G}}
+\newcommand{\Hm}{\mathbf{H}}
 \newcommand{\Sm}{\mathbf{S}}
 \newcommand{\R}{\mathbb{R}}
 \newcommand{\tr}{\operatorname{tr}}
@@ -50,20 +51,26 @@ is parameterized by the single ratio $\delta$; all variance-component
 estimation reduces to one-dimensional optimization of the REML or ML
 profile likelihood over $\delta$.
 
-The package implements three regimes:
+The package implements four regimes:
 \begin{enumerate}[nosep]
-  \item \textbf{Exact} ($n \lesssim 8{,}000$): one dense
-        eigendecomposition of $\K$ and of the restricted matrix
-        $\Sm(\K+I)\Sm$ (Section~\ref{sec:fit}); the association scan
-        evaluates the exact EMMAX statistic in batched dense GEMMs
-        (Section~\ref{sec:scan}).
-  \item \textbf{Truncated spectrum} (large $n$): a randomized top-$k$
-        eigenbasis of $\K$ with an exact identity-tail correction
-        (Section~\ref{sec:topk}).
+  \item \textbf{Exact} ($n \lesssim 5{,}000$ by default): one dense
+        eigendecomposition per leave-one-chromosome-out (LOCO) kinship;
+        the association scan evaluates the exact EMMAX statistic in
+        batched dense GEMMs (Sections~\ref{sec:fit}, \ref{sec:scan},
+        \ref{sec:twostep}).
+  \item \textbf{Two-step K-free} (large $n$): BOLT-LMM and LDAK-KVIK
+        statistics with LOCO residuals from conjugate gradients or
+        variational Bayes, never forming an $n\times n$ matrix
+        (Section~\ref{sec:twostep}), with an optional structure-aware
+        denominator (Section~\ref{sec:spectral}).
   \item \textbf{SLQ fitting} (large $n$): variance components by
         deflated stochastic Lanczos quadrature, requiring only
         matrix--vector products with $\K$ and no $O(n^3)$
         factorization (Section~\ref{sec:slq}).
+  \item \textbf{Truncated spectrum}: a randomized top-$k$ eigenbasis of
+        $\K$ with a flat-bulk tail (Section~\ref{sec:topk}). Kept for
+        comparison only: its scans were anti-conservative in
+        simulation, and they warn.
 \end{enumerate}
 Genotypes are stored sample-major as $n \times m$ matrices of
 \texttt{int8} dosages in $\{0,1,2\}$ with $-1$ encoding missing calls;
@@ -137,11 +144,11 @@ grid-argmax fallback rules retained. Finally
 
 \subsection{GLS coefficients and gBLUP}
 
-With $\H \equiv \V^{-1/2}$ (applied implicitly, Section~\ref{sec:topk}),
+With $\Hm \equiv \V^{-1/2}$ (applied implicitly, Section~\ref{sec:topk}),
 \begin{equation}
   \hat\beta = \big(\X^\top\V^{-1}\X\big)^{-1}\X^\top\V^{-1}\y
   \quad\text{computed as}\quad
-  \big((\H\X)^\top(\H\X)\big)^{-1}(\H\X)^\top(\H\y),
+  \big((\Hm\X)^\top(\Hm\X)\big)^{-1}(\Hm\X)^\top(\Hm\y),
   \label{eq:gls}
 \end{equation}
 and the gBLUP of breeding values is
@@ -159,9 +166,9 @@ transformed, covariate-residualized SNP by an explicit least-squares
 solve \emph{per SNP}. The identical statistic has a closed form.
 Define, at the fitted $\hat\delta$,
 \begin{equation}
-  \Q \gets \operatorname{qr}\big(\H\X\big), \qquad
-  r \gets (I - \Q\Q^\top)\,\H\y, \qquad
-  \tilde g \gets (I - \Q\Q^\top)\,\H g, \qquad
+  \Q \gets \operatorname{qr}\big(\Hm\X\big), \qquad
+  r \gets (I - \Q\Q^\top)\,\Hm\y, \qquad
+  \tilde g \gets (I - \Q\Q^\top)\,\Hm g, \qquad
   \mathrm{RSS}_0 \gets \|r\|^2 .
 \end{equation}
 The one-degree-of-freedom F statistic is the rank-one update
@@ -187,12 +194,12 @@ partialling out). Effect sizes and standard errors come in closed form,
 All per-SNP quantities are rows of matrix expressions. For a block
 $\G \in \R^{k\times n}$ of $k$ SNPs:
 \begin{equation}
-  \widetilde\G^\top = (I - \Q\Q^\top)\,\H\,\G^\top, \qquad
+  \widetilde\G^\top = (I - \Q\Q^\top)\,\Hm\,\G^\top, \qquad
   \mathbf{num} = \widetilde\G\,^\top r \in \R^k, \qquad
   \mathbf{den} = \operatorname{diag}(\widetilde\G^\top\widetilde\G) \in \R^k,
 \end{equation}
 and \eqref{eq:scanstat} is applied elementwise. The transform
-$\H\,\G^\top$ is two GEMMs against the eigenbasis (one GEMM per side);
+$\Hm\,\G^\top$ is two GEMMs against the eigenbasis (one GEMM per side);
 the residualization is one small GEMM of cost $O(nqk)$. The scan is
 therefore $O(n^2 m)$ dense linear algebra with BLAS-3 kernels, no
 Python-level per-SNP loop, and no per-SNP factorization; arithmetic
@@ -203,9 +210,9 @@ defaults to \texttt{float32} (fitting stays \texttt{float64}).
 \label{alg:scan}
 \begin{algorithmic}[1]
 \Require fitted $\hat\delta$; covariates $\X$; phenotype $\y$; genotype store returning blocks $\G \in \R^{k\times n}$; block size $k$, dtype
-\State $\Q \gets \operatorname{qr}(\H\X)$; $r \gets (I-\Q\Q^\top)\H\y$; $\mathrm{RSS}_0 \gets \|r\|^2$; $\nu \gets n - q - 1$
+\State $\Q \gets \operatorname{qr}(\Hm\X)$; $r \gets (I-\Q\Q^\top)\Hm\y$; $\mathrm{RSS}_0 \gets \|r\|^2$; $\nu \gets n - q - 1$
 \ForAll{blocks $\G$ from the store}
-  \State $\widetilde\G^\top \gets (I - \Q\Q^\top)\,\H\,\G^\top$ \Comment{2 GEMMs vs.\ eigenbasis + 1 small GEMM}
+  \State $\widetilde\G^\top \gets (I - \Q\Q^\top)\,\Hm\,\G^\top$ \Comment{2 GEMMs vs.\ eigenbasis + 1 small GEMM}
   \State $\mathbf{num} \gets \widetilde\G^\top r$;\quad $\mathbf{den} \gets \operatorname{rowsums}(\widetilde\G \circ \widetilde\G)$
   \State $t^2 \gets \mathbf{num}^2 / \max(\mathbf{den}, \epsilon)$;\quad
          $\mathbf{RSS} \gets \max(\mathrm{RSS}_0 - t^2, 0)$
@@ -217,19 +224,43 @@ defaults to \texttt{float32} (fitting stays \texttt{float64}).
 
 \subsection{Multi-df extensions}
 
-2-df genotypic tests (v1's ANOVA path) group SNPs by level count $L$
-and build $L{-}1$ indicator contrasts per SNP; the small
-$(L{-}1)\times(L{-}1)$ normal equations are solved \emph{batched} over
-the block (stacked \texttt{solve}). GxE scans test the interaction
-column $g \circ E$ (1~df), or jointly $[g,\; g\circ E]$ (2~df) with the
-same batched two-column update. The stepwise MLMM rescans with the
-current cofactors appended to $\X$, selecting by
-$\mathrm{BIC} = \ell - \tfrac{k}{2}\log n$ with backward elimination.
+2-df genotypic tests (v1's ANOVA path) build $L{-}1$ indicator
+contrasts for an $L$-level SNP and solve the small normal equations.
+
+\paragraph{GxE.} The 1-df interaction test is for $c_j = 0$ in
+$\y = \X b + g_j a_j + (g_j \circ E) c_j + u + e$, with the SNP main
+effect $a_j$ in the model and $E$ among the covariates (it is added when
+absent): an interaction column tested without both main effects absorbs
+them. With $\tilde g = (I-\Q\Q^\top)\Hm g$ and
+$\tilde c = (I-\Q\Q^\top)\Hm (g\circ E)$, the interaction sum of
+squares after the main effect is
+$(\tilde c^\top r - \tfrac{\tilde c^\top\tilde g}{\tilde g^\top\tilde g}\tilde g^\top r)^2
+ / (\tilde c^\top\tilde c - \tfrac{(\tilde c^\top\tilde g)^2}{\tilde g^\top\tilde g})$,
+batched over the block; the 2-df joint test adds the main-effect
+reduction. An optional polygenic interaction component with kinship
+$\K\circ(EE^\top)$ (Sul et al.\ 2016) is fitted as a two-kinship mixture
+(Section~\ref{sec:twokin}). The 2026-10-02 revision omitted $a_j$; with a
+0/1 environment a pure main-effect SNP then gave interaction
+$p \approx 10^{-6}$ in 20 of 20 replicates.
+
+\paragraph{MLMM.} The stepwise multi-locus mixed model (Segura et al.\
+2012) adds the most significant SNP as a fixed-effect cofactor,
+re-estimates the variance components (REML for the scans) and repeats
+until the pseudo-heritability has vanished or a step cap is reached,
+then eliminates backward from the last forward model, dropping the
+least significant cofactor (conditional F test) each step. Every
+visited model is scored with the \emph{maximum-likelihood}
+log-likelihood $\ell$ (REML likelihoods are not comparable across
+fixed-effect designs) by the extended BIC (Chen \& Chen 2008),
+$\mathrm{EBIC} = -2\ell + k'\log n + 2\log\binom{m}{k}$, and by mBonf, the
+largest model whose cofactors all have conditional $p < \alpha/m$.
+Plain BIC is reported but, as Segura et al.\ found, it is too tolerant
+for GWAS.
 
 \section{Large \texorpdfstring{$n$}{n}: the kinship as a streaming operator}
 \label{sec:operator}
 
-Following BOLT-LMM and LDAK-KVIK, above the dense regime the kinship is
+Following BOLT-LMM, above the dense regime the kinship is
 never materialized. \texttt{GenotypeKinship} wraps the genotype store and
 applies $K$ only through streaming products,
 \begin{equation}
@@ -260,29 +291,31 @@ the regime Gauss quadrature resolves well.
 \section{Large \texorpdfstring{$n$}{n}: truncated randomized spectrum}
 \label{sec:topk}
 
-Above $n \approx 8{,}000$ (or whenever the kinship is a streaming
-operator) the dense eigendecomposition is replaced by a randomized
-top-$k$ approximation ($k = 2048$ by default). A Gaussian
-sketch $\Omega \in \R^{n\times(k+p)}$ ($p = 12$ oversampling) is
-powered by $\ell = 5$ subspace iterations,
+This approximation is mixmogam's own (BOLT-LMM never truncates the
+spectrum). A randomized top-$k$ approximation ($k = 1024$ by default)
+is obtained from a Gaussian sketch $\Omega \in \R^{n\times(k+p)}$
+($p = 12$ oversampling) powered by $\ell = 5$ subspace iterations,
 $\Q_0 \gets \operatorname{orth}(\K\Omega)$, \
 $\Q_t \gets \operatorname{orth}(\K\Q_{t-1})$, and the Ritz extraction
 $B = \Q^\top\K\Q$, $B = W\Lambda W^\top$ yields
-$\hat\Lambda_k, \hat U_k = \Q W_k$ (Halko et al.\ 2011). The
-$V^{-1/2}$ map applied to any matrix $A$ becomes
+$\hat\Lambda_k, \hat U_k = \Q W_k$ (Halko et al.\ 2011). With the
+discarded spectrum treated as a flat bulk at its mean
+$\bar\lambda = (\tr\K - \sum_{i\le k}\hat\lambda_i)/(n-k)$,
 \begin{equation}
-  \boxed{\;
-  \H A \;=\; \delta^{-1/2} A \;+\;
+  \Hm A \;=\; (\bar\lambda+\delta)^{-1/2} A \;+\;
   \hat U_k\Big[\operatorname{diag}\big((\hat\lambda_i + \delta)^{-1/2}\big) -
-  \delta^{-1/2} I_k\Big]\hat U_k^\top A \;}
+  (\bar\lambda+\delta)^{-1/2} I_k\Big]\hat U_k^\top A ,
   \label{eq:tail}
 \end{equation}
-which is \emph{exact} whenever the discarded eigenvalues vanish, costs
-two $n \times k$ GEMMs, and never forms an $n \times n$ matrix. The
-unexplained spectral mass
-$\tau = \tr(\K) - \sum_{i\le k}\hat\lambda_i$ is reported on the fit so
-the approximation can be audited; the same identity serves the scan,
-gBLUP and $\V^{-1}$ applications.
+exact when the discarded eigenvalues are equal. They are not: a GRM
+bulk has a Marchenko--Pastur spread, and the per-SNP whitening error it
+leaves inflates the scan. Re-read with the corrected $\lambda_{GC}$
+(Section~\ref{sec:validation}), the 2026-10-03 large-$n$ simulation gave
+$\lambda_{GC} = 2.13$, $1.28$ and $0.95$ at $k/n = 0.03, 0.13, 0.26$
+($n = 4{,}000$; exact scan $0.91$) and $1.30$ at $k/n = 0.10$
+($n = 10{,}000$; exact scan $0.85$; 84 vs 50 significant non-causal
+SNPs). Large-$n$ association therefore goes
+through the two-step statistics of Section~\ref{sec:twostep}.
 
 \section{Large-\texorpdfstring{$n$}{n} fitting: deflated stochastic Lanczos quadrature}
 \label{sec:slq}
@@ -344,6 +377,171 @@ factorization.
 \end{algorithmic}
 \end{algorithm}
 
+\section{LOCO association and two-step statistics}
+\label{sec:twostep}
+
+\paragraph{Why LOCO.} With the tested SNP inside the kinship, the
+polygenic term absorbs part of its own effect (proximal contamination;
+Listgarten et al.\ 2012, Yang et al.\ 2014): the exact EMMAX scan of the
+2026-10-03 simulation was deflated ($\lambda_{GC} = 0.91$ at $n = 4{,}000$,
+$0.85$ at $n = 10{,}000$). Every method behind \texttt{gwas()} therefore
+tests SNPs on chromosome $g$ against a model built from the other
+chromosomes. With more than 25 chromosomes (e.g.\ simulated data with one
+``chromosome'' per LD block) consecutive chromosomes are merged into 25
+groups of balanced size, BOLT-LMM's genome segments.
+
+\paragraph{Exact LOCO.} For each group $g$,
+$\K_{-g} = \operatorname{scale}\big((\sum_j z_jz_j^\top - \sum_{j\in g}z_jz_j^\top)/(m-m_g)\big)$
+is formed by subtraction (two passes over the genotypes in total), the
+variance components are refitted by exact EMMA, and the SNPs of group
+$g$ are scanned with Algorithm~\ref{alg:scan}. Cost: one $O(n^3)$
+eigendecomposition per group.
+
+\paragraph{The streaming LOCO operator.} The two-step methods hold the
+genotypes as standardized, covariate-projected blocks
+$Z_b$ ($z \gets z - \Q\Q^\top z$, BOLT-LMM's treatment of covariates)
+that never straddle a group. One pass applies \emph{every} LOCO kinship
+to its own column of a block $P$: with per-group products
+$S_h = Z_h^\top(Z_h P)$,
+\begin{equation}
+  \K_{-g}\,P_{:,r} \;=\; \frac{\big(\textstyle\sum_h S_h - S_g\big)_{:,r}}{M - M_g},
+  \qquad g = \text{group}(r),
+  \label{eq:locoop}
+\end{equation}
+so the $G$ LOCO systems of BOLT-LMM, the calibration solves, and the
+LOCO eigenbases below all share GEMM passes.
+
+\subsection{BOLT-LMM-inf}
+
+Variance components $(\sigma_g^2, \delta)$ are estimated once on all
+SNPs (Section~\ref{sec:slq}; BOLT-LMM uses Monte Carlo REML for the same
+quantities) and are not refitted per group, BOLT-LMM's default. For
+each group, $w_g = (\K_{-g} + \delta I)^{-1}\y$ is solved by batched
+preconditioned conjugate gradients, the preconditioner inverting the
+top-64 eigenpairs of $\K$ exactly and the rest as a flat bulk. Every
+SNP $z_j$ in group $g$ then gets the retrospective statistic
+\begin{equation}
+  \chi^2_j = \frac{(z_j^\top w_g)^2}{c\,(z_j^\top z_j / n_{\mathrm{eff}})\,\|w_g\|^2},
+  \qquad n_{\mathrm{eff}} = n - q,
+  \label{eq:boltinf}
+\end{equation}
+whose calibration constant $c$ makes it match the exact prospective
+statistic
+$(z^\top \V_{-g}^{-1}\y)^2 / (z^\top \V_{-g}^{-1} z)$: for 30 random SNPs
+with GRAMMAR $\chi^2 < 5$, $c_j = \sigma_g^2 z_j^\top(\K_{-g}+\delta I)^{-1}z_j
+\,/\,\big((z_j^\top z_j/n_{\mathrm{eff}})\|w_g\|^2\big)$ by 30 more CG
+solves, and $c = \overline{c_j}$ (Loh et al.\ 2015). The spread
+$\mathrm{cv} = \operatorname{sd}(c_j)/c$ is reported: \eqref{eq:boltinf}
+is exact only if the prospective denominator is proportional to
+$z_j^\top z_j$ across SNPs, an assumption the BOLT-LMM authors flagged as
+untested outside human data.
+
+\subsection{BOLT-LMM}
+
+The prior on standardized SNP effects is the two-Gaussian mixture
+\begin{equation}
+  \beta_j \sim p\,\mathcal{N}\!\Big(0, \tfrac{(1-f_2)\sigma_\beta^2}{p}\Big)
+  + (1-p)\,\mathcal{N}\!\Big(0, \tfrac{f_2\,\sigma_\beta^2}{1-p}\Big),
+  \qquad \sigma_\beta^2 = \sigma_g^2 / M,
+\end{equation}
+fitted by fully factorized variational Bayes (iterated conditional
+posterior means). $(f_2, p)$ is chosen on BOLT-LMM's 18-point grid
+$f_2 \in \{0.5, 0.3, 0.1\}$, $p \in \{0.5, 0.2, 0.1, 0.05, 0.02, 0.01\}$ by
+5-fold cross-validated prediction; the mixture is used only if its CV
+$R^2$ beats the infinitesimal $(0.5, 0.5)$ by a relative 1\% (BOLT-LMM's
+threshold is not published; this is our choice), otherwise BOLT-LMM-inf
+is returned. LOCO residuals
+$r_g = \y - Z_{-g}^\top\hat\beta_{-g}$ replace $w_g$ in
+\eqref{eq:boltinf}, and the constant is set so that the LD Score
+regression intercept (Bulik-Sullivan et al.\ 2015) of the mixture
+statistic equals that of BOLT-LMM-inf. In-sample LD scores use
+bias-adjusted $r^2$ within 1\,Mb. When the LD scores barely vary
+(coefficient of variation $< 0.2$, e.g.\ LD-free simulations) the
+intercept is not identified and the medians are matched instead.
+
+\paragraph{Blocked variational Bayes.} All cross-validation fits
+(18 settings $\times$ 5 folds $= 90$ columns) or all LOCO fits ($G$
+columns) run as one Gauss--Seidel iteration over SNP blocks of 128: the
+block's products $Z_b^\top R$ are one GEMM, and as SNP $a$ moves by
+$\Delta_a$ the products of later SNPs in the block are corrected
+through the block's Gram matrix, $u_c \gets u_c - G_{ca}\Delta_a$
+(per-fold Gram matrices for cross-validation columns). The sequential
+part is a $B \times B \times$ columns loop (Numba), the rest is BLAS.
+The posterior mean of one effect given the others is closed-form for
+both priors used here (the Laplace component via truncated normals).
+
+\subsection{LDAK-KVIK}
+
+Following the LDAK-KVIK documentation (Hof \& Speed 2025):
+(1)~structure test: among 512 SNPs spread over the genome, the mean
+squared correlation between SNPs on different chromosomes,
+$\mathrm{excess} = n_{\mathrm{eff}}\,\overline{r^2} - 1$; strong
+structure if $\mathrm{excess} > 0.1$ with $z > 3$;
+(2)~per-SNP heritabilities $h_j^2 = w_j h^2/\sum_k w_k$ with
+$w_j = [f_j(1-f_j)]^{1+\alpha}$ and $\alpha$ the best of
+$\{-1, -0.75, -0.5, -0.25, 0\}$ by REML likelihood of the weighted kinship
+(LDAK-KVIK: randomized Haseman--Elston regression; no LD thinning here);
+(3)~the elastic-net prior
+$\gamma_j \sim p\,\mathrm{Laplace}\big(\sqrt{2p/((1-F)h_j^2)}\big) + (1-p)\,\mathcal{N}(0, F h_j^2/(1-p))$
+with $(p, F)$ chosen on a 10\% hold-out among KVIK's ten pairs;
+(4)~LOCO polygenic scores $P_g$ by variational Bayes; (5)~the ordinary
+least-squares statistic of $\y - P_g$ on $z_j$, scaled by $\lambda$:
+$\lambda = 1$ without strong structure, otherwise
+$\lambda = \lambda'\sum_S T/\sum_S U$ over SNPs with $\lambda U < 6$ and
+$\lambda' T < 6$, where $T$ are the statistics with ridge-prior scores
+and $\lambda' = 1/c$ their GRAMMAR-Gamma calibration (the BOLT-LMM-inf
+constant of the weighted model).
+
+\subsection{Structure-aware denominator}
+\label{sec:spectral}
+
+Every statistic above, and REGENIE's and SAIGE's, scales a score by one
+genome-wide constant. Under strong structure the prospective
+denominator $z_j^\top(\K_{-g}+\delta I)^{-1}z_j$ is \emph{not}
+proportional to $z_j^\top z_j$: a SNP aligned with the leading
+(structure) eigenvectors of $\K_{-g}$ has a smaller denominator than an
+unaligned SNP of equal norm, so one constant inflates unaligned SNPs and
+deflates aligned ones (Section~\ref{sec:validation}). mixmogam's
+extension replaces the constant by a low-rank-plus-flat approximation
+on the top-$k$ eigenpairs $(U_g, \Lambda_g)$ of the SNP's own LOCO
+kinship,
+\begin{equation}
+  D_j = c'\sigma_g^2\Big[\,\|(\Lambda_g + \delta)^{-1/2}U_g^\top z_j\|^2
+  + \frac{z_j^\top z_j - \|U_g^\top z_j\|^2}{\bar\lambda_g + \delta}\Big],
+  \qquad \chi^2_j = \frac{(z_j^\top w_g)^2}{D_j},
+  \label{eq:spectral}
+\end{equation}
+with $\bar\lambda_g$ the mean of the remaining eigenvalues of
+$\K_{-g}$ and $c'$ calibrated on the same 30 prospective SNPs. The width
+$k$ is adaptive: it doubles from 64 to at most 512 until the spread of
+$c'_j$ over the calibration SNPs falls below 3\%. The bulk of an
+LD-rich kinship is not flat, and the calibration SNPs measure how much
+of it the basis misses (in a coalescent sample without population
+structure, $n = 1{,}500$, $k = 64$ left a 7\% spread and $k = 256$ 2\%). The LOCO
+eigenbases are computed for all groups at once by randomized subspace
+iteration through \eqref{eq:locoop}. A basis of the \emph{full} kinship
+does not work: it contains each SNP's own LD block and reintroduces
+proximal contamination into the denominator. For the mixture and
+elastic-net statistics, the per-SNP factor
+$\kappa_j = D_j^{\mathrm{const}}/D_j$ of the infinitesimal model is
+applied before their global calibration; this transfer is a heuristic.
+
+\begin{algorithm}[t]
+\caption{BOLT-LMM-inf with the structure-aware denominator}
+\label{alg:spectral}
+\begin{algorithmic}[1]
+\Require standardized projected blocks $Z_b$ in $G$ LOCO groups; $\y$; $(\sigma_g^2,\delta)$; width $k$
+\State $W \gets$ batched PCG for $(\K_{-g}+\delta I)\,w_g = \y$, $g = 1..G$ \Comment{one LOCO pass per iteration, \eqref{eq:locoop}}
+\State $\{U_g,\Lambda_g,\bar\lambda_g\} \gets$ batched randomized subspace iteration on all $\K_{-g}$
+\State 30 SNPs $j$ with GRAMMAR $\chi^2<5$: $v_j \gets (\K_{-g(j)}+\delta I)^{-1}z_j$ \Comment{batched PCG}
+\State $c' \gets \operatorname{mean}_j\big(\sigma_g^2 z_j^\top v_j / D_j^{(c'=1)}\big)$
+\ForAll{blocks $Z_b$ of group $g$}
+  \State $\mathbf{num} \gets Z_b w_g$;\quad $P \gets Z_b U_g$;\quad $D \gets c'\sigma_g^2\big[(P\circ P)(\Lambda_g{+}\delta)^{-1} + (\operatorname{rowsums}(Z_b\circ Z_b) - \operatorname{rowsums}(P\circ P))/(\bar\lambda_g{+}\delta)\big]$
+  \State $\chi^2 \gets \mathbf{num}^2/D$
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
 \section{Kinships}
 
 \paragraph{Additive GRM.} Per variant $j$, genotypes are standardized
@@ -353,7 +551,7 @@ otherwise (Yang et al.\ 2010), and
 $\K = \sum_j w_j\, z_j z_j^\top / \sum_j w_j$ is accumulated over SNP
 blocks in \texttt{float64}. Optional weights $w_j$ implement LDAK-style
 weighting; an optional SNP subset fits the null model from a marker
-subsample (LDAK-KVIK style) at reduced cost.
+subsample at reduced cost.
 
 \paragraph{IBS.} Identity-by-state similarity is accumulated as one-hot
 GEMMs per block: with $H_a$ the indicator of genotype $a \in \{0,1,2\}$
@@ -375,22 +573,30 @@ the genome are the same construction restricted to a sliding interval.
 
 \section{Batched permutation thresholds}
 
-Permutation follows v1 semantics: the \emph{raw} phenotype is permuted
-and variance components stay fixed at $\hat\delta$. Because
-permutation does not commute with the whitening transform
-($P\H \neq \H P$), permuted phenotypes are transformed after
-permutation, $\mathbf{Y}_P = \H\,\y[\Pi]$, and residualized against the fixed
-$\Q$. All $B$ permutations then flow through each SNP-block GEMM at
-once:
+Permuting the raw phenotype breaks the covariance the kinship models:
+under relatedness or structure the permuted phenotypes are not draws
+from the null model, and the threshold is anti-conservative (Abney
+2015). With 4 populations at $F_{ST} = 0.3$, the v1 scheme gave a
+family-wise error rate of $7.6\% \pm 0.6\%$ at a nominal 5\%
+(2{,}000 parametric-null replicates, 1{,}000 permutations).
+mixmogam therefore permutes the GLS-whitened null residuals
+(Abney's MVNpermute construction): $r = (I - \Q\Q^\top)\Hm\y$ at the
+fitted $\hat\delta$ is close to exchangeable under the null, so
+\begin{equation}
+  R_P = (I - \Q\Q^\top)\, r[\Pi] \in \R^{n\times B}
+\end{equation}
+holds $B$ draws of the whitened null. All permutations then flow
+through each SNP-block GEMM at once,
 \begin{equation}
   T = \widetilde\G^\top R_P \in \R^{k\times B}, \qquad
   F = \frac{T \circ T}{\mathbf{den}\,\mathrm{RSS}_{0,P}}\,\nu,
 \end{equation}
-so a permutation costs a matrix multiply rather than a full scan, and
-the genome-wide 5\% threshold is the 5th percentile of the per-
-permutation minimum $p$.
+and the genome-wide 5\% threshold is the 5th percentile of the
+per-permutation minimum $p$. The v1 scheme remains available
+(\texttt{scheme="raw"}) to reproduce old results.
 
 \section{Two-kinship mixtures}
+\label{sec:twokin}
 
 For $\V = \sigma_{g_1}^2\K_1 + \sigma_{g_2}^2\K_2 + \sigma_e^2 I$, the
 ratio $\rho = \sigma^2_{g_1}/\sigma^2_{g_2}$ is profiled on a grid of
@@ -409,15 +615,76 @@ the int8-to-float block conversion (optionally a Numba kernel);
 handling.
 
 \section{Validation and measured performance}
+\label{sec:validation}
 
-Correctness is certified against a float64 port of the v1
-mathematics (\texttt{tests/\_reference.py}): F statistics agree to
-rtol $10^{-6}$, null $p$-values pass a Kolmogorov--Smirnov uniformity
-test, simulated causal loci are recovered with high power, the SLQ
-solver reproduces the exact fit (Section~\ref{sec:slq}), and the
-bundled \emph{A.\ thaliana} Atwell data runs end-to-end. Measured
-timings (development laptop, Apple silicon, 4 BLAS threads, AC power;
-archive \texttt{benchmarks/results/}):
+\paragraph{Correctness.} The exact scan is certified against a float64
+port of the v1 mathematics, with F statistics equal to rtol $10^{-6}$
+(the oracle is \texttt{tests/\allowbreak\_reference.py}). The exact LOCO path equals a hand-built per-chromosome
+EMMAX fit; the streaming LOCO operator equals the dense LOCO kinship
+products; batched CG equals a dense solve; variational Bayes with a
+Gaussian prior converges to the BLUP residual
+$\sigma_e^2\V^{-1}\y$; both posterior means match numerical quadrature;
+LD scores match a brute-force computation; whitened-residual
+permutations reproduce scans of $\V^{1/2}P r$ and keep the family-wise
+error at its nominal level under strong structure; the GxE statistic
+equals a direct GLS F test of the full design. Without structure,
+BOLT-LMM-inf agrees with the exact LOCO scan (chi-square correlation
+0.996--0.9998, mean ratio 0.99--1.00), and mixmogam's LDAK-KVIK correlates
+0.966 per SNP with the LDAK~6 binary.
+
+\paragraph{The constant-ratio assumption under structure.}
+Table~\ref{tab:structure} uses a null-chromosome design: the genetic
+value comes from all chromosomes but the last (polygenic $h^2 = 0.4$ on
+standardized genotypes plus 10 QTLs with $h^2 = 0.1$), so the last
+chromosome's SNPs are null and their LOCO kinship is the generating one.
+SNPs are binned by their squared-norm share in the top-10 kinship
+eigenvectors. Data: LD-free simulated genotypes ($n = 1{,}300$,
+$m = 20{,}000$; 4 populations at $F_{ST} = 0.3$) and the \emph{A.\
+thaliana} RegMap genotypes ($n = 1{,}307$ inbred accessions, 53{,}167 SNPs
+with MAC~$\ge 10$). Six replicate phenotypes each (archives
+\texttt{20261003T081812Z-structure-calibration} and
+\texttt{20261003T083746Z-kvik-reference}).
+
+\begin{table}[h]
+\centering
+\small
+\caption{$\lambda_{GC}$ on null SNPs by structure-loading quintile
+(q1 lowest, q5 highest) and false-positive rate at $p < 0.01$, means over
+six replicates. ``spectral'' is Section~\ref{sec:spectral}; ``LDAK
+binary'' is the reference LDAK-KVIK program run on the same phenotypes.}
+\label{tab:structure}
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{@{}llccccc c@{}}
+\toprule
+data & method & q1 & q2 & q3 & q4 & q5 & FPR q1 / q5 \\
+\midrule
+sim., $F_{ST} = 0.3$ & exact LOCO EMMAX & 1.05 & 0.98 & 1.05 & 0.92 & 1.02 & 1.12\% / 1.11\% \\
+ & BOLT-LMM-inf & 1.34 & 1.12 & 1.07 & 0.82 & 0.64 & 2.45\% / 0.11\% \\
+ & BOLT-LMM-inf, spectral & 1.05 & 0.99 & 1.05 & 0.92 & 1.01 & 1.14\% / 1.06\% \\
+ & BOLT-LMM & 1.35 & 1.14 & 1.06 & 0.85 & 0.70 & 2.58\% / 0.11\% \\
+ & LDAK-KVIK (mixmogam) & 1.37 & 1.17 & 1.12 & 0.89 & 0.73 & 2.92\% / 0.11\% \\
+\midrule
+\emph{A.\ thaliana} & exact LOCO EMMAX & 1.04 & 1.01 & 0.98 & 1.01 & 1.04 & 0.96\% / 0.98\% \\
+ & LDAK-KVIK, LDAK binary & 1.21 & 1.10 & 1.04 & 1.01 & 0.92 & 1.67\% / 0.78\% \\
+ & LDAK-KVIK (mixmogam) & 1.16 & 1.07 & 0.99 & 0.98 & 0.85 & 1.44\% / 0.49\% \\
+ & BOLT-LMM-inf & 1.19 & 1.10 & 1.01 & 0.99 & 0.86 & 1.66\% / 0.56\% \\
+ & BOLT-LMM-inf, spectral & 1.04 & 1.02 & 0.98 & 1.00 & 1.03 & 0.97\% / 0.99\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Without structure every method is flat ($\lambda_{GC}$ 0.98--1.04). Under
+structure, each single-constant statistic is anti-conservative for SNPs
+that load weakly on the structure and conservative for strongly loading
+ones, while its genome-wide $\lambda_{GC}$ (0.97--1.04) looks normal. The
+structure-aware denominator restores per-quintile calibration for
+BOLT-LMM-inf. Transferred to BOLT-LMM it is flat (0.96--1.09). Transferred
+to LDAK-KVIK through its $\lambda$ rule it is flat but about 7\% inflated
+overall under the simulated structure. Power at the QTLs, which are not
+chosen for structure alignment, is within a few percent across methods.
+
+\paragraph{Speed.} Development laptop, Apple silicon, 4 BLAS threads, AC
+power; these compare mixmogam with itself.
 
 \begin{center}
 \small
@@ -426,10 +693,11 @@ archive \texttt{benchmarks/results/}):
 \toprule
 Workload & Metric & Result \\
 \midrule
-scan vs.\ v1-style per-SNP least squares ($n{=}2000$, $m{=}10$k) & speed-up & $123\times$ (0.27\,s vs 33.7\,s) \\
-scan, $n{=}500$, $m{=}100$k, float32 & throughput & $2.5\times10^{5}$ SNPs/s \\
-scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNPs/s ($3.3\times$ float64) \\
-500 permutations $\times$ 5k SNPs, $n{=}1500$ (batched) & throughput & $1.7\times10^{6}$ perm-SNPs/s \\
+exact scan vs.\ v1-style per-SNP least squares ($n{=}2000$, $m{=}10$k) & speed-up & $123\times$ \\
+exact scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNPs/s \\
+\texttt{gwas} exact LOCO, \emph{A.\ thaliana} ($n{=}1307$, $m{=}53$k, 5 chr.) & wall time & 4\,s \\
+\texttt{gwas} BOLT-LMM-inf, same data (spectral: $+2$\,s) & wall time & 28\,s \\
+\texttt{gwas} LDAK-KVIK, same data (LDAK binary: 9\,s) & wall time & 140\,s \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -437,26 +705,51 @@ scan, $n{=}2000$, $m{=}100$k, float32 & throughput & $4.8\times10^{4}$ SNPs/s ($
 \section{References}
 
 \begin{itemize}[nosep,leftmargin=1.4em]
-\item Kang, H.M.\ et al.\ (2008) Efficient control of population
-  structure in model organism association mapping. \emph{Genetics} 178:1709--1723. (EMMA)
-\item Kang, H.M.\ et al.\ (2010) Variance component model to account
-  for sample structure in genome-wide association studies.
-  \emph{Nat Genet} 42:348--354. (EMMAX)
-\item Yang, J.\ et al.\ (2010) Common SNPs explain a large proportion
-  of the heritability for human height. \emph{Nat Genet} 42:565--569. (GRM)
-\item Loh, P.-R.\ et al.\ (2015) Efficient Bayesian mixed-model
-  analysis in genome-wide association studies. \emph{Nat Genet}
-  47:284--290. (BOLT-LMM; truncated-spectrum scanning)
-\item Mbatchou, J.\ et al.\ (2021) Computationally efficient
-  whole-genome regression for quantitative and binary traits.
-  \emph{Nat Genet} 53:1097--1103. (REGENIE; batched permutation-style projection scanning)
-\item Tian, J.\ et al.\ (2024) LDAK-KVIK: fast and accurate
-  variance-component estimation and association testing.
-  (randomized eigensolvers, SNP-subsampled null fits)
+\item Abney, M.\ (2015) Permutation testing in the presence of polygenic
+  variation. \emph{Genet Epidemiol} 39:249--258. doi:10.1002/gepi.21893
+\item Bulik-Sullivan, B.K.\ et al.\ (2015) LD Score regression
+  distinguishes confounding from polygenicity in genome-wide association
+  studies. \emph{Nat Genet} 47:291--295. doi:10.1038/ng.3211
+\item Chen, J., Chen, Z.\ (2008) Extended Bayesian information criteria
+  for model selection with large model spaces. \emph{Biometrika}
+  95:759--771.
 \item Halko, N., Martinsson, P.-G., Tropp, J.A.\ (2011) Finding
   structure with randomness. \emph{SIAM Review} 53:217--288.
+\item Hof, J.P., Speed, D.\ (2025) LDAK-KVIK performs fast and powerful
+  mixed-model association analysis of quantitative and binary
+  phenotypes. \emph{Nat Genet} 57:2116--2123.
+  doi:10.1038/s41588-025-02286-z
+\item Kang, H.M.\ et al.\ (2008) Efficient control of population
+  structure in model organism association mapping. \emph{Genetics}
+  178:1709--1723. doi:10.1534/genetics.107.080101 (EMMA)
+\item Kang, H.M.\ et al.\ (2010) Variance component model to account
+  for sample structure in genome-wide association studies.
+  \emph{Nat Genet} 42:348--354. doi:10.1038/ng.548 (EMMAX)
+\item Listgarten, J.\ et al.\ (2012) Improved linear mixed models for
+  genome-wide association studies. \emph{Nat Methods} 9:525--526.
+  doi:10.1038/nmeth.2037
+\item Loh, P.-R.\ et al.\ (2015) Efficient Bayesian mixed-model analysis
+  increases association power in large cohorts. \emph{Nat Genet}
+  47:284--290. doi:10.1038/ng.3190 (BOLT-LMM)
+\item Mbatchou, J.\ et al.\ (2021) Computationally efficient
+  whole-genome regression for quantitative and binary traits.
+  \emph{Nat Genet} 53:1097--1103. doi:10.1038/s41588-021-00870-7 (REGENIE)
+\item Segura, V.\ et al.\ (2012) An efficient multi-locus mixed-model
+  approach for genome-wide association studies in structured
+  populations. \emph{Nat Genet} 44:825--830. doi:10.1038/ng.2314 (MLMM)
+\item Sul, J.H.\ et al.\ (2016) Accounting for population structure in
+  gene-by-environment interactions in genome-wide association studies
+  using mixed models. \emph{PLoS Genet} 12:e1005849.
+  doi:10.1371/\allowbreak journal.pgen.1005849
 \item Ubaru, S., Chen, J., Saad, Y.\ (2017) Fast estimation of
-  $\tr f(A)$ via stochastic Lanczos quadrature. \emph{SIAM J.\ Matrix Anal.\ Appl.}\ 38:1075--1099.
+  $\tr f(A)$ via stochastic Lanczos quadrature. \emph{SIAM J.\ Matrix
+  Anal.\ Appl.}\ 38:1075--1099.
+\item Yang, J.\ et al.\ (2010) Common SNPs explain a large proportion
+  of the heritability for human height. \emph{Nat Genet} 42:565--569.
+  doi:10.1038/ng.608 (GRM)
+\item Yang, J.\ et al.\ (2014) Advantages and pitfalls in the
+  application of mixed-model association methods. \emph{Nat Genet}
+  46:100--106. doi:10.1038/ng.2876
 \end{itemize}
 
 \end{document}

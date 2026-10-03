@@ -8,6 +8,7 @@ the hot paths.
 
 from __future__ import annotations
 
+import warnings
 
 import numpy as np
 from scipy import stats
@@ -78,71 +79,123 @@ def scan_genotypic(
     }
 
 
+def _with_covariate(lmm: LMM, E: np.ndarray, tol: float = 1e-8) -> LMM:
+    """``lmm`` itself if E lies in its covariate span, else a refitted copy
+    with E appended (same kinship, eigendecomposition reused)."""
+    Q = lmm.resid_projector
+    resid = E - Q @ (Q.T @ E)
+    if np.linalg.norm(resid) <= tol * max(np.linalg.norm(E), 1.0):
+        return lmm
+    warnings.warn(
+        "scan_gxe: E is not among the covariates; adding it and refitting "
+        "the null model (an interaction test without the environment main "
+        "effect confounds GxE with E)",
+        stacklevel=3,
+    )
+    K = lmm.K if lmm.K is not None else lmm._kop
+    aug = LMM(lmm.y, X=np.column_stack([lmm.X, E]), K=K, add_intercept=False,
+              n_eig=lmm.n_eig, random_state=lmm.random_state)
+    aug._eig = lmm._eig  # the spectrum of K does not depend on X
+    aug._basis_cache = lmm._basis_cache
+    method = lmm.fit_result.method if lmm.fit_result is not None else "reml"
+    aug.fit(method=method)
+    return aug
+
+
 def scan_gxe(
     lmm: LMM,
     gt,
     E: np.ndarray,
     block: int = 2048,
-    dtype=np.float32,
+    dtype=np.float64,
     joint: bool = False,
+    polygenic_gxe: bool = False,
 ) -> dict:
     """Gene-environment interaction scan (v1 emmax_GxT successor).
 
-    Tests the interaction column g_j * E (1 df), or with ``joint=True``
-    the joint [g_j, g_j*E] block (2 df). ``E`` is a complete (n,) vector
-    and may also appear among the covariates: the interaction column is
-    formed in *raw* space (g * E), then transformed and residualized --
-    V^{-1/2}(g E) is not the product of the separate transforms, and
-    residualizing E itself would annihilate the interaction when E is a
-    covariate.
+    Per SNP the model is y = X b + g_j a_j + (g_j * E) c_j + u + e. The
+    default 1-df test is for c_j = 0 *with* the SNP main effect a_j in the
+    model; ``joint=True`` tests (a_j, c_j) = 0 with 2 df. E must be among
+    the covariates (it is added, with a warning, when it is not), because
+    a GxE test without both main effects attributes them to the
+    interaction. The interaction column is formed in raw space (g * E) and
+    then transformed and residualized, since V^{-1/2}(g E) is not the
+    product of the separate transforms.
+
+    ``polygenic_gxe=True`` adds a polygenic interaction variance component
+    with kinship K * (E E') (Sul et al. 2016, PLoS Genet), fitted as a
+    two-kinship mixture: without it, population structure in the
+    environment response inflates GxE statistics. Needs a dense K.
+
+    Algebra is float64 throughout (``dtype`` is accepted for signature
+    compatibility): the interaction reduction is a difference of nearly
+    equal quantities when g and g * E are strongly correlated.
     """
     lmm = _model(lmm)
-    E = np.asarray(E, dtype=np.float64)
+    E = np.asarray(E, dtype=np.float64).ravel()
     if E.size != lmm.n:
         raise ValueError("environment vector length mismatch")
-    fac = lmm._scan_factors(dtype)
+    lmm = _with_covariate(lmm, E)
+    if polygenic_gxe:
+        if lmm.K is None:
+            raise ValueError("polygenic_gxe needs a dense kinship matrix")
+        method = lmm.fit_result.method if lmm.fit_result is not None else "reml"
+        mix = fit_two_kinships(lmm.y, lmm.K, lmm.K * np.outer(E, E),
+                               X=lmm.X[:, 1:] if _has_intercept(lmm.X) else lmm.X,
+                               method=method)
+        lmm = mix["fit"].model
+    elif lmm.fit_result is None and lmm.K is not None:
+        lmm.fit()
+    fac = lmm._scan_factors(np.float64)
     Q, r, rss0, df0 = fac["Q"], fac["r"], fac["rss0"], lmm.n - lmm.q
     r64 = r.astype(np.float64)
     tiny = np.finfo(float).tiny
-    ps, fs, betas = [], [], []
+    ps, fs, betas, ses = [], [], [], []
     for S in gt.iter_snp_blocks(block=block, dtype=np.float64, impute="mean"):
-        GE_raw = S * E[None, :]  # (k, n) raw interaction columns
-        C = lmm._apply_inv_sqrt(GE_raw.T, fac["delta"], np.float64)  # (n, k)
+        C = lmm._apply_inv_sqrt((S * E[None, :]).T, fac["delta"], np.float64)
         C -= Q @ (Q.T @ C)
         C = C.T  # (k, n) transformed, residualized interaction columns
-        if not joint:
-            num = C @ r64
-            den = np.einsum("ij,ij->i", C, C)
-            t2 = (num**2) / np.maximum(den, tiny)
-            rss = np.maximum(rss0 - t2, 0.0)
-            df2 = df0 - 1
-            f = t2 / rss * df2
-            ps.append(stats.f.sf(f, 1, df2))
-            betas.append(num / np.maximum(den, tiny))
-        else:
-            G = lmm._apply_inv_sqrt(S.T, fac["delta"], np.float64)
-            G -= Q @ (Q.T @ G)
-            G = G.T  # (k, n) transformed, residualized main columns
-            b0 = G @ r64
-            b1 = C @ r64
-            c00 = np.einsum("ij,ij->i", G, G)
-            c11 = np.einsum("ij,ij->i", C, C)
-            c01 = np.einsum("ij,ij->i", G, C)
-            det = np.maximum(c00 * c11 - c01 * c01, tiny)
-            beta0 = (b0 * c11 - b1 * c01) / det
-            beta1 = (b1 * c00 - b0 * c01) / det
-            reduction = beta0 * b0 + beta1 * b1
-            rss = np.maximum(rss0 - reduction, 0.0)
-            df2 = df0 - 2
-            f = (reduction / 2.0) / (rss / df2)
-            ps.append(stats.f.sf(f, 2, df2))
-            betas.append(beta1)
+        G = lmm._apply_inv_sqrt(S.T, fac["delta"], np.float64)
+        G -= Q @ (Q.T @ G)
+        G = G.T  # (k, n) transformed, residualized main-effect columns
+        b0 = G @ r64
+        b1 = C @ r64
+        c00 = np.einsum("ij,ij->i", G, G)
+        c11 = np.einsum("ij,ij->i", C, C)
+        c01 = np.einsum("ij,ij->i", G, C)
+        det = c00 * c11 - c01 * c01
+        # g and g*E collinear (e.g. the SNP is monomorphic in one
+        # environment): the interaction is not identifiable
+        ok = (c00 > tiny) & (det > 1e-10 * np.maximum(c00 * c11, tiny))
+        det = np.where(ok, det, np.nan)
+        beta1 = (b1 * c00 - b0 * c01) / det
+        main_red = np.where(c00 > tiny, b0 * b0 / np.maximum(c00, tiny), 0.0)
+        # interaction sum of squares after the main effect
+        int_red = (b1 - c01 * b0 / np.maximum(c00, tiny)) ** 2 / (det / np.maximum(c00, tiny))
+        rss_full = np.maximum(rss0 - main_red - int_red, tiny)
+        df2 = df0 - 2
+        with np.errstate(invalid="ignore"):
+            if not joint:
+                f = int_red / (rss_full / df2)
+                ps.append(stats.f.sf(f, 1, df2))
+            else:
+                f = ((main_red + int_red) / 2.0) / (rss_full / df2)
+                ps.append(stats.f.sf(f, 2, df2))
+            ses.append(np.sqrt(rss_full / df2 * c00 / det))
+        betas.append(beta1)
         fs.append(f)
     return {
         "ps": np.concatenate(ps),
         "f_stats": np.concatenate(fs),
         "betas": np.concatenate(betas),
+        "ses": np.concatenate(ses),
+        "df": 2 if joint else 1,
+        "model": lmm,
     }
+
+
+def _has_intercept(X: np.ndarray) -> bool:
+    return X.shape[1] > 0 and np.allclose(X[:, 0], 1.0)
 
 
 def permutation_min_p(
@@ -152,19 +205,28 @@ def permutation_min_p(
     block: int = 2048,
     dtype=np.float32,
     seed: int = 0,
+    scheme: str = "whitened",
 ) -> dict:
     """Genome-wide minimum p-value distribution under permutation.
 
-    Phenotypes are permuted (v1 semantics: fixed variance components at
-    the fitted delta), transformed, residualized and scanned in batches --
-    all ``n_perm`` permutations flow through the same SNP-block GEMMs as a
-    single (n, B) response matrix, so each permutation costs a matrix
-    multiply rather than a full scan.
+    ``scheme="whitened"`` (default) permutes the GLS-whitened null
+    residuals r = (I - Q Q') V^{-1/2} y at the fitted variance components
+    and re-residualizes them (the MVNpermute construction of Abney 2015,
+    Genet Epidemiol): under the null model these residuals are close to
+    exchangeable, so the permuted copies are draws from the null
+    distribution of the EMMAX statistic. ``scheme="raw"`` reproduces v1:
+    permute the raw phenotype and then whiten. That breaks the covariance
+    the kinship models, so with population structure or relatedness its
+    threshold is anti-conservative; it is kept only to reproduce old
+    results.
 
-    Returns ``{"min_ps", "max_fs", "threshold_05"}`` where the threshold
-    is the 5th percentile of minimum p-values (the genome-wide 5%
-    significance threshold).
+    All ``n_perm`` permutations flow through the same SNP-block GEMMs as a
+    single (n, B) response matrix. Returns ``{"min_ps", "max_fs",
+    "threshold_05"}``; the threshold is the 5th percentile of the minimum
+    p-values (the genome-wide 5% significance threshold).
     """
+    if scheme not in ("whitened", "raw"):
+        raise ValueError(f"unknown scheme {scheme!r}; use 'whitened' or 'raw'")
     lmm = _model(lmm)
     rng = np.random.default_rng(seed)
     fac = lmm._scan_factors(dtype)
@@ -172,9 +234,12 @@ def permutation_min_p(
     tiny = np.finfo(dtype).tiny
 
     perms = np.argsort(rng.random((lmm.n, n_perm)), axis=0)
-    # v1 semantics: permute the raw phenotype, then transform at the fixed
-    # fitted delta (permutation does not commute with V^{-1/2})
-    Yt = lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype)  # (n, B)
+    if scheme == "whitened":
+        Rp = np.asarray(fac["r"], dtype=dtype)[perms]  # (n, B)
+    else:
+        Rp = lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype)
+    Rp -= Q @ (Q.T @ Rp)
+    rss0_p = np.einsum("ij,ij->j", Rp, Rp)  # (B,)
     min_ps = np.ones(n_perm)
     max_fs = np.zeros(n_perm)
     for S in gt.iter_snp_blocks(block=block, dtype=dtype, impute="mean"):
@@ -182,13 +247,11 @@ def permutation_min_p(
         G -= Q @ (Q.T @ G)
         den = np.einsum("ij,ij->j", G, G)
         den = np.maximum(den, tiny)
-        # all permutations at once: (k, B) F statistics
-        Rp = Yt - Q @ (Q.T @ Yt)
-        rss0_p = np.einsum("ij,ij->j", Rp, Rp)  # (B,)
-        num = G.T @ Rp  # (k, B)
+        num = G.T @ Rp  # (k, B): all permutations at once
         t2 = (num * num) / den[:, None]
         rss = np.maximum(rss0_p[None, :] - t2, 0.0)
-        f = t2 / rss * df
+        with np.errstate(divide="ignore", invalid="ignore"):
+            f = t2 / rss * df
         p = stats.f.sf(f, 1, df)
         min_ps = np.minimum(min_ps, np.nanmin(p, axis=0))
         max_fs = np.maximum(max_fs, np.nanmax(f, axis=0))
@@ -196,6 +259,7 @@ def permutation_min_p(
         "min_ps": min_ps,
         "max_fs": max_fs,
         "threshold_05": float(np.quantile(min_ps, 0.05)),
+        "scheme": scheme,
     }
 
 
@@ -212,8 +276,7 @@ def fit_two_kinships(
     """Fit vg1 K1 + vg2 K2 + ve I by mixture-weight profiling (v1
     get_estimates_3 successor).
 
-    A cascade of grids over log10(vg1/vg2) (KVIK-style subsampled first
-    pass would be an easy swap here) with an exact EMMA fit per candidate
+    A cascade of grids over log10(vg1/vg2) with an exact EMMA fit per candidate
     mixture; the best bracket is refined, then the final mixture is fit
     and returned with per-matrix variance shares.
     """

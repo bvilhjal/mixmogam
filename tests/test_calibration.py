@@ -5,6 +5,7 @@ import pytest
 from scipy import stats
 
 from mixmogam import LMM
+from mixmogam.results import GwasResult
 from mixmogam.simulate import simulate_genotypes, simulate_kinship, simulate_traits
 
 pytestmark = pytest.mark.slow
@@ -35,8 +36,9 @@ def test_null_with_confounded_phenotype():
     ps = res["ps"]
     # modest tolerance: massive structure, LMM should largely correct it
     assert (ps < 1e-5).mean() < 0.005
-    lam_gc = np.median(ps) / 0.5
-    assert 0.2 < lam_gc < 5.0, f"genomic inflation lambda={lam_gc}"
+    lam_gc = GwasResult(chromosome=np.ones(ps.size), position=np.arange(ps.size),
+                        p=ps).genomic_control()
+    assert 0.5 < lam_gc < 2.0, f"genomic inflation lambda={lam_gc}"
 
 
 def test_power_recovers_causals():

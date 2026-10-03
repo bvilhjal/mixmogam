@@ -1,4 +1,4 @@
-"""EMMAX mixed-model GWAS: the headline mixmogam workflow.
+"""Mixed-model GWAS with LOCO: the headline mixmogam workflow.
 
 Usage: python mixed_model_gwas.py <plink-prefix-or-sim> [phenotype-file]
 With no arguments, runs on simulated data.
@@ -7,10 +7,9 @@ import sys
 
 import numpy as np
 
-from mixmogam import Genotypes, LMM, kinship
+from mixmogam import Genotypes, gwas
 from mixmogam.io.phenofile import read_phenotypes
 from mixmogam.plotting import plot_manhattan, plot_qq
-from mixmogam.results import GwasResult
 from mixmogam.simulate import simulate_genotypes, simulate_traits
 
 
@@ -26,14 +25,11 @@ def main():
                        position=np.arange(20000) * 100)
         y = simulate_traits(G, h2=0.6, n_causal=10, seed=2)["y"]
 
-    K = kinship.realized_relationship(gt)
-    fit = LMM(y, K=K).fit()
-    print(f"delta={fit.delta:.3f}  pseudo-h2={fit.pseudo_heritability:.3f}")
-
-    scan = fit.scan(gt, with_betas=True)
-    result = GwasResult.from_scan(scan, gt, fit=fit)
+    result = gwas(y, gt)  # exact LOCO EMMAX at this n
+    h2 = np.round(result.extra["pseudo_heritability"], 3)
+    print(f"method={result.extra['method']}  pseudo-h2 per LOCO group={h2}")
     print(f"lambda_GC={result.genomic_control():.3f}  min p={result.p.min():.3e}")
-    print(result.top_snps(5).to_dataframe() if False else result.top_snps(5).p)
+    print(result.top_snps(5).p)
 
     result.write_csv("gwas.csv")
     plot_manhattan(result, savepath="manhattan.png")

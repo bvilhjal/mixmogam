@@ -67,7 +67,7 @@ def realized_relationship(
 
     Standardized genotype columns are summed as z z'; ``weights`` allows
     LDAK-style per-SNP weights. ``snp_subset`` builds the kinship from a
-    subset of markers only (cheap null-model fits, LDAK-KVIK style).
+    subset of markers only (cheap null-model fits).
     """
     gt = _as_genotypes(G)
     n = gt.n_samples
@@ -223,7 +223,7 @@ def windowed_kinships(
 class GenotypeKinship:
     """Streaming kinship operator: K x = Z (Z' x) / m_eff, never forming K.
 
-    The BOLT-LMM / LDAK-KVIK large-n design: the additive GRM only ever
+    As in BOLT-LMM (Loh et al. 2015), the additive GRM only ever
     enters computations through matrix products, and Z is tall-skinny, so
     applying K through the genotypes costs O(n m) per product with O(block)
     working memory -- instead of O(n^2) storage plus an O(n^2 m)

@@ -6,8 +6,11 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import numpy as np
+from scipy import stats
 
 __all__ = ["GwasResult"]
+
+_CHI2_1DF_MEDIAN = float(stats.chi2.ppf(0.5, 1))  # 0.4549
 
 
 @dataclass
@@ -54,8 +57,20 @@ class GwasResult:
     # ------------------------------------------------------------------
 
     def genomic_control(self) -> float:
-        """Median-based inflation factor lambda_GC."""
-        return float(np.median(self.p) / 0.5)
+        """Genomic inflation factor lambda_GC (Devlin & Roeder 1999).
+
+        The median 1-df chi-square statistic over its null median (0.455),
+        with statistics recovered from the p-values so F and chi-square
+        scans are treated alike. Above 1 means inflation. (The 2026-10-02
+        revision returned median(p)/0.5 here, which runs the other way:
+        values below 1 meant inflation.)
+        """
+        p = np.asarray(self.p, dtype=np.float64)
+        p = p[np.isfinite(p)]
+        if p.size == 0:
+            return float("nan")
+        chi2 = stats.chi2.isf(np.clip(p, 1e-300, 1.0), 1)
+        return float(np.median(chi2) / _CHI2_1DF_MEDIAN)
 
     def neg_log10_p(self) -> np.ndarray:
         return -np.log10(np.minimum(self.p, 1.0))
@@ -86,10 +101,13 @@ class GwasResult:
         )
 
     def power_analysis(self, causal, window: int = 0, alpha=None) -> dict:
-        """Power/FDR-style summary against known causal variants.
+        """SNP-level power summary against known causal variants.
 
-        Returns counts: discovered causal variants (p below threshold, or
-        within ``window`` bp of such a SNP) and false positives.
+        ``discovered`` counts causal variants that are significant (or have
+        a significant SNP within ``window`` bp). ``n_significant_noncausal``
+        counts significant SNPs that are not themselves causal -- LD tags of
+        a causal variant included, so it is NOT a false-positive count; use
+        :meth:`locus_summary` for locus-level power and FDR.
         """
         if alpha is None:
             alpha = self.bonferroni_threshold()
@@ -106,12 +124,59 @@ class GwasResult:
                 )
                 hit = bool(sig[near].any())
             discovered += int(hit)
+        noncausal = sig.copy()
+        noncausal[causal] = False
         return {
             "n_causal": int(causal.size),
             "discovered": discovered,
             "power": discovered / max(causal.size, 1),
             "n_significant": int(sig.sum()),
-            "n_false_positive": int(sig.sum() - discovered),
+            "n_significant_noncausal": int(noncausal.sum()),
+        }
+
+    def locus_summary(self, causal, window: int, alpha=None) -> dict:
+        """Locus-level power and false discoveries.
+
+        Significant SNPs are merged into loci by single linkage: same
+        chromosome, consecutive significant SNPs at most ``window`` bp
+        apart. A locus is true when a causal variant lies within ``window``
+        bp of its span; a causal variant is discovered when a significant
+        SNP lies within ``window`` bp of it. ``fdr`` is false loci over all
+        loci (0 when nothing is significant).
+        """
+        if alpha is None:
+            alpha = self.bonferroni_threshold()
+        causal = np.atleast_1d(np.asarray(causal, dtype=np.int64))
+        sig = np.nonzero(self.p < alpha)[0]
+        chrom = np.asarray(self.chromosome)
+        pos = np.asarray(self.position, dtype=np.int64)
+        c_chrom, c_pos = chrom[causal], pos[causal]
+
+        loci = []  # (chromosome, start, stop)
+        for c in np.unique(chrom[sig]):
+            p_c = np.sort(pos[sig[chrom[sig] == c]])
+            breaks = np.nonzero(np.diff(p_c) > window)[0]
+            starts = np.r_[0, breaks + 1]
+            stops = np.r_[breaks, p_c.size - 1]
+            loci.extend((c, p_c[a], p_c[b]) for a, b in zip(starts, stops))
+        n_true = 0
+        for c, lo, hi in loci:
+            on = c_chrom == c
+            n_true += int(np.any((c_pos[on] >= lo - window) & (c_pos[on] <= hi + window)))
+        discovered = 0
+        for c, p in zip(c_chrom, c_pos):
+            near = sig[(chrom[sig] == c) & (np.abs(pos[sig] - p) <= window)]
+            discovered += int(near.size > 0)
+        n_loci = len(loci)
+        return {
+            "n_causal": int(causal.size),
+            "discovered": discovered,
+            "power": discovered / max(causal.size, 1),
+            "n_significant": int(sig.size),
+            "n_loci": n_loci,
+            "n_true_loci": n_true,
+            "n_false_loci": n_loci - n_true,
+            "fdr": (n_loci - n_true) / n_loci if n_loci else 0.0,
         }
 
     # ------------------------------------------------------------------

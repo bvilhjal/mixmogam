@@ -1,153 +1,153 @@
-# mixmogam 2.0 engine design
+# mixmogam engine design
 
-This document records the numerical design of the revised engine and why
-it is fast. Everything here is backed by tests in `tests/` (the reference
-oracle certifies the exact statistics) and by measured timings in
-`benchmarks/results/`.
+Numerical design and the evidence behind it. Full derivations with
+pseudocode: [methods.pdf](methods.pdf). Every claim here is backed by a
+test in `tests/` or an archive in `benchmarks/results/`.
 
 ## Model
 
 y = X beta + u + e,  u ~ N(0, vg K),  e ~ N(0, ve I),  delta = ve / vg.
 
-Covariates X always include an intercept unless suppressed. `K = None`
-gives the ordinary linear model on the same scanning machinery.
+Covariates X always include an intercept. `K = None` gives the ordinary
+linear model on the same machinery.
 
-## Variance components: EMMA, exactly (Kang et al. 2008)
+## Association: LOCO by default
 
-The null model is fitted by the EMMA algorithm with the v1 semantics,
-modernized:
+`gwas(y, gt, method=...)` tests every SNP against a polygenic model
+built without its own chromosome. With the tested SNP inside the
+kinship, the polygenic term absorbs part of its effect (proximal
+contamination): the exact non-LOCO scan was deflated, with lambda_GC
+0.91 at n = 4,000 and 0.85 at n = 10,000 (2026-10-03 large-n
+simulation, read on the corrected scale). More than 25 chromosomes are
+merged into 25 contiguous groups of balanced size.
 
-- REML eigenspace: eigenvalues of S (K + I) S with S = I - X (X'X)^-1 X',
-  dropping the q annihilated directions and subtracting 1 (eq. A7). The
-  likelihood along the delta grid is evaluated **vectorized** over all
-  grid points in float64.
-- Bracketing: sign changes of d ll / d delta locate the maximum; the
-  bracket is polished with Brent's method (v1 used Newton from the
-  midpoint; same root, guaranteed convergence), with v1's boundary
-  acceptance rules and grid-argmax fallback.
-- ML uses the R EMMA formulation: quadratic forms from the REML basis,
-  log-determinant from the full spectrum.
-- Pseudo-heritability h2 = 1 / (1 + delta); vg from the profiled
-  quadratic form; gBLUP from the eigenbasis (or K @ V^-1 r).
+| method | residual tested against | calibration |
+|---|---|---|
+| `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | exact F test |
+| `bolt-inf` | V_{-g}^{-1} y by batched CG | one constant from 30 exact prospective statistics |
+| `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
+| `kvik` | y minus the elastic-net LOCO score | lambda = 1, or KVIK's rule under strong structure |
 
-## The scan: EMMAX as pure GEMM (Kang et al. 2010)
+`auto` uses `exact` up to n = 5,000 and `bolt-inf` above.
 
-The v1 code called `lstsq` once per SNP. The engine instead precomputes,
-for the fitted delta:
+## Exact engine
 
-- Q from the thin QR of V^{-1/2} X (q x n work),
-- r = V^{-1/2} y residualized against Q, rss0 = |r|^2,
+- Variance components: EMMA REML/ML from one eigendecomposition of K
+  (matrix determinant lemma for the REML terms), vectorized grid plus
+  Brent.
+- Scan: the EMMAX statistic as BLAS-3, per SNP block
+  G~ = (I - QQ') V^{-1/2} G' (two GEMMs against the eigenbasis and one
+  rank-q residualization), then closed-form F, beta and se. No per-SNP
+  solve; float32 GEMMs by default.
+- LOCO: K_{-g} by subtraction from one pass over all SNPs plus one pass
+  over group g, then one eigendecomposition and REML refit per group.
 
-and per SNP block of size k performs
+## Two-step engine (K-free)
 
-1. T = V^{-1/2} S_block^T  -- two GEMMs against the eigenbasis U,
-2. G = T - Q (Q^T T)      -- one small GEMM residualization,
-3. num_j = (G^T r)_j, den_j = |G_j|^2 (row norms),
+- **Streaming LOCO operator** (`_loco.LocoGenotypes`): standardized,
+  covariate-projected SNP blocks that never straddle a group. One pass
+  applies every K_{-g} to its own column, so BOLT-LMM's G LOCO solves,
+  the 30 calibration solves and the LOCO eigenbases share GEMMs.
+- **Conjugate gradients** (`_cg`): batched over columns, preconditioned
+  by the top-64 kinship eigenpairs plus a flat bulk. Strong structure
+  puts a few eigenvalues far above the bulk; without the preconditioner
+  CG slows down.
+- **Variational Bayes** (`_vb`): BOLT-LMM's iterated conditional
+  posterior means, for every cross-validation fold x hyperparameter or
+  every LOCO group at once. Within a 128-SNP block, residual products
+  come from one GEMM and are corrected through the block's Gram matrix
+  as earlier SNPs move. The sequential B x B x columns loop is Numba;
+  the rest is BLAS.
+- **Variance components**: deflated stochastic Lanczos quadrature REML
+  on the operator (BOLT-LMM uses Monte Carlo REML, LDAK-KVIK randomized
+  Haseman-Elston regression). It matched the exact fit's delta to 0.09%
+  at n = 10,000.
 
-so that per SNP the F statistic is the closed form
-F_j = (num_j^2 / den_j) / rss_j * (n - q - 1) with
-rss_j = rss0 - num_j^2 / den_j -- algebraically identical to v1's
-per-SNP regression of the residualized transformed phenotype on the
-residualized transformed SNP (verified to rtol 1e-6 by the oracle test).
-Per-SNP cost is BLAS-3 dominated; there is no Python-level loop over
-SNPs in the hot path and no per-SNP factorization. Effect sizes and
-standard errors are the closed-form equivalents of v1's refits.
+Where mixmogam departs from the reference implementations, the
+docstrings of `mixmogam.twostep` say so. The departures: REML instead
+of MC REML / HE regression; KVIK's alpha chosen by REML likelihood; no
+LD thinning in the LDAK-Thin weights; a 1% relative CV R^2 margin
+before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
+median matching instead of the LDSC intercept when LD scores do not
+vary (coefficient of variation < 0.2).
 
-Scans default to float32 arithmetic (fit stays float64); blocks stream
-from the int8 genotype store with fused mean imputation, so memory is
-flat in the variant count.
+## Structure-aware denominator (mixmogam extension)
 
-## Large n: truncated spectrum (BOLT-LMM style)
+All two-step statistics, like REGENIE's and SAIGE's, scale a score by
+one genome-wide constant. That is exact only if the prospective
+denominator z_j' V_{-g}^{-1} z_j is proportional to z_j' z_j. Under
+strong structure it is not: SNPs aligned with the leading kinship
+eigenvectors have smaller denominators. Each two-step result reports
+`calibration_cv`, the spread of the ratio over the 30 calibration SNPs.
+It was 0.5% without structure, 23% at simulated F_ST = 0.3, and 13% on
+*A. thaliana* (spectral: 0.4%, 0.3%, 3%).
 
-Above `n > 8000` the exact O(n^3) eigendecomposition is skipped. A
-randomized top-k eigenbasis (k = 2048 default, KVIK-style subspace
-iteration with Rayleigh-Ritz extraction) gives
+`denominator="spectral"` replaces the constant by
+c' vg [ |(L_g + delta)^{-1/2} U_g' z|^2 + (z'z - |U_g' z|^2) / (lam_g + delta) ]
+on the top-k eigenpairs (U_g, L_g) of the SNP's **own LOCO** kinship,
+with c' calibrated on the same 30 SNPs. The width is adaptive: k doubles
+from 64 to at most 512 until the calibration spread falls below 3%. The
+bulk of an LD-rich kinship is not flat. In a coalescent sample without
+population structure (n = 1,500), k = 64 left a 1.07 → 0.98 gradient
+and a 7% spread; k = 256 brought it to 1.005-1.018 (2%). A full-kinship basis is not
+enough: on *A. thaliana* (5 chromosomes, long-range LD) it left a 6%
+error in the top loading quintile, because each SNP's own LD block sits
+inside the full kinship.
 
-V^{-1/2} A = delta^{-1/2} A + U_k [ (lam_k + delta)^{-1/2} - delta^{-1/2} ]
-(U_k^T A),
+Replicated null-chromosome benchmark (6 replicates; lambda_GC on null
+SNPs by structure-loading quintile, the share of z_j in the top-10
+kinship eigenvectors; archive 20261003T081812Z-structure-calibration
+and, for the LDAK binary, 20261003T083746Z-kvik-reference):
 
-which is exact when the dropped eigenvalues are zero; the unexplained
-trace mass `trace(K) - sum(top-k)` is reported on the fit so the
-approximation can be audited. The same identity serves the scan
-transform, gBLUP and V^{-1} applies.
+| data | exact LOCO | BOLT-LMM-inf | + spectral | LDAK-KVIK | + spectral |
+|---|---|---|---|---|---|
+| simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
+| simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
+| *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 (binary: 1.21 → 0.92) | 0.97-1.03 |
 
-## Large-n variance components: deflated stochastic Lanczos quadrature
+FPR at p < 0.01 follows suit (strong simulated structure: BOLT-LMM-inf
+2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through KVIK's
+lambda rule the transferred correction flattens the gradient but leaves
+about 7% overall inflation under strong simulated structure.
 
-Fitting without the full spectrum needs spectral sums of K + delta I.
-The SLQ solver builds Gauss quadrature rules from short Lanczos runs
-(full reorthogonalization): log-determinants and traces are unbiased
-Rademacher-probe averages; the y quadratic form uses a single
-deterministic rule. Extreme eigenvalues (population structure) are
-deflated with a randomized top-d pass and handled analytically - the
-crucial step, since Gauss quadrature converges slowly on spectra with
-strong outliers, and the deflated directions must be subtracted from the
-probe estimates (f(-delta) correction). Validated against the exact EMMA
-fit: likelihoods agree to ~1 nats and delta within a few percent on
-structure-rich kinships (the likelihood is very flat near the optimum).
+## Other analyses
 
-## Kinships
+- **GxE**: the 1-df interaction test is conditional on the SNP main
+  effect with E among the covariates. `polygenic_gxe=True` adds a
+  K * (EE') variance component (Sul et al. 2016).
+- **Permutations**: GLS-whitened null residuals are permuted (Abney
+  2015). Raw-phenotype permutation (v1) gave a 7.6% family-wise error
+  at a nominal 5% under structure. All permutations share each
+  SNP-block GEMM. In the sim study the 5% threshold is 4.4e-6 against
+  Bonferroni's 2.5e-6 (the raw scheme gave 8.6e-5).
+- **MLMM**: forward inclusion with REML refits, backward elimination,
+  selection by EBIC or mBonf on ML likelihoods (Segura et al. 2012).
+- **Kinships**: GRM (called-only standardization), IBS, exact LOCO by
+  subtraction, windowed local/global pairs, LDAK-style weights.
 
-- Additive GRM: blocked accumulation of z z' over globally standardized
-  columns (Yang et al. 2010 called-only convention; no-calls contribute
-  zero). Optional per-SNP weights (LDAK-style) and SNP subsampling for
-  cheap null fits (LDAK-KVIK style).
-- IBS: one-hot GEMMs per block, missing-aware denominators.
-- LOCO: exact by additive subtraction - the GRM is a sum over
-  standardized SNPs, so K_loco(c) = (m K - m_c K_c)/(m - m_c) with a
-  single global standardization; no per-chromosome restandardization.
-- Windowed local/global pairs along the genome (v1's local-vs-global
-  scan concept, fixed).
+## Truncated spectrum (not a default path)
 
-## Batched permutations
+A randomized top-k basis with the discarded spectrum treated as a flat
+bulk at its mean is mixmogam's own approximation. On the corrected
+lambda_GC scale:
 
-Phenotype permutations follow v1 semantics (raw y permuted, variance
-components fixed at the fitted delta), but all B permutations flow
-through each SNP-block GEMM at once as an n x B response matrix:
-per-permutation cost collapses to a matrix multiply. Genome-wide 5%
-thresholds from the minimum-p distribution.
+| n | k | lambda_GC (exact non-LOCO scan) |
+|---|---|---|
+| 4,000 | 128 / 512 / 1,024 | 2.13 / 1.28 / 0.95 (0.91) |
+| 10,000 | 1,024 | 1.30 (0.85); 84 vs 50 significant non-causal SNPs |
 
-## Efficiency knobs and measured numbers
+Truncated scans therefore warn; large-n association uses the two-step
+statistics.
 
-See `benchmarks/` for the measured suite (AC power, guarded like the
-sibling packages). Representative numbers from the 2026-10-02 run on
-the development laptop (M-series, 4 BLAS threads):
+## Measured speed (development laptop, 4 BLAS threads, AC power)
 
 | workload | result |
 |---|---|
-| scan vs v1-style per-SNP lstsq (n=2000, m=10k, f32) | 123x (0.27 s vs 33.7 s) |
-| scan throughput n=500, m=100k, float32 | ~2.5e5 SNPs/s |
-| scan throughput n=2000, m=100k, float32 | ~4.8e4 SNPs/s (float64: ~1.5e4) |
-| 500 permutations x 5k SNPs (n=1500) | one batched pass, 1.5 s |
+| exact scan vs the v1-style per-SNP loop (n = 2,000, m = 10k, f32) | 123x (0.27 s vs 33.7 s) |
+| exact scan throughput, n = 2,000, m = 100k, f32 | ~4.8e4 SNPs/s |
+| `gwas` exact LOCO, n = 1,307, m = 53k, 5 chromosomes | ~4 s |
+| `gwas` bolt-inf, same data | ~28 s (spectral +2 s; the K-free path is for large n) |
+| `gwas` kvik, same data | ~140 s (the LDAK binary: ~9 s for both steps) |
 
-The scan transform casts the eigenbasis once per dtype, so float32
-scans run float32 GEMMs end-to-end (measured ~3.3x over float64 at
-n=2000-5000 with identical leading statistics; scales on OpenBLAS-style
-BLAS are expected to be larger). An earlier revision computed the
-transform in float64 internally and cast only the result -- its
-"float32" timings were float64 timings in disguise.
-
-## Measured: truncated-spectrum calibration (sim study 20261003T001500Z)
-
-Scan calibration under truncation depends on covering the GRM bulk's
-eigenvalue spread relative to delta (mean-bulk tail correction in):
-
-| basis | lambda_GC (n=4000, m=50k) |
-|---|---|
-| k=128 | 0.65 |
-| k=512 | 0.89 |
-| k=1024 | 1.02 (exact 1.04) |
-
-At n=10k, k=1024 (10% of the spectrum) gives lambda_GC 0.88 with
-88/100 top-hit overlap and power 0.47 vs 0.50 exact; the K-free fit
-itself matches the dense one-eigh exact delta to 0.09%. Default
-spectrum width is 1024; users needing strict calibration at large n
-should scale it with the sample count.
-
-## Roadmap (not yet implemented)
-
-- BOLT-LMM's non-inf mixture statistic (batched variational updates over
-  scalar sufficient statistics).
-- REGENIE-style stage-1 ridge projection scan for biobank-scale n where
-  even truncated-spectrum transforms dominate.
-- AI-REML (average-information) as an alternative large-n solver; CG
-  solves instead of Lanczos quadrature.
+These compare mixmogam with itself. It has not been benchmarked against
+GEMMA, BOLT-LMM, REGENIE or LDAK.
