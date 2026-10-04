@@ -163,10 +163,18 @@ Python starts; it is not detected by threadpoolctl. See the
 The genotype cache retains float32 projected blocks when
 `4 * n * m <= cache_bytes`, inclusively. Its default 4e9-byte budget is not a total-memory
 limit. The int8 genotype input, Gram matrices, residuals and workspaces are
-separate allocations. `cache_bytes=0` retains no projected blocks and reuses
-prepared moments; the parallel route also reuses float64 projection
-coefficients and decodes directly into bounded storage. Variational fitting
-decodes 128-SNP blocks on that route rather than the larger operator blocks.
+separate allocations. `cache_bytes=0` retains no projected blocks. With Numba,
+streamed blocks decode hard calls through per-variant value tables (the three
+standardized call values, computed in float64 exactly as in preparation) and
+subtract the covariate projection in the preparation route's own arithmetic
+(the serial route's GEMM correction, or the parallel route's per-cell loop):
+they equal the cached blocks bit for bit. Operator products skip the
+per-variant projection altogether: Z P = z (I - QQ') P, so the n x c operand
+is projected once and the decoded slices (at most 64 MiB) are unprojected.
+Variational fitting decodes 128-SNP blocks, and one-pass consumers decode
+whole blocks, into reused buffers rather than fresh memory per block. At
+n = 10,000 and m = 30,000 an uncached kinship pass took 128 ms instead of
+1,033 ms (cached: 64 ms).
 PLINK input decoding and genotype validation also use bounded tiles. None of
 these changes makes the full analysis out of core.
 

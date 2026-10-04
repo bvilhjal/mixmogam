@@ -93,7 +93,7 @@ def test_two_step_workspace_matches_original(dtype, large_block):
     blocks = [(idx, g, Z if large_block else Z[idx]) for g in np.unique(groups)
               for idx in [np.flatnonzero(groups == g)]]
     lg = SimpleNamespace(n=n, m=m, dtype=np.dtype(dtype), groups=groups,
-                         blocks=lambda: iter(blocks))
+                         blocks=lambda reuse=False: iter(blocks))
     y = rng.normal(size=n) + latent
     st = SimpleNamespace(lg=lg, n_eff=n - 2, y_p=y - y.mean())
     W = rng.normal(size=(n, 2 * len(blocks)))[:, ::2]  # noncontiguous columns

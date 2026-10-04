@@ -43,6 +43,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   so their per-seed results. Eigenvectors come from the divide-and-conquer
   driver (23-42% faster than MRRR, MRRR as fallback) and are stored
   contiguously in descending order.
+- Uncached two-step passes (`cache_bytes` below the float32 cache size)
+  decode hard calls through per-variant value tables and project covariates
+  in the preparation route's own arithmetic, so streamed blocks still equal
+  cached ones bit for bit; operator products instead project their n x c
+  operands once. Decoded slices and VB subblocks reuse buffers. An uncached
+  kinship pass at n = 10,000 and m = 30,000 took 128 ms instead of 1,033 ms
+  (cached 64 ms). KVIK-HE at n = m = 20,000 with four threads peaked at
+  0.97 GiB uncached against 2.26 GiB cached, 16% slower with identical
+  associations; uncached bolt-inf agrees with cached to 1.4e-5 in log10 p.
 
 ## [2.0.0.dev4] - 2026-10-03
 

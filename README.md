@@ -50,8 +50,9 @@ the parallel matrix products; for Apple Accelerate, set
 Numba's configured thread limit must be at least the requested count. Speedup
 depends on the workload. `cache_bytes` budgets the standardized float genotype
 cache, not total memory; `cache_bytes=0` trades that cache for repeated decoding
-from prepared moments and projection coefficients. The int8 input remains in
-memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
+from prepared per-variant value tables and projection coefficients, which
+reproduces the cached blocks bit for bit (operator products project their
+n x c operands instead). The int8 input remains in memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
 HE/four-thread configuration.
 
 The [20K benchmark](benchmarks/results/20261003-kvik-20k/README.md) measures

@@ -403,18 +403,18 @@ def test_uncached_parallel_decode_retains_parent_boundaries(phensim_problem, mon
     reference = _vb.VBEngine(cached, folds=folds, n_threads=2)
     actual = _vb.VBEngine(uncached, folds=folds, n_threads=2)
     expected_blocks = list(reference._subblocks())
-    original = uncached._standardize
+    original = uncached._decode
     decoded = []
 
     def track_decode(idx, **kwargs):
-        assert not kwargs.get("prepare", False)
         assert idx.size <= 128
         decoded.append(idx.copy())
         return original(idx, **kwargs)
 
     with monkeypatch.context() as context:
-        context.setattr(uncached, "_standardize", track_decode)
-        actual_blocks = list(actual._subblocks())
+        context.setattr(uncached, "_decode", track_decode)
+        # Streamed subblocks share one buffer: copy what outlives an iteration.
+        actual_blocks = [(i, g, b.copy()) for i, g, b in actual._subblocks()]
     assert len(actual_blocks) == len(expected_blocks) == len(decoded)
     for (idx, group, block), (want_idx, want_group, want_block), observed in zip(actual_blocks, expected_blocks, decoded):
         assert group == want_group

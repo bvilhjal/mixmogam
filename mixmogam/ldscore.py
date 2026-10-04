@@ -29,7 +29,7 @@ def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
     out = np.zeros(lg.m)
     # dense standardized rows per chromosome, assembled from the cached blocks
     rows = {}
-    for idx, _, Z in lg.blocks():
+    for idx, _, Z in lg.blocks(reuse=True):  # Z[sel] copies the rows kept
         for c in np.unique(chrom[idx]):
             sel = chrom[idx] == c
             rows.setdefault(c, []).append((idx[sel], Z[sel]))

@@ -300,7 +300,7 @@ def test_sample_tiled_prediction_matches_dense(dtype):
     Z1 = rng.standard_normal((last, n)).astype(dtype)
     idx = rng.permutation(first + last)
     blocks = [(idx[:first], 0, Z0), (idx[first:], 1, Z1)]
-    lg = SimpleNamespace(n=n, m=first + last, blocks=lambda: iter(blocks))
+    lg = SimpleNamespace(n=n, m=first + last, blocks=lambda reuse=False: iter(blocks))
     beta = rng.standard_normal((first + last, 3))
     prediction = VBEngine(lg).predict(beta)
     assert prediction.dtype == np.float64

@@ -368,14 +368,17 @@ class VBEngine:
 
     def _subblocks(self):
         B = self.sub_block
-        if self.lg._cache is None and self.lg.n_threads > 1:
-            # Parallel preparation cached each variant's projection already.
-            # Decode only the current VB subblock, retaining every original
-            # parent-block boundary and the exact variant order.
+        if self.lg._cache is None and self.lg._table is not None:
+            # Streamed blocks decode from value tables and prepared projection
+            # coefficients. Decode only the current VB subblock, retaining
+            # every original parent-block boundary and the exact variant order,
+            # into one reused buffer: each subblock is consumed before the next.
+            buffer = np.empty((B, self.n), dtype=self.lg.dtype)
+            scratch = np.empty((B, self.n))  # float64 covariate corrections
             for idx, g in self.lg._blocks:
                 for s in range(0, idx.size, B):
                     take = idx[s : s + B]
-                    yield take, g, self.lg._standardize(take)
+                    yield take, g, self.lg._decode(take, out=buffer[: take.size], scratch=scratch)
             return
         for idx, g, Z in self.lg.blocks():
             for s in range(0, idx.size, B):
@@ -503,7 +506,7 @@ class VBEngine:
     def predict(self, beta: np.ndarray) -> np.ndarray:
         """Fitted values Z' beta (n, P) for every column."""
         out = np.zeros((self.n, beta.shape[1]))
-        for idx, _, Z in self.lg.blocks():
+        for idx, _, Z in self.lg.blocks(reuse=True):
             # Tile samples, keeping the complete variant reduction in each
             # product. Widening scratch is bounded by 16 MiB (or one row).
             rows = max(1, (16 * 1024**2) // (8 * idx.size))

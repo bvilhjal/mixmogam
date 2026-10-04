@@ -97,11 +97,13 @@ def test_serial_default_does_not_call_parallel_kernel(monkeypatch, cache_bytes):
         raise AssertionError("serial default invoked the parallel kernel")
 
     monkeypatch.setattr(_standardize, "standardize_parallel", forbidden)
-    monkeypatch.setattr(_standardize, "decode_parallel", forbidden)
+    monkeypatch.setattr(_standardize, "_decode_table_parallel", forbidden)
+    monkeypatch.setattr(_standardize, "_project_table_parallel", forbidden)
     gt, groups, Q = problem("F", True)
     default = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, cache_bytes=cache_bytes)
     explicit = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, n_threads=1, cache_bytes=cache_bytes)
-    assert default._projection is None and explicit._projection is None
+    # Streamed blocks keep the prepared projection coefficients.
+    assert (default._projection is None) == (explicit._projection is None) == (cache_bytes > 0)
     for (idx, _, actual), (_, _, expected) in zip(default.blocks(), explicit.blocks()):
         mean, sd, oracle = dense_oracle(gt.G, idx, Q, np.float64)
         np.testing.assert_array_equal(default.mean[idx], mean)
@@ -151,7 +153,9 @@ def test_parallel_decode_failure_restores_thread_mask(monkeypatch):
     def fail(*args):
         raise RuntimeError("injected decode failure")
 
-    monkeypatch.setattr(_standardize, "_decode_columns", fail)
+    # Projected float32 blocks decode in the fused kernel; plain ones in the other.
+    monkeypatch.setattr(_standardize, "_decode_table_parallel", fail)
+    monkeypatch.setattr(_standardize, "_project_table_parallel", fail)
     with pytest.raises(RuntimeError, match="injected decode"):
         next(streamed.blocks())
     assert numba.get_num_threads() == previous

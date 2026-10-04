@@ -112,7 +112,7 @@ class _KOp:
             self._trace = self.lg.trace
         elif self._trace is None:
             tot = 0.0
-            for idx, _, Z in self.lg.blocks():
+            for idx, _, Z in self.lg.blocks(reuse=True):
                 tot += float(np.einsum("ij,ij,i->", Z, Z, self.weights[idx].astype(Z.dtype),
                                        dtype=np.float64))
             self._trace = tot / float(np.sum(self.weights))
@@ -191,7 +191,7 @@ def _retro_stats(st: _Setup, W: np.ndarray) -> dict:
     # Widen at most 16 MiB of variant rows, retaining each full sample
     # reduction. The minimum one-row tile and native BLAS scratch are separate.
     tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
-    for idx, g, Z in st.lg.blocks():
+    for idx, g, Z in st.lg.blocks(reuse=True):
         for start in range(0, idx.size, tile):
             take = idx[start : start + tile]
             Zs = Z[start : start + tile]
@@ -306,7 +306,7 @@ def _loco_eigh(st: _Setup, k: int, n_iter: int = 4, oversampling: int = 12,
     KQ = lg.matmul_loco(Q, col_group, weights)
     sq = np.zeros(G)
     wsum = np.zeros(G)
-    for idx, g, Z in lg.blocks():
+    for idx, g, Z in lg.blocks(reuse=True):
         w = np.ones(idx.size) if weights is None else weights[idx]
         sq[g] += float(np.einsum("ij,ij,i->", Z.astype(np.float64), Z.astype(np.float64), w))
         wsum[g] += float(w.sum())
@@ -332,7 +332,7 @@ def _spectral_quadform(st: _Setup, bases: list, delta: float) -> np.ndarray:
     per LOCO group (or a single entry used for every group).
     """
     out = np.zeros(st.lg.m)
-    for idx, g, Z in st.lg.blocks():
+    for idx, g, Z in st.lg.blocks(reuse=True):
         vals, U, lam_bar = bases[g] if len(bases) > 1 else bases[0]
         Z64 = Z.astype(np.float64)
         P = Z64 @ U
@@ -646,7 +646,7 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
     P32 = P.astype(lg.dtype)
     KP = np.zeros((A, n, P.shape[1]))
     diag = np.zeros((n, A))
-    for idx, _, Z in lg.blocks():
+    for idx, _, Z in lg.blocks(reuse=True):
         T = Z @ P32
         wb = Wt[idx].astype(lg.dtype)
         for a in range(A):
