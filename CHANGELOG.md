@@ -30,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   position window. They held every projected genotype (4 bytes per genotype)
   whatever `cache_bytes`.
 - The spectral denominator projects one LOCO basis at a time.
+- KVIK and BOLT-LMM release the cross-validation fit's effects, residuals and
+  masks once its scores are taken, and the LOCO fit's effects and the
+  variational engine's Gram cache once its residuals are extracted.
+  BOLT-LMM's cross-validation held 90 float64 effect columns (720 bytes per
+  variant) through the LOCO fit.
 
 ### Benchmarks
 

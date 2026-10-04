@@ -3,12 +3,13 @@ BOLT-LMM / LDAK-KVIK statistics against the exact LOCO scan."""
 
 import math
 from types import SimpleNamespace
+import weakref
 
 import numpy as np
 import pytest
 from scipy import integrate, stats
 
-from mixmogam import gwas
+from mixmogam import gwas, twostep
 from mixmogam._cg import SpectralPreconditioner, batched_pcg
 from mixmogam._loco import LocoGenotypes, loco_groups
 from mixmogam._vb import PRIOR_MIXTURE, VBEngine, _pm_enet, _pm_mixture
@@ -245,6 +246,35 @@ def test_bolt_mixture_gains_on_sparse_trait():
     # background), so both statistics share the same mild polygenic inflation
     null = np.setdiff1d(np.arange(gt.n_variants), c)
     assert np.median(bo.f_stat[null]) == pytest.approx(np.median(bi.f_stat[null]), rel=0.02)
+
+
+@pytest.mark.parametrize("method", ["kvik", "bolt"])
+def test_cv_and_loco_fit_state_is_released_after_use(small, monkeypatch, method):
+    # Cross-validation effects (m x folds x grid) must be gone before the LOCO
+    # fit starts, and the LOCO effects and the engine's Gram cache before the
+    # residual statistics.
+    gt, y, _ = small
+    effects, engines = [], []
+    original_fit, original_retro = VBEngine.fit, twostep._retro_stats
+
+    def fit(self, *args, **kwargs):
+        assert all(ref() is None for ref in effects)
+        out = original_fit(self, *args, **kwargs)
+        effects.append(weakref.ref(out["beta"]))
+        engines.append(weakref.ref(self))
+        return out
+
+    def retro(*args, **kwargs):
+        if len(effects) == 2:
+            assert all(ref() is None for ref in effects + engines)
+        return original_retro(*args, **kwargs)
+
+    monkeypatch.setattr(VBEngine, "fit", fit)
+    monkeypatch.setattr(twostep, "_retro_stats", retro)
+    # A negative CV margin keeps BOLT-LMM on its mixture (LOCO) path.
+    options = {"heritability_method": "he"} if method == "kvik" else {"min_cv_gain": -1.0}
+    gwas(y, gt, method=method, **options)
+    assert len(effects) == 2
 
 
 @pytest.mark.slow

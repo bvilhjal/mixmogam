@@ -544,6 +544,9 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              "cv_grid": list(grid), "cv_r2": r2, "cv_best": grid[best],
              "cv_iterations": cv["iterations"], "cv_converged": cv["converged"],
              "use_mixture": bool(use_mixture)}
+    # The CV fit's (m, folds x grid) effects and (n, folds x grid) residuals,
+    # predictions and masks are not needed once its scores are taken.
+    del cv, pred
     if not use_mixture:
         extra["note"] = "mixture did not beat the infinitesimal model in CV; BOLT-LMM-inf statistics"
         return _result(st, gt, inf["chi2"], inf["beta_z"], inf["se_z"], extra)
@@ -552,8 +555,13 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     loco = eng.fit(np.repeat(st.y_p[:, None], G, axis=1), np.full(G, -1), np.arange(G),
                     PRIOR_MIXTURE, np.tile(prior_row(*grid[best]), (G, 1)),
                     np.full(G, fit.ve), max_iter=vb_max_iter, tol=vb_tol)
-    del loco["prediction"]  # Only CV needs the fitted values after residual reconstruction.
-    rs = _retro_stats(st, loco["resid"])
+    # Only the residuals of the LOCO fit are used; the engine's Gram cache
+    # and the (m, groups) effects go before the LD scores need memory.
+    loco_iterations, loco_converged = loco["iterations"], loco["converged"]
+    resid = loco["resid"]
+    del loco, eng
+    rs = _retro_stats(st, resid)
+    del resid
     if denominator == "spectral":
         rs["chi2"] = rs["chi2"] * inf["kappa"]
     ell = ld_scores(st.lg, window_bp=ld_window_bp)
@@ -577,8 +585,8 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
         beta_z = rs["num"] / rs["zz"]
         se_z = np.abs(beta_z) / np.sqrt(chi2)
     extra.update({"calibration": c_mix, "calibration_method": how,
-                  "ld_score_cv": ell_cv, "loco_iterations": loco["iterations"],
-                  "loco_converged": loco["converged"]})
+                  "ld_score_cv": ell_cv, "loco_iterations": loco_iterations,
+                  "loco_converged": loco_converged})
     return _result(st, gt, chi2, beta_z, se_z, extra)
 
 
@@ -837,24 +845,30 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
                  np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
                  max_iter=vb_max_iter, tol=vb_tol)
-    pred = cv["prediction"]
-    mse = np.mean((ys[held, None] - pred[held]) ** 2, axis=0)
+    mse = np.mean((ys[held, None] - cv["prediction"][held]) ** 2, axis=0)
     best = int(np.argmin(mse))
+    cv_converged = cv["converged"]
+    del cv  # the (m, grid) effects and (n, grid) arrays are not needed again
 
     # (1e) LOCO elastic-net scores and the OLS-on-offset statistics U
     loco = eng.fit(np.repeat(ys[:, None], G, axis=1), np.full(G, -1), np.arange(G),
                     PRIOR_ENET, np.tile(prior_row(*grid[best]), (G, 1)), np.full(G, s2e),
                     snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
-    del loco["prediction"]
-    rsU = _retro_stats(st, loco["resid"])
+    # Only the LOCO residuals are used; the engine's Gram cache and the
+    # (m, groups) effects go before the calibration solves.
+    loco_iterations, loco_converged = loco["iterations"], loco["converged"]
+    resid = loco["resid"]
+    del loco, eng
+    rsU = _retro_stats(st, resid)
+    del resid
     U = rsU["chi2"]
 
     extra = {"method": "kvik", "denominator": denominator, "alpha": alpha, "h2": h2,
              "alpha_method": alpha_method, "alpha_scores": alpha_scores,
              "structure": struct,
              "cv_grid": list(grid), "cv_mse": mse, "cv_best": grid[best],
-             "cv_converged": cv["converged"],
-             "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}
+             "cv_converged": cv_converged,
+             "loco_iterations": loco_iterations, "loco_converged": loco_converged}
     if heritability_method == "he":
         extra.update({"heritability_method": "he", "he_variance": he["variance_fit"],
                       "vb_residual_variance": s2e,
