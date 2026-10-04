@@ -25,6 +25,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bolt-inf at n = 10,000 and m = 30,000 took 8.5 s instead of 12.7 s.
   Estimates change within their Monte Carlo error. Probes that a covariate
   projection reduces to rounding noise are dropped.
+- BOLT-LMM, BOLT-LMM-inf and KVIK under strong structure compute one
+  randomized kinship basis for both the REML deflation and the CG
+  preconditioner, and solve the calibration SNPs in the same CG run as the
+  LOCO residuals. Calibration candidates are now drawn before the residuals
+  and filtered by chi2 < 5 afterwards (the same distribution), so a given
+  `random_state` selects different SNPs than before. bolt-inf at n = 10,000
+  took 7.4 s instead of 8.5 s.
 
 ## [2.0.0.dev4] - 2026-10-03
 

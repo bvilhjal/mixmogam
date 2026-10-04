@@ -36,6 +36,16 @@ class SpectralPreconditioner:
         )
         self.lam_bar = max((trace - float(self.values.sum())) / (n - k), 0.0)
 
+    @classmethod
+    def from_eigenpairs(cls, values: np.ndarray, vectors: np.ndarray, n: int,
+                        trace: float, k: int = 64) -> "SpectralPreconditioner":
+        """Use the top-k of already computed eigenpairs (sorted descending)."""
+        pre = cls.__new__(cls)
+        k = max(1, min(k, n - 2, values.size))
+        pre.values, pre.vectors = values[:k], vectors[:, :k]
+        pre.lam_bar = max((trace - float(pre.values.sum())) / (n - k), 0.0)
+        return pre
+
     def __call__(self, R: np.ndarray, delta: float) -> np.ndarray:
         U = self.vectors
         P = U.T @ R

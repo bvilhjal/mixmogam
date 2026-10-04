@@ -47,6 +47,7 @@ from scipy import linalg, stats
 
 from mixmogam._cg import SpectralPreconditioner, batched_pcg
 from mixmogam._loco import LocoGenotypes, loco_groups
+from mixmogam._slq import randomized_eigh_op
 from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _validate_n_threads
 from mixmogam.ldscore import ld_scores, ldsc_intercept
 from mixmogam.lmm import LMM, _design_matrix
@@ -121,19 +122,47 @@ class _KOp:
         return self.lg.matmul(P, self.weights)
 
 
-def fit_variance_components(st: _Setup, weights=None, random_state=0, **slq) -> object:
+def fit_variance_components(st: _Setup, weights=None, random_state=0, basis=None,
+                            **slq) -> object:
     """REML variance components with the stochastic Lanczos solver.
 
     The kinship is Z' W Z / sum(W) over the covariate-projected
     standardized genotypes, applied as a streaming operator. BOLT-LMM uses
     Monte Carlo REML; LDAK-KVIK starts with partitioned randomized HE and
-    optionally refines its heritability by Monte Carlo REML.
+    optionally refines its heritability by Monte Carlo REML. ``basis``
+    (:func:`_spectral_basis`, same weights) supplies the eigenpairs the
+    solver deflates, which a later CG preconditioner then reuses.
     """
-    lmm = LMM(st.y, X=st.X, K=_KOp(st.lg, weights), add_intercept=False,
-              random_state=random_state)
+    op = _KOp(st.lg, weights) if basis is None else basis["op"]
+    lmm = LMM(st.y, X=st.X, K=op, add_intercept=False, random_state=random_state)
     # Two-step methods use variance components, never the null-model GLS
     # coefficients or prediction methods of a complete LMFit.
-    return lmm._fit_variance_components(solver="slq", **slq)
+    deflation = None if basis is None else (basis["values"], basis["vectors"])
+    return lmm._fit_variance_components(solver="slq", deflation_basis=deflation, **slq)
+
+
+SPECTRAL_BASIS_K = 128  # the REML deflation width; preconditioners use the top 64
+
+
+def _spectral_basis(st: _Setup, weights=None, random_state=0) -> dict:
+    """Top eigenpairs of the (weighted) kinship, computed once.
+
+    The genotype blocks are covariate-projected, so the kinship already
+    equals the REML operator S K S: the Lanczos REML deflation and the
+    conjugate-gradient preconditioner can share one randomized subspace
+    iteration (the deflation's own: width 128, seed ``random_state``)
+    instead of each running its own passes over the genotypes.
+    """
+    op = _KOp(st.lg, weights)
+    values, vectors = randomized_eigh_op(op.matmul, st.lg.n,
+                                         min(SPECTRAL_BASIS_K, st.lg.n - 1),
+                                         random_state=random_state)
+    return {"op": op, "values": values, "vectors": vectors}
+
+
+def _preconditioner(st: _Setup, basis: dict) -> SpectralPreconditioner:
+    return SpectralPreconditioner.from_eigenpairs(basis["values"], basis["vectors"], st.lg.n,
+                                                  basis["op"].trace, k=min(64, st.lg.n - 2))
 
 
 def _loco_solve(st: _Setup, delta: float, rhs: np.ndarray, col_group: np.ndarray,
@@ -175,32 +204,78 @@ def _retro_stats(st: _Setup, W: np.ndarray) -> dict:
     return {"chi2": chi2, "num": num, "zz": zz, "wnorm2": wg}
 
 
-def _calibrate_inf(st: _Setup, vg: float, delta: float, U: np.ndarray, rs: dict,
-                   n_cal: int, rng, weights=None, pre=None) -> dict:
+CALIBRATION_OVERSAMPLE = 1.25
+
+
+def _calibration_draw(st: _Setup, n_cal: int, rng) -> np.ndarray:
+    """Calibration candidates, drawn before the LOCO residuals exist.
+
+    BOLT-LMM-inf calibrates on random SNPs whose GRAMMAR chi2, a function of
+    the residuals, is below 5. Polymorphic SNPs drawn in random order and
+    filtered afterwards (rejection sampling: the same distribution) let the
+    candidates' prospective solves share the residuals' CG passes. About a
+    quarter more are drawn than needed; a short second solve covers a
+    shortfall.
+    """
+    if not isinstance(n_cal, (int, np.integer)) or n_cal < 1:
+        raise ValueError("n_calibration must be a positive integer")
+    pool = np.nonzero(st.lg.sd > 0)[0]
+    if pool.size == 0:
+        raise ValueError("calibration needs polymorphic SNPs outside the covariate span")
+    size = min(pool.size, int(np.ceil(CALIBRATION_OVERSAMPLE * n_cal)) + 4)
+    return rng.choice(pool, size=size, replace=False)
+
+
+def _solve_with_calibration(st: _Setup, delta: float, rhs: np.ndarray, col_group: np.ndarray,
+                            cand: np.ndarray, weights=None, tol: float = 1e-6, pre=None):
+    """LOCO solves for ``rhs`` and for the candidates' genotypes, batched.
+
+    Returns the ``rhs`` solutions, the candidates' rows and solutions, and
+    the CG information of the shared run.
+    """
+    Zc = st.lg.rows(cand)
+    groups = np.concatenate([np.asarray(col_group, dtype=np.int64), st.lg.groups[cand]])
+    X, info = _loco_solve(st, delta, np.column_stack([rhs, Zc.T]), groups,
+                          weights=weights, tol=tol, pre=pre)
+    r = rhs.shape[1]
+    return X[:, :r], {"cand": cand, "Z": Zc, "V": X[:, r:]}, info
+
+
+def _calibrate_inf(st: _Setup, vg: float, delta: float, rs: dict, n_cal: int, rng,
+                   drawn: dict, weights=None, pre=None, tol: float = 1e-6) -> dict:
     """BOLT-LMM-inf calibration constant from exact prospective statistics.
 
     For ``n_cal`` random SNPs with GRAMMAR chi2 < 5, c_j = D_prosp / D_retro
     with D_prosp = vg z'(K_{-g} + delta I)^{-1} z and D_retro = (z'z / n_eff)
     |w|^2; the constant is mean(c_j). ``cv`` = sd(c_j) / mean(c_j) measures
     how far the proportional-denominator assumption is from holding.
+    ``drawn`` holds the candidates solved together with the residuals
+    (:func:`_solve_with_calibration`); the first ``n_cal`` that qualify are
+    used, as from uniform sampling among all qualifying SNPs.
     """
-    cand = np.nonzero((rs["chi2"] < 5.0) & (rs["zz"] > 0))[0]
-    if not isinstance(n_cal, (int, np.integer)) or n_cal < 1:
-        raise ValueError("n_calibration must be a positive integer")
-    if cand.size == 0:
-        cand = np.nonzero(rs["zz"] > 0)[0]
-    if cand.size == 0:
+    qualifies = (rs["chi2"] < 5.0) & (rs["zz"] > 0)
+    if not qualifies.any():
+        qualifies = rs["zz"] > 0  # as before: no SNP below 5, use any
+    if not qualifies.any():
         raise ValueError("calibration needs polymorphic SNPs outside the covariate span")
-    sel = np.sort(rng.choice(cand, size=min(n_cal, cand.size), replace=False))
-    Zc = st.lg.rows(sel)  # (k, n)
-    gsel = st.lg.groups[sel]
-    V, info = _loco_solve(st, delta, Zc.T, gsel, weights=weights, pre=pre)
-    d_prosp = vg * np.einsum("ij,ji->i", Zc, V)
+    cand, Zc, V = drawn["cand"], drawn["Z"], drawn["V"]
+    keep = np.nonzero(qualifies[cand])[0][:n_cal]
+    sel, Zsel, Vsel = cand[keep], Zc[keep], V[:, keep]
+    short = min(n_cal, int(qualifies.sum())) - sel.size
+    if short > 0:
+        rest = np.setdiff1d(np.nonzero(qualifies)[0], cand)
+        extra = rng.choice(rest, size=min(short, rest.size), replace=False)
+        Ze = st.lg.rows(extra)
+        Ve, _ = _loco_solve(st, delta, Ze.T, st.lg.groups[extra], weights=weights, tol=tol, pre=pre)
+        sel, Zsel, Vsel = np.r_[sel, extra], np.vstack([Zsel, Ze]), np.hstack([Vsel, Ve])
+    order = np.argsort(sel)
+    sel, Zsel, Vsel = sel[order], Zsel[order], Vsel[:, order]
+    d_prosp = vg * np.einsum("ij,ji->i", Zsel, Vsel)
     d_retro = rs["zz"][sel] / st.n_eff * rs["wnorm2"][sel]
     ratio = d_prosp / d_retro
     c = float(np.mean(ratio))
     return {"c": c, "cv": float(np.std(ratio) / c), "ratios": ratio, "snps": sel,
-            "d_prosp": d_prosp, "cg_iterations": info["iterations"]}
+            "d_prosp": d_prosp}
 
 
 def _loco_eigh(st: _Setup, k: int, n_iter: int = 4, oversampling: int = 12,
@@ -331,7 +406,7 @@ def _spectral_denominator(st: _Setup, vg: float, delta: float, cal: dict,
 
 
 def _inf_core(st: _Setup, fit, n_cal: int, rng, tol: float,
-              denominator: str = "constant", n_spectral="auto") -> dict:
+              denominator: str = "constant", n_spectral="auto", basis=None) -> dict:
     """BOLT-LMM steps 1a-1b on a prepared setup.
 
     ``denominator="constant"`` is BOLT-LMM-inf: D_j = c (z'z / n_eff) |w|^2.
@@ -342,12 +417,16 @@ def _inf_core(st: _Setup, fit, n_cal: int, rng, tol: float,
     if denominator not in ("constant", "spectral"):
         raise ValueError(f"unknown denominator {denominator!r}")
     G = st.lg.n_groups
-    op = _KOp(st.lg)
-    pre = SpectralPreconditioner(op.matmul, st.lg.n, op.trace, k=min(64, st.lg.n - 2))
-    U, info = _loco_solve(st, fit.delta, np.repeat(st.y_p[:, None], G, axis=1),
-                          np.arange(G), tol=tol, pre=pre)
+    if basis is not None:
+        pre = _preconditioner(st, basis)
+    else:
+        op = _KOp(st.lg)
+        pre = SpectralPreconditioner(op.matmul, st.lg.n, op.trace, k=min(64, st.lg.n - 2))
+    cand = _calibration_draw(st, n_cal, rng)
+    U, drawn, info = _solve_with_calibration(st, fit.delta, np.repeat(st.y_p[:, None], G, axis=1),
+                                             np.arange(G), cand, tol=tol, pre=pre)
     rs = _retro_stats(st, U)
-    cal = _calibrate_inf(st, fit.vg, fit.delta, U, rs, n_cal, rng, pre=pre)
+    cal = _calibrate_inf(st, fit.vg, fit.delta, rs, n_cal, rng, drawn, pre=pre, tol=tol)
     D_const = cal["c"] * rs["zz"] / st.n_eff * rs["wnorm2"]
     if denominator == "constant":
         D = D_const
@@ -395,8 +474,9 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
     """
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, cache_bytes)
-    fit = fit_variance_components(st, random_state=random_state)
-    core = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral)
+    basis = _spectral_basis(st, random_state=random_state)
+    fit = fit_variance_components(st, random_state=random_state, basis=basis)
+    core = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
     extra = {"method": "bolt-inf" if denominator == "constant" else "bolt-inf-spectral",
              "denominator": denominator, **_fit_extra(fit),
              "calibration": core["cal"]["c"], "calibration_cv": core["cal"]["cv"],
@@ -432,8 +512,9 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     """
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, cache_bytes)
-    fit = fit_variance_components(st, random_state=random_state)
-    inf = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral)
+    basis = _spectral_basis(st, random_state=random_state)
+    fit = fit_variance_components(st, random_state=random_state, basis=basis)
+    inf = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
     n, m, G = st.lg.n, st.lg.m, st.lg.n_groups
     s2 = fit.vg / m
 
@@ -687,6 +768,9 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
 
     # (1b) alpha, then variance components at that alpha.
     f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+    # Under strong structure the ridge solves below need a preconditioner:
+    # REML computes its deflation basis explicitly so that they can share it.
+    basis = None
     if alpha_method == "he":
         he = _he_alpha(st, f, list(alphas), he_probes, rng,
                        fit_h2=heritability_method == "he")
@@ -695,14 +779,17 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
         if heritability_method == "he":
             h2 = he["variance_fit"]["h2"]
         else:
-            fit = fit_variance_components(st, weights=w, random_state=random_state)
+            basis = _spectral_basis(st, w, random_state) if struct["strong"] else None
+            fit = fit_variance_components(st, weights=w, random_state=random_state, basis=basis)
     elif alpha_method == "reml":
         fits = []
         for a in alphas:
             w_a = (f * (1.0 - f)) ** (1.0 + a)
-            fit_a = fit_variance_components(st, weights=w_a, random_state=random_state)
-            fits.append((fit_a.ll, a, w_a, fit_a))
-        _, alpha, w, fit = max(fits, key=lambda t: t[0])
+            basis_a = _spectral_basis(st, w_a, random_state) if struct["strong"] else None
+            fit_a = fit_variance_components(st, weights=w_a, random_state=random_state,
+                                            basis=basis_a)
+            fits.append((fit_a.ll, a, w_a, fit_a, basis_a))
+        _, alpha, w, fit, basis = max(fits, key=lambda t: t[0])
         alpha_scores = np.array([t[0] for t in fits])
     else:
         raise ValueError(f"unknown alpha_method {alpha_method!r}; use 'he' or 'reml'")
@@ -757,14 +844,19 @@ def kvik(y, gt, X=None, *, max_loco_groups: int = 25, alphas=KVIK_ALPHAS,
         # the projected LOCO operator singular in the covariate directions.
         residual_variance = s2e if heritability_method == "he" else 1.0 - h2
         delta = residual_variance / h2
-        # Both solves use the same weighted kinship and deterministic
-        # spectral basis; construct that basis once, as in _inf_core.
-        op = _KOp(st.lg, w)
-        pre = SpectralPreconditioner(op.matmul, n, op.trace, k=min(64, n - 2))
-        Wr, _ = _loco_solve(st, delta, np.repeat(ys[:, None], G, axis=1), np.arange(G),
-                            weights=w, tol=cg_tol, pre=pre)
+        # The ridge residuals and the calibration SNPs share one batched CG
+        # run, preconditioned by the REML deflation basis when there is one.
+        if basis is not None:
+            pre = _preconditioner(st, basis)
+        else:
+            op = _KOp(st.lg, w)
+            pre = SpectralPreconditioner(op.matmul, n, op.trace, k=min(64, n - 2))
+        cand = _calibration_draw(st, n_calibration, rng)
+        Wr, drawn, _ = _solve_with_calibration(st, delta, np.repeat(ys[:, None], G, axis=1),
+                                               np.arange(G), cand, weights=w, tol=cg_tol, pre=pre)
         rsT = _retro_stats(st, Wr)
-        cal = _calibrate_inf(st, h2, delta, Wr, rsT, n_calibration, rng, weights=w, pre=pre)
+        cal = _calibrate_inf(st, h2, delta, rsT, n_calibration, rng, drawn, weights=w,
+                             pre=pre, tol=cg_tol)
         lam_p = 1.0 / cal["c"]
         T = rsT["chi2"]
         if denominator == "spectral":

@@ -93,7 +93,12 @@ proximal-contamination deflation.
 - **Conjugate gradients** (`_cg`): batched over columns, preconditioned
   by the top-64 kinship eigenpairs plus a flat bulk. Strong structure
   puts a few eigenvalues far above the bulk; without the preconditioner
-  CG slows down.
+  CG slows down. The covariate-projected kinship equals the REML operator
+  S K S, so one randomized basis (width 128) serves the REML deflation and
+  the preconditioner. The calibration SNPs' prospective solves share the
+  LOCO residuals' CG passes: polymorphic SNPs are drawn first and the first
+  `n_calibration` with GRAMMAR chi2 < 5 are kept afterwards (rejection
+  sampling), with a short second solve if too few qualify.
 - **Variational Bayes** (`_vb`): iterated conditional
   posterior means, for every cross-validation fold x hyperparameter or
   every LOCO group at once. Within a 128-SNP block, residual products

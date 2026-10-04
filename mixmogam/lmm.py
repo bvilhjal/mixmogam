@@ -533,12 +533,16 @@ class LMM:
 
         return ll_at, dll_at, s1_at
 
-    def _slq_pack(self, method: str, probes: int, steps: int, deflate: int):
+    def _slq_pack(self, method: str, probes: int, steps: int, deflate: int,
+                  basis: Optional[tuple[np.ndarray, np.ndarray]] = None):
         """Lanczos-quadrature ll/dll/s1 evaluators (no eigendecomposition).
 
         Extreme eigenvalues are deflated with a randomized top-d pass and
         handled analytically; Gauss quadrature then only resolves the tight
-        bulk of the spectrum, where it converges quickly.
+        bulk of the spectrum, where it converges quickly. ``basis`` supplies
+        those top eigenpairs (descending) of the REML operator S K S, e.g.
+        from a covariate-projected genotype operator, for which K = S K S
+        and the same basis also serves a CG preconditioner.
         """
         rng = np.random.default_rng(self.random_state)
         op = self._reml_op()
@@ -550,9 +554,12 @@ class LMM:
         lam_d = np.empty(0)
         U_d = np.empty((self.n, 0))
         if deflate > 0 and has_kinship:
-            lam_d, U_d = randomized_eigh_op(
-                op, self.n, min(deflate, self.n - 1), random_state=self.random_state
-            )
+            if basis is not None:
+                lam_d, U_d = basis[0][:deflate], basis[1][:, :deflate]
+            else:
+                lam_d, U_d = randomized_eigh_op(
+                    op, self.n, min(deflate, self.n - 1), random_state=self.random_state
+                )
             # deflate only well-separated extremes: the analytic
             # top-eigenvalue accounting is exact only for an invariant
             # subspace, and subspace iteration cannot converge the
@@ -776,6 +783,7 @@ class LMM:
         slq_probes: int = 48,
         slq_steps: int = 24,
         slq_deflate: int = 128,
+        deflation_basis: Optional[tuple[np.ndarray, np.ndarray]] = None,
     ) -> _VarianceFit:
         """Optimize variances without the GLS completion needed by scans.
 
@@ -814,7 +822,8 @@ class LMM:
         if solver == "exact":
             ll_at, dll_at, s1_at = self._exact_pack(method)
         elif solver == "slq":
-            ll_at, dll_at, s1_at = self._slq_pack(method, slq_probes, slq_steps, slq_deflate)
+            ll_at, dll_at, s1_at = self._slq_pack(method, slq_probes, slq_steps,
+                                                  slq_deflate, deflation_basis)
         else:
             raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
 
