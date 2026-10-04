@@ -247,7 +247,12 @@ about 7% overall inflation under strong simulated structure.
   4.4e-6 against Bonferroni's 2.5e-6 (raw: 8.6e-5). These values do not
   validate the corrected residual-coordinate scheme.
 - **MLMM**: forward inclusion with REML refits, backward elimination,
-  selection by EBIC or mBonf on ML likelihoods (Segura et al. 2012).
+  selection by EBIC or mBonf on ML likelihoods (Segura et al. 2012). The
+  kinship and its eigenbasis are the same in every visited model, so the
+  SNPs are rotated into eigen coordinates once (within `cache_bytes`, 4e9
+  bytes by default) and each forward scan only rescales and residualizes
+  them: O(n m q) per step instead of O(n^2 m). Forward scans default to
+  float32; cofactor tests and likelihoods stay float64.
 - **Kinships**: GRM (called-only standardization), IBS, exact LOCO by
   subtraction, windowed local/global pairs, LDAK-style weights.
 

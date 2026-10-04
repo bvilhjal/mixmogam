@@ -65,3 +65,35 @@ def test_mlmm_imputes_missing_cofactor_calls(structured):
     # a -1 dosage would distort the cofactor; imputation keeps it close
     full = mlmm(sim["y"], gt, K=K, max_steps=2, backward=False)
     assert res["steps"][1]["cofactors"] == full["steps"][1]["cofactors"]
+
+
+def test_prerotated_scans_match_per_step_rotation(structured, monkeypatch):
+    """SNPs rotated into eigen coordinates once give every forward scan of a
+    fresh rotation; a zero budget falls back to rotating at each step."""
+    import mixmogam.stepwise as stepwise
+
+    gt, K, sim = structured
+    fast = mlmm(sim["y"], gt, K=K, max_steps=3, dtype=np.float64)
+    calls = []
+    original = stepwise._rotated_scan
+    monkeypatch.setattr(stepwise, "_rotated_scan",
+                        lambda *a: calls.append(1) or original(*a))
+    slow = mlmm(sim["y"], gt, K=K, max_steps=3, dtype=np.float64, cache_bytes=0)
+    assert not calls
+    assert [s["cofactors"] for s in fast["steps"]] == [s["cofactors"] for s in slow["steps"]]
+    for a, b in zip(fast["steps"], slow["steps"]):
+        assert a["ll"] == b["ll"]
+        if "min_p" in b:
+            assert a["min_p"] == pytest.approx(b["min_p"], rel=1e-9)
+    assert fast["selected"] == slow["selected"]
+    mlmm(sim["y"], gt, K=K, max_steps=1, dtype=np.float64)
+    assert calls  # within the budget the rotated route is used
+
+
+def test_float32_default_selects_as_float64(structured):
+    gt, K, sim = structured
+    default = mlmm(sim["y"], gt, K=K, max_steps=3)
+    exact = mlmm(sim["y"], gt, K=K, max_steps=3, dtype=np.float64)
+    assert default["selected"] == exact["selected"]
+    with pytest.raises(ValueError, match="cache_bytes"):
+        mlmm(sim["y"], gt, K=K, max_steps=1, cache_bytes=-1)

@@ -52,6 +52,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (cached 64 ms). KVIK-HE at n = m = 20,000 with four threads peaked at
   0.97 GiB uncached against 2.26 GiB cached, 16% slower with identical
   associations; uncached bolt-inf agrees with cached to 1.4e-5 in log10 p.
+- `mlmm` rotates the SNPs into the kinship's eigen coordinates once (new
+  `cache_bytes`, default 4e9; `block`) and rescales them for each forward
+  scan, O(n m q) per step instead of O(n^2 m). Forward scans default to
+  float32, like `gwas` (was float64); cofactor tests and likelihoods stay
+  float64. At n = 2,000, m = 50,000 and ten forward steps it took 5.5 s
+  instead of 27.2 s (8.9 s with `dtype=np.float64`), selecting the same
+  cofactors.
 
 ## [2.0.0.dev4] - 2026-10-03
 

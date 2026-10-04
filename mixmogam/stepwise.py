@@ -17,6 +17,12 @@ likelihoods are not comparable between models with different fixed
 effects. The scans and conditional cofactor tests use the REML variance
 components, as in v1. This is a port of the v1 ``linear_models.mlmm``
 semantics (preserved under the ``v1.0-legacy`` tag) on the batched engine.
+
+The kinship, and so its eigenbasis U, is the same in every visited model:
+only the variance ratio and the cofactors change. The SNPs are therefore
+rotated into eigen coordinates once, U' G', within ``cache_bytes``; each
+forward scan then rescales and residualizes them, O(n m q) per step
+instead of the O(n^2 m) of a fresh rotation.
 """
 
 from __future__ import annotations
@@ -27,7 +33,7 @@ import numpy as np
 from scipy import special, stats
 
 from mixmogam.genotypes import MISSING
-from mixmogam.lmm import LMM
+from mixmogam.lmm import LMM, _whitened_scan
 
 __all__ = ["mlmm", "CRITERIA"]
 
@@ -41,6 +47,36 @@ def _dosage(gt, j: int) -> np.ndarray:
     if miss.any():
         g[miss] = g[~miss].mean() if (~miss).any() else 0.0
     return g
+
+
+def _rotated_snps(base: LMM, gt, dtype, block: int, cache_bytes: float):
+    """U' G' (n, m) of all SNPs in eigen coordinates, or None.
+
+    None when the spectrum is truncated (the identity tail needs sample
+    coordinates) or the rotated matrix would exceed ``cache_bytes``.
+    """
+    eig = base.eigen()
+    n, m = gt.n_samples, gt.n_variants
+    if not eig["full"] or n * m * np.dtype(dtype).itemsize > cache_bytes:
+        return None
+    U = base._basis_cache.get(np.dtype(dtype))
+    if U is None:
+        U = base._basis_cache[np.dtype(dtype)] = eig["vectors"].astype(dtype)
+    R = np.empty((n, m), dtype=dtype, order="F")
+    done = 0
+    for S in gt.iter_snp_blocks(block=block, dtype=dtype):
+        R[:, done : done + S.shape[0]] = U.T @ S.T
+        done += S.shape[0]
+    return R
+
+
+def _rotated_scan(lmm: LMM, R: np.ndarray, dtype, block: int) -> dict:
+    """:meth:`LMM.scan` from pre-rotated SNPs: the same whitening, W =
+    diag((lam + delta)^-1/2) U', applied as a rescaling of U' G'."""
+    fac = lmm._scan_factors(dtype)
+    lam = np.maximum(lmm.eigen()["values"], 0.0)
+    s = ((lam + fac["delta"]) ** -0.5).astype(dtype)[:, None]
+    return _whitened_scan(lambda A: s * A, fac, lmm.n, R.T, block, dtype)
 
 
 def _log_choose(m: int, k: int) -> float:
@@ -89,8 +125,10 @@ def mlmm(
     alpha: float = 0.05,
     h2_stop: float = 1e-3,
     backward: bool = True,
-    dtype=np.float64,
+    dtype=np.float32,
     verbose: bool = False,
+    cache_bytes: float = 4e9,
+    block: int = 2048,
 ) -> dict:
     """Forward-backward multi-locus mixed model.
 
@@ -105,6 +143,11 @@ def mlmm(
     h2_stop : forward inclusion stops once the pseudo-heritability has
         been below this value for two consecutive steps (v1 semantics)
     backward : run backward elimination from the last forward model
+    dtype : arithmetic of the forward scans (float32 like :func:`gwas`;
+        cofactor tests and likelihoods stay float64)
+    cache_bytes : budget for the SNPs rotated into eigen coordinates once
+        (n * m * itemsize); above it every forward step rotates them again
+    block : SNPs per scan block
 
     Returns
     -------
@@ -128,6 +171,9 @@ def mlmm(
     base = LMM(y, X=X0, K=K, add_intercept=False) if K is not None else None
     if base is not None:
         base.eigen()  # one eigendecomposition shared by every visited model
+    if not np.isfinite(cache_bytes) or cache_bytes < 0:
+        raise ValueError("cache_bytes must be finite and non-negative")
+    rotated = None if base is None else _rotated_snps(base, gt, dtype, block, cache_bytes)
 
     steps: list[dict] = []
 
@@ -162,7 +208,8 @@ def mlmm(
     for _ in range(max_steps):
         if n - model.lmm.q <= 1:
             break
-        scan = model.lmm.scan(gt, dtype=dtype)
+        scan = (model.lmm.scan(gt, block=block, dtype=dtype) if rotated is None
+                else _rotated_scan(model.lmm, rotated, dtype, block))
         ps = np.asarray(scan["ps"], dtype=np.float64).copy()
         ps[cofs] = np.nan
         if not np.isfinite(ps).any():
