@@ -37,7 +37,9 @@ existing REML estimator remains the default; use `heritability_method="reml"`
 to select it explicitly. A probe standard error describes trace estimation,
 not a heritability confidence interval.
 
-With the `fast` extra, `gwas(..., method="kvik", n_threads=4)` parallelizes
+With the `fast` extra, `gwas(..., method="exact", n_threads=4)` decodes
+genotype blocks in parallel with unchanged results, and
+`gwas(..., method="kvik", n_threads=4)` parallelizes
 genotype preparation and independent candidate-model and LOCO coordinate
 updates. Large fits also distribute residual matrix products across sample
 rows. Model sweeps retain their SNP order; genotype preparation and numerical

@@ -60,9 +60,18 @@ proximal-contamination deflation.
   (matrix determinant lemma for the REML terms), profile grid plus
   Brent.
 - Scan: the EMMAX statistic as BLAS-3, per SNP block
-  G~ = (I - QQ') V^{-1/2} G' (two GEMMs against the eigenbasis and one
-  rank-q residualization), then closed-form F, beta and se. No per-SNP
-  solve; float32 GEMMs by default.
+  G~ = (I - QQ') W G' with W = (L + delta I)^{-1/2} U' (one GEMM in eigen
+  coordinates and one rank-q residualization), then closed-form F, beta
+  and se. Any W with W'W = V^{-1} gives the same statistics; the symmetric
+  root U W, a second GEMM, is kept only for permutations of sample
+  entries. No per-SNP solve; float32 GEMMs by default, which also lose
+  less to rounding with one GEMM. Eigenvectors are stored contiguously in
+  descending order (a reversed view made NumPy copy them before every
+  product), from the divide-and-conquer driver.
+- Relationship matrices standardize each block of hard calls in one fused
+  Numba pass rather than with float64 NumPy temporaries, which had cost
+  2.8 times the block's GEMM. `gwas(method="exact", n_threads=k)`
+  standardizes and converts blocks in parallel with unchanged values.
 - LOCO (`gwas(method="exact")`): K_{-g} by subtraction from one pass over
   all SNPs plus one pass over group g. Each group's REML fit uses Cholesky
   factorizations of K_{-g} + delta I instead of an eigendecomposition: a

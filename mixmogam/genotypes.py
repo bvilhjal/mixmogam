@@ -234,12 +234,14 @@ class Genotypes:
         dtype=np.float32,
         impute: str = "mean",
         variant_indices: Optional[np.ndarray] = None,
+        n_threads: int = 1,
     ):
         """Yield SNP-major (block, n_samples) float blocks with imputation.
 
         ``impute='mean'`` fills no-calls with the called genotype mean of
         each variant (EMMAX-style, keeps blocks batchable); ``'zero'`` fills
-        with 0; ``'none'`` propagates NaN.
+        with 0; ``'none'`` propagates NaN. ``n_threads`` > 1 converts the
+        variants of a block in parallel (Numba), with identical values.
         """
         from mixmogam._fast import convert_block
 
@@ -253,7 +255,7 @@ class Genotypes:
         m = self.n_variants if idx is None else idx.size
         for i in range(0, m, block):
             take = slice(i, i + block) if idx is None else idx[i : i + block]
-            yield convert_block(self.G[:, take], dtype, impute)
+            yield convert_block(self.G[:, take], dtype, impute, n_threads)
 
     def snp_major(self, dtype=np.float32, impute: str = "mean") -> np.ndarray:
         """Full SNP-major float matrix (materializes m x n)."""

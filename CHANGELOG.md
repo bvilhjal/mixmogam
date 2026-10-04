@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and filtered by chi2 < 5 afterwards (the same distribution), so a given
   `random_state` selects different SNPs than before. bolt-inf at n = 10,000
   took 7.4 s instead of 8.5 s.
+- Relationship matrices standardize genotype blocks in one fused Numba
+  pass (1.6 times faster serially, 5 times with six threads, same values to
+  rounding of the moments). `gwas(method="exact")` accepts `n_threads` for
+  parallel standardization and block conversion with identical results;
+  n = 3,000 exact LOCO took 12.9 s serially and 11.8 s with six threads.
+- `LMM` scans whiten in eigen coordinates, one GEMM per SNP block instead
+  of two (1.5 times faster in float32, 1.7 in float64, and closer to the
+  float64 statistics in float32); permutations keep sample coordinates and
+  so their per-seed results. Eigenvectors come from the divide-and-conquer
+  driver (23-42% faster than MRRR, MRRR as fallback) and are stored
+  contiguously in descending order.
 
 ## [2.0.0.dev4] - 2026-10-03
 

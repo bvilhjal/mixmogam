@@ -157,7 +157,7 @@ def test_permutations_match_sequential_whitened(setup):
     model = LMM(y, K=K)
     fit = model.fit()
     out = permutation_min_p(model, gt, n_perm=4, block=10**9, dtype=np.float64, seed=9)
-    fac = model._scan_factors(np.float64)
+    fac = model._scan_factors(np.float64, sample_space=True)
     basis = linalg.qr(fac["Q"], mode="full")[0][:, model.q:]
     xi = basis.T @ fac["r"]
     perms = np.argsort(np.random.default_rng(9).random((xi.size, 4)), axis=0)

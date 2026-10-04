@@ -11,6 +11,7 @@ from typing import Optional, Sequence, Union
 
 import numpy as np
 
+from mixmogam._fast import standardize_block
 from mixmogam.genotypes import Genotypes, MISSING
 
 __all__ = [
@@ -53,15 +54,7 @@ def _standardized_blocks(gt: Genotypes, block: int, dtype, weights=None):
     m = G.shape[1]
     for i in range(0, m, block):
         s = slice(i, min(i + block, m))
-        g = G[:, s].astype(np.float64)
-        ok = g != MISSING
-        gf = np.where(ok, g, 0.0)
-        cnt = ok.sum(axis=0)
-        mean = np.where(cnt > 0, gf.sum(axis=0) / np.maximum(cnt, 1), 0.0)
-        cen = np.where(ok, g - mean, 0.0)
-        var = (cen * cen).sum(axis=0) / np.maximum(cnt, 1)
-        std = np.sqrt(var)
-        Z = (cen / np.where(std > 0, std, 1.0)).T.astype(dtype)
+        Z = standardize_block(np.asarray(G[:, s]), dtype).T  # (k, n) view
         w = (
             np.ones(Z.shape[0], dtype=Z.dtype)
             if weights is None

@@ -268,7 +268,9 @@ def permutation_min_p(
         raise ValueError("n_perm must be a positive integer")
     lmm = _model(lmm)
     rng = np.random.default_rng(seed)
-    fac = lmm._scan_factors(dtype)
+    # Residual entries are permuted in sample coordinates: whiten by the
+    # symmetric root here, so given seeds keep their permutations.
+    fac = lmm._scan_factors(dtype, sample_space=True)
     Q, df = fac["Q"], fac["df"]
     tiny = np.finfo(dtype).tiny
 
@@ -277,13 +279,13 @@ def permutation_min_p(
     else:
         perms = np.argsort(rng.random((lmm.n, n_perm)), axis=0)
         Rp = (np.asarray(fac["r"], dtype=dtype)[perms] if scheme == "projected"
-              else lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype))
+              else lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype, sample_space=True))
         Rp -= Q @ (Q.T @ Rp)
     rss0_p = np.einsum("ij,ij->j", Rp, Rp)  # (B,)
     min_ps = np.ones(n_perm)
     max_fs = np.zeros(n_perm)
     for S in gt.iter_snp_blocks(block=block, dtype=dtype, impute="mean"):
-        G = lmm._apply_inv_sqrt(S.T.astype(dtype), fac["delta"], dtype)
+        G = lmm._apply_inv_sqrt(S.T.astype(dtype), fac["delta"], dtype, sample_space=True)
         G -= Q @ (Q.T @ G)
         den = np.einsum("ij,ij->j", G, G)
         den = np.maximum(den, tiny)
