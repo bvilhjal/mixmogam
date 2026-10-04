@@ -161,6 +161,26 @@ At this size the float32 cache is exactly the
 default 4 GB budget; workers record its actual allocation. These are new fixed
 panels, not nested subsets of the earlier 12,000-variant data.
 
+**2.0.0.dev5 work reduction.** `efficiency_paired.py` compares two frozen
+source trees on five seeded synthetic workloads, one per association path:
+exact LOCO, BOLT-LMM-inf, KVIK with REML, uncached KVIK-HE on four threads,
+and MLMM. Each source warms its own Numba cache on a small panel. Measured
+fits run in fresh processes in alternating order, and fit time, CPU time,
+peak RSS and saved results are compared across sources. Panel arrays are
+ignored by Git; their hashes are kept. See
+[`20261004-efficiency-paired`](results/20261004-efficiency-paired/README.md).
+`slq_defaults.py` compares two-step Lanczos REML with exact REML on the
+same projected genotypes, across Lanczos steps, probe counts and probe
+seeds. See [`20261004-slq-defaults`](results/20261004-slq-defaults/README.md).
+
+```sh
+mkdir -p /tmp/mixmogam-dev4
+git archive 0fa3da8 mixmogam | tar -x -C /tmp/mixmogam-dev4
+python benchmarks/efficiency_paired.py --baseline /tmp/mixmogam-dev4 \
+  --optimized . --reps 2 --out NEW_DIRECTORY
+OPENBLAS_NUM_THREADS=1 python benchmarks/slq_defaults.py --out NEW_DIRECTORY
+```
+
 ```sh
 OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
     python benchmarks/run_benchmarks.py [--quick]

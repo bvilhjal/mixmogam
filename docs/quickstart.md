@@ -29,6 +29,7 @@ gt, _ = gt.align_samples(list(samples))
 from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
+result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
 result = gwas(y, gt, method="bolt-inf")      # BOLT-LMM-inf-style, K-free
 result = gwas(y, gt, method="bolt")          # two-Gaussian mixture
 result = gwas(y, gt, method="kvik")          # KVIK-style elastic-net model
@@ -93,8 +94,9 @@ latency to the first use of a kernel.
 
 `cache_bytes` controls only the float32 standardized-genotype cache. At 50,000
 samples and 20,000 variants its 4,000,000,000 bytes fit the default budget
-exactly. Use `cache_bytes=0` to decode blocks repeatedly from prepared moments
-and projection coefficients, reducing memory at a runtime cost. The int8
+exactly. Use `cache_bytes=0` to decode blocks repeatedly from per-variant
+value tables and projection coefficients, reducing memory at a runtime cost;
+with Numba the decoded blocks equal the cached ones bit for bit. The int8
 input and other workspaces remain resident: this is neither a total-RSS limit
 nor a fully out-of-core fit. The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md)
 records the measured tradeoff, thread-path numerical differences, and timing
@@ -118,7 +120,7 @@ res = fit.scan(gt, with_betas=True)          # classic EMMAX: the tested SNP
 from mixmogam.stepwise import mlmm
 from mixmogam.scan import scan_gxe, permutation_min_p, fit_two_kinships
 
-out = mlmm(y, gt, K=K, max_steps=10)         # forward-backward
+out = mlmm(y, gt, K=K, max_steps=10)         # forward-backward; float32 scans
 out["selected"]["ebic"], out["selected"]["mbonf"]
 scan_gxe(LMM(y, X=E, K=K).fit(), gt, E)      # interaction given the main effect
 scan_gxe(fit, gt, E, polygenic_gxe=True)     # + polygenic K*(EE') component
@@ -140,6 +142,12 @@ fit_two_kinships(y, K_close, K_structure)     # mixture weights + shares
 - `gwas(..., dtype=...)` controls exact-scan arithmetic only. Two-step methods
   use float32 genotype storage. Unknown exact-method options now raise an
   error rather than silently disappearing.
+- Since 2.0.0.dev5, a given `random_state` draws different Lanczos probes
+  (48 instead of 12) and calibration SNPs, so two-step REML fits and
+  calibrations move within Monte Carlo error. `mlmm` scans in float32 by default
+  (`dtype=np.float64` restores the previous arithmetic) and rotates the SNPs
+  once when they fit its `cache_bytes` (4e9 by default; `4 * n * m` bytes in
+  float32).
 - `permutation_min_p(..., scheme="whitened")` permutes coordinates in the
   residual subspace. The older projected-residual approximation is available
   as `scheme="projected"`; old thresholds do not certify the corrected scheme.

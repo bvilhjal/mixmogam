@@ -38,7 +38,7 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{3 October 2026\\\small Research report for version 2.0.0.dev4}
+\date{4 October 2026\\\small Research report for version 2.0.0.dev5}
 
 \begin{document}
 \maketitle
@@ -81,7 +81,10 @@ but increases time. Thread changes exceed a prespecified strict numerical
 tolerance, although the tested significance decisions are unchanged.
 These workstation timings, with observed system swapping, establish a
 workload-specific tradeoff rather than general performance or calibration.
-REML remains the default variance estimator. The research agenda emphasizes
+Version 2.0.0.dev5 computes the same estimators with less work: in paired
+runs, an exact LOCO scan of 3,000 samples took 13.3 instead of 79.6
+seconds, and fewer Lanczos steps with more trace probes reduced Monte
+Carlo error. REML remains the default variance estimator. The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
 approximations and measured failure limits.
 \end{abstract}
@@ -188,6 +191,10 @@ paired implementation, thread and cache comparisons; 36 complete fits at
 50,000 samples and 20,000 markers & Two fixed timing panels; different
 variance estimators across programs; strict thread-tolerance failures and
 system-wide swapping retained. \\
+Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
+2.0.0.dev4 on five workloads, with result agreement; Lanczos steps and
+probes against dense REML on six panels & Two repetitions on a loaded
+host; simulated panels; two-step results move by Monte Carlo amounts. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -282,7 +289,8 @@ as a variance estimate.
 
 LOCO matrices can be formed by subtracting group-specific cross-products
 from the genome-wide sum. The dense implementation refits variance
-components for each group; the streaming infinitesimal path uses one
+components for each group, by Cholesky factorizations since version
+2.0.0.dev5 (Section~\ref{sec:dev5-methods}); the streaming infinitesimal path uses one
 global variance fit and group-specific solves. These are distinct
 nuisance-fitting procedures. When chromosome labels are numerous, the
 implementation can merge them into a limited number of groups, so the
@@ -558,7 +566,7 @@ float32 values. Sample reductions remain serial within a variant, with
 no fast-math reassociation. The initial scratch is $8(n+p)$ bytes per
 active worker, separate from outputs. Retaining $Mp$ float64 projection
 coefficients permits later decoding directly from int8 calls and prepared
-moments. On the uncached variational path, at most 128 markers are decoded
+moments (Section~\ref{sec:dev5-methods}). On the uncached variational path, at most 128 markers are decoded
 per subblock. Other stages may still materialize their configured parent
 blocks, so this is a bounded fitting workspace rather than constant total
 memory. The one-thread default retains the NumPy preparation path.
@@ -581,7 +589,110 @@ Consequently a float32 cache at $n=50{,}000$, $M=20{,}000$ lies exactly on
 the inclusion boundary. Disabling it saves retained storage but repeats
 decoding during fitting. The comparison in Section~\ref{sec:20k-results}
 measures this exchange in complete fits rather than inferring it from a
-decoder microbenchmark.
+decoder microbenchmark. That experiment used the 2.0.0.dev3 decoder;
+Section~\ref{sec:dev5-methods} describes its replacement.
+
+\subsection{Version 2.0.0.dev5: the same estimators with less work}
+\label{sec:dev5-methods}
+
+Version 2.0.0.dev5 computes the quantities of the preceding subsections
+with less work; models and estimators are unchanged. Three choices do
+change results. Two-step fits draw different trace probes and calibration
+markers for a given seed. The Lanczos defaults trade quadrature steps for
+probes. MLMM forward scans default to float32.
+Section~\ref{sec:dev5-results} reports the measured effects.
+
+\paragraph{Exact LOCO REML by Cholesky factorization.}
+Equation~\eqref{eq:reml} needs $\log|\Hm|$, $\log|\X^\top\Hm^{-1}\X|$
+and $\y^\top\Pm_H\y$, not the spectrum of $\K_{-g}$. With
+$\Hm=\mathbf L\mathbf L^\top$, $\log|\Hm|=2\sum_i\log L_{ii}$, and a
+least-squares fit of $\mathbf L^{-1}\y$ on $\mathbf L^{-1}\X$ supplies
+the other two terms. A likelihood evaluation is therefore one
+factorization, about $n^3/3$ operations in a parallel BLAS-3 kernel.
+The eigendecomposition it replaces used about 1.2 cores of the test
+machine: at $n=4{,}000$ it took 6.4 seconds against 0.12 seconds for
+a factorization. The search over $\log\delta$ keeps the EMMA grid
+limits $[-10,10]$. For the first group, a 21-point grid locates the
+maximum and bounded Brent refinement resolves it to an absolute
+$10^{-6}$. Later groups, whose kinships share most markers, expand a
+bracket from the previous optimum. If the first profile has more than
+one interior maximum, every group repeats the grid.
+
+The F statistic of Equation~\eqref{eq:f} depends on $\z_j$, $\y$ and
+$\X$ only through inner products in the metric $\Hm^{-1}$. Any whitening
+$\mathbf W$ with $\mathbf W^\top\mathbf W=\Hm^{-1}$ gives the same
+statistics, so the LOCO scan whitens genotype blocks by triangular
+solves with $\mathbf L$ at the fitted $\delta$. Where $\K=\U\Lambda\U^\top$
+is computed anyway, as in non-LOCO scans and MLMM,
+$\mathbf W=(\Lambda+\delta\I)^{-1/2}\U^\top$ takes one matrix product per
+block, against two for the symmetric root
+$\U(\Lambda+\delta\I)^{-1/2}\U^\top$. Permutation routines permute sample
+entries and keep the symmetric root, so a seed reproduces its earlier
+results. MLMM refits $\delta$ as cofactors enter, but $\U$ stays fixed.
+The rotated genotypes $\U^\top\mathbf Z$ are therefore formed once,
+within a memory budget. Each forward scan then rescales them and removes
+the cofactor directions: $O(nMq)$ operations for $q$ cofactors rather
+than $O(n^2M)$ per step.
+
+\paragraph{Lanczos steps and probes.}
+Stochastic Lanczos quadrature evaluates the REML objective from Lanczos
+runs on the deflated operator. A run from the projected phenotype gives
+the quadratic form; runs from $N$ Rademacher probes give the
+log-determinant and trace terms. One quadrature rule per run serves every
+$\delta$. A fit therefore costs $s$ operator products with $N+1$ columns
+for $s$ Lanczos steps, and each product is one pass over the genotypes.
+Quadrature error falls quickly with $s$ for these smooth functions of a
+positive definite operator, whereas probe error falls only as $N^{-1/2}$.
+On the test machine, a pass cost nearly the same for 1 and 64 columns,
+because decoding and memory traffic dominate. Version 2.0.0.dev5
+therefore uses $s=24$ and $N=48$ rather than 96 and 12: a quarter of the
+passes and four times the probes. Probes that the covariate projection
+reduces to rounding noise are discarded.
+
+\paragraph{Shared spectral basis and calibration solves.}
+Streaming genotype blocks are stored after covariate projection. The
+streaming kinship therefore already equals the REML operator
+$\mathbf S\K\mathbf S$, with $\mathbf S=\I-\mathbf Q\mathbf Q^\top$ for an
+orthonormal covariate basis $\mathbf Q$. In the BOLT-style paths, and in
+KVIK under strong structure, one randomized subspace iteration of width
+128 supplies both the REML deflation and the 64-pair conjugate-gradient
+preconditioner; previously each ran its own passes. The infinitesimal
+calibration of Section~\ref{sec:spectral} uses random markers whose
+retrospective statistic is below 5. That statistic depends on residuals
+that do not yet exist when their solves start. Polymorphic candidates are
+therefore drawn in random order beforehand, with 25\% oversampling, and
+solved in the residuals' batched conjugate-gradient run. The first
+$n_{\mathrm{cal}}$ that qualify are kept, and a short second solve covers
+any shortfall. This rejection sampling still selects a uniformly random
+subset of the qualifying markers, but a given seed selects different
+markers than before.
+
+\paragraph{Streamed genotypes.}
+With the float cache disabled, every pass rebuilds standardized, projected
+blocks from int8 calls. A hard call takes only three values. Preparation
+therefore stores per-variant tables $t_j(c)=(c-\mu_j)/s_j$ for
+$c\in\{0,1,2\}$, computed in float64 by the preparation's own operations,
+and decoding becomes a lookup; missing calls decode to zero. To reproduce
+cached blocks exactly, the covariate correction is replayed from the
+prepared coefficients in the arithmetic of the route that prepared them.
+That is a float64 matrix product for the serial route and a per-cell sum
+for the parallel route, followed by one rounding to storage precision.
+Kinship products avoid per-variant projection altogether. Let
+$\mathbf Z_b$ hold the standardized, unprojected columns of block $b$, so
+that the stored block is $\mathbf S\mathbf Z_b$. For an $n\times c$
+operand $\mathbf B$,
+\begin{equation}
+ \K\mathbf B=\frac1M\sum_b\mathbf S\mathbf Z_b\mathbf Z_b^\top\mathbf S\mathbf B
+ =\frac1M\,\mathbf S\Bigl(\sum_b\mathbf Z_b\mathbf Z_b^\top\Bigr)(\mathbf S\mathbf B),
+ \label{eq:rhs-projection}
+\end{equation}
+so the operand and the result are each projected once. These products
+agree with the cached route to rounding, not bitwise. Decoded slices of
+at most 64 MiB, and the 128-marker variational subblocks, reuse their
+buffers: a fresh allocation per block faulted in every page and doubled
+the decoding time. With Numba, dense relationship matrices also
+standardize each genotype block in one compiled pass, optionally parallel
+across variants, instead of with float64 array temporaries.
 
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
@@ -1500,6 +1611,87 @@ finds no OpenMP library linkage or matching symbols. Source-level OpenMP
 directives cannot be assumed active in this executable. These measurements
 do not establish relative scaling against LDAK's Linux OpenMP/MKL build.
 
+\subsection{Version 2.0.0.dev5: paired fits and Lanczos accuracy}
+\label{sec:dev5-results}
+
+Table~\ref{tab:dev5-paired} compares frozen 2.0.0.dev4 and 2.0.0.dev5
+sources on five seeded synthetic workloads, one per association path. Each
+source first warmed its own Numba cache on a small panel. Measured fits
+then ran in fresh processes, two per source, alternating which source ran
+first. An unrelated session's jobs kept the host at a load average of
+about 2.4 throughout. These are therefore paired comparisons under shared
+load, not isolated timings. Both repetitions of every fit returned
+identical arrays.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Paired fits of frozen 2.0.0.dev4 and 2.0.0.dev5 sources on
+ simulated panels (samples/markers). Fit seconds are median [minimum,
+ maximum] over two fresh-process repetitions; the ratio compares medians.
+ Peak RSS is the median whole-process value in GiB. Agreement is the
+ largest absolute difference in $\log_{10}p$ between versions. MLMM's
+ default forward-scan precision changed from float64 to float32.}
+ \label{tab:dev5-paired}
+ \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrrl@{}}
+ \toprule
+ Workload & dev4 s & dev5 s & Ratio & dev4 GiB & dev5 GiB & Agreement \\
+ \midrule
+ \tabinput{tables/dev5_paired.tex}
+ \bottomrule
+ \end{tabularx}
+\end{table}
+
+The exact LOCO scan took 13.3 instead of 79.6 seconds. Its CPU time fell
+less, from 89 to 60 seconds, because the factorizations use several cores
+where the eigensolver used about one. The first group took 31
+factorizations and the other 21 took 11 to 18 (median 13). Variance ratios
+agreed to a relative $6.1\times10^{-7}$, and $\log_{10}p$ to
+$3\times10^{-5}$; the remaining difference is float32 rounding under a
+different whitening. Peak RSS fell from 1.14 to 0.80 GiB. MLMM ran five
+times faster and selected the same cofactors under all three criteria;
+its new float32 default accounts for part of that gain.
+
+The two-step paths gained less, 1.8-fold for BOLT-LMM-inf and 1.5-fold for
+KVIK with REML, because their genotype passes were already batched. Their
+heritability estimate moved from 0.4440 to 0.4369 with the new Lanczos
+probes. With new calibration markers, $\log_{10}p$ moved by up to 0.07 at
+$p\approx4\times10^{-31}$. These are Monte Carlo changes, not errors of
+either version. Uncached KVIK-HE draws neither probes nor calibration
+markers here, and its p-values were identical. Its peak RSS fell from
+1.14 to 0.93 GiB at similar speed.
+
+Table~\ref{tab:dev5-slq} supports the new Lanczos defaults. Each panel
+compares two-step REML with exact REML on a dense kinship formed from the
+same projected genotype blocks, over independent probe seeds.
+Twenty-four steps reproduced 96 to within $1.1\times10^{-7}$ in $h^2$ on
+every panel. Sixteen steps missed by $1.1\times10^{-4}$ when markers were
+fewer than samples. The remaining error came from the probes. With six
+populations at $n=500$, 12 probes gave a standard deviation of 0.116 over
+seeds and one error of 0.38; 48 probes reduced these to 0.018 and 0.028.
+On the other panels the gain was smaller. These six panels, each with one
+phenotype, test the trace estimator, not the sampling distribution of
+$h^2$.
+
+\medskip\noindent
+\begin{minipage}{\textwidth}
+ \centering\small
+ \captionof{table}{Two-step REML heritability at 24 Lanczos steps against
+ exact REML on the same projected genotypes (samples/markers). Entries are
+ mean $\pm$ standard deviation over six probe seeds (twelve at $n=500$),
+ with the largest absolute error in parentheses. The last column is the
+ largest change from 24 to 96 steps. In the first simulated $h^2=0.95$
+ panel both solvers stop at the upper limit of the variance-ratio grid.}
+ \label{tab:dev5-slq}
+ \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrr@{}}
+ \toprule
+ Panel & Exact $h^2$ & 12 probes & 48 probes & 24 vs 96 steps \\
+ \midrule
+ \tabinput{tables/dev5_slq.tex}
+ \bottomrule
+ \end{tabularx}
+\end{minipage}
+\medskip
+
 \FloatBarrier
 \section{Discussion}
 
@@ -1799,9 +1991,10 @@ of the inclusive 4 GB cache boundary with explicit cache budgets.
 The jump from retained float blocks to repeated decoding is a software
 threshold, not evidence of a statistical complexity transition.
 
-A subsequent implementation study should compare retained int8 calls
-with two-bit storage, reuse prepared per-variant moments and covariate
-coefficients, and profile decoding together with matrix products.
+Version 2.0.0.dev5 already decodes through prepared per-variant value
+tables and covariate coefficients (Section~\ref{sec:dev5-methods}). A
+subsequent implementation study should compare retained int8 calls with
+two-bit storage and profile decoding together with matrix products.
 Reducing bytes read need not reduce time if unpacking prevents efficient
 matrix operations. Missing calls, noncontiguous chromosomes, repeated
 indices and high covariate dimension need independent precision oracles.
@@ -1839,7 +2032,7 @@ and uncached routes, without hiding estimator changes or numerical failures.
 
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. This report describes package
-version 2.0.0.dev4; the known-covariance experiment uses baseline commit
+version 2.0.0.dev5; the known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-manuscript-geometry} beneath
@@ -1883,6 +2076,17 @@ The table generator, \code{report/}\allowbreak\code{make\_efficiency\_tables.py}
 reads saved individual measurements and never reruns a model. Its
 \code{efficiency\_table\_}\allowbreak\code{manifest.json} records input
 and output hashes.
+
+Two archives hold the 2.0.0.dev5 evidence. The paired archive,
+\code{20261004-}\allowbreak\code{efficiency-paired}, comes from
+\code{benchmarks/}\allowbreak\code{efficiency\_paired.py} and keeps both
+frozen sources, panel hashes, process measurements and saved results. The
+Lanczos archive, \code{20261004-}\allowbreak\code{slq-defaults}, comes from
+\code{benchmarks/}\allowbreak\code{slq\_defaults.py} and keeps every fit
+with its source snapshot.
+\code{report/}\allowbreak\code{make\_dev5\_tables.py} renders
+Tables~\ref{tab:dev5-paired} and~\ref{tab:dev5-slq} from these files and
+records hashes in \code{dev5\_table\_}\allowbreak\code{manifest.json}.
 
 \code{report/README.md} gives the reproduction commands, exact archive
 identities, and evidence map. The figure generator reads recorded results and does not silently

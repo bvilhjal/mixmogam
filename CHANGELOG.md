@@ -7,7 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0.dev5] - 2026-10-04
+
 ### Computational efficiency
+
+Archived paired fits against 2.0.0.dev4
+([`20261004-efficiency-paired`](benchmarks/results/20261004-efficiency-paired/README.md):
+fresh processes, alternating order, two repetitions, M2 Pro under unrelated
+background load): exact LOCO at n = 3,000 and m = 44,000 took 13.3 s instead
+of 79.6 s; bolt-inf at n = 10,000 and m = 30,000 7.3 s instead of 12.9 s;
+KVIK with REML 9.8 s instead of 14.4 s; MLMM at n = 2,000 with ten steps
+5.5 s instead of 27.4 s; uncached KVIK-HE at n = m = 20,000 with four threads
+peaked at 0.93 GiB instead of 1.14 GiB with identical associations. The new
+probe count and calibration draw change two-step results within their Monte
+Carlo error (up to 0.07 in log10 p at p = 4e-31); the exact scan agrees to
+3e-5 in log10 p. The bullets give each change's own development measurement.
 
 - Exact LOCO scans fit each group's REML variance ratio through Cholesky
   factorizations of K_{-g} + delta I and whiten SNPs by triangular solves,
@@ -21,7 +35,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   count up to about 64, and 24 steps reproduced 96 to five digits across
   unstructured, structured, high-heritability and fewer-markers-than-samples
   spectra. The probes carried the error: at n = 500 with strong structure
-  the h2 SD over probe seeds fell from 0.11 (errors up to 0.39) to 0.02.
+  the h2 SD over probe seeds fell from 0.12 (one error of 0.38) to 0.02
+  ([`20261004-slq-defaults`](benchmarks/results/20261004-slq-defaults/README.md)).
   bolt-inf at n = 10,000 and m = 30,000 took 8.5 s instead of 12.7 s.
   Estimates change within their Monte Carlo error. Probes that a covariate
   projection reduces to rounding noise are dropped.
@@ -59,6 +74,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   float64. At n = 2,000, m = 50,000 and ten forward steps it took 5.5 s
   instead of 27.2 s (8.9 s with `dtype=np.float64`), selecting the same
   cofactors.
+- Archive the paired comparison with 2.0.0.dev4 and the Lanczos
+  steps-versus-probes study, with their drivers `benchmarks/efficiency_paired.py`
+  and `benchmarks/slq_defaults.py`, and the release checks in
+  `20261004-release-dev5`.
+- Describe the methods in a new manuscript Section 2.10, report the paired
+  fits and Lanczos accuracy in two tables rendered by
+  `report/make_dev5_tables.py`, and update the README, quickstart and design
+  notes.
 
 ## [2.0.0.dev4] - 2026-10-03
 

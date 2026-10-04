@@ -4,7 +4,12 @@ Mixed linear models for quantitative-trait genome-wide association,
 with leave-one-chromosome-out (LOCO) testing by default. The core uses
 NumPy and SciPy; Numba accelerates optional kernels.
 
-**Development version 2.0.0.dev4.** The [critical review](docs/review-2026-10-03.md)
+**Development version 2.0.0.dev5.** This release makes every association path
+cheaper without changing its model: exact LOCO REML by Cholesky factorizations
+(about six times faster at 3,000 samples), fewer Lanczos passes with more
+probes, shared spectral bases, streamed genotypes that reproduce the cache bit
+for bit, and a pre-rotated MLMM ([changelog](CHANGELOG.md), report Section 2.10).
+The [critical review](docs/review-2026-10-03.md)
 records correctness fixes, migration notes, validation, and remaining work.
 The older LDAK binary comparison is withdrawn because its PLINK writer used
 the wrong bit encoding. A new comparison verifies every exported genotype.

@@ -6,6 +6,9 @@ behind mixmogam, its evidence, and six research priorities. The
 includes a matched comparison with official LDAK-KVIK, optimized workloads at
 50,000 samples and 20,000 variants, and HAPNEST-model simulation measurements
 through 100,000 samples. Historical evidence retains its original limitations.
+Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
+with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
+support it.
 
 The manuscript distinguishes the original REML-default workloads from the
 subsequent explicit HE option and computational optimizations. The
@@ -35,7 +38,8 @@ Table 1. Evidence and provenance used in the manuscript.
 | Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations, observed swapping |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
-| Development release validation | `20261003-release-dev4` | Current test suites, installed package checks and document verification |
+| Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
+| Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
 | Historical timing and large-sample checks | `20261002T200925Z`, `20261003T001500Z-sim-study-large` | Internal comparisons with workload and measurement limitations |
@@ -62,12 +66,12 @@ spectral algebra, disjoint calibration/audit sets, and simulated versus analytic
 rejection probabilities. It records seeds, versions, genotype hashes, and its
 source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
-Its first expanded manuscript was included in `2.0.0.dev2`. This revision
-accompanies `2.0.0.dev4`, which adds optional HE fitting, parallel kernels
-and bounded/reused workspaces. The 20K archive records the timed code as
-`2.0.0.dev3` with uncommitted optimizations frozen in full. Its computational
-modules match this release; the package-version field is updated separately.
-REML and one thread remain the defaults.
+Its first expanded manuscript was included in `2.0.0.dev2`. `2.0.0.dev4`
+added optional HE fitting, parallel kernels and bounded/reused workspaces.
+The 20K archive records that timed code as `2.0.0.dev3` with uncommitted
+optimizations frozen in full; its computational modules match `2.0.0.dev4`.
+This revision accompanies `2.0.0.dev5`, whose sources are frozen in its
+paired archive. REML and one thread remain the defaults.
 
 ## Rebuild the manuscript
 
@@ -77,6 +81,7 @@ From the repository root, with matplotlib and Tectonic available:
 python report/make_figures.py
 python report/make_kvik_figures.py
 python report/make_efficiency_tables.py
+python report/make_dev5_tables.py
 cd report
 tectonic mixmogam_report.tex
 ```
@@ -86,7 +91,8 @@ source. The figure script reads the archived CSVs, excludes the invalid external
 comparison, and writes input/output hashes to `figure_manifest.json`.
 The matched comparison has separate figure and HAPNEST manifests. The
 20K tables are regenerated directly from the primary and cache result archives;
-`efficiency_table_manifest.json` records their inputs and output hashes. The earlier
+`efficiency_table_manifest.json` records their inputs and output hashes;
+`dev5_table_manifest.json` does the same for the two 2.0.0.dev5 tables. The earlier
 association results use mixmogam `2.0.0.dev2` at `db232216`, with exact phensim
 extensions frozen per archive; subsequent simulation changes do not retroactively
 validate old results. At large n, input BED files stay local and are ignored by
