@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Computational efficiency
+
+- Exact LOCO scans fit each group's REML variance ratio through Cholesky
+  factorizations of K_{-g} + delta I and whiten SNPs by triangular solves,
+  instead of one eigendecomposition per group. LAPACK's eigensolvers used
+  about 1.2 cores here; at n = 3,000 with 22 chromosome groups the scan
+  took 14.5 s instead of 79 s. Delta agrees with the EMMA fit to 1e-6 and
+  log10 p to 1.2e-7 (float64). Results add `variance_solver` and
+  `reml_factorizations`; `LMM` itself keeps its eigendecomposition.
+
 ## [2.0.0.dev4] - 2026-10-03
 
 ### KVIK computational efficiency

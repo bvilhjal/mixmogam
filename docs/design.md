@@ -63,8 +63,18 @@ proximal-contamination deflation.
   G~ = (I - QQ') V^{-1/2} G' (two GEMMs against the eigenbasis and one
   rank-q residualization), then closed-form F, beta and se. No per-SNP
   solve; float32 GEMMs by default.
-- LOCO: K_{-g} by subtraction from one pass over all SNPs plus one pass
-  over group g, then one eigendecomposition and REML refit per group.
+- LOCO (`gwas(method="exact")`): K_{-g} by subtraction from one pass over
+  all SNPs plus one pass over group g. Each group's REML fit uses Cholesky
+  factorizations of K_{-g} + delta I instead of an eigendecomposition: a
+  21-point grid over log delta for the first group, a local search from
+  the previous group's optimum afterwards (about 12 factorizations, delta
+  to 1e-6 as with EMMA's root finder), a full grid for every group if the
+  first profile has several maxima. SNPs are whitened by triangular
+  solves; the EMMAX statistics do not depend on the square root used.
+  LAPACK's symmetric eigensolvers ran on about 1.2 cores of an M2 Pro,
+  whereas Cholesky is a parallel BLAS-3 kernel (n = 4,000: 0.12 s against
+  6.4 s). At n = 3,000 with 22 groups the scan took 14.5 s instead of
+  79 s, with log10 p within 1.2e-7 of the eigendecomposition route.
 - Models and fits: `LMM.fit()` returns an `LMFit` that holds its model;
   the model caches the fit without that back reference (`fit_result`
   binds it on access). The cycle they used to form kept K and its

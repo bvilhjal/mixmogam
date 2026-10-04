@@ -930,59 +930,8 @@ class LMM:
                 stacklevel=2,
             )
         fac = self._scan_factors(dtype)
-        Q, r, rss0, df = fac["Q"], fac["r"], fac["rss0"], fac["df"]
-        tiny = np.finfo(dtype).tiny
-
-        ps, f_stats, rss_list, var_perc = [], [], [], []
-        betas, ses = [], []
-        done = 0
-        if not isinstance(block, (int, np.integer)) or block <= 0:
-            raise ValueError("block must be a positive integer")
-        for S in _iter_snp_blocks(snps, block, dtype):
-            S32 = np.asarray(S, dtype=dtype)
-            if S32.ndim != 2 or S32.shape[1] != self.n or not np.isfinite(S32).all():
-                raise ValueError("SNP blocks must be finite and match the phenotype sample count")
-            G = self._apply_inv_sqrt(S32.T, fac["delta"], dtype)
-            norm0 = np.einsum("ij,ij->j", G, G)
-            G -= Q @ (Q.T @ G)  # residualize against covariates
-            num = G.T @ r  # (k,)
-            den = np.einsum("ij,ij->j", G, G)
-            # A SNP in the covariate span has no identifiable effect.
-            ok = den > np.maximum(tiny, (32 * np.finfo(dtype).eps) ** 2 * norm0)
-            den = np.where(ok, den, np.nan)
-            with np.errstate(divide="ignore", invalid="ignore"):
-                t2 = (num * num) / np.maximum(den, tiny)
-                rss = np.maximum(rss0 - t2, 0.0)
-                f_stat = t2 / rss * df
-                p = stats.f.sf(f_stat, 1, df)
-            ps.append(p)
-            f_stats.append(f_stat)
-            rss_list.append(rss)
-            var_perc.append(1.0 - rss / rss0)
-            if with_betas:
-                betas.append(num / np.maximum(den, tiny))
-                ses.append(
-                    np.sqrt(np.maximum(rss / (df * np.maximum(den, tiny)), 0.0))
-                )
-            done += S32.shape[0]
-            if callback is not None:
-                callback(done)
-
-        def join(arrays):
-            return np.concatenate(arrays) if arrays else np.empty(0)
-
-        out = {
-            "ps": join(ps),
-            "f_stats": join(f_stats),
-            "rss": join(rss_list),
-            "var_perc": join(var_perc),
-            "h0_rss": rss0,
-            "n": self.n,
-        }
-        if with_betas:
-            out["betas"] = join(betas)
-            out["ses"] = join(ses)
-        return out
+        return _whitened_scan(lambda A: self._apply_inv_sqrt(A, fac["delta"], dtype),
+                              fac, self.n, snps, block, dtype, with_betas, callback)
 
     # ------------------------------------------------------------------
     # Prediction
@@ -1030,6 +979,72 @@ class LMM:
         if self.K is not None or self._kop is not None:
             pred = pred + self.blup()
         return pred
+
+
+def _whitened_scan(whiten, fac: dict, n: int, snps, block: int, dtype,
+                   with_betas: bool = False,
+                   callback: Optional[Callable[[int], None]] = None) -> dict:
+    """EMMAX F tests of SNP blocks against a whitened null model.
+
+    ``whiten(A)`` maps an (n, k) block of raw SNP columns through any W
+    with W'W = V^{-1}; ``fac`` holds the orthonormal basis ``Q`` of the
+    whitened covariates, the whitened residual ``r``, its sum of squares
+    ``rss0`` and the residual degrees of freedom ``df``, all computed with
+    the same W. The statistics do not depend on the choice of W.
+    """
+    Q, r, rss0, df = fac["Q"], fac["r"], fac["rss0"], fac["df"]
+    tiny = np.finfo(dtype).tiny
+
+    ps, f_stats, rss_list, var_perc = [], [], [], []
+    betas, ses = [], []
+    done = 0
+    if not isinstance(block, (int, np.integer)) or block <= 0:
+        raise ValueError("block must be a positive integer")
+    for S in _iter_snp_blocks(snps, block, dtype):
+        S32 = np.asarray(S, dtype=dtype)
+        if S32.ndim != 2 or S32.shape[1] != n or not np.isfinite(S32).all():
+            raise ValueError("SNP blocks must be finite and match the phenotype sample count")
+        G = whiten(S32.T)
+        norm0 = np.einsum("ij,ij->j", G, G)
+        G -= Q @ (Q.T @ G)  # residualize against covariates
+        num = G.T @ r  # (k,)
+        den = np.einsum("ij,ij->j", G, G)
+        # A SNP in the covariate span has no identifiable effect.
+        ok = den > np.maximum(tiny, (32 * np.finfo(dtype).eps) ** 2 * norm0)
+        den = np.where(ok, den, np.nan)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            t2 = (num * num) / np.maximum(den, tiny)
+            rss = np.maximum(rss0 - t2, 0.0)
+            f_stat = t2 / rss * df
+            p = stats.f.sf(f_stat, 1, df)
+        ps.append(p)
+        f_stats.append(f_stat)
+        rss_list.append(rss)
+        var_perc.append(1.0 - rss / rss0)
+        if with_betas:
+            betas.append(num / np.maximum(den, tiny))
+            ses.append(
+                np.sqrt(np.maximum(rss / (df * np.maximum(den, tiny)), 0.0))
+            )
+        done += S32.shape[0]
+        if callback is not None:
+            callback(done)
+
+    def join(arrays):
+        return np.concatenate(arrays) if arrays else np.empty(0)
+
+    out = {
+        "ps": join(ps),
+        "f_stats": join(f_stats),
+        "rss": join(rss_list),
+        "var_perc": join(var_perc),
+        "h0_rss": rss0,
+        "n": n,
+    }
+    if with_betas:
+        out["betas"] = join(betas)
+        out["ses"] = join(ses)
+    return out
 
 
 def _iter_snp_blocks(snps, block: int, dtype=np.float32):

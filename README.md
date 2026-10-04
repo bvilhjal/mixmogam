@@ -17,7 +17,7 @@ Table 1. Association methods implemented by the current package.
 
 | `gwas(..., method=)` | Implementation |
 |---|---|
-| `"exact"` | EMMAX with a full eigendecomposition and REML refit per LOCO group |
+| `"exact"` | EMMAX with an exact REML refit per LOCO group, by Cholesky factorizations |
 | `"bolt-inf"` | BOLT-LMM-inf-style CG solves and retrospective calibration |
 | `"bolt"` | Two-Gaussian mixture, variational fitting and cross-validation |
 | `"kvik"` | KVIK-style elastic-net LOCO scores and structure-dependent calibration |
@@ -104,7 +104,7 @@ sample order.
   fitted polygenic covariance. These tests do not establish causation.
 - `exact` describes the matrix calculation. EMMAX still plugs estimated
   variance components into the F test; finite-sample calibration is not
-  guaranteed merely by an exact eigendecomposition.
+  guaranteed merely by exact matrix algebra.
 - Population structure aligned with environmental effects may require
   explicit covariates. Neither LOCO nor a kinship guarantees removal of
   such confounding. Binary-trait imbalance and rare-variant calibration

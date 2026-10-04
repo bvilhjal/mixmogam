@@ -9,9 +9,11 @@ the exact EMMAX scan was deflated (lambda_GC 0.85 at n = 10,000 in the
 Methods
 -------
 ``"exact"``
-    EMMAX with one exact eigendecomposition per LOCO group: the kinship
-    from all other groups, REML variance components refitted per group,
-    F tests. The gold standard for n up to a few thousand.
+    EMMAX with the kinship from all other groups and REML variance
+    components refitted per LOCO group, through Cholesky factorizations of
+    K_{-g} + delta I rather than an eigendecomposition; F tests on
+    triangular-solve whitened SNPs. The gold standard for n up to a few
+    thousand.
 ``"bolt-inf"``, ``"bolt"``, ``"kvik"``
     The two-step K-free statistics of :mod:`mixmogam.twostep`.
 ``"auto"``
@@ -20,14 +22,17 @@ Methods
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Optional
 
 import numpy as np
 
+from scipy import linalg
+
+from mixmogam._chol import CholeskyREML
 from mixmogam._loco import loco_groups
 from mixmogam.genotypes import MISSING
-from mixmogam.kinship import scale_k
-from mixmogam.lmm import LMM
+from mixmogam.lmm import _whitened_scan
 from mixmogam.results import GwasResult
 
 __all__ = ["gwas", "loco_groups", "EXACT_N_AUTO"]
@@ -62,8 +67,39 @@ class _Subset:
         return self.gt.iter_snp_blocks(block, dtype, impute, variant_indices=self.idx)
 
 
+def _scale_k_inplace(K: np.ndarray) -> np.ndarray:
+    """:func:`mixmogam.kinship.scale_k` without its two n x n temporaries."""
+    n = K.shape[0]
+    if not np.isfinite(K).all():
+        raise ValueError("K must be a finite square matrix with at least two samples")
+    K -= (K.sum() - np.trace(K)) / (n * (n - 1))
+    dmean = np.trace(K) / n
+    if dmean <= 0:
+        raise ValueError("K has no positive variation to scale; check genotype polymorphism")
+    K /= dmean
+    return K
+
+
+def _cholesky_scan_factors(reml, L: np.ndarray, dtype) -> dict:
+    """:meth:`LMM._scan_factors` with W = L^-1, L L' = K + delta I."""
+    if reml.n - reml.q - 1 <= 0:
+        raise ValueError("association tests require positive residual degrees of freedom")
+    W = linalg.solve_triangular(L, np.column_stack([reml.X, reml.y0]), lower=True,
+                                check_finite=False)
+    Xt, yt = W[:, : reml.q].astype(dtype), W[:, reml.q].astype(dtype)
+    Q = linalg.qr(Xt, mode="economic", check_finite=False)[0].astype(dtype, copy=False)
+    r = yt - Q @ (Q.T @ yt)
+    rss0 = float(r @ r)
+    if rss0 <= np.finfo(dtype).tiny:
+        raise ValueError("phenotype has no residual variation after covariate adjustment")
+    return {"Q": Q, "r": r, "rss0": rss0, "df": reml.n - reml.q - 1}
+
+
 def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
                 dtype, kin_block: int = 4096) -> GwasResult:
+    """Exact EMMAX with a REML refit per LOCO group, through Cholesky
+    factorizations of K_{-g} + delta I (:mod:`mixmogam._chol`) rather than
+    one eigendecomposition per group."""
     n, m = gt.n_samples, gt.n_variants
     groups, labels = (loco_groups(gt.chromosome, max_loco_groups) if loco
                       else (np.zeros(m, dtype=np.int64), [tuple(np.unique(gt.chromosome))]))
@@ -75,29 +111,44 @@ def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
     f = np.full(m, np.nan)
     beta = np.full(m, np.nan)
     se = np.full(m, np.nan)
-    h2, delta = [], []
+    h2, delta, evaluations = [], [], []
+    start, regrid = None, False
     for g in range(len(labels)):
         idx = np.nonzero(groups == g)[0]
         if loco:
-            S = S_all - _grm_sum(gt, idx, kin_block, dtype)
-            K = scale_k(S / (m - idx.size))
+            K = S_all - _grm_sum(gt, idx, kin_block, dtype)
+            K /= m - idx.size
         else:
-            K = scale_k(S_all / m)
-        lmm = LMM(y, X=X, K=K, n_eig=n)
-        fit = lmm.fit()
-        h2.append(fit.pseudo_heritability)
-        delta.append(fit.delta)
-        scan = lmm.scan(_Subset(gt, idx), block=block, dtype=dtype, with_betas=True)
+            K = S_all / m
+        reml = CholeskyREML(_scale_k_inplace(K), y, X)
+        # The first group searches the whole grid; later groups, whose
+        # kinships share most variants, start from the previous optimum
+        # unless that coarse profile had several maxima.
+        fit = reml.fit(start=start, grid=regrid)
+        if start is None:
+            regrid = fit["multimodal"]
+        start = fit["log_delta"]
+        h2.append(fit["pseudo_heritability"])
+        delta.append(fit["delta"])
+        evaluations.append(fit["evaluations"])
+        L = reml.factor()
+        fac = _cholesky_scan_factors(reml, L, dtype)
+        Ld = L if np.dtype(dtype) == np.float64 else L.astype(dtype, order="F")
+        whiten = partial(linalg.solve_triangular, Ld, lower=True, check_finite=False)
+        scan = _whitened_scan(whiten, fac, n, _Subset(gt, idx), block, dtype,
+                              with_betas=True)
         p[idx], f[idx] = scan["ps"], scan["f_stats"]
         beta[idx], se[idx] = scan["betas"], scan["ses"]
-        del K, lmm, fit
+        del K, reml, L, Ld, whiten
     res = GwasResult(chromosome=np.asarray(gt.chromosome), position=np.asarray(gt.position),
                      p=p, variant_ids=np.asarray(gt.variant_ids), f_stat=f,
                      beta=beta, se=se, af=gt.allele_freqs(),
                      effect_allele=gt.allele1, other_allele=gt.allele2)
     res.extra.update({"method": "exact", "statistic": "F", "loco": loco, "n": n,
                       "n_loco_groups": len(labels), "loco_groups": labels,
-                      "pseudo_heritability": np.array(h2), "delta": np.array(delta)})
+                      "pseudo_heritability": np.array(h2), "delta": np.array(delta),
+                      "variance_solver": "cholesky",
+                      "reml_factorizations": np.array(evaluations)})
     return res
 
 
