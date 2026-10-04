@@ -103,7 +103,11 @@ proximal-contamination deflation.
   widening whole genotype blocks; residual accumulation remains float64.
   The coordinate loop has an optional Numba implementation.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML
-  on the operator. The phenotype rule and trace probes share batched Lanczos
+  on the operator: 24 Lanczos steps and 48 Rademacher probes. A pass over
+  the genotypes costs about the same for 1 to 64 columns; 24 steps matched
+  96 to five digits in every tested spectrum, while 12 probes left h2 with
+  an SD of 0.11 over probe seeds at n = 500 under strong structure (0.02
+  with 48). The phenotype rule and trace probes share batched Lanczos
   products. The two-step caller requests variance components alone, avoiding
   unused fixed-effect solves and scan preparation; public `LMM.fit()` still
   produces a complete fit.

@@ -700,8 +700,8 @@ class LMM:
         tol: float = 1e-6,
         recompute: bool = False,
         solver: str = "auto",
-        slq_probes: int = 12,
-        slq_steps: int = 96,
+        slq_probes: int = 48,
+        slq_steps: int = 24,
         slq_deflate: int = 128,
     ) -> LMFit:
         """Fit variance components on the null (covariates-only) model.
@@ -711,6 +711,13 @@ class LMM:
         (truncated spectrum or ``solver='slq'``). Returns an
         :class:`LMFit` and caches it on ``self.fit_result``; :meth:`scan`
         uses the cached fit.
+
+        Each Lanczos step is one pass over a streaming kinship, and a pass
+        costs about the same for 1 to 64 columns. 24 steps reproduced the
+        heritability of 96 steps to five digits in every tested spectrum
+        (no structure, F_ST 0.1 with and without PCs, h2 0.95, fewer markers
+        than samples); the error is Monte Carlo in the trace probes, so the
+        defaults spend the columns on 48 probes rather than on steps.
         """
         variance = self._fit_variance_components(
             method=method, ngrids=ngrids, llim=llim, ulim=ulim, tol=tol,
@@ -766,8 +773,8 @@ class LMM:
         tol: float = 1e-6,
         recompute: bool = False,
         solver: str = "auto",
-        slq_probes: int = 12,
-        slq_steps: int = 96,
+        slq_probes: int = 48,
+        slq_steps: int = 24,
         slq_deflate: int = 128,
     ) -> _VarianceFit:
         """Optimize variances without the GLS completion needed by scans.

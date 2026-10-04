@@ -181,13 +181,19 @@ def lanczos_quadrature_batch(
 def rademacher_probes(n: int, probes: int, rng: np.random.Generator,
                       pre: Callable[[np.ndarray], np.ndarray] | None = None) -> np.ndarray:
     """(n, p) Rademacher probes, drawn one at a time (the sequence of the
-    sequential estimator), optionally projected, all-zero probes dropped."""
+    sequential estimator), optionally projected.
+
+    A probe the projection reduces to rounding noise is dropped: counted
+    with its zero contribution it would bias the trace estimate by
+    tr(f(A)) / p. Independent draws hit this only through aliasing, e.g. a
+    random stream shared with indicator covariates.
+    """
     out = []
     for _ in range(probes):
         z = rng.choice(np.array([-1.0, 1.0]), size=n)
         if pre is not None:
             z = pre(z)
-        if np.any(z):
+        if float(z @ z) > 1e-8 * n:
             out.append(z)
     return np.column_stack(out) if out else np.empty((n, 0))
 

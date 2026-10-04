@@ -16,6 +16,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   took 14.5 s instead of 79 s. Delta agrees with the EMMA fit to 1e-6 and
   log10 p to 1.2e-7 (float64). Results add `variance_solver` and
   `reml_factorizations`; `LMM` itself keeps its eigendecomposition.
+- Stochastic Lanczos REML defaults to 24 steps and 48 probes (was 96 and
+  12). Each step is a genotype pass whose cost hardly depends on the column
+  count up to about 64, and 24 steps reproduced 96 to five digits across
+  unstructured, structured, high-heritability and fewer-markers-than-samples
+  spectra. The probes carried the error: at n = 500 with strong structure
+  the h2 SD over probe seeds fell from 0.11 (errors up to 0.39) to 0.02.
+  bolt-inf at n = 10,000 and m = 30,000 took 8.5 s instead of 12.7 s.
+  Estimates change within their Monte Carlo error. Probes that a covariate
+  projection reduces to rounding noise are dropped.
 
 ## [2.0.0.dev4] - 2026-10-03
 
