@@ -4,6 +4,11 @@
 Example (from the repository root, with phensim installed):
     python benchmarks/kvik_simulation.py --ldak /path/to/ldak --out RUN_DIRECTORY
 
+To time new local code on an archive's unchanged inputs, reusing its official
+LDAK-KVIK outputs:
+    python benchmarks/kvik_simulation.py --rerun-from OLD_RUN --methods exact \
+        bolt-inf kvik --ldak /path/to/ldak --out NEW_RUN
+
 Every association worker reads the same on-disk PLINK inputs. A failed worker
 is retained as a failed result; its missing markers never become p=1.
 """
@@ -493,6 +498,80 @@ def summarize(out):
                                         "failed_method_runs": len(failures)})
 
 
+def link_or_copy(source, target):
+    """Hard-link an archived file (same bytes, no extra space); copy across devices."""
+    try:
+        os.link(source, target)
+    except OSError:
+        shutil.copy2(source, target)
+
+
+def prepare_rerun(old, out, methods):
+    """Re-create an archive's panels so that ``methods`` can run again.
+
+    Genotype files are checked against the hashes recorded at export. Every
+    other file, inputs and the outputs of methods not rerun (such as official
+    LDAK-KVIK), is linked unchanged. Returns the cases and the reused hashes.
+    """
+    if (old / ".gitignore").exists():
+        shutil.copy2(old / ".gitignore", out / ".gitignore")
+    cases, reused = [], {}
+    for panel in sorted(p for p in old.glob("rho*") if p.is_dir()):
+        for name, expected in json.loads((panel / "export_check.json").read_text())["files"].items():
+            if digest(panel / name) != expected:
+                raise ValueError(f"{panel / name} differs from its export record")
+        (out / panel.name).mkdir()
+        for item in sorted(panel.iterdir()):
+            target = out / panel.name / item.name
+            if item.is_file():
+                link_or_copy(item, target)
+                reused[f"{panel.name}/{item.name}"] = digest(item)
+                continue
+            if not (item / "case.json").exists():
+                raise ValueError(f"unexpected directory {item}")
+            target.mkdir()
+            for file in sorted(item.iterdir()):
+                if not any(file.name.startswith(f"{method}.") for method in methods):
+                    link_or_copy(file, target / file.name)
+                    reused[f"{panel.name}/{item.name}/{file.name}"] = digest(file)
+            cases.append(target)
+    return cases, reused
+
+
+def rerun(args):
+    """Run local methods again on an archive's inputs, reusing everything else."""
+    if args.out is None or "ldak-kvik" in args.methods:
+        raise SystemExit("--rerun-from needs a new --out and local --methods only")
+    old = args.rerun_from.resolve()
+    out = args.out.resolve()
+    args.out, args.plan, args.rerun_from = str(out), str(old / "plan.md"), str(old)
+    args.ldak = str(Path(args.ldak).expanduser().resolve())
+    out.mkdir(parents=True, exist_ok=False)
+    archive_sources(out, args)
+    cases, reused = prepare_rerun(old, out, args.methods)
+    save_json(out / "rerun.json", {
+        "rerun_from": str(old), "rerun_methods": args.methods,
+        "original_args": json.loads((old / "environment.json").read_text())["args"],
+        "reused": "inputs and the outputs of every other method, linked unchanged; "
+                  "genotypes verified against their export hashes",
+        "reused_sha256": reused})
+    failures = 0
+    for case in cases:
+        # Rotate method order by replicate, as in the original runs.
+        shift = (json.loads((case / "case.json").read_text())["rep"]-1) % len(args.methods)
+        for method in args.methods[shift:]+args.methods[:shift]:
+            try:
+                result = run_method(case, method, args)
+                print(f"{case.parent.name}/{case.name} {method}: {result['wall_seconds']:.2f}s", flush=True)
+            except Exception as exc:
+                failures += 1
+                save_json(case / f"{method}.status.json", {"method": method, "status": "failed", "error": str(exc)})
+                print(f"FAILED {case}: {method}: {exc}", flush=True)
+    summarize(out)
+    print(f"Complete: {out}; failures={failures}", flush=True)
+    return int(failures > 0)
+
+
 def archive_sources(out, args):
     import phensim
     import mixmogam
@@ -547,7 +626,11 @@ def main():
     ap.add_argument("--prepare-only", action="store_true",
                     help="Freeze sources and prepare/export panels, without fitting association methods")
     ap.add_argument("--prepare", type=Path)
+    ap.add_argument("--rerun-from", type=Path,
+                    help="Existing archive: rerun --methods on its inputs, reusing all other outputs")
     args = ap.parse_args()
+    if args.rerun_from:
+        return rerun(args)
     if args.prepare:
         from types import SimpleNamespace
         cfg = json.loads(args.prepare.read_text())

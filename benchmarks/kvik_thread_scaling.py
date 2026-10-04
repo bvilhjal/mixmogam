@@ -39,7 +39,7 @@ from kvik_he_comparison import aggregate, compare_scientific, run_reference, sci
 METHODS = ("mixmogam-he", "ldak-kvik")
 
 
-def schedule(cases, levels, repetitions):
+def schedule(cases, levels, repetitions, methods=METHODS):
     """Rotate a balanced adjacent-order pattern and alternate method first."""
     # Four levels use 0,1,3,2 and cyclic shifts (a Williams-design row).
     # Six case/repetition panels cannot exactly balance four positions;
@@ -62,8 +62,8 @@ def schedule(cases, levels, repetitions):
             shift = (rep + case_shift) % len(levels)
             ordered = [levels[(index + shift) % len(levels)] for index in pattern]
             for thread_order, threads in enumerate(ordered, 1):
-                first = (rep + case_index + levels.index(threads)) % len(METHODS)
-                for method_order, method in enumerate(METHODS[first:] + METHODS[:first], 1):
+                first = (rep + case_index + levels.index(threads)) % len(methods)
+                for method_order, method in enumerate(methods[first:] + methods[:first], 1):
                     jobs.append({"case_index": case_index + 1, "rep": rep + 1, "threads": threads,
                                  "thread_order": thread_order, "order": method_order, "method": method})
     return jobs
@@ -105,11 +105,13 @@ def numerical_comparison(left, right, case, rep, method, threads, kind, rtol, at
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--ldak", type=Path, required=True)
+    parser.add_argument("--ldak", type=Path)
     parser.add_argument("--ldak-source-url", default="unspecified; executable SHA-256 recorded")
     parser.add_argument("--case", type=Path, action="append", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--reps", type=int, default=3)
+    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
+                        help="Omit ldak-kvik to time new local code against archived official runs")
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 2, 4, 8])
     parser.add_argument("--parallel-kvik", action="store_true",
                         help="Also set mixmogam n_threads, enabling its optional parallel kernels")
@@ -128,6 +130,9 @@ def main():
             or args.rtol < 0 or args.atol < 0):
         parser.error("use positive reps, distinct positive thread counts including 1, and nonnegative tolerances")
     levels = sorted(args.threads)
+    methods = tuple(method for method in METHODS if method in args.methods)
+    if "ldak-kvik" in methods and args.ldak is None:
+        parser.error("--ldak is required when ldak-kvik is run")
     if any(value is not None and value < 1 for value in (args.blas_threads, args.numba_threads)):
         parser.error("local BLAS and Numba thread limits must be positive")
     if args.cache_bytes is not None and (not math.isfinite(args.cache_bytes) or args.cache_bytes < 0):
@@ -147,18 +152,22 @@ def main():
         target = out / name
         shutil.copy2(path, target)
         drivers[name] = digest(target)
-    executable = out / "external" / args.ldak.name
-    executable.parent.mkdir()
-    shutil.copy2(args.ldak.resolve(), executable)
+    executable = None
+    if "ldak-kvik" in methods:
+        executable = out / "external" / args.ldak.name
+        executable.parent.mkdir()
+        shutil.copy2(args.ldak.resolve(), executable)
     inputs = [input_manifest(case) for case in cases]
     for case, description in zip(cases, inputs):
         truth = case.parent / "truth.npz"
         description["files"][str(truth)] = {"sha256": digest(truth), "bytes": truth.stat().st_size}
-    jobs = schedule(len(cases), levels, args.reps)
+    jobs = schedule(len(cases), levels, args.reps, methods)
     manifest = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "command": sys.argv, "source": source, "drivers_sha256": drivers, "inputs": inputs,
-                "ldak": {"original": str(args.ldak.resolve()), "snapshot": str(executable),
-                         "sha256": digest(executable), "source_url": args.ldak_source_url},
+                "ldak": None if executable is None else {
+                    "original": str(args.ldak.resolve()), "snapshot": str(executable),
+                    "sha256": digest(executable), "source_url": args.ldak_source_url},
+                "methods": list(methods),
                 "platform": platform.platform(), "python": sys.executable,
                 "thread_levels": levels, "thread_environment_variables": list(THREAD_VARS),
                 "parallel_kvik": args.parallel_kvik,
@@ -168,7 +177,7 @@ def main():
                     level, blas_threads=args.blas_threads, numba_threads=numba_ceiling) for level in levels},
                 "official_thread_environments": {str(level): thread_environment(level) for level in levels},
                 "timing_repetitions": args.reps, "planned_method_runs": len(jobs), "schedule": jobs,
-                "expected_within_method_comparisons": len(cases) * len(METHODS)
+                "expected_within_method_comparisons": len(cases) * len(methods)
                     * (args.reps * (len(levels) - 1) + (args.reps - 1) * len(levels)),
                 "warmup": not args.no_warmup, "power_state": initial_power,
                 "comparison_tolerances": {"rtol": args.rtol, "atol": args.atol},
@@ -252,7 +261,7 @@ def main():
             jobs[schedule_index]["case_index"], jobs[schedule_index]["rep"]) != (case_index, rep)
         if panel_done:
             null = (np.ones(config["m"], dtype=bool) if config["trait"] == "null" else truth["null_chromosome"])
-            for method in METHODS:
+            for method in methods:
                 reference = successes.get((case_index, rep, 1, method))
                 for level in levels:
                     current = successes.get((case_index, rep, level, method))

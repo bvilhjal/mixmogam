@@ -83,3 +83,27 @@ def test_summary_uses_null_chromosome_and_replicate_uncertainty(tmp_path):
     expected_lambda = np.mean([stats.chi2.isf(.1, 1), stats.chi2.isf(.3, 1)]) / stats.chi2.ppf(.5, 1)
     assert float(row["lambda_gc"]) == pytest.approx(expected_lambda)
     assert json.loads((tmp_path / "completion.json").read_text())["successful_method_runs"] == 2
+
+
+def test_rerun_reuses_inputs_and_other_outputs_but_not_rerun_methods(tmp_path):
+    old, out = tmp_path / "old", tmp_path / "new"
+    panel = old / "rho0_fst0_rep01"
+    case = panel / "unstructured_mixed"
+    case.mkdir(parents=True)
+    out.mkdir()
+    for name in ("geno.bed", "geno.bim", "geno.fam"):
+        (panel / name).write_bytes(name.encode())
+    bench.save_json(panel / "export_check.json",
+                    {"files": {p.name: bench.digest(p) for p in panel.glob("geno.*")}})
+    for name in ("case.json", "phenotype.txt", "exact.npz", "exact.status.json",
+                 "ldak-kvik.npz", "ldak-step1.log", "reference.step2.assoc.gz"):
+        (case / name).write_text(name)
+    cases, reused = bench.prepare_rerun(old, out, ["exact"])
+    assert cases == [out / "rho0_fst0_rep01" / "unstructured_mixed"]
+    assert sorted(p.name for p in cases[0].iterdir()) == [
+        "case.json", "ldak-kvik.npz", "ldak-step1.log", "phenotype.txt", "reference.step2.assoc.gz"]
+    assert reused["rho0_fst0_rep01/geno.bed"] == bench.digest(panel / "geno.bed")
+    assert reused["rho0_fst0_rep01/unstructured_mixed/ldak-kvik.npz"] == bench.digest(case / "ldak-kvik.npz")
+    (panel / "geno.bed").write_bytes(b"changed")
+    with pytest.raises(ValueError, match="export record"):
+        bench.prepare_rerun(old, tmp_path / "again", ["exact"])

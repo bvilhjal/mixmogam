@@ -216,16 +216,21 @@ def aggregate(rows):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--ldak", type=Path, required=True)
+    parser.add_argument("--ldak", type=Path)
     parser.add_argument("--ldak-source-url", default="unspecified; executable SHA-256 recorded")
     parser.add_argument("--case", type=Path, action="append", required=True)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--reps", type=int, default=3)
     parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
+                        help="Omit ldak-kvik to time new local code against archived official runs")
     parser.add_argument("--no-warmup", action="store_true")
     args = parser.parse_args()
     if args.reps < 1 or args.threads < 1:
         parser.error("reps and threads must be positive")
+    methods = tuple(method for method in METHODS if method in args.methods)
+    if "ldak-kvik" in methods and args.ldak is None:
+        parser.error("--ldak is required when ldak-kvik is run")
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     (out / ".gitignore").write_text("jit-cache/\nexternal/\n")
@@ -236,9 +241,11 @@ def main():
         target = out / path.name
         shutil.copy2(path, target)
         drivers[path.name] = digest(target)
-    executable = out / "external" / args.ldak.name
-    executable.parent.mkdir()
-    shutil.copy2(args.ldak.resolve(), executable)
+    executable = None
+    if "ldak-kvik" in methods:
+        executable = out / "external" / args.ldak.name
+        executable.parent.mkdir()
+        shutil.copy2(args.ldak.resolve(), executable)
     cases = [case.resolve() for case in args.case]
     inputs = [input_manifest(case) for case in cases]
     for case, description in zip(cases, inputs):
@@ -246,12 +253,14 @@ def main():
         description["files"][str(path)] = {"sha256": digest(path), "bytes": path.stat().st_size}
     manifest = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                 "command": sys.argv, "source": source, "drivers_sha256": drivers, "inputs": inputs,
-                "ldak": {"original": str(args.ldak.resolve()), "snapshot": str(executable),
-                         "sha256": digest(executable), "source_url": args.ldak_source_url},
+                "ldak": None if executable is None else {
+                    "original": str(args.ldak.resolve()), "snapshot": str(executable),
+                    "sha256": digest(executable), "source_url": args.ldak_source_url},
+                "methods": list(methods),
                 "platform": platform.platform(), "python": sys.executable,
                 "threads": args.threads, "timing_repetitions": args.reps,
                 "warmup": not args.no_warmup, "power_state": initial_power,
-                "order": "cyclic method rotation by (rep + case index) modulo three",
+                "order": f"cyclic method rotation by (rep + case index) modulo {len(methods)}",
                 "scope": "full association fits; repeated timing on fixed simulated inputs; no estimator agreement requirement"}
     save_json(out / "manifest.json", manifest)
     worker_driver = out / "kvik_efficiency.py"
@@ -263,7 +272,7 @@ def main():
         return measured(command, directory, args.threads, out / "jit-cache")
 
     if not args.no_warmup:
-        for method in METHODS[:2]:
+        for method in (method for method in methods if method != "ldak-kvik"):
             measurement = local_run(method, out / "warmup" / method)
             print(f"{method} cache warm-up: {measurement['wall_seconds']:.2f}s (excluded)", flush=True)
     import numpy as np
@@ -273,8 +282,8 @@ def main():
             config = description["config"]
             with np.load(case.parent / "truth.npz", allow_pickle=False) as data:
                 truth = {key: data[key] for key in data.files if key == "variant_ids" or key == "null_chromosome" or key.endswith("_bin")}
-            shift = (rep + case_index) % len(METHODS)
-            order = METHODS[shift:] + METHODS[:shift]
+            shift = (rep + case_index) % len(methods)
+            order = methods[shift:] + methods[:shift]
             outputs = {}
             for order_index, method in enumerate(order):
                 directory = out / "runs" / f"case{case_index + 1:02d}" / f"rep{rep + 1:02d}" / method
@@ -304,7 +313,7 @@ def main():
                 write_csv(out / "strata.csv", strata_rows)
                 print(f"case {case_index + 1}, rep {rep + 1}, {method}: {measurement['wall_seconds']:.2f}s, "
                       f"{measurement['peak_rss_bytes'] / 2**30:.3f} GiB, h2={metrics['h2']}", flush=True)
-            for first, second in itertools.combinations([method for method in METHODS if method in outputs], 2):
+            for first, second in itertools.combinations([method for method in methods if method in outputs], 2):
                 comparisons.extend({"case_index": case_index + 1, "rep": rep + 1,
                                     "first": first, "second": second, **summary}
                                    for summary in compare_scientific(outputs[first], outputs[second], null))
