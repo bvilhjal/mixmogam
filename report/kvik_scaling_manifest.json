@@ -1,12 +1,44 @@
 {
   "intervals": "observed minimum to maximum across replicates",
+  "reruns": [
+    {
+      "archive": "benchmarks/results/20261004-phensim-kvik-dev5",
+      "rerun_from": "benchmarks/results/20261003-phensim-kvik",
+      "rerun_methods": [
+        "exact",
+        "bolt-inf",
+        "kvik"
+      ],
+      "reused_files_verified": 2112
+    },
+    {
+      "archive": "benchmarks/results/20261004-phensim-kvik-dev5-n2000",
+      "rerun_from": "benchmarks/results/20261003-phensim-kvik-n2000",
+      "rerun_methods": [
+        "exact",
+        "bolt-inf",
+        "kvik"
+      ],
+      "reused_files_verified": 122
+    },
+    {
+      "archive": "benchmarks/results/20261004-phensim-kvik-dev5-n4000",
+      "rerun_from": "benchmarks/results/20261003-phensim-kvik-n4000",
+      "rerun_methods": [
+        "exact",
+        "bolt-inf",
+        "kvik"
+      ],
+      "reused_files_verified": 122
+    }
+  ],
   "sha256": {
-    "benchmarks/results/20261003-phensim-kvik/replicates.csv": "290cfda78c3b23a62981ade4132c4b652d4575a240658bc1e0d17401dba09008",
-    "benchmarks/results/20261003-phensim-kvik-n2000/replicates.csv": "9a9f5f691f96623394aefea364f98f5e876ed242b6c49978c9819b0ead1d0343",
-    "benchmarks/results/20261003-phensim-kvik-n4000/replicates.csv": "749bd10955f5d13eea60cb0e440fdc0f02d6b5ceb8e0e4abd8e0e091ecd61501",
-    "report/figures/kvik_scaling.pdf": "ad70718e1b660275a1d761c039542ca7f4a7e9d842395a49d27daed15d50d0e1",
-    "report/tables/kvik_scaling.tex": "b7ebaf5430d6b9ab364cba421d5cf15bff9c70e24e9c2cfe35c0babe2df20884",
-    "benchmarks/results/20261003-phensim-kvik/scaling_summary.csv": "d1679b211f0d75fe9f2e012972b68aff5c141e3b1ee0bcb3cad74188ea313fed",
-    "report/make_kvik_figures.py": "8c677b9962e48e907c7c6b697a2ab0001bd9bc2e6b43b26b45177f15bbb8cef3"
+    "benchmarks/results/20261004-phensim-kvik-dev5/replicates.csv": "3469c4a6273b392be3df8c466c219a3a4548767381a1e8f1d0051fa00b777164",
+    "benchmarks/results/20261004-phensim-kvik-dev5-n2000/replicates.csv": "9c341a8b376bb514daab0dbd6aaccfd980ebb0ce9dbbe9edc2d73170489bb848",
+    "benchmarks/results/20261004-phensim-kvik-dev5-n4000/replicates.csv": "fc6cd393e4039fcd081e25c01ff4d6542a442a7865ba621a3ecddeba096debba",
+    "report/figures/kvik_scaling.pdf": "d63dac744286cc28f311fb62749bb8757f641e1fded7f63c6a695b2dea0f5dfe",
+    "report/tables/kvik_scaling.tex": "9f00bf61d815e2b4a1dd15f912d2ab1398a6e9c8de44ba5ba21b058675fd905b",
+    "benchmarks/results/20261004-phensim-kvik-dev5/scaling_summary.csv": "f8bc1aae04114a20c94906acf0785a985e68c03f2af51cef81e4823c86049164",
+    "report/make_kvik_figures.py": "f8d9614a3e74294e3cf61dd18f6b915653cc9d3e396331af933ca066fe7d46f1"
   }
 }

@@ -1,21 +1,33 @@
 {
   "purpose": "Render measured evidence only; no simulation or fitting",
-  "timed_package_version": "2.0.0.dev3",
-  "generator_sha256": "4b2d972f1c89c303a55002aec299b0710568b85e6e662cfd05354309c737a60b",
+  "timed_versions": {
+    "mixmogam-he": "2.0.0.dev5 (20261004-kvik-20k-dev5)",
+    "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"
+  },
+  "generator_sha256": "862c3858d9a635a12e9d29e865e865d2d8a0df1586dc5e101890e5fe78f38b90",
   "inputs": {
+    "benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/measurements.csv": "8b7ab9a7ce1308b156972c34b015fde635088c1956893831176ef99d01080c3a",
+    "benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a",
+    "benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/manifest.json": "037f0965d2285f671a5c2af1c0fdff95b056c6c3418cf246d6435429e0a6999a",
+    "benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/comparisons.json": "e8bd6dfa0fb8f54e01f5d3d6086fc99358e11f9f3d8dd62ae3da1d305d9ad3ec",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/measurements.csv": "ef0322e31d43124bdf3b460d21f18bd71dc67bbc0b9a973b953a7273249b92a7",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/verification.json": "f2566591f69a8125424a6c670f5151d26548d6caeb593fb97ee89ed70545fd07",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/manifest.json": "47d74c0b3e10c19d58970f120ba24354c43cb4958efbfe15b710811fb93822c8",
-    "benchmarks/results/20261003-kvik-20k/cache/measurements.csv": "b19e998907c307bdb734620c9de6d6aefeeb4c66f2a03bd38b1b4238237c9499",
-    "benchmarks/results/20261003-kvik-20k/cache/verification.json": "c2efc474dce84efaeddfb8a899b1b9e62dbbb2c744b551a81538fffb38b5ae9f"
+    "benchmarks/results/20261004-kvik-20k-dev5/cache/measurements.csv": "8aeb2b019a479c5b7e328a642a0fac5073de0ed2f714882e6aae98eb9195a099",
+    "benchmarks/results/20261004-kvik-20k-dev5/cache/status.json": "b1144b5d10321df98ba0112f332bc92313b36373052479962bad5fad7019b42b",
+    "benchmarks/results/20261004-kvik-20k-dev5/cache/comparisons.json": "a60a8bd9ce82815657a6dae1fdf0c79c993512476c0eea77e95b6fd42d883b4e"
   },
   "outputs": {
-    "report/tables/kvik_20k_resources.tex": "7b13c9518fb30c606faf77492dec5820dbc03aa2e84ce24575234dee54bcf627",
-    "report/tables/kvik_20k_science.tex": "80321c626b8428d2bd071378831286230795b3cf4fce0afdc139bafeba94821b",
-    "report/tables/kvik_20k_cache.tex": "a54e1ced561cc7fcf5c8a39f48fb68accce74e0b47082c0f77cf855b42553a5c"
+    "report/tables/kvik_20k_resources.tex": "69b653a8f202f65bcfc9acb138db9a1b24b1e98f484146c63a23a052acfb2fbd",
+    "report/tables/kvik_20k_science.tex": "2e77ff5ba3406c7b7cea27b6181c5fab2db44d18bd0827557cf39013052a99aa",
+    "report/tables/kvik_20k_cache.tex": "3be14f44b5dc3db1b84be640b7357e556f9c1385ccad5e022f6ffdd22bf6963d"
   },
   "primary_fits": 24,
+  "local_fits_rerun": 12,
+  "official_fits_reused": 12,
   "cache_fits": 12,
-  "primary_original_tolerance_passed": false,
+  "input_hashes_identical": true,
+  "dev5_thread_comparisons": 14,
+  "dev5_thread_comparisons_outside_tolerance": 6,
   "exact_cache_invariance_passed": true
 }

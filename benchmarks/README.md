@@ -181,6 +181,29 @@ python benchmarks/efficiency_paired.py --baseline /tmp/mixmogam-dev4 \
 OPENBLAS_NUM_THREADS=1 python benchmarks/slq_defaults.py --out NEW_DIRECTORY
 ```
 
+**Reruns with new local code.** `kvik_simulation.py --rerun-from` repeats
+the local methods on an existing archive's inputs. All other files, including
+the official LDAK-KVIK outputs, are linked unchanged, but only after the
+genotype files match their export hashes. `kvik_thread_scaling.py` and
+`kvik_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
+omitted. The 2.0.0.dev5 reruns are:
+- `20261004-phensim-kvik-dev5`, with `-n2000` and `-n4000`;
+- `20261004-hapnest-kvik-dev5-n10000` and `-n50000`;
+- `20261004-kvik-he-dev5`;
+- `20261004-kvik-20k-dev5`.
+
+Official results are reused only on byte-identical inputs. Their timings
+come from the original runs, so cross-program time ratios also span the
+days and host loads of both runs.
+
+```sh
+python benchmarks/kvik_simulation.py --rerun-from benchmarks/results/OLD_RUN \
+  --methods exact bolt-inf kvik --ldak /path/to/ldak --out NEW_DIRECTORY
+python benchmarks/kvik_thread_scaling.py --source . --methods mixmogam-he \
+  --case CASE --case CASE --threads 1 4 --parallel-kvik --blas-threads 1 \
+  --numba-threads 8 --cache-bytes 4000000000 --reps 3 --out NEW_DIRECTORY
+```
+
 ```sh
 OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
     python benchmarks/run_benchmarks.py [--quick]

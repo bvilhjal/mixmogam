@@ -1,0 +1,613 @@
+diff --git a/benchmarks/README.md b/benchmarks/README.md
+index 5083d5c..4cb1d5c 100644
+--- a/benchmarks/README.md
++++ b/benchmarks/README.md
+@@ -181,6 +181,29 @@ python benchmarks/efficiency_paired.py --baseline /tmp/mixmogam-dev4 \
+ OPENBLAS_NUM_THREADS=1 python benchmarks/slq_defaults.py --out NEW_DIRECTORY
+ ```
+ 
++**Reruns with new local code.** `kvik_simulation.py --rerun-from` repeats
++the local methods on an existing archive's inputs. All other files, including
++the official LDAK-KVIK outputs, are linked unchanged, but only after the
++genotype files match their export hashes. `kvik_thread_scaling.py` and
++`kvik_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
++omitted. The 2.0.0.dev5 reruns are:
++- `20261004-phensim-kvik-dev5`, with `-n2000` and `-n4000`;
++- `20261004-hapnest-kvik-dev5-n10000` and `-n50000`;
++- `20261004-kvik-he-dev5`;
++- `20261004-kvik-20k-dev5`.
++
++Official results are reused only on byte-identical inputs. Their timings
++come from the original runs, so cross-program time ratios also span the
++days and host loads of both runs.
++
++```sh
++python benchmarks/kvik_simulation.py --rerun-from benchmarks/results/OLD_RUN \
++  --methods exact bolt-inf kvik --ldak /path/to/ldak --out NEW_DIRECTORY
++python benchmarks/kvik_thread_scaling.py --source . --methods mixmogam-he \
++  --case CASE --case CASE --threads 1 4 --parallel-kvik --blas-threads 1 \
++  --numba-threads 8 --cache-bytes 4000000000 --reps 3 --out NEW_DIRECTORY
++```
++
+ ```sh
+ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
+     python benchmarks/run_benchmarks.py [--quick]
+diff --git a/benchmarks/kvik_he_comparison.py b/benchmarks/kvik_he_comparison.py
+index 0dbaeab..5462932 100644
+--- a/benchmarks/kvik_he_comparison.py
++++ b/benchmarks/kvik_he_comparison.py
+@@ -216,16 +216,21 @@ def aggregate(rows):
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--source", type=Path, required=True)
+-    parser.add_argument("--ldak", type=Path, required=True)
++    parser.add_argument("--ldak", type=Path)
+     parser.add_argument("--ldak-source-url", default="unspecified; executable SHA-256 recorded")
+     parser.add_argument("--case", type=Path, action="append", required=True)
+     parser.add_argument("--out", type=Path, required=True)
+     parser.add_argument("--reps", type=int, default=3)
+     parser.add_argument("--threads", type=int, default=1)
++    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
++                        help="Omit ldak-kvik to time new local code against archived official runs")
+     parser.add_argument("--no-warmup", action="store_true")
+     args = parser.parse_args()
+     if args.reps < 1 or args.threads < 1:
+         parser.error("reps and threads must be positive")
++    methods = tuple(method for method in METHODS if method in args.methods)
++    if "ldak-kvik" in methods and args.ldak is None:
++        parser.error("--ldak is required when ldak-kvik is run")
+     out = args.out.resolve()
+     out.mkdir(parents=True, exist_ok=False)
+     (out / ".gitignore").write_text("jit-cache/\nexternal/\n")
+@@ -236,9 +241,11 @@ def main():
+         target = out / path.name
+         shutil.copy2(path, target)
+         drivers[path.name] = digest(target)
+-    executable = out / "external" / args.ldak.name
+-    executable.parent.mkdir()
+-    shutil.copy2(args.ldak.resolve(), executable)
++    executable = None
++    if "ldak-kvik" in methods:
++        executable = out / "external" / args.ldak.name
++        executable.parent.mkdir()
++        shutil.copy2(args.ldak.resolve(), executable)
+     cases = [case.resolve() for case in args.case]
+     inputs = [input_manifest(case) for case in cases]
+     for case, description in zip(cases, inputs):
+@@ -246,12 +253,14 @@ def main():
+         description["files"][str(path)] = {"sha256": digest(path), "bytes": path.stat().st_size}
+     manifest = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                 "command": sys.argv, "source": source, "drivers_sha256": drivers, "inputs": inputs,
+-                "ldak": {"original": str(args.ldak.resolve()), "snapshot": str(executable),
+-                         "sha256": digest(executable), "source_url": args.ldak_source_url},
++                "ldak": None if executable is None else {
++                    "original": str(args.ldak.resolve()), "snapshot": str(executable),
++                    "sha256": digest(executable), "source_url": args.ldak_source_url},
++                "methods": list(methods),
+                 "platform": platform.platform(), "python": sys.executable,
+                 "threads": args.threads, "timing_repetitions": args.reps,
+                 "warmup": not args.no_warmup, "power_state": initial_power,
+-                "order": "cyclic method rotation by (rep + case index) modulo three",
++                "order": f"cyclic method rotation by (rep + case index) modulo {len(methods)}",
+                 "scope": "full association fits; repeated timing on fixed simulated inputs; no estimator agreement requirement"}
+     save_json(out / "manifest.json", manifest)
+     worker_driver = out / "kvik_efficiency.py"
+@@ -263,7 +272,7 @@ def main():
+         return measured(command, directory, args.threads, out / "jit-cache")
+ 
+     if not args.no_warmup:
+-        for method in METHODS[:2]:
++        for method in (method for method in methods if method != "ldak-kvik"):
+             measurement = local_run(method, out / "warmup" / method)
+             print(f"{method} cache warm-up: {measurement['wall_seconds']:.2f}s (excluded)", flush=True)
+     import numpy as np
+@@ -273,8 +282,8 @@ def main():
+             config = description["config"]
+             with np.load(case.parent / "truth.npz", allow_pickle=False) as data:
+                 truth = {key: data[key] for key in data.files if key == "variant_ids" or key == "null_chromosome" or key.endswith("_bin")}
+-            shift = (rep + case_index) % len(METHODS)
+-            order = METHODS[shift:] + METHODS[:shift]
++            shift = (rep + case_index) % len(methods)
++            order = methods[shift:] + methods[:shift]
+             outputs = {}
+             for order_index, method in enumerate(order):
+                 directory = out / "runs" / f"case{case_index + 1:02d}" / f"rep{rep + 1:02d}" / method
+@@ -304,7 +313,7 @@ def main():
+                 write_csv(out / "strata.csv", strata_rows)
+                 print(f"case {case_index + 1}, rep {rep + 1}, {method}: {measurement['wall_seconds']:.2f}s, "
+                       f"{measurement['peak_rss_bytes'] / 2**30:.3f} GiB, h2={metrics['h2']}", flush=True)
+-            for first, second in itertools.combinations([method for method in METHODS if method in outputs], 2):
++            for first, second in itertools.combinations([method for method in methods if method in outputs], 2):
+                 comparisons.extend({"case_index": case_index + 1, "rep": rep + 1,
+                                     "first": first, "second": second, **summary}
+                                    for summary in compare_scientific(outputs[first], outputs[second], null))
+diff --git a/benchmarks/kvik_simulation.py b/benchmarks/kvik_simulation.py
+index c7d0bd5..6c015d7 100644
+--- a/benchmarks/kvik_simulation.py
++++ b/benchmarks/kvik_simulation.py
+@@ -4,6 +4,11 @@
+ Example (from the repository root, with phensim installed):
+     python benchmarks/kvik_simulation.py --ldak /path/to/ldak --out RUN_DIRECTORY
+ 
++To time new local code on an archive's unchanged inputs, reusing its official
++LDAK-KVIK outputs:
++    python benchmarks/kvik_simulation.py --rerun-from OLD_RUN --methods exact \
++        bolt-inf kvik --ldak /path/to/ldak --out NEW_RUN
++
+ Every association worker reads the same on-disk PLINK inputs. A failed worker
+ is retained as a failed result; its missing markers never become p=1.
+ """
+@@ -493,6 +498,80 @@ def summarize(out):
+                                         "failed_method_runs": len(failures)})
+ 
+ 
++def link_or_copy(source, target):
++    """Hard-link an archived file (same bytes, no extra space); copy across devices."""
++    try:
++        os.link(source, target)
++    except OSError:
++        shutil.copy2(source, target)
++
++
++def prepare_rerun(old, out, methods):
++    """Re-create an archive's panels so that ``methods`` can run again.
++
++    Genotype files are checked against the hashes recorded at export. Every
++    other file, inputs and the outputs of methods not rerun (such as official
++    LDAK-KVIK), is linked unchanged. Returns the cases and the reused hashes.
++    """
++    if (old / ".gitignore").exists():
++        shutil.copy2(old / ".gitignore", out / ".gitignore")
++    cases, reused = [], {}
++    for panel in sorted(p for p in old.glob("rho*") if p.is_dir()):
++        for name, expected in json.loads((panel / "export_check.json").read_text())["files"].items():
++            if digest(panel / name) != expected:
++                raise ValueError(f"{panel / name} differs from its export record")
++        (out / panel.name).mkdir()
++        for item in sorted(panel.iterdir()):
++            target = out / panel.name / item.name
++            if item.is_file():
++                link_or_copy(item, target)
++                reused[f"{panel.name}/{item.name}"] = digest(item)
++                continue
++            if not (item / "case.json").exists():
++                raise ValueError(f"unexpected directory {item}")
++            target.mkdir()
++            for file in sorted(item.iterdir()):
++                if not any(file.name.startswith(f"{method}.") for method in methods):
++                    link_or_copy(file, target / file.name)
++                    reused[f"{panel.name}/{item.name}/{file.name}"] = digest(file)
++            cases.append(target)
++    return cases, reused
++
++
++def rerun(args):
++    """Run local methods again on an archive's inputs, reusing everything else."""
++    if args.out is None or "ldak-kvik" in args.methods:
++        raise SystemExit("--rerun-from needs a new --out and local --methods only")
++    old = args.rerun_from.resolve()
++    out = args.out.resolve()
++    args.out, args.plan, args.rerun_from = str(out), str(old / "plan.md"), str(old)
++    args.ldak = str(Path(args.ldak).expanduser().resolve())
++    out.mkdir(parents=True, exist_ok=False)
++    archive_sources(out, args)
++    cases, reused = prepare_rerun(old, out, args.methods)
++    save_json(out / "rerun.json", {
++        "rerun_from": str(old), "rerun_methods": args.methods,
++        "original_args": json.loads((old / "environment.json").read_text())["args"],
++        "reused": "inputs and the outputs of every other method, linked unchanged; "
++                  "genotypes verified against their export hashes",
++        "reused_sha256": reused})
++    failures = 0
++    for case in cases:
++        # Rotate method order by replicate, as in the original runs.
++        shift = (json.loads((case / "case.json").read_text())["rep"]-1) % len(args.methods)
++        for method in args.methods[shift:]+args.methods[:shift]:
++            try:
++                result = run_method(case, method, args)
++                print(f"{case.parent.name}/{case.name} {method}: {result['wall_seconds']:.2f}s", flush=True)
++            except Exception as exc:
++                failures += 1
++                save_json(case / f"{method}.status.json", {"method": method, "status": "failed", "error": str(exc)})
++                print(f"FAILED {case}: {method}: {exc}", flush=True)
++    summarize(out)
++    print(f"Complete: {out}; failures={failures}", flush=True)
++    return int(failures > 0)
++
++
+ def archive_sources(out, args):
+     import phensim
+     import mixmogam
+@@ -547,7 +626,11 @@ def main():
+     ap.add_argument("--prepare-only", action="store_true",
+                     help="Freeze sources and prepare/export panels, without fitting association methods")
+     ap.add_argument("--prepare", type=Path)
++    ap.add_argument("--rerun-from", type=Path,
++                    help="Existing archive: rerun --methods on its inputs, reusing all other outputs")
+     args = ap.parse_args()
++    if args.rerun_from:
++        return rerun(args)
+     if args.prepare:
+         from types import SimpleNamespace
+         cfg = json.loads(args.prepare.read_text())
+diff --git a/benchmarks/kvik_thread_scaling.py b/benchmarks/kvik_thread_scaling.py
+index 0119b52..2f38e3c 100644
+--- a/benchmarks/kvik_thread_scaling.py
++++ b/benchmarks/kvik_thread_scaling.py
+@@ -39,7 +39,7 @@ from kvik_he_comparison import aggregate, compare_scientific, run_reference, sci
+ METHODS = ("mixmogam-he", "ldak-kvik")
+ 
+ 
+-def schedule(cases, levels, repetitions):
++def schedule(cases, levels, repetitions, methods=METHODS):
+     """Rotate a balanced adjacent-order pattern and alternate method first."""
+     # Four levels use 0,1,3,2 and cyclic shifts (a Williams-design row).
+     # Six case/repetition panels cannot exactly balance four positions;
+@@ -62,8 +62,8 @@ def schedule(cases, levels, repetitions):
+             shift = (rep + case_shift) % len(levels)
+             ordered = [levels[(index + shift) % len(levels)] for index in pattern]
+             for thread_order, threads in enumerate(ordered, 1):
+-                first = (rep + case_index + levels.index(threads)) % len(METHODS)
+-                for method_order, method in enumerate(METHODS[first:] + METHODS[:first], 1):
++                first = (rep + case_index + levels.index(threads)) % len(methods)
++                for method_order, method in enumerate(methods[first:] + methods[:first], 1):
+                     jobs.append({"case_index": case_index + 1, "rep": rep + 1, "threads": threads,
+                                  "thread_order": thread_order, "order": method_order, "method": method})
+     return jobs
+@@ -105,11 +105,13 @@ def numerical_comparison(left, right, case, rep, method, threads, kind, rtol, at
+ def main():
+     parser = argparse.ArgumentParser(description=__doc__)
+     parser.add_argument("--source", type=Path, required=True)
+-    parser.add_argument("--ldak", type=Path, required=True)
++    parser.add_argument("--ldak", type=Path)
+     parser.add_argument("--ldak-source-url", default="unspecified; executable SHA-256 recorded")
+     parser.add_argument("--case", type=Path, action="append", required=True)
+     parser.add_argument("--out", type=Path, required=True)
+     parser.add_argument("--reps", type=int, default=3)
++    parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
++                        help="Omit ldak-kvik to time new local code against archived official runs")
+     parser.add_argument("--threads", type=int, nargs="+", default=[1, 2, 4, 8])
+     parser.add_argument("--parallel-kvik", action="store_true",
+                         help="Also set mixmogam n_threads, enabling its optional parallel kernels")
+@@ -128,6 +130,9 @@ def main():
+             or args.rtol < 0 or args.atol < 0):
+         parser.error("use positive reps, distinct positive thread counts including 1, and nonnegative tolerances")
+     levels = sorted(args.threads)
++    methods = tuple(method for method in METHODS if method in args.methods)
++    if "ldak-kvik" in methods and args.ldak is None:
++        parser.error("--ldak is required when ldak-kvik is run")
+     if any(value is not None and value < 1 for value in (args.blas_threads, args.numba_threads)):
+         parser.error("local BLAS and Numba thread limits must be positive")
+     if args.cache_bytes is not None and (not math.isfinite(args.cache_bytes) or args.cache_bytes < 0):
+@@ -147,18 +152,22 @@ def main():
+         target = out / name
+         shutil.copy2(path, target)
+         drivers[name] = digest(target)
+-    executable = out / "external" / args.ldak.name
+-    executable.parent.mkdir()
+-    shutil.copy2(args.ldak.resolve(), executable)
++    executable = None
++    if "ldak-kvik" in methods:
++        executable = out / "external" / args.ldak.name
++        executable.parent.mkdir()
++        shutil.copy2(args.ldak.resolve(), executable)
+     inputs = [input_manifest(case) for case in cases]
+     for case, description in zip(cases, inputs):
+         truth = case.parent / "truth.npz"
+         description["files"][str(truth)] = {"sha256": digest(truth), "bytes": truth.stat().st_size}
+-    jobs = schedule(len(cases), levels, args.reps)
++    jobs = schedule(len(cases), levels, args.reps, methods)
+     manifest = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+                 "command": sys.argv, "source": source, "drivers_sha256": drivers, "inputs": inputs,
+-                "ldak": {"original": str(args.ldak.resolve()), "snapshot": str(executable),
+-                         "sha256": digest(executable), "source_url": args.ldak_source_url},
++                "ldak": None if executable is None else {
++                    "original": str(args.ldak.resolve()), "snapshot": str(executable),
++                    "sha256": digest(executable), "source_url": args.ldak_source_url},
++                "methods": list(methods),
+                 "platform": platform.platform(), "python": sys.executable,
+                 "thread_levels": levels, "thread_environment_variables": list(THREAD_VARS),
+                 "parallel_kvik": args.parallel_kvik,
+@@ -168,7 +177,7 @@ def main():
+                     level, blas_threads=args.blas_threads, numba_threads=numba_ceiling) for level in levels},
+                 "official_thread_environments": {str(level): thread_environment(level) for level in levels},
+                 "timing_repetitions": args.reps, "planned_method_runs": len(jobs), "schedule": jobs,
+-                "expected_within_method_comparisons": len(cases) * len(METHODS)
++                "expected_within_method_comparisons": len(cases) * len(methods)
+                     * (args.reps * (len(levels) - 1) + (args.reps - 1) * len(levels)),
+                 "warmup": not args.no_warmup, "power_state": initial_power,
+                 "comparison_tolerances": {"rtol": args.rtol, "atol": args.atol},
+@@ -252,7 +261,7 @@ def main():
+             jobs[schedule_index]["case_index"], jobs[schedule_index]["rep"]) != (case_index, rep)
+         if panel_done:
+             null = (np.ones(config["m"], dtype=bool) if config["trait"] == "null" else truth["null_chromosome"])
+-            for method in METHODS:
++            for method in methods:
+                 reference = successes.get((case_index, rep, 1, method))
+                 for level in levels:
+                     current = successes.get((case_index, rep, level, method))
+diff --git a/report/make_efficiency_tables.py b/report/make_efficiency_tables.py
+index 07a023d..9cae757 100644
+--- a/report/make_efficiency_tables.py
++++ b/report/make_efficiency_tables.py
+@@ -1,10 +1,11 @@
+ #!/usr/bin/env python
+-"""Typeset the frozen 20K workload evidence; never run an association fit.
++"""Typeset the 20K workload evidence; never run an association fit.
+ 
+-The primary and cache experiments have separate timing baselines. Read their
++mixmogam fits are the 2.0.0.dev5 reruns; official LDAK-KVIK fits are reused
++from the 2.0.0.dev3 experiment, whose inputs must be byte-identical. The
++primary and cache experiments have separate timing baselines. Read their
+ individual measurements, check the complete design, and retain that separation
+-in the tables. Verification success means archive integrity; it must not erase
+-the primary experiment's six strict numerical-tolerance failures.
++in the tables. Numerical-tolerance results are reported, not suppressed.
+ """
+ import csv
+ import hashlib
+@@ -14,7 +15,8 @@ from statistics import median
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261003-kvik-20k"
++RUN = ROOT / "benchmarks/results/20261004-kvik-20k-dev5"
++REFERENCE = ROOT / "benchmarks/results/20261003-kvik-20k"
+ OUT = ROOT / "report"
+ LABELS = {1: "Unstructured", 2: "Structure, environment, two PCs"}
+ NAMES = {"mixmogam-he": "mixmogam HE", "ldak-kvik": "LDAK-KVIK"}
+@@ -35,19 +37,39 @@ def spread(rows, key, scale=1, digits=2):
+             f"[{min(values):.{digits}f}, {max(values):.{digits}f}]")
+ 
+ 
++def input_hashes(manifest):
++    return [{path: entry["sha256"] for path, entry in case["files"].items()}
++            for case in manifest["inputs"]]
++
++
+ def main():
+-    inputs = [RUN / "thread-scaling/measurements.csv",
+-              RUN / "thread-scaling/verification.json",
+-              RUN / "thread-scaling/manifest.json",
+-              RUN / "cache/measurements.csv", RUN / "cache/verification.json"]
+-    primary = read_csv(inputs[0])
+-    audit = json.loads(inputs[1].read_text())
+-    cache = read_csv(inputs[3])
+-    cache_audit = json.loads(inputs[4].read_text())
++    inputs = [RUN / "thread-scaling/measurements.csv", RUN / "thread-scaling/status.json",
++              RUN / "thread-scaling/manifest.json", RUN / "thread-scaling/comparisons.json",
++              REFERENCE / "thread-scaling/measurements.csv",
++              REFERENCE / "thread-scaling/verification.json",
++              REFERENCE / "thread-scaling/manifest.json",
++              RUN / "cache/measurements.csv", RUN / "cache/status.json",
++              RUN / "cache/comparisons.json"]
++    local = read_csv(inputs[0])
++    status = json.loads(inputs[1].read_text())
++    manifest = json.loads(inputs[2].read_text())
++    official = [r for r in read_csv(inputs[4]) if r["method"] == "ldak-kvik"]
++    audit = json.loads(inputs[5].read_text())
++    reference_manifest = json.loads(inputs[6].read_text())
++    cache = read_csv(inputs[7])
++    cache_status = json.loads(inputs[8].read_text())
++    cache_pairs = json.loads(inputs[9].read_text())
++    if not status["complete"] or status["failed_method_runs"] or manifest["methods"] != ["mixmogam-he"]:
++        raise ValueError("the dev5 primary rerun is incomplete or not mixmogam-only")
+     if not audit["archive_integrity_verified"] or audit["errors"]:
+-        raise ValueError("primary archive integrity is not verified")
+-    if not cache_audit["archive_integrity_verified"] or cache_audit["errors"]:
+-        raise ValueError("cache archive integrity is not verified")
++        raise ValueError("the reused official archive integrity is not verified")
++    if input_hashes(manifest) != input_hashes(reference_manifest):
++        raise ValueError("official fits can be reused only on byte-identical inputs")
++    if not cache_status["complete"] or len(cache_pairs) != 6:
++        raise ValueError("the dev5 cache experiment is incomplete")
++    cache_exact = all(item["arrays"][key].get("exact", False)
++                      for item in cache_pairs for key in item["arrays"])
++    primary = local + official
+     expected = {(c, t, m, r) for c in LABELS for t in (1, 4)
+                 for m in NAMES for r in (1, 2, 3)}
+     observed = [(int(r["case_index"]), int(r["threads"]), r["method"],
+@@ -101,18 +123,23 @@ def main():
+     for name, lines in [("kvik_20k_resources.tex", resources),
+                         ("kvik_20k_science.tex", science), ("kvik_20k_cache.tex", storage)]:
+         path = OUT / "tables" / name
+-        path.write_text("% Generated by report/make_efficiency_tables.py; frozen measured fits.\n"
++        path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam 2.0.0.dev5 reruns,\n"
++                        "% official LDAK-KVIK fits reused from 20261003-kvik-20k.\n"
+                         + "\n".join(lines) + "\n")
+         outputs.append(path)
+-    manifest = {"purpose": "Render measured evidence only; no simulation or fitting",
+-                "timed_package_version": "2.0.0.dev3",
+-                "generator_sha256": sha256(Path(__file__)),
+-                "inputs": {str(p.relative_to(ROOT)): sha256(p) for p in inputs},
+-                "outputs": {str(p.relative_to(ROOT)): sha256(p) for p in outputs},
+-                "primary_fits": len(primary), "cache_fits": len(cache),
+-                "primary_original_tolerance_passed": audit["numerical_original_tolerance_passed"],
+-                "exact_cache_invariance_passed": cache_audit["exact_cache_invariance_passed"]}
+-    (OUT / "efficiency_table_manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
++    record = {"purpose": "Render measured evidence only; no simulation or fitting",
++              "timed_versions": {"mixmogam-he": "2.0.0.dev5 (20261004-kvik-20k-dev5)",
++                                 "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"},
++              "generator_sha256": sha256(Path(__file__)),
++              "inputs": {str(p.relative_to(ROOT)): sha256(p) for p in inputs},
++              "outputs": {str(p.relative_to(ROOT)): sha256(p) for p in outputs},
++              "primary_fits": len(primary), "local_fits_rerun": len(local),
++              "official_fits_reused": len(official), "cache_fits": len(cache),
++              "input_hashes_identical": True,
++              "dev5_thread_comparisons": status["within_method_comparisons"],
++              "dev5_thread_comparisons_outside_tolerance": status["comparisons_outside_tolerance"],
++              "exact_cache_invariance_passed": cache_exact}
++    (OUT / "efficiency_table_manifest.json").write_text(json.dumps(record, indent=2) + "\n")
+     print(json.dumps({"tables": len(outputs), "primary_fits": len(primary), "cache_fits": len(cache)}))
+ 
+ 
+diff --git a/report/make_kvik_figures.py b/report/make_kvik_figures.py
+index 09ee817..ed618bd 100644
+--- a/report/make_kvik_figures.py
++++ b/report/make_kvik_figures.py
+@@ -1,5 +1,10 @@
+ #!/usr/bin/env python
+-"""Render the frozen phensim/reference comparison, without rerunning scans."""
++"""Render the phensim/reference comparison, without rerunning scans.
++
++The archives are the 2.0.0.dev5 reruns: mixmogam methods ran again on the
++original inputs, and the official LDAK-KVIK outputs were reused unchanged.
++Every reused file is checked against the hash recorded at rerun time.
++"""
+ import csv
+ import hashlib
+ import json
+@@ -12,7 +17,8 @@ import numpy as np
+ from scipy import stats
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261003-phensim-kvik"
++RUN = ROOT / "benchmarks/results/20261004-phensim-kvik-dev5"
++HAPNEST = "benchmarks/results/20261004-hapnest-kvik-dev5-n{n}"
+ OUT = ROOT / "report"
+ METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
+ NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam KVIK", "LDAK-KVIK"]
+@@ -21,7 +27,23 @@ CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
+ LABELS = ["Unstructured", "Structured", "Structured +\nenvironment", "Same trait\n+ 2 PCs"]
+ 
+ 
++def sha256(path):
++    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
++
++
++def verify_rerun(run):
++    """Reused inputs and official outputs still match their rerun-time hashes."""
++    record = json.loads((run / "rerun.json").read_text())
++    changed = [p for p, digest in record["reused_sha256"].items() if sha256(run / p) != digest]
++    if changed:
++        raise ValueError(f"{run.name}: reused files changed: {changed[:3]}")
++    return {"archive": str(run.relative_to(ROOT)),
++            "rerun_from": str(Path(record["rerun_from"]).relative_to(ROOT)),
++            "rerun_methods": record["rerun_methods"], "reused_files_verified": len(record["reused_sha256"])}
++
++
+ def main():
++    rerun = verify_rerun(RUN)
+     with open(RUN / "aggregate.csv") as fh:
+         rows = [r for r in csv.DictReader(fh) if r["stratum"] == "all"]
+     index = {(r["cell"], r["trait"], float(r["rho"]), r["method"]): r for r in rows}
+@@ -119,7 +141,8 @@ def main():
+         writer.writerows(paired)
+     paths = [RUN/"aggregate.csv", RUN/"replicates.csv", RUN/"environment.json",
+              RUN/"plan.md", Path(__file__), figure, table, resources, paired_file]
+-    manifest = {"archive": str(RUN.relative_to(ROOT)), "error_bars": "one Monte Carlo standard error across six independent panels",
++    manifest = {"archive": str(RUN.relative_to(ROOT)), "rerun": rerun,
++                "error_bars": "one Monte Carlo standard error across six independent panels",
+                 "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
+     (OUT / "kvik_figure_manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
+ 
+@@ -127,6 +150,7 @@ def main():
+ def scaling():
+     """Observed workload curves; n and m increase together."""
+     archives = [RUN, RUN.with_name(RUN.name+"-n2000"), RUN.with_name(RUN.name+"-n4000")]
++    reruns = [verify_rerun(archive) for archive in archives]
+     raw = []
+     for archive in archives:
+         if json.loads((archive/"completion.json").read_text())["failed_method_runs"]:
+@@ -189,7 +213,7 @@ def scaling():
+     paths = [a/"replicates.csv" for a in archives]+[OUT/"figures/kvik_scaling.pdf",
+              OUT/"tables/kvik_scaling.tex", RUN/"scaling_summary.csv", Path(__file__)]
+     (OUT/"kvik_scaling_manifest.json").write_text(json.dumps({
+-        "intervals": "observed minimum to maximum across replicates",
++        "intervals": "observed minimum to maximum across replicates", "reruns": reruns,
+         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+     }, indent=2)+"\n")
+ 
+@@ -209,10 +233,11 @@ def hapnest():
+         lines.append(f"{n:,} & {backend} / {mode} & {np.median(times):.2f} & "
+                      f"{min(times):.2f}--{max(times):.2f} & {max(peak):.1f}"+r" \\")
+     (OUT/"tables/hapnest_simulator.tex").write_text("\n".join(lines)+"\n")
+-    lines, paths = [], [sim/"resources.csv", sim/"environment.json",
+-                       sim/"preparation_resources.csv", sim/"preparation_validation.json"]
++    lines, paths, reruns = [], [sim/"resources.csv", sim/"environment.json",
++                                sim/"preparation_resources.csv", sim/"preparation_validation.json"], []
+     for n in (10000, 50000):
+-        run = ROOT/f"benchmarks/results/20261003-hapnest-kvik-n{n}"
++        run = ROOT/HAPNEST.format(n=n)
++        reruns.append(verify_rerun(run))
+         if json.loads((run/"completion.json").read_text())["failed_method_runs"]:
+             raise ValueError("report failed large-sample methods explicitly")
+         with open(run/"replicates.csv") as fh:
+@@ -227,7 +252,7 @@ def hapnest():
+     (OUT/"tables/hapnest_kvik.tex").write_text("\n".join(lines)+"\n")
+     paths += [OUT/"tables/hapnest_kvik.tex",OUT/"tables/hapnest_simulator.tex",Path(__file__)]
+     (OUT/"hapnest_manifest.json").write_text(json.dumps({
+-        "simulator_replicates": 3, "association_replicates": 1,
++        "simulator_replicates": 3, "association_replicates": 1, "reruns": reruns,
+         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+     }, indent=2)+"\n")
+ 
+diff --git a/report/mixmogam_report.tex b/report/mixmogam_report.tex
+index 73bda73..1d378bb 100644
+--- a/report/mixmogam_report.tex
++++ b/report/mixmogam_report.tex
+@@ -956,9 +956,10 @@ Local BLAS/OpenMP environment limits are one with a Numba pool ceiling
+ of eight; \code{n\_threads} requests one or four workers. The official
+ Mac executable receives the corresponding environment limit and native
+ \code{--max-threads} argument. Requested counts do not assert identical
+-thread execution across implementations. The fitted data, drivers and
+-package code are frozen; the timed package identifies itself as
+-2.0.0.dev3. Repeated timings on two phenotypes measure computational
++thread execution across implementations. The fitted data and drivers are
++frozen. The reported mixmogam fits are 2.0.0.dev5 reruns, and the official
++fits come from the original 2.0.0.dev3 experiment on the same inputs.
++Repeated timings on two phenotypes measure computational
+ variability, not biological replication. The new data are also distinct
+ from the small known-covariance HE validation panels.
+ 
+@@ -1033,6 +1034,18 @@ and outputs. Historical archives retain their original source snapshots;
+ we do not attach the current version number to computations performed
+ by an earlier implementation.
+ 
++The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
++(Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
++\ref{sec:he-results} and~\ref{sec:20k-results}) are 2.0.0.dev5 reruns.
++Each repeated the mixmogam methods on the
++archived inputs, after checking the genotype files against their export
++hashes. The official LDAK-KVIK outputs, logs and process measurements of
++the original runs were reused unchanged. Input identity makes the official
++results reusable; it does not make the timings simultaneous. The reruns
++took place on 4 October 2026 while an unrelated job loaded the host, a day
++after the official runs, so cross-program time ratios include day-to-day
++and load differences. The original archives remain as provenance.
++
+ \section{Results}
+ 
+ \subsection{A nearly correct average can conceal conditional error}
+diff --git a/tests/test_kvik_simulation.py b/tests/test_kvik_simulation.py
+index 002d56c..34e9edd 100644
+--- a/tests/test_kvik_simulation.py
++++ b/tests/test_kvik_simulation.py
+@@ -83,3 +83,27 @@ def test_summary_uses_null_chromosome_and_replicate_uncertainty(tmp_path):
+     expected_lambda = np.mean([stats.chi2.isf(.1, 1), stats.chi2.isf(.3, 1)]) / stats.chi2.ppf(.5, 1)
+     assert float(row["lambda_gc"]) == pytest.approx(expected_lambda)
+     assert json.loads((tmp_path / "completion.json").read_text())["successful_method_runs"] == 2
++
++
++def test_rerun_reuses_inputs_and_other_outputs_but_not_rerun_methods(tmp_path):
++    old, out = tmp_path / "old", tmp_path / "new"
++    panel = old / "rho0_fst0_rep01"
++    case = panel / "unstructured_mixed"
++    case.mkdir(parents=True)
++    out.mkdir()
++    for name in ("geno.bed", "geno.bim", "geno.fam"):
++        (panel / name).write_bytes(name.encode())
++    bench.save_json(panel / "export_check.json",
++                    {"files": {p.name: bench.digest(p) for p in panel.glob("geno.*")}})
++    for name in ("case.json", "phenotype.txt", "exact.npz", "exact.status.json",
++                 "ldak-kvik.npz", "ldak-step1.log", "reference.step2.assoc.gz"):
++        (case / name).write_text(name)
++    cases, reused = bench.prepare_rerun(old, out, ["exact"])
++    assert cases == [out / "rho0_fst0_rep01" / "unstructured_mixed"]
++    assert sorted(p.name for p in cases[0].iterdir()) == [
++        "case.json", "ldak-kvik.npz", "ldak-step1.log", "phenotype.txt", "reference.step2.assoc.gz"]
++    assert reused["rho0_fst0_rep01/geno.bed"] == bench.digest(panel / "geno.bed")
++    assert reused["rho0_fst0_rep01/unstructured_mixed/ldak-kvik.npz"] == bench.digest(case / "ldak-kvik.npz")
++    (panel / "geno.bed").write_bytes(b"changed")
++    with pytest.raises(ValueError, match="export record"):
++        bench.prepare_rerun(old, tmp_path / "again", ["exact"])

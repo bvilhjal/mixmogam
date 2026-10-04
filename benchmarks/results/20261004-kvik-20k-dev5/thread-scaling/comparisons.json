@@ -1,0 +1,5896 @@
+[
+  {
+    "case_index": 1,
+    "rep": 1,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.442040244285466e-09,
+          "max_relative_error": 0.0032911943104604624
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.682951109520218e-05,
+          "max_relative_error": 0.006571560164910441
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.408172465633406e-06,
+          "max_relative_error": 2.1745803725213278e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2158128630545004e-11,
+          "max_relative_error": 3.426419885999571e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 4.0391414785588553e-07,
+          "max_relative_error": 0.20145981381547498
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.448646965376281e-08,
+          "max_relative_error": 0.17268764223989203
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 9.443979877232778e-06
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9488181624005563e-08,
+          "max_relative_error": 3.27992911506903e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0268701608972218e-10,
+          "max_relative_error": 0.0004094116054095712
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.094645752464033e-11,
+          "max_relative_error": 7.726389987925808e-06
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 1,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.789208159360907e-09,
+          "max_relative_error": 0.017278386301163105
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 8.000921798156924e-05,
+          "max_relative_error": 0.034258229307268816
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.4312175896646906e-06,
+          "max_relative_error": 2.6372877359396046e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.082642821561343e-11,
+          "max_relative_error": 3.643571999843828e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.029414664146914e-07,
+          "max_relative_error": 0.2439323815293145
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.725796951496943e-08,
+          "max_relative_error": 0.1471804469972031
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 1.1453444074049912e-05
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2332751541398466e-05,
+          "max_relative_error": 3.84663427718348e-10
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.202873033458786e-08,
+          "max_relative_error": 5.0244693013770674e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.957550921360962e-08,
+          "max_relative_error": 9.691675622509867e-11
+        },
+        "he_variance.denominator": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5629415176808834e-06,
+          "max_relative_error": 1.1775415063788277e-11
+        },
+        "he_variance.h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.174641490972135e-08,
+          "max_relative_error": 8.514140814810326e-11
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.547606295844782e-11
+        },
+        "he_variance.raw_ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.raw_vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5857589207589626e-06,
+          "max_relative_error": 9.895203247827563e-12
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.441380431150719e-13,
+          "max_relative_error": 2.612481635317386e-13
+        },
+        "he_variance.ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.941913627793838e-13,
+          "max_relative_error": 1.3981409965120331e-10
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9527002237396118e-10,
+          "max_relative_error": 1.380078248973217e-10
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.442813502410386e-11
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0048619716351202e-10,
+          "max_relative_error": 5.831584413466646e-05
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.0715261131926825e-11,
+          "max_relative_error": 1.193696661480491e-05
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 1,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep02/threads01/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep02/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep02/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.442040244285466e-09,
+          "max_relative_error": 0.0032911943104604624
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.682951109520218e-05,
+          "max_relative_error": 0.006571560164910441
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.408172465633406e-06,
+          "max_relative_error": 2.1745803725213278e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2158128630545004e-11,
+          "max_relative_error": 3.426419885999571e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 4.0391414785588553e-07,
+          "max_relative_error": 0.20145981381547498
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.448646965376281e-08,
+          "max_relative_error": 0.17268764223989203
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 9.443979877232778e-06
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9488181624005563e-08,
+          "max_relative_error": 3.27992911506903e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0268701608972218e-10,
+          "max_relative_error": 0.0004094116054095712
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.094645752464033e-11,
+          "max_relative_error": 7.726389987925808e-06
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads04/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep02/threads04/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 1,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep02/threads01/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep02/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep02/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.789208159360907e-09,
+          "max_relative_error": 0.017278386301163105
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 8.000921798156924e-05,
+          "max_relative_error": 0.034258229307268816
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.4312175896646906e-06,
+          "max_relative_error": 2.6372877359396046e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.082642821561343e-11,
+          "max_relative_error": 3.643571999843828e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.029414664146914e-07,
+          "max_relative_error": 0.2439323815293145
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.725796951496943e-08,
+          "max_relative_error": 0.1471804469972031
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 1.1453444074049912e-05
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2332751541398466e-05,
+          "max_relative_error": 3.84663427718348e-10
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.202873033458786e-08,
+          "max_relative_error": 5.0244693013770674e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.957550921360962e-08,
+          "max_relative_error": 9.691675622509867e-11
+        },
+        "he_variance.denominator": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5629415176808834e-06,
+          "max_relative_error": 1.1775415063788277e-11
+        },
+        "he_variance.h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.174641490972135e-08,
+          "max_relative_error": 8.514140814810326e-11
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.547606295844782e-11
+        },
+        "he_variance.raw_ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.raw_vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5857589207589626e-06,
+          "max_relative_error": 9.895203247827563e-12
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.441380431150719e-13,
+          "max_relative_error": 2.612481635317386e-13
+        },
+        "he_variance.ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.941913627793838e-13,
+          "max_relative_error": 1.3981409965120331e-10
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9527002237396118e-10,
+          "max_relative_error": 1.380078248973217e-10
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.442813502410386e-11
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0048619716351202e-10,
+          "max_relative_error": 5.831584413466646e-05
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.0715261131926825e-11,
+          "max_relative_error": 1.193696661480491e-05
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 2,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads04/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep02/threads04/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 1,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep03/threads01/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep03/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep03/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.442040244285466e-09,
+          "max_relative_error": 0.0032911943104604624
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.682951109520218e-05,
+          "max_relative_error": 0.006571560164910441
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.408172465633406e-06,
+          "max_relative_error": 2.1745803725213278e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2158128630545004e-11,
+          "max_relative_error": 3.426419885999571e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 4.0391414785588553e-07,
+          "max_relative_error": 0.20145981381547498
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.448646965376281e-08,
+          "max_relative_error": 0.17268764223989203
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 9.443979877232778e-06
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9488181624005563e-08,
+          "max_relative_error": 3.27992911506903e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0268701608972218e-10,
+          "max_relative_error": 0.0004094116054095712
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.094645752464033e-11,
+          "max_relative_error": 7.726389987925808e-06
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 1,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep01/threads04/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case01/rep03/threads04/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19992,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 1,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep03/threads01/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed one-thread reference",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep03/threads01/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep03/threads04/mixmogam-he",
+    "arrays_exact": false,
+    "shared_diagnostics_exact": false,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.789208159360907e-09,
+          "max_relative_error": 0.017278386301163105
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 8.000921798156924e-05,
+          "max_relative_error": 0.034258229307268816
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.4312175896646906e-06,
+          "max_relative_error": 2.6372877359396046e-05
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.082642821561343e-11,
+          "max_relative_error": 3.643571999843828e-09
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.029414664146914e-07,
+          "max_relative_error": 0.2439323815293145
+        },
+        "vb_02_beta": {
+          "exact": false,
+          "strict": false,
+          "allclose": false,
+          "nonfinite_match": true,
+          "max_absolute_error": 6.725796951496943e-08,
+          "max_relative_error": 0.1471804469972031
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 1.1453444074049912e-05
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.2332751541398466e-05,
+          "max_relative_error": 3.84663427718348e-10
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.202873033458786e-08,
+          "max_relative_error": 5.0244693013770674e-08
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.957550921360962e-08,
+          "max_relative_error": 9.691675622509867e-11
+        },
+        "he_variance.denominator": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5629415176808834e-06,
+          "max_relative_error": 1.1775415063788277e-11
+        },
+        "he_variance.h2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.318153103624384e-11
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 9.174641490972135e-08,
+          "max_relative_error": 8.514140814810326e-11
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.547606295844782e-11
+        },
+        "he_variance.raw_ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.raw_vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.5857589207589626e-06,
+          "max_relative_error": 9.895203247827563e-12
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 2.441380431150719e-13,
+          "max_relative_error": 2.612481635317386e-13
+        },
+        "he_variance.ve": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.194922104654552e-11,
+          "max_relative_error": 6.239505689840521e-11
+        },
+        "he_variance.vg": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.40518724328831e-11,
+          "max_relative_error": 6.521469901526204e-11
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 5.941913627793838e-13,
+          "max_relative_error": 1.3981409965120331e-10
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.9527002237396118e-10,
+          "max_relative_error": 1.380078248973217e-10
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.189937203273985e-11,
+          "max_relative_error": 6.442813502410386e-11
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 1.0048619716351202e-10,
+          "max_relative_error": 5.831584413466646e-05
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": false,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 3.0715261131926825e-11,
+          "max_relative_error": 1.193696661480491e-05
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": false,
+      "shared_diagnostics_allclose": true
+    }
+  },
+  {
+    "case_index": 2,
+    "rep": 3,
+    "method": "mixmogam-he",
+    "threads": 4,
+    "comparison_kind": "same-seed same-thread first repetition",
+    "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep01/threads04/mixmogam-he",
+    "candidate": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-20k-dev5/thread-scaling/runs/case02/rep03/threads04/mixmogam-he",
+    "arrays_exact": true,
+    "shared_diagnostics_exact": true,
+    "comparison": {
+      "rtol": 1e-06,
+      "atol": 1e-08,
+      "array_fields_difference": [],
+      "arrays": {
+        "af": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "chromosome": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "effect_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "f_stat": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "other_allele": {
+          "exact": true,
+          "allclose": true
+        },
+        "p": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "position": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "variant_ids": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_01_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_02_beta": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "p_log10": {
+        "finite_positive_pairs": 19995,
+        "positive_mask_match": true,
+        "max_absolute_log10_error": 0.0
+      },
+      "diagnostics": {
+        "alpha": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "alpha_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "alpha_scores": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_best": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "cv_grid": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "cv_mse": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "denominator": {
+          "exact": true,
+          "allclose": true
+        },
+        "h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.boundary": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.curvature_se_ratio": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.denominator": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.h2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.n_probes": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.probe_se": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.projected_genetic_variance_fraction": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.raw_vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.status": {
+          "exact": true,
+          "allclose": true
+        },
+        "he_variance.trace_k2": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.trace_k_over_df": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.ve": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "he_variance.vg": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "heritability_method": {
+          "exact": true,
+          "allclose": true
+        },
+        "lambda": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "loco_iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "method": {
+          "exact": true,
+          "allclose": true
+        },
+        "n": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "n_loco_groups": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "statistic": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.excess": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.n_snps": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "structure.strong": {
+          "exact": true,
+          "allclose": true
+        },
+        "structure.z": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_noise_floor_applied": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_residual_variance": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.count": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.01.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.01.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.converged": {
+          "exact": true,
+          "allclose": true
+        },
+        "vb_fits.02.iterations": {
+          "exact": true,
+          "strict": true,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        },
+        "vb_fits.02.rel_change": {
+          "exact": true,
+          "strict": false,
+          "allclose": true,
+          "nonfinite_match": true,
+          "max_absolute_error": 0.0,
+          "max_relative_error": 0.0
+        }
+      },
+      "new_diagnostic_fields": [],
+      "removed_diagnostic_fields": [],
+      "arrays_allclose": true,
+      "shared_diagnostics_allclose": true
+    }
+  }
+]

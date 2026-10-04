@@ -1,0 +1,219 @@
+{
+  "result": {
+    "statistic": "chi2",
+    "n": 50000,
+    "n_loco_groups": 6,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ]
+    ],
+    "method": "kvik",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.5208717458993155,
+    "alpha_method": "he",
+    "alpha_scores": [
+      104666.61684502194,
+      102980.04630027011,
+      101181.2895922766,
+      99310.2501091441,
+      97398.13390954942
+    ],
+    "structure": {
+      "excess": 0.005085752980239278,
+      "z": 1.7182075914749246,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.6087870254471021,
+      0.6070556942540809,
+      0.6078419855398797,
+      0.6052990832516303,
+      0.6050466720305483,
+      0.6248676209314112,
+      0.6031782822602204,
+      0.6068969987562609,
+      0.6330973036171583,
+      0.6343440525412481
+    ],
+    "cv_best": [
+      0.01,
+      0.5
+    ],
+    "cv_converged": true,
+    "loco_iterations": 9,
+    "loco_converged": true,
+    "heritability_method": "he",
+    "he_variance": {
+      "raw_vg": 0.5393744634206018,
+      "raw_ve": 0.4961481343531368,
+      "vg": 0.5393744634206018,
+      "ve": 0.4961481343531368,
+      "h2": 0.5208717458993155,
+      "status": "interior",
+      "boundary": "none",
+      "denominator": 359768.9553598469,
+      "trace_k2": 403397.31915452454,
+      "trace_k_over_df": 0.9341411205334754,
+      "projected_genetic_variance_fraction": 0.5038518656468631,
+      "probe_se": 2007.9524386597768,
+      "curvature_se_ratio": 179.17205031010465,
+      "n_probes": 32
+    },
+    "vb_residual_variance": 0.4791282541006845,
+    "vb_noise_floor_applied": false,
+    "lambda": 1.0
+  },
+  "vb_fits": [
+    {
+      "iterations": 10,
+      "converged": true,
+      "rel_change": [
+        9.311599012687221e-07,
+        7.627054354132694e-07,
+        5.141592241368892e-07,
+        6.497480152559103e-07,
+        3.115629568972511e-07,
+        8.450814361538675e-06,
+        4.378000409707654e-07,
+        3.312313850952977e-07,
+        2.664433319485275e-06,
+        9.027895944497281e-07
+      ]
+    },
+    {
+      "iterations": 9,
+      "converged": true,
+      "rel_change": [
+        1.6101321389391132e-06,
+        1.9347790836116214e-06,
+        2.368204854083752e-06,
+        1.9597794206799995e-06,
+        2.1368602814301077e-06,
+        2.6299023232024596e-06
+      ]
+    }
+  ],
+  "genotype_storage": [
+    {
+      "fit_index": 1,
+      "n_samples": 50000,
+      "n_variants": 12000,
+      "dtype": "float32",
+      "cached": true,
+      "cache_nbytes": 2400000000,
+      "n_loco_groups": 6,
+      "group_variant_counts": [
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000
+      ]
+    },
+    {
+      "fit_index": 2,
+      "n_samples": 50000,
+      "n_variants": 12000,
+      "dtype": "float32",
+      "cached": true,
+      "cache_nbytes": 2400000000,
+      "n_loco_groups": 6,
+      "group_variant_counts": [
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000
+      ]
+    }
+  ],
+  "fit_seconds": 14.301305959001184,
+  "package_file": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-kvik-he-dev5/source/mixmogam/__init__.py",
+  "versions": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "mixmogam": "2.0.0.dev5",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "numba": "0.66.0"
+  },
+  "threadpools": [],
+  "n": 50000,
+  "m": 12000,
+  "seed": 20262486,
+  "warmup": false,
+  "kvik_threads": null,
+  "cache_bytes": null,
+  "fit_options": {
+    "heritability_method": "he"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "1"
+  },
+  "numba_pool_ceiling": 1
+}

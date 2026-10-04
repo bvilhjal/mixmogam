@@ -1,5 +1,10 @@
 #!/usr/bin/env python
-"""Render the frozen phensim/reference comparison, without rerunning scans."""
+"""Render the phensim/reference comparison, without rerunning scans.
+
+The archives are the 2.0.0.dev5 reruns: mixmogam methods ran again on the
+original inputs, and the official LDAK-KVIK outputs were reused unchanged.
+Every reused file is checked against the hash recorded at rerun time.
+"""
 import csv
 import hashlib
 import json
@@ -12,7 +17,8 @@ import numpy as np
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN = ROOT / "benchmarks/results/20261003-phensim-kvik"
+RUN = ROOT / "benchmarks/results/20261004-phensim-kvik-dev5"
+HAPNEST = "benchmarks/results/20261004-hapnest-kvik-dev5-n{n}"
 OUT = ROOT / "report"
 METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
 NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam KVIK", "LDAK-KVIK"]
@@ -21,7 +27,23 @@ CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
 LABELS = ["Unstructured", "Structured", "Structured +\nenvironment", "Same trait\n+ 2 PCs"]
 
 
+def sha256(path):
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+
+
+def verify_rerun(run):
+    """Reused inputs and official outputs still match their rerun-time hashes."""
+    record = json.loads((run / "rerun.json").read_text())
+    changed = [p for p, digest in record["reused_sha256"].items() if sha256(run / p) != digest]
+    if changed:
+        raise ValueError(f"{run.name}: reused files changed: {changed[:3]}")
+    return {"archive": str(run.relative_to(ROOT)),
+            "rerun_from": str(Path(record["rerun_from"]).relative_to(ROOT)),
+            "rerun_methods": record["rerun_methods"], "reused_files_verified": len(record["reused_sha256"])}
+
+
 def main():
+    rerun = verify_rerun(RUN)
     with open(RUN / "aggregate.csv") as fh:
         rows = [r for r in csv.DictReader(fh) if r["stratum"] == "all"]
     index = {(r["cell"], r["trait"], float(r["rho"]), r["method"]): r for r in rows}
@@ -119,7 +141,8 @@ def main():
         writer.writerows(paired)
     paths = [RUN/"aggregate.csv", RUN/"replicates.csv", RUN/"environment.json",
              RUN/"plan.md", Path(__file__), figure, table, resources, paired_file]
-    manifest = {"archive": str(RUN.relative_to(ROOT)), "error_bars": "one Monte Carlo standard error across six independent panels",
+    manifest = {"archive": str(RUN.relative_to(ROOT)), "rerun": rerun,
+                "error_bars": "one Monte Carlo standard error across six independent panels",
                 "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
     (OUT / "kvik_figure_manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
@@ -127,6 +150,7 @@ def main():
 def scaling():
     """Observed workload curves; n and m increase together."""
     archives = [RUN, RUN.with_name(RUN.name+"-n2000"), RUN.with_name(RUN.name+"-n4000")]
+    reruns = [verify_rerun(archive) for archive in archives]
     raw = []
     for archive in archives:
         if json.loads((archive/"completion.json").read_text())["failed_method_runs"]:
@@ -189,7 +213,7 @@ def scaling():
     paths = [a/"replicates.csv" for a in archives]+[OUT/"figures/kvik_scaling.pdf",
              OUT/"tables/kvik_scaling.tex", RUN/"scaling_summary.csv", Path(__file__)]
     (OUT/"kvik_scaling_manifest.json").write_text(json.dumps({
-        "intervals": "observed minimum to maximum across replicates",
+        "intervals": "observed minimum to maximum across replicates", "reruns": reruns,
         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
     }, indent=2)+"\n")
 
@@ -209,10 +233,11 @@ def hapnest():
         lines.append(f"{n:,} & {backend} / {mode} & {np.median(times):.2f} & "
                      f"{min(times):.2f}--{max(times):.2f} & {max(peak):.1f}"+r" \\")
     (OUT/"tables/hapnest_simulator.tex").write_text("\n".join(lines)+"\n")
-    lines, paths = [], [sim/"resources.csv", sim/"environment.json",
-                       sim/"preparation_resources.csv", sim/"preparation_validation.json"]
+    lines, paths, reruns = [], [sim/"resources.csv", sim/"environment.json",
+                                sim/"preparation_resources.csv", sim/"preparation_validation.json"], []
     for n in (10000, 50000):
-        run = ROOT/f"benchmarks/results/20261003-hapnest-kvik-n{n}"
+        run = ROOT/HAPNEST.format(n=n)
+        reruns.append(verify_rerun(run))
         if json.loads((run/"completion.json").read_text())["failed_method_runs"]:
             raise ValueError("report failed large-sample methods explicitly")
         with open(run/"replicates.csv") as fh:
@@ -227,7 +252,7 @@ def hapnest():
     (OUT/"tables/hapnest_kvik.tex").write_text("\n".join(lines)+"\n")
     paths += [OUT/"tables/hapnest_kvik.tex",OUT/"tables/hapnest_simulator.tex",Path(__file__)]
     (OUT/"hapnest_manifest.json").write_text(json.dumps({
-        "simulator_replicates": 3, "association_replicates": 1,
+        "simulator_replicates": 3, "association_replicates": 1, "reruns": reruns,
         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
     }, indent=2)+"\n")
 

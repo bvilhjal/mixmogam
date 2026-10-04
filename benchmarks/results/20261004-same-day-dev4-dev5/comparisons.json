@@ -1,0 +1,40 @@
+{
+  "he-20k-4t": {
+    "repeats_identical": {
+      "dev4": true,
+      "dev5": true
+    },
+    "dev4_vs_dev5_p_identical": true,
+    "underflow_to_zero": {
+      "dev4": 8,
+      "dev5": 8,
+      "same_variants": true
+    },
+    "max_abs_log10_p_positive": 0.0
+  },
+  "reml-12k-1t": {
+    "repeats_identical": {
+      "dev5": true,
+      "dev4": true
+    },
+    "dev4_vs_dev5_p_identical": false,
+    "underflow_to_zero": {
+      "dev4": 7,
+      "dev5": 7,
+      "same_variants": true
+    },
+    "max_abs_log10_p_positive": 0.02493467205408706
+  },
+  "sources": {
+    "dev4": {
+      "commit": "0fa3da8",
+      "package_files": 26,
+      "identical_to_commit": true
+    },
+    "dev5": {
+      "commit": "5353a23",
+      "package_files": 27,
+      "identical_to_commit": true
+    }
+  }
+}

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Benchmarks
+
+- Rerun the mixmogam methods of the matched phensim (n = 800, 2,000 and
+  4,000), HAPNEST (10K and 50K), HE-versus-REML and 20,000-marker benchmarks
+  with 2.0.0.dev5, on their archived inputs. Official LDAK-KVIK outputs are
+  reused after the inputs are verified by hash. `kvik_simulation.py
+  --rerun-from` and a `--methods` option in `kvik_thread_scaling.py` and
+  `kvik_he_comparison.py` support this. The report's tables, figures and
+  text now use the reruns.
+- A same-day 2.0.0.dev4/dev5 check at 50,000 samples found no memory change
+  and REML fits 1.57 times faster. The HE path was unchanged. Identical
+  dev4 code ran 27% faster than on the day of the original runs, so most of
+  the differences from those archives in time and peak RSS reflect host
+  conditions.
+
 ## [2.0.0.dev5] - 2026-10-04
 
 ### Computational efficiency

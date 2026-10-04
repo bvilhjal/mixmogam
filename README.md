@@ -60,18 +60,21 @@ reproduces the cached blocks bit for bit (operator products project their
 n x c operands instead). The int8 input remains in memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
 HE/four-thread configuration.
 
-The [20K benchmark](benchmarks/results/20261003-kvik-20k/README.md) measures
+The [20K benchmark](benchmarks/results/20261004-kvik-20k-dev5/README.md) measures
 50,000 samples on two fixed phensim HAPNEST panels, with three fresh-process
-timings per setting. Four-thread mixmogam HE took median 33.22 s without
-structure and 32.06 s with structure/confounding and PCs, versus 25.45 s and
-30.09 s for official LDAK-KVIK. In a separate paired experiment, disabling the
-cache cut peak RSS by 52% and 49%, at 31% and 39% longer elapsed time, with
-exactly equal saved numerical results. One- versus four-thread results have
-small rounding differences that exceed the original strict array tolerance;
-the tested significance decisions agree. The archive retains those failures.
-These are different estimators on two biological realizations, not a
-calibration study. System-wide swapping on the 16-GB host also limits timing
-generalization. Timings use explicit HE and exclude initial Numba compilation;
+timings per setting. Rerun with 2.0.0.dev5, four-thread mixmogam HE took
+median 24.29 s without structure and 22.28 s with structure/confounding and
+PCs. Official LDAK-KVIK took 25.45 s and 30.09 s in the
+[original run](benchmarks/results/20261003-kvik-20k/README.md) a day earlier,
+when identical mixmogam code was 27% slower. Those cross-day ratios mostly
+reflect host conditions
+([same-day check](benchmarks/results/20261004-same-day-dev4-dev5/README.md)).
+Disabling the cache cut peak RSS by 63%, at 13% and 25% longer elapsed time,
+with exactly equal saved numerical results. One- versus four-thread results
+have small rounding differences that exceed the original strict array
+tolerance; the tested significance decisions agree. These are different
+estimators on two biological realizations, not a calibration study.
+Timings use explicit HE and exclude initial Numba compilation;
 **REML and one thread remain the defaults**.
 
 ## Install

@@ -8,7 +8,10 @@ includes a matched comparison with official LDAK-KVIK, optimized workloads at
 through 100,000 samples. Historical evidence retains its original limitations.
 Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
 with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
-support it.
+support it. The benchmark results are 2.0.0.dev5 reruns of the mixmogam
+methods on the archived inputs. Official LDAK-KVIK results are reused from
+the original runs. Their timings come from the previous day, when identical
+mixmogam code ran 27% slower, so cross-program time ratios span both days.
 
 The manuscript distinguishes the original REML-default workloads from the
 subsequent explicit HE option and computational optimizations. The
@@ -30,15 +33,15 @@ Table 1. Evidence and provenance used in the manuscript.
 | Evidence | Archive under `benchmarks/results/` | Interpretation |
 |---|---|---|
 | Known-covariance denominator experiment | `20261003-manuscript-geometry` | New analytic and simulated conditional calibration; separate calibration/audit variants |
-| Matched phensim comparison | `20261003-phensim-kvik` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
-| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
-| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
-| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
+| Matched phensim comparison | `20261003-phensim-kvik`; rerun `20261004-phensim-kvik-dev5` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
+| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000`; reruns `20261004-phensim-kvik-dev5-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
+| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261004-hapnest-kvik-dev5-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
+| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261004-kvik-he-dev5` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
 | Explicit parallelism and memory | `20261003-kvik-parallel`, `20261003-kvik-cache` | Full 12K fits and numerical audits; optional parallel paths preserve model order but can change rounding |
-| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations, observed swapping |
+| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261004-kvik-20k-dev5` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations, observed swapping |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
-| Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
+| Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults`, `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
