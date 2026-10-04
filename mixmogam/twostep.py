@@ -106,16 +106,11 @@ class _KOp:
 
     @property
     def trace(self):
-        # SLQ only needs products. Compute this separate genotype pass when
-        # a spectral preconditioner actually requests the trace.
+        # The variants' projected squared norms are prepared: no genotype pass.
         if self._trace is None and self.weights is None:
             self._trace = self.lg.trace
         elif self._trace is None:
-            tot = 0.0
-            for idx, _, Z in self.lg.blocks(reuse=True):
-                tot += float(np.einsum("ij,ij,i->", Z, Z, self.weights[idx].astype(Z.dtype),
-                                       dtype=np.float64))
-            self._trace = tot / float(np.sum(self.weights))
+            self._trace = float(self.weights @ self.lg.zz) / float(np.sum(self.weights))
         return self._trace
 
     def matmul(self, P):
@@ -186,17 +181,14 @@ def _retro_stats(st: _Setup, W: np.ndarray) -> dict:
     column of W: n_eff (z'w)^2 / (z'z |w|^2)."""
     m = st.lg.m
     num = np.zeros(m)
-    zz = np.zeros(m)
+    zz = np.array(st.lg.zz)
     wn = np.einsum("ij,ij->j", W, W)
+    Wp = st.lg.project(W)  # Z_j w = z_j (I - QQ') w
     # Widen at most 16 MiB of variant rows, retaining each full sample
     # reduction. The minimum one-row tile and native BLAS scratch are separate.
     tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
-    for idx, g, Z in st.lg.blocks(reuse=True):
-        for start in range(0, idx.size, tile):
-            take = idx[start : start + tile]
-            Zs = Z[start : start + tile]
-            num[take] = Zs.astype(np.float64, copy=False) @ W[:, g]
-            zz[take] = np.einsum("ij,ij->i", Zs, Zs, dtype=np.float64)
+    for idx, g, Z in st.lg.raw_slices(tile):
+        num[idx] = Z.astype(np.float64, copy=False) @ Wp[:, g]
     wg = wn[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2 = st.n_eff * num * num / (zz * wg)
@@ -304,12 +296,9 @@ def _loco_eigh(st: _Setup, k: int, n_iter: int = 4, oversampling: int = 12,
     for _ in range(n_iter - 1):
         Q = orth(lg.matmul_loco(Q, col_group, weights))
     KQ = lg.matmul_loco(Q, col_group, weights)
-    sq = np.zeros(G)
-    wsum = np.zeros(G)
-    for idx, g, Z in lg.blocks(reuse=True):
-        w = np.ones(idx.size) if weights is None else weights[idx]
-        sq[g] += float(np.einsum("ij,ij,i->", Z.astype(np.float64), Z.astype(np.float64), w))
-        wsum[g] += float(w.sum())
+    w = np.ones(lg.m) if weights is None else np.asarray(weights, dtype=np.float64)
+    sq = np.bincount(lg.groups, weights=w * lg.zz, minlength=G)
+    wsum = np.bincount(lg.groups, weights=w, minlength=G)
     out = []
     for g in range(G):
         Qg, KQg = Q[:, g * L : (g + 1) * L], KQ[:, g * L : (g + 1) * L]
@@ -332,13 +321,22 @@ def _spectral_quadform(st: _Setup, bases: list, delta: float) -> np.ndarray:
     per LOCO group (or a single entry used for every group).
     """
     out = np.zeros(st.lg.m)
-    for idx, g, Z in st.lg.blocks(reuse=True):
-        vals, U, lam_bar = bases[g] if len(bases) > 1 else bases[0]
-        Z64 = Z.astype(np.float64)
-        P = Z64 @ U
-        top = np.einsum("ij,ij->i", P, P)
-        zz = np.einsum("ij,ij->i", Z64, Z64)
-        out[idx] = (P * P) @ (1.0 / (vals + delta)) + (zz - top) / (lam_bar + delta)
+    # Z_j u = z_j (I - QQ') u. Slices arrive in group order, so one projected
+    # basis is held at a time; rows are widened in tiles of at most 32 MiB.
+    tile = max(1, (32 * 1024**2) // max(8 * st.lg.n, 1))
+    current, basis = None, None
+    for idx, g, Z in st.lg.raw_slices():
+        key = g if len(bases) > 1 else 0
+        if key != current:
+            current, basis = key, None  # release the previous projection first
+            vals, U, lam_bar = bases[key]
+            basis = (vals, st.lg.project(U), lam_bar)
+        vals, U, lam_bar = basis
+        for start in range(0, idx.size, tile):
+            rows = idx[start : start + tile]
+            P = Z[start : start + tile].astype(np.float64) @ U
+            top = np.einsum("ij,ij->i", P, P)
+            out[rows] = (P * P) @ (1.0 / (vals + delta)) + (st.lg.zz[rows] - top) / (lam_bar + delta)
     return out
 
 
@@ -643,24 +641,50 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
     Wt = np.column_stack([(f * (1.0 - f)) ** (1.0 + a) for a in alphas])  # (m, A)
     ys = st.y_p / np.sqrt(np.sum(st.y_p**2) / st.n_eff)
     P = np.column_stack([ys, rng.choice(np.array([-1.0, 1.0]), size=(n, n_probes))])
-    P32 = P.astype(lg.dtype)
-    KP = np.zeros((A, n, P.shape[1]))
+    # Z P = z (I - QQ') P and sum Z' t = (I - QQ') sum z' t: the probes and
+    # the accumulated products are projected once, never the genotypes.
+    P32 = lg.project(P).astype(lg.dtype)
+    q, c = lg.Q.shape[1], P.shape[1]
+    KP = np.zeros((A, n, c))
+    # The diagonal of Z' W Z from unprojected rows: with Z_j = z_j - c_j Q',
+    # sum_j w_j Z_ij^2 = sum_j w_j z_ij^2 - 2 Q_i . X_i + Q_i S Q_i', where
+    # X = z' W C rides along the product GEMM and S = C' W C is q x q.
+    cross = np.zeros((A, n, q))
+    S = np.zeros((A, q, q))
     diag = np.zeros((n, A))
-    for idx, _, Z in lg.blocks(reuse=True):
-        T = Z @ P32
+    # Per-slice buffers, reused (grown to the largest slice): the products
+    # with appended coefficients, their weighted copy, the n-row product and
+    # the squared sample tiles.
+    prod = np.empty((n, c + q), dtype=lg.dtype)
+    T = None
+    for idx, _, Z in lg.raw_slices():
+        k = idx.size
+        if T is None or T.shape[0] < k:
+            T = np.empty((k, c + q), dtype=lg.dtype)
+            Tw = np.empty_like(T)
+            tile = max(1, (16 * 1024**2) // max(k * T.itemsize, 1))
+            square = np.empty((k, min(tile, n)), dtype=lg.dtype)
+        coef = lg._projection[idx]
+        np.matmul(Z, P32, out=T[:k, :c])
+        T[:k, c:] = coef
         wb = Wt[idx].astype(lg.dtype)
         for a in range(A):
-            KP[a] += (Z.T @ (T * wb[:, a, None])).astype(np.float64)
-        # Square sample tiles instead of the whole genotype block. Each
-        # product still reduces over all variants in the block, in the same
-        # storage precision. Budget the square plus its narrow product/cast.
-        # One sample is the minimum tile; native BLAS scratch is separate.
-        per_sample = Z.shape[0] * Z.dtype.itemsize + A * (Z.dtype.itemsize + 8)
-        tile = max(1, (16 * 1024**2) // max(per_sample, 1))
+            np.multiply(T[:k], wb[:, a, None], out=Tw[:k])
+            np.matmul(Z.T, Tw[:k], out=prod)
+            KP[a] += prod[:, :c]
+            cross[a] += prod[:, c:]
+            S[a] += (coef.T * Wt[idx, a]) @ coef
+        # Square bounded sample tiles; each product reduces the whole slice.
         for start in range(0, n, tile):
-            Zs = Z[:, start : start + tile]
-            diag[start : start + tile] += ((Zs * Zs).T @ wb).astype(np.float64, copy=False)
+            width = min(tile, n - start)
+            Zs = np.multiply(Z[:, start : start + width], Z[:, start : start + width],
+                             out=square[:k, :width])
+            diag[start : start + width] += Zs.T @ wb
     tot = Wt.sum(axis=0)
+    for a in range(A):
+        KP[a] = lg.project(KP[a])
+        if q:
+            diag[:, a] += np.einsum("ik,ik->i", lg.Q @ S[a] - 2.0 * cross[a], lg.Q)
     KP /= tot[:, None, None]
     diag /= tot
     scores = np.empty(A)

@@ -1,4 +1,4 @@
-"""Parallel initial standardization against the independent dense formula."""
+"""Compiled preparation and decoding against the independent dense formula."""
 
 import numpy as np
 import pytest
@@ -58,9 +58,11 @@ def test_parallel_preparation_matches_dense_formula(order, dtype, project, cache
         mean, sd, expected = dense_oracle(gt.G, idx, Q, dtype)
         np.testing.assert_array_equal(lg.mean[idx], mean)
         np.testing.assert_allclose(lg.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
-        # Sequential sample sums have O(n*eps64) forward rounding error;
-        # float32 storage adds a few ulps at the final conversion only.
-        scale = max(1.0, float(np.max(np.abs(expected))))
+        # Sequential sample sums have O(n*eps64) forward rounding error.
+        # float32 storage rounds the unprojected values once and the
+        # projected ones once more.
+        _, _, unprojected = dense_oracle(gt.G, idx, np.empty((gt.n_samples, 0)), np.float64)
+        scale = max(1.0, float(np.max(np.abs(unprojected))))
         bound = 32 * eps * gt.n_samples * (Q.shape[1] + 1) * scale
         if dtype == np.float32:
             bound += 4 * np.finfo(np.float32).eps * scale
@@ -90,26 +92,51 @@ def test_parallel_preparation_is_thread_invariant_and_restores_mask(dtype, cache
 
 
 @pytest.mark.parametrize("cache_bytes", [0, 1e9])
-def test_serial_default_does_not_call_parallel_kernel(monkeypatch, cache_bytes):
+def test_serial_default_decodes_serially_and_matches_threads(monkeypatch, cache_bytes):
+    require_threads(2)
     from mixmogam import _standardize
 
-    def forbidden(*args, **kwargs):
-        raise AssertionError("serial default invoked the parallel kernel")
-
-    monkeypatch.setattr(_standardize, "standardize_parallel", forbidden)
-    monkeypatch.setattr(_standardize, "_decode_table_parallel", forbidden)
-    monkeypatch.setattr(_standardize, "_project_table_parallel", forbidden)
     gt, groups, Q = problem("F", True)
+    threaded = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, n_threads=2,
+                             cache_bytes=cache_bytes)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("serial default invoked a parallel kernel")
+
+    for name in ("_decode_variants_parallel", "_decode_samples_parallel", "_moments_columns_parallel"):
+        monkeypatch.setattr(_standardize, name, forbidden)
     default = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, cache_bytes=cache_bytes)
     explicit = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, n_threads=1, cache_bytes=cache_bytes)
-    # Streamed blocks keep the prepared projection coefficients.
-    assert (default._projection is None) == (explicit._projection is None) == (cache_bytes > 0)
+    # One compiled preparation for every thread count: identical statistics.
+    for lg in (explicit, threaded):
+        for name in ("mean", "sd", "_projection", "zz"):
+            np.testing.assert_array_equal(getattr(lg, name), getattr(default, name))
+    eps = np.finfo(np.float64).eps
     for (idx, _, actual), (_, _, expected) in zip(default.blocks(), explicit.blocks()):
         mean, sd, oracle = dense_oracle(gt.G, idx, Q, np.float64)
         np.testing.assert_array_equal(default.mean[idx], mean)
-        np.testing.assert_array_equal(default.sd[idx], sd)
+        np.testing.assert_allclose(default.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
         np.testing.assert_array_equal(actual, expected)
-        np.testing.assert_array_equal(actual, oracle)
+        np.testing.assert_allclose(actual, oracle, rtol=0, atol=128 * eps * gt.n_samples)
+
+
+@pytest.mark.parametrize("project", [False, True])
+def test_preparation_and_decoding_ignore_storage_order(project):
+    # One tile kernel sums every variant's samples in order, and decoding
+    # follows the layout: sample-major, variant-major and strided storage
+    # give the same prepared values and decoded rows.
+    pytest.importorskip("numba")
+    prepared = []
+    for order in ("C", "F", "strided"):
+        gt, groups, Q = problem(order, project)
+        lg = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, cache_bytes=0)
+        prepared.append((lg, [z.copy() for _, _, z in lg.raw_slices(5)]))
+    (first, first_rows), *others = prepared
+    for lg, rows in others:
+        for name in ("mean", "sd", "_projection", "zz"):
+            np.testing.assert_array_equal(getattr(lg, name), getattr(first, name))
+        for actual, expected in zip(rows, first_rows, strict=True):
+            np.testing.assert_array_equal(actual, expected)
 
 
 @pytest.mark.parametrize("order", ["C", "F", "strided"])
@@ -153,9 +180,8 @@ def test_parallel_decode_failure_restores_thread_mask(monkeypatch):
     def fail(*args):
         raise RuntimeError("injected decode failure")
 
-    # Projected float32 blocks decode in the fused kernel; plain ones in the other.
-    monkeypatch.setattr(_standardize, "_decode_table_parallel", fail)
-    monkeypatch.setattr(_standardize, "_project_table_parallel", fail)
+    for name in ("_decode_variants_parallel", "_decode_samples_parallel"):
+        monkeypatch.setattr(_standardize, name, fail)
     with pytest.raises(RuntimeError, match="injected decode"):
         next(streamed.blocks())
     assert numba.get_num_threads() == previous
@@ -183,7 +209,7 @@ def test_parallel_failure_restores_thread_mask(monkeypatch):
         raise RuntimeError("injected kernel failure")
 
     previous = numba.get_num_threads()
-    monkeypatch.setattr(_standardize, "_standardize_columns", fail)
+    monkeypatch.setattr(_standardize, "_moments_columns_parallel", fail)
     gt, groups, Q = problem("F", True)
     with pytest.raises(RuntimeError, match="injected"):
         LocoGenotypes(gt, groups, Q, n_threads=2)
@@ -199,7 +225,7 @@ def test_invalid_covariate_shape_is_rejected_before_standardization(monkeypatch,
     def forbidden(*args, **kwargs):
         raise AssertionError("invalid covariate shape reached standardization")
 
-    monkeypatch.setattr(LocoGenotypes, "_standardize", forbidden)
+    monkeypatch.setattr(LocoGenotypes, "_prepare", forbidden)
     gt, groups, _ = problem("F", True)
     with pytest.raises(ValueError, match="two-dimensional array with one row per sample"):
         LocoGenotypes(gt, groups, np.zeros(shape), n_threads=n_threads)

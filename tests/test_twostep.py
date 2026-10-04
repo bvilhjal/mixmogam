@@ -2,6 +2,7 @@
 BOLT-LMM / LDAK-KVIK statistics against the exact LOCO scan."""
 
 import math
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
@@ -9,12 +10,12 @@ from scipy import integrate, stats
 
 from mixmogam import gwas
 from mixmogam._cg import SpectralPreconditioner, batched_pcg
-from mixmogam._loco import loco_groups
+from mixmogam._loco import LocoGenotypes, loco_groups
 from mixmogam._vb import PRIOR_MIXTURE, VBEngine, _pm_enet, _pm_mixture
 from mixmogam.genotypes import Genotypes
 from mixmogam.ldscore import ld_scores, ldsc_intercept
 from mixmogam.simulate import simulate_genotypes, simulate_traits
-from mixmogam.twostep import _setup, structure_test
+from mixmogam.twostep import _he_alpha, _setup, structure_test
 
 
 def _gt(G, n_chrom):
@@ -136,6 +137,62 @@ def test_ld_scores_match_bruteforce(small):
     r = np.array([np.corrcoef(Z[j], Z[k])[0, 1] for k in near])
     r2 = r * r
     assert ell[j] == pytest.approx(np.sum(r2 - (1 - r2) / (n - 2)), rel=1e-4)
+
+
+def _covariate_panel(seed, n, m, n_chrom):
+    rng = np.random.default_rng(seed)
+    G = rng.binomial(2, rng.uniform(0.05, 0.5, m), size=(n, m)).astype(np.int8)
+    G[rng.random((n, m)) < 0.01] = -1
+    Q = np.linalg.qr(np.column_stack([np.ones(n), rng.normal(size=(n, 3))]))[0]
+    return rng, G, Q
+
+
+@pytest.mark.parametrize("cache_bytes", [0, 4e9])
+def test_ld_scores_stream_windows_like_dense_projected_rows(cache_bytes):
+    # Unsorted storage, tied positions, covariates and blocks smaller than
+    # the window: every sliding-window step against a dense calculation.
+    rng, G, Q = _covariate_panel(5, 300, 240, 3)
+    chrom = np.repeat([1, 2, 3], 80)
+    pos = np.concatenate([np.sort(rng.choice(60_000, 80, replace=False)) for _ in range(3)])
+    pos[10:14] = pos[10]
+    perm = rng.permutation(240)
+    gt = Genotypes(G[:, perm], chromosome=chrom[perm], position=pos[perm])
+    groups, _ = loco_groups(gt.chromosome)
+    lg = LocoGenotypes(gt, groups, Q, block=64, dtype=np.float64, cache_bytes=cache_bytes)
+    ell = ld_scores(lg, window_bp=5000, block=16)
+    Z = lg.rows(np.arange(lg.m))
+    norms = np.einsum("ij,ij->i", Z, Z)
+    p_, c_ = np.asarray(gt.position), np.asarray(gt.chromosome)
+    for j in range(lg.m):
+        near = np.flatnonzero((c_ == c_[j]) & (np.abs(p_ - p_[j]) <= 5000))
+        r2 = (Z[near] @ Z[j]) ** 2 / (norms[near] * norms[j])
+        assert ell[j] == pytest.approx(np.sum(r2 - (1 - r2) / (lg.n - 2)), rel=1e-10, abs=1e-12)
+    other = LocoGenotypes(gt, groups, Q, block=64, dtype=np.float64, cache_bytes=4e9 - cache_bytes)
+    np.testing.assert_array_equal(ld_scores(other, window_bp=5000, block=16), ell)
+
+
+def test_he_alpha_with_covariates_matches_dense_kinship():
+    # The HE diagonal comes from unprojected rows plus rank-q corrections.
+    rng, G, Q = _covariate_panel(7, 240, 180, 3)
+    gt = Genotypes(G, chromosome=np.repeat([1, 2, 3], 60))
+    lg = LocoGenotypes(gt, np.repeat([0, 1, 2], 60), Q, block=50, dtype=np.float64, cache_bytes=0)
+    y = rng.normal(size=lg.n)
+    y_p = y - Q @ (Q.T @ y)
+    st = SimpleNamespace(lg=lg, n_eff=lg.n - Q.shape[1], y_p=y_p)
+    f = rng.uniform(0.05, 0.5, lg.m)
+    alphas = (-1.0, -0.25, 0.5)
+    got = _he_alpha(st, f, alphas, 4, np.random.default_rng(3))
+    Z = lg.rows(np.arange(lg.m))
+    ys = y_p / np.sqrt(np.sum(y_p**2) / st.n_eff)
+    P = np.column_stack([ys, np.random.default_rng(3).choice(np.array([-1.0, 1.0]), size=(lg.n, 4))])
+    for a, alpha in enumerate(alphas):
+        w = (f * (1 - f)) ** (1 + alpha)
+        K = (Z.T * w) @ Z / w.sum()
+        KP, diag = K @ P, np.diag(K)
+        yky = ys @ KP[:, 0] - np.sum(ys * ys * diag)
+        k2 = np.mean(np.sum(KP[:, 1:] ** 2, axis=0)) - np.sum(diag**2)
+        assert got["h2_he"][a] == pytest.approx(yky / k2, rel=1e-8)
+        assert got["scores"][a] == pytest.approx(yky * yky / k2, rel=1e-8)
 
 
 def test_ldsc_intercept_recovers_simulated_truth():

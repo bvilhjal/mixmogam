@@ -31,20 +31,15 @@ def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, cache_bytes, weigh
         expected_trace = st.lg.trace
         dense_weights = np.ones(st.lg.m)
     else:
-        # Preserve the original eager operator's storage-precision weights,
-        # float64 accumulation, and per-block summation order exactly.
-        # An explicit loop: Python's sum() compensates float rounding (3.12+).
-        expected_trace = 0.0
-        for idx, _, block in blocks:
-            expected_trace += float(np.einsum("ij,ij,i->", block, block,
-                                              weights[idx].astype(block.dtype), dtype=np.float64))
-        expected_trace /= float(weights.sum())
-        dense_weights = weights.astype(st.lg.dtype).astype(np.float64)
+        # The prepared float64 projected norms, weighted exactly.
+        expected_trace = float(weights @ st.lg.zz) / float(weights.sum())
+        dense_weights = weights
     divisor = st.lg.m if weights is None else weights.sum()
     dense_K = (Z.astype(np.float64).T * dense_weights) @ Z.astype(np.float64) / divisor
-    assert expected_trace == pytest.approx(np.trace(dense_K), rel=3e-15)
+    # The dense matrix uses float32 storage rows; the trace exact norms.
+    assert expected_trace == pytest.approx(np.trace(dense_K), rel=1e-6)
     original_blocks = st.lg.blocks
-    original_products = st.lg._streamed_products
+    original_products = st.lg._products
     passes = []
 
     def observed_blocks(reuse=False):
@@ -56,17 +51,16 @@ def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, cache_bytes, weigh
         return original_products(*args)
 
     monkeypatch.setattr(st.lg, "blocks", observed_blocks)
-    monkeypatch.setattr(st.lg, "_streamed_products", observed_products)
+    monkeypatch.setattr(st.lg, "_products", observed_products)
     op = _KOp(st.lg, weights)
     assert not passes  # Construction does not scan the weighted genotypes.
     P = rng.normal(size=(st.lg.n, 2))
-    # Streamed products cast the projected operand to float32: one more rounding.
-    np.testing.assert_allclose(op.matmul(P), dense_K @ P, rtol=2e-5,
-                               atol=1e-6 if cache_bytes == 0 else 5e-7)
+    # Both routes cast the projected operand to float32: one more rounding.
+    np.testing.assert_allclose(op.matmul(P), dense_K @ P, rtol=2e-5, atol=1e-6)
     assert len(passes) == 1
     assert op._trace is None  # Products do not implicitly ask for a trace.
     assert op.trace == expected_trace
-    assert len(passes) == (2 if weighted else 1)
+    assert len(passes) == 1  # Prepared norms: the trace needs no genotype pass.
 
     def forbid_pass(reuse=False):
         raise AssertionError("a cached trace must not scan genotypes again")

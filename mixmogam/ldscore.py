@@ -19,32 +19,49 @@ def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
 
     l_j = sum over variants k on the same chromosome within ``window_bp``
     of the bias-adjusted r^2_jk - (1 - r^2_jk) / (n - 2), the variant
-    itself included. Uses the covariate-projected genotypes of a
-    :class:`mixmogam._loco.LocoGenotypes`.
+    itself included, for the covariate-projected genotypes of a
+    :class:`mixmogam._loco.LocoGenotypes`. Each chromosome streams through
+    a sliding window of decoded, unprojected rows: covariates leave the
+    products through the prepared coefficients, Z_j Z_k' = z_j z_k' - c_j c_k'
+    (exact up to the storage rounding of z), and the norms are the prepared
+    squared norms of Z. Memory is the widest window times n.
     """
     gt = lg.gt
     n = lg.n
     chrom = np.asarray(gt.chromosome)
     pos = np.asarray(gt.position, dtype=np.int64)
+    coef = lg._projection
+    q = coef.shape[1]
     out = np.zeros(lg.m)
-    # dense standardized rows per chromosome, assembled from the cached blocks
-    rows = {}
-    for idx, _, Z in lg.blocks(reuse=True):  # Z[sel] copies the rows kept
-        for c in np.unique(chrom[idx]):
-            sel = chrom[idx] == c
-            rows.setdefault(c, []).append((idx[sel], Z[sel]))
-    for c, parts in rows.items():
-        idx = np.concatenate([p[0] for p in parts])
-        Z = np.concatenate([p[1] for p in parts])  # float32 rows
-        order = np.argsort(pos[idx], kind="stable")
-        idx, Z = idx[order], Z[order]
-        norms = np.einsum("ij,ij->i", Z, Z, dtype=np.float64) / n
+    for c in np.unique(chrom):
+        idx = np.flatnonzero(chrom == c)
+        idx = idx[np.argsort(pos[idx], kind="stable")]
         p_c = pos[idx]
-        for s in range(0, idx.size, block):
-            e = min(s + block, idx.size)
-            lo = int(np.searchsorted(p_c, p_c[s] - window_bp, side="left"))
-            hi = int(np.searchsorted(p_c, p_c[e - 1] + window_bp, side="right"))
-            C = (Z[s:e] @ Z[lo:hi].T).astype(np.float64) / n
+        norms = lg.zz[idx] / n
+        starts = np.arange(0, idx.size, block)
+        stops = np.minimum(starts + block, idx.size)
+        lows = np.searchsorted(p_c, p_c[starts] - window_bp, side="left")
+        highs = np.searchsorted(p_c, p_c[stops - 1] + window_bp, side="right")
+        rows = np.empty((int(np.max(highs - lows)), n), dtype=lg.dtype)
+        held_lo = held_hi = 0  # rows holds the window idx[held_lo:held_hi]
+        for s, e, lo, hi in zip(starts, stops, lows, highs):
+            if lo > held_lo:
+                # Move the kept rows to the front in chunks no longer than the
+                # shift: overlapping slices would make NumPy copy via a fresh
+                # temporary the size of the window.
+                shift, kept = lo - held_lo, max(held_hi - lo, 0)
+                for start in range(0, kept, shift):
+                    stop = min(start + shift, kept)
+                    rows[start:stop] = rows[start + shift : stop + shift]
+                held_lo, held_hi = lo, max(held_hi, lo)
+            if hi > held_hi:
+                lg._decode(idx[held_hi:hi], out=rows[held_hi - held_lo : hi - held_lo])
+                held_hi = hi
+            window = rows[: hi - lo]
+            C = (window[s - lo : e - lo] @ window.T).astype(np.float64)
+            if q:
+                C -= coef[idx[s:e]] @ coef[idx[lo:hi]].T
+            C /= n
             denom = np.sqrt(np.outer(norms[s:e], norms[lo:hi]))
             r2 = np.where(denom > 0, (C / np.where(denom > 0, denom, 1.0)) ** 2, 0.0)
             r2_adj = r2 - (1.0 - r2) / (n - 2)

@@ -1,6 +1,6 @@
 """Leave-one-chromosome-out (LOCO) infrastructure for the two-step engines.
 
-:class:`LocoGenotypes` holds the genotypes as standardized,
+:class:`LocoGenotypes` presents the genotypes as standardized,
 covariate-projected SNP blocks that never straddle a LOCO group. One pass
 over the blocks applies every LOCO kinship at once: with per-group
 products ``S_g = Z_g' (Z_g P)``, the LOCO product for group ``g`` is
@@ -20,15 +20,20 @@ from mixmogam.genotypes import MISSING
 
 __all__ = ["loco_groups", "LocoGenotypes"]
 
-# Decoded columns per streamed product: the uncached operator never holds more
-# than this much of a float block, whatever the configured block size.
-_PRODUCT_WORK_BYTES = 64 * 1024**2
-# float64 covariate corrections per serial streamed decode, in row chunks.
+# Unprojected rows decoded per slice by one-pass consumers (products,
+# predictions, statistics), whatever the parent block size; cached passes use
+# the same slices. A 16 MiB slice stays in cache between decoding and its two
+# products (fastest at n = 10,000), but large samples need enough rows to
+# amortize the n x columns accumulation per slice (256 rows were fastest at
+# n = 50,000), up to a 512 MiB slice.
+_SLICE_BYTES = 16 * 1024**2
+_MIN_SLICE_ROWS = 256
+_MAX_SLICE_BYTES = 512 * 1024**2
+# float64 projection scratch when projected rows are materialized.
 _PROJECT_WORK_BYTES = 32 * 1024**2
 
-# Explicit conversion/projection scratch, separate from the returned block and
-# the genotype cache. Native BLAS workspace is outside this budget; at least one
-# variant must fit, even when its sample vector alone exceeds the budget.
+# Explicit preparation scratch (float64 tile, mask and temporaries). Native
+# BLAS workspace is outside this budget; at least one variant is prepared.
 _STANDARDIZE_WORK_BYTES = 64 * 1024**2
 
 
@@ -58,14 +63,24 @@ def loco_groups(chromosome, max_groups: int = 25) -> tuple[np.ndarray, list]:
 
 
 class LocoGenotypes:
-    """Standardized, covariate-projected genotype blocks grouped for LOCO.
+    """Standardized, covariate-projected genotypes grouped for LOCO.
 
     Per variant: mean and standard deviation over called genotypes, no-calls
-    set to the mean (0 after centering), then the covariate space is
-    projected out: z <- z - (z Q) Q' with Q an orthonormal basis of the
-    covariates (BOLT-LMM's treatment of covariates). Blocks are cached as
-    float32 when ``n * m * 4`` bytes fit in ``cache_bytes``; otherwise they
-    are re-derived from the int8 store using moments prepared once.
+    set to the mean (0 after centering), and the covariate space projected
+    out: Z = z (I - QQ') with Q an orthonormal basis of the covariates
+    (BOLT-LMM's treatment of covariates).
+
+    Z itself is never stored. A hard call takes three values, so preparation
+    keeps each variant's standardized call values (decoded by table lookup),
+    its covariate coefficients c = z Q (``_projection``) and the squared norm
+    of its projected values (``zz``). Consumers remove covariates on the
+    sample side, Z P = z (I - QQ') P and Z' T = (I - QQ') z' T, or add
+    rank-q corrections from the coefficients to products of unprojected rows
+    (Gram matrices, LD scores).
+    The unprojected values are cached in the storage precision when
+    ``n * m * itemsize`` bytes fit in ``cache_bytes`` and decoded on every
+    pass otherwise; both routes see identical values in identical slices,
+    so they agree bit for bit.
 
     This is a prepared view of a fixed genotype dataset: the genotype
     storage must remain unchanged throughout its lifetime. Replacement or
@@ -79,13 +94,14 @@ class LocoGenotypes:
     gt : Genotypes
     groups : (m,) LOCO group index per variant (see :func:`loco_groups`)
     Q : (n, q) orthonormal covariate basis (None: centering only)
-    block : SNPs per block
+    block : SNPs per group-pure block
+    cache_bytes : budget for the float cache of unprojected values
     n_threads : positive integer, default 1
-        Above one, prepare independent variants with Numba workers using
-        float64 two-pass variance and projection. This changes reduction
-        rounding relative to NumPy; the default NumPy path is unchanged.
-        Uncached passes reuse the moments and float64 projection coefficients
-        to decode directly into the storage block with the same arithmetic.
+        Above one, prepare and decode independent variants with Numba
+        workers. Preparation sums each variant's samples in order in every
+        case, so all thread counts give the same values; without Numba (or
+        for storage that is not an in-memory array) NumPy prepares them, with
+        its own reduction rounding.
     """
 
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
@@ -113,10 +129,15 @@ class LocoGenotypes:
         self.Q = np.zeros((self.n, 0)) if Q is None else np.array(Q, dtype=np.float64, copy=True)
         if self.Q.ndim != 2 or self.Q.shape[0] != self.n:
             raise ValueError("Q must be a two-dimensional array with one row per sample")
-        if self.n_threads > 1:
-            self.Q = np.ascontiguousarray(self.Q)
-            self.Q.flags.writeable = False
+        self.Q = np.ascontiguousarray(self.Q)
+        self.Q.flags.writeable = False
         self.dtype = np.dtype(dtype)
+        # Compiled kernels need an in-memory array; other storage uses NumPy.
+        self._compiled = HAS_NUMBA and isinstance(gt.G, np.ndarray)
+        # The basis in the storage precision, for the q-rank corrections that
+        # accompany storage-precision GEMMs.
+        self._Qs = np.ascontiguousarray(self.Q, dtype=self.dtype)
+        self._Qt = None  # Q' for compiled row projection, made on first use
         self.block = int(block)
         # blocks: (variant indices, group); each block is group-pure
         self._blocks = []
@@ -126,36 +147,25 @@ class LocoGenotypes:
                 self._blocks.append((idx[i : i + self.block], g))
         self.mean = np.zeros(self.m)
         self.sd = np.zeros(self.m)
-        self._cache = None
-        cache = self.n * self.m * self.dtype.itemsize <= cache_bytes
-        if cache:
-            self._cache = []
-        # Uncached blocks are decoded from value tables and projected with the
-        # prepared coefficients (Numba and an in-memory array required);
-        # otherwise every pass repeats the preparation's float64 arithmetic.
-        streamed = not cache and HAS_NUMBA and isinstance(gt.G, np.ndarray)
-        self._projection = (np.empty((self.m, self.Q.shape[1]))
-                            if self.n_threads > 1 or streamed else None)
-        trace = 0.0
+        self._projection = np.zeros((self.m, self.Q.shape[1]))
+        self.zz = np.zeros(self.m)
         for idx, _ in self._blocks:
-            Z = self._standardize(idx, prepare=True)
-            trace += float(np.einsum("ij,ij->", Z, Z, dtype=np.float64))
-            if cache:
-                self._cache.append(Z)
-            else:
-                del Z  # release before allocating the next preparation block
-        self.trace = trace / max(self.m, 1)
-        if self._projection is not None:
-            self._projection.flags.writeable = False
-        self._table = None
-        if streamed:
-            # The three standardized call values per variant, by the same
-            # float64 operations as preparation, then storage rounding.
-            divisor = np.where(self.sd > 0, self.sd, 1.0)
-            calls = np.arange(3, dtype=np.float64)
-            self._table64 = (calls[None, :] - self.mean[:, None]) / divisor[:, None]
-            self._table = self._table64.astype(self.dtype)
-            self._Qt = np.ascontiguousarray(self.Q.T)
+            self._prepare(idx)
+        for array in (self.mean, self.sd, self._projection, self.zz):
+            array.flags.writeable = False
+        self.trace = float(self.zz.sum()) / max(self.m, 1)
+        # The three standardized call values per variant, by the same float64
+        # operations as preparation, then storage rounding.
+        divisor = np.where(self.sd > 0, self.sd, 1.0)
+        calls = np.arange(3, dtype=np.float64)
+        self._table64 = (calls[None, :] - self.mean[:, None]) / divisor[:, None]
+        self._table = self._table64.astype(self.dtype)
+        # Lookup rows indexed by code & 3: calls 0, 1, 2 and a no-call (-1).
+        self._lut = np.zeros((self.m, 4), dtype=self.dtype)
+        self._lut[:, :3] = self._table
+        self._cache = None
+        if self.n * self.m * self.dtype.itemsize <= cache_bytes:
+            self._cache = [self._decode(idx) for idx, _ in self._blocks]
 
     # ------------------------------------------------------------------
     def _check_source(self):
@@ -168,151 +178,129 @@ class LocoGenotypes:
         per_variant = 32 * max(self.n, 1) + 8 * self.Q.shape[1] + 128
         return min(256, max(1, _STANDARDIZE_WORK_BYTES // per_variant))
 
-    def _standardize(self, idx: np.ndarray, *, prepare: bool = False) -> np.ndarray:
-        """Standardize small variant tiles before writing the storage block.
+    def _prepare(self, idx: np.ndarray) -> None:
+        """Moments, covariate coefficients and projected norms of ``idx``.
 
-        Called-sample moments and covariate projection remain float64. The
-        scratch bound covers the float64 tile, missing mask, second-moment or
-        projection temporary, and per-variant statistics. Tiling can change
-        BLAS reduction rounding, but neither normalization nor projection.
-        The initial preparation computes called-sample moments; subsequent
-        conversions reuse them without another sum or second-moment pass.
-        Parallel preparation also retains the projection coefficients, so
-        later decoding needs no float64 tile or repeated sample reductions.
+        Called-sample moments and the projection stay float64, in bounded
+        variant tiles; no float block is formed. The compiled kernel sums each
+        variant sequentially, so every thread count prepares the same values.
         """
         self._check_source()
-        if not prepare and self._table is not None:
-            return self._decode(idx)
-        out = np.empty((idx.size, self.n), dtype=self.dtype)
-        if prepare and self.n_threads > 1:
-            from mixmogam._standardize import standardize_parallel
-            mean, sd, coefficients = standardize_parallel(self.gt.G, idx, self.Q, out, self.n_threads)
-            self.mean[idx], self.sd[idx], self._projection[idx] = mean, sd, coefficients
-            return out
+        if self._compiled:
+            from mixmogam._standardize import prepare_moments
+            for start in range(0, idx.size, 1024):
+                take = idx[start : start + 1024]
+                (self.mean[take], self.sd[take], self._projection[take],
+                 self.zz[take]) = prepare_moments(self.gt.G, take, self.Q, self.n_threads)
+            return
         tile = self._tile_size()
         for start in range(0, idx.size, tile):
             take = idx[start : start + tile]
             g = np.asarray(self.gt.G[:, take]).astype(np.float64)  # (n, k)
             ok = g != MISSING
-            if prepare:
-                cnt = ok.sum(axis=0)
-                g[~ok] = 0.0
-                mean = g.sum(axis=0) / np.maximum(cnt, 1)
-            else:
-                mean = self.mean[take]
+            cnt = ok.sum(axis=0)
+            g[~ok] = 0.0
+            mean = g.sum(axis=0) / np.maximum(cnt, 1)
             g -= mean
             g[~ok] = 0.0
-            if prepare:
-                sd = np.sqrt((g * g).sum(axis=0) / np.maximum(cnt, 1))
-                self.mean[take] = mean
-                self.sd[take] = sd
-            else:
-                sd = self.sd[take]
+            sd = np.sqrt((g * g).sum(axis=0) / np.maximum(cnt, 1))
             del ok
             g /= np.where(sd > 0, sd, 1.0)
             Z = g.T
+            coefficients = Z @ self.Q
             if self.Q.shape[1]:
-                coefficients = Z @ self.Q
                 Z -= coefficients @ self.Q.T
-                if prepare and self._projection is not None:
-                    self._projection[take] = coefficients
-            out[start : start + take.size] = Z
-        return out
+            self.mean[take], self.sd[take] = mean, sd
+            self._projection[take] = coefficients
+            self.zz[take] = np.einsum("ij,ij->i", Z, Z)
 
-    def _decode(self, idx: np.ndarray, project: bool = True,
-                out: Optional[np.ndarray] = None,
-                scratch: Optional[np.ndarray] = None) -> np.ndarray:
-        """Streamed (k, n) block of variants ``idx`` from the value tables.
+    def _decode(self, idx: np.ndarray, out: Optional[np.ndarray] = None) -> np.ndarray:
+        """Unprojected standardized rows (k, n) of ``idx``, by table lookup."""
+        from mixmogam._standardize import decode_table
 
-        The covariate projection repeats the arithmetic of the route that
-        prepared the block (the serial route's float64 GEMM correction, the
-        parallel route's per-cell loop) before one storage rounding, so the
-        block equals the prepared one bit for bit. Products skip it
-        (``project=False``) and project their n-sided operands instead.
-        """
-        from mixmogam._standardize import decode_table, subtract_table
-
+        self._check_source()
         if out is None:
             out = np.empty((idx.size, self.n), dtype=self.dtype)
-        if not (project and self.Q.shape[1] and idx.size):
-            decode_table(self.gt.G, idx, self._table[idx], out, self.n_threads)
-            return out
-        if self.n_threads > 1:
-            # The parallel preparation's per-cell float64 correction, fused.
-            decode_table(self.gt.G, idx, self._table64[idx], out, self.n_threads,
-                         coef=self._projection[idx], Qt=self._Qt)
-            return out
-        # The serial preparation's GEMM correction, in float64 row chunks,
-        # then one pass that rounds once: the prepared block, bit for bit.
-        rows = max(1, _PROJECT_WORK_BYTES // (8 * self.n))
-        if scratch is None or scratch.dtype != np.float64:
-            scratch = np.empty((min(rows, idx.size), self.n))
-        rows = min(rows, scratch.shape[0])
-        for start in range(0, idx.size, rows):
-            take = idx[start : start + rows]
-            corr = np.matmul(self._projection[take], self.Q.T, out=scratch[: take.size])
-            subtract_table(self.gt.G, take, self._table64[take], corr, out[start : start + take.size])
+        if idx.size:
+            decode_table(self.gt.G, idx, self._lut[idx], out, self.n_threads,
+                         compiled=self._compiled)
         return out
 
-    def _streamed_products(self, P: np.ndarray, col_group, weights):
-        """K-products without per-variant projection or a float cache.
+    def _slice_rows(self) -> int:
+        row = max(self.n * self.dtype.itemsize, 1)
+        return max(1, min(max(_SLICE_BYTES // row, _MIN_SLICE_ROWS), _MAX_SLICE_BYTES // row))
 
-        With Z = (I - QQ') z for the unprojected standardized z, Z P = z P~
-        for P~ = (I - QQ') P, and sums of Z' t are the projection of the sums
-        of z' t: covariates leave the n x c operands instead of every
-        variant. Columns are decoded in bounded slices.
+    def raw_slices(self, rows: Optional[int] = None):
+        """Yield ``(variant_indices, group, z)``: unprojected standardized
+        rows (k, n), at most ``rows`` per slice and within one block.
+
+        Cached slices are views of the cache; uncached ones are decoded into
+        one reused buffer, valid until the next iteration.
         """
         self._check_source()
-        Pt = self.project(np.asarray(P, dtype=np.float64)).astype(self.dtype)
-        total = np.zeros(Pt.shape)
-        own = None if col_group is None else np.zeros(Pt.shape)
-        step = max(1, _PRODUCT_WORK_BYTES // max(self.n * self.dtype.itemsize, 1))
-        # One reused buffer: fresh memory per slice cost a page fault per page.
-        buffer = np.empty((min(step, max(self.m, 1)), self.n), dtype=self.dtype)
-        for idx, g in self._blocks:
-            selected = None if col_group is None else col_group == g
-            for start in range(0, idx.size, step):
-                take = idx[start : start + step]
-                z = self._decode(take, project=False, out=buffer[: take.size])
-                T = z @ Pt
-                if weights is not None:
-                    T *= weights[take, None].astype(self.dtype)
-                contrib = (z.T @ T).astype(np.float64)
-                total += contrib
-                if selected is not None and selected.any():
-                    own[:, selected] += contrib[:, selected]
-        total = self.project(total)
-        return total if own is None else (total, self.project(own))
+        rows = self._slice_rows() if rows is None else max(1, int(rows))
+        buffer = None
+        if self._cache is None:
+            largest = max((idx.size for idx, _ in self._blocks), default=1)
+            buffer = np.empty((min(rows, largest), self.n), dtype=self.dtype)
+        for b, (idx, g) in enumerate(self._blocks):
+            for start in range(0, idx.size, rows):
+                take = idx[start : start + rows]
+                if self._cache is not None:
+                    yield take, g, self._cache[b][start : start + take.size]
+                else:
+                    yield take, g, self._decode(take, out=buffer[: take.size])
+
+    def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray) -> np.ndarray:
+        """out = z - c Q' for the rows of ``idx``: float64 arithmetic, one
+        storage rounding (``out`` may be ``z``).
+
+        The q-term correction is summed elementwise in a fixed order, so a
+        row's result does not depend on the tiling (BLAS would let the
+        product shape change the rounding): compiled row by row with Numba,
+        otherwise in bounded NumPy row tiles with the same operations.
+        """
+        q = self.Q.shape[1]
+        if not q:
+            if out is not z:
+                out[:] = z
+            return out
+        if HAS_NUMBA and idx.size:
+            from mixmogam._standardize import _project_rows
+            if self._Qt is None:
+                self._Qt = np.ascontiguousarray(self.Q.T)
+            _project_rows(z, np.ascontiguousarray(self._projection[idx]), self._Qt, out)
+            return out
+        rows = max(1, _PROJECT_WORK_BYTES // (8 * max(self.n, 1)))
+        for start in range(0, idx.size, rows):
+            take = idx[start : start + rows]
+            c = self._projection[take]
+            corr = c[:, :1] * self.Q[:, 0]
+            for k in range(1, q):
+                corr += c[:, k : k + 1] * self.Q[:, k]
+            out[start : start + take.size] = z[start : start + take.size] - corr
+        return out
 
     def blocks(self, reuse: bool = False):
-        """Yield ``(variant_indices, group, Z_block)`` with Z (k, n).
+        """Yield ``(variant_indices, group, Z_block)`` with projected Z (k, n)
+        in the storage precision, one whole block at a time.
 
-        ``reuse=True`` lets streamed blocks share one buffer, valid until the
-        next iteration: for one-pass consumers, which then neither allocate
-        nor fault in a block of memory per iteration.
+        For consumers that need projected rows themselves; the engines use
+        :meth:`raw_slices` with sample-side projection instead. ``reuse=True``
+        shares one output buffer, valid until the next iteration.
         """
         self._check_source()
-        buffer = scratch = None
-        if reuse and self._cache is None and self._table is not None:
-            size = max((idx.size for idx, _ in self._blocks), default=0)
-            buffer = np.empty((size, self.n), dtype=self.dtype)
-            rows = min(size, max(1, _PROJECT_WORK_BYTES // (8 * self.n)))
-            scratch = np.empty((max(rows, 1), self.n))
+        largest = max((idx.size for idx, _ in self._blocks), default=1)
+        buffer = np.empty((largest, self.n), dtype=self.dtype) if reuse else None
         for b, (idx, g) in enumerate(self._blocks):
-            if self._cache is not None:
-                Z = self._cache[b]
-            elif buffer is not None:
-                Z = self._decode(idx, out=buffer[: idx.size], scratch=scratch)
-            else:
-                Z = self._standardize(idx)
-            yield idx, g, Z
+            out = buffer[: idx.size] if reuse else np.empty((idx.size, self.n), dtype=self.dtype)
+            z = self._cache[b] if self._cache is not None else self._decode(idx, out=out)
+            yield idx, g, self._project_into(idx, z, out)
 
     def rows(self, variant_idx: np.ndarray) -> np.ndarray:
-        """Requested rows (k, n), preserving order and repeated indices.
-
-        Without a float cache, only requested variants are converted. Work
-        is tiled independently of the required float64 result matrix.
-        """
+        """Projected rows (k, n) as float64, equal to those of :meth:`blocks`
+        (storage precision), preserving order and repeated indices; only the
+        requested variants are decoded."""
         self._check_source()
         variant_idx = np.asarray(variant_idx)
         if variant_idx.ndim != 1 or (variant_idx.size and variant_idx.dtype.kind not in "iu"):
@@ -324,57 +312,58 @@ class LocoGenotypes:
         tile = self._tile_size()
         for start in range(0, variant_idx.size, tile):
             take = variant_idx[start : start + tile]
-            target = out[start : start + take.size]
-            if self._cache is None:
-                target[:] = self._standardize(take)
-                continue
-            for (idx, _), Z in zip(self._blocks, self._cache):
-                positions = np.searchsorted(idx, take)
-                possible = np.nonzero(positions < idx.size)[0]
-                hit = possible[idx[positions[possible]] == take[possible]]
-                target[hit] = Z[positions[hit]]
+            z = self._decode(take)
+            out[start : start + take.size] = self._project_into(take, z, z)
         return out
 
     def _trace(self) -> float:
         """trace(Z'Z) / M: the mean diagonal of the kinship times n."""
-        tot = 0.0
-        for _, _, Z in self.blocks(reuse=True):
-            tot += float(np.einsum("ij,ij->", Z, Z, dtype=np.float64))
-        return tot / max(self.m, 1)
+        return self.trace
 
     # ------------------------------------------------------------------
-    def _products(self, P: np.ndarray, col_group: np.ndarray, weights: Optional[np.ndarray]):
-        """Total and own-group products; memory is O(n * columns)."""
-        if self._table is not None:
-            return self._streamed_products(P, col_group, weights)
-        P32 = np.asarray(P, dtype=self.dtype)
-        total = np.zeros(P.shape, dtype=np.float64)
-        own = np.zeros(P.shape, dtype=np.float64)
-        for idx, g, Z in self.blocks():
-            T = Z @ P32
+    def _products(self, P: np.ndarray, col_group: Optional[np.ndarray],
+                  weights: Optional[np.ndarray]):
+        """Total (and, with ``col_group``, own-group) sums of Z' W Z P.
+
+        Z P = z P~ with P~ = (I - QQ') P, and the sums of Z' t are the
+        projection of the sums of z' t: covariates leave the n x c operands
+        instead of every variant. Columns are processed sorted by group, so
+        a slice adds to one contiguous run of own-group columns, and the
+        per-slice products reuse two buffers. Memory is O(n * columns) plus
+        one slice.
+        """
+        Pt = self.project(np.asarray(P, dtype=np.float64))
+        order = None
+        if col_group is not None:
+            order = np.argsort(col_group, kind="stable")
+            Pt = Pt[:, order]
+            bounds = np.searchsorted(col_group[order], np.arange(self.n_groups + 1))
+        Pt = Pt.astype(self.dtype)
+        n, c = Pt.shape
+        total = np.zeros((n, c))
+        own = None if col_group is None else np.zeros((n, c))
+        T = np.empty((min(self._slice_rows(), max(self.m, 1)), c), dtype=self.dtype)
+        contrib = np.empty((n, c), dtype=self.dtype)
+        for idx, g, z in self.raw_slices():
+            Tk = np.matmul(z, Pt, out=T[: idx.size])
             if weights is not None:
-                T *= weights[idx, None].astype(self.dtype)
-            contrib = (Z.T @ T).astype(np.float64)
+                Tk *= weights[idx, None].astype(self.dtype)
+            np.matmul(z.T, Tk, out=contrib)
             total += contrib
-            selected = col_group == g
-            own[:, selected] += contrib[:, selected]
-        return total, own
+            if own is not None and bounds[g + 1] > bounds[g]:
+                own[:, bounds[g] : bounds[g + 1]] += contrib[:, bounds[g] : bounds[g + 1]]
+        total = self.project(total)
+        if own is None:
+            return total
+        inverse = np.empty_like(order)
+        inverse[order] = np.arange(c)
+        return total[:, inverse], self.project(own)[:, inverse]
 
     def matmul(self, P: np.ndarray, weights: Optional[np.ndarray] = None) -> np.ndarray:
         """K P with K = Z' W Z / sum(W) over all variants (W = 1 by default)."""
         vec = np.ndim(P) == 1
         P2 = np.asarray(P, dtype=np.float64).reshape(self.n, -1)
-        if self._table is not None:
-            out = self._streamed_products(P2, None, weights)
-            out /= self.m if weights is None else float(np.sum(weights))
-            return out[:, 0] if vec else out
-        P32 = P2.astype(self.dtype)
-        out = np.zeros(P2.shape, dtype=np.float64)
-        for idx, _, Z in self.blocks():
-            T = Z @ P32
-            if weights is not None:
-                T *= weights[idx, None].astype(self.dtype)
-            out += (Z.T @ T).astype(np.float64)
+        out = self._products(P2, None, weights)
         out /= self.m if weights is None else float(np.sum(weights))
         return out[:, 0] if vec else out
 

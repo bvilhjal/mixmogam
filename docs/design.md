@@ -160,26 +160,32 @@ restored on exit. Apple Accelerate needs `VECLIB_MAXIMUM_THREADS=1` before
 Python starts; it is not detected by threadpoolctl. See the
 [quickstart](quickstart.md#larger-kvik-fits) for a complete configuration.
 
-The genotype cache retains float32 projected blocks when
-`4 * n * m <= cache_bytes`, inclusively. Its default 4e9-byte budget is not a total-memory
-limit. The int8 genotype input, Gram matrices, residuals and workspaces are
-separate allocations. `cache_bytes=0` retains no projected blocks. With Numba,
-streamed blocks decode hard calls through per-variant value tables (the three
-standardized call values, computed in float64 exactly as in preparation) and
-subtract the covariate projection in the preparation route's own arithmetic
-(the serial route's GEMM correction, or the parallel route's per-cell loop):
-they equal the cached blocks bit for bit. Operator products skip the
-per-variant projection altogether: Z P = z (I - QQ') P, so the n x c operand
-is projected once and the decoded slices (at most 64 MiB) are unprojected.
-Variational fitting decodes 128-SNP blocks, and one-pass consumers decode
-whole blocks, into reused buffers rather than fresh memory per block. At
-n = 10,000 and m = 30,000 an uncached kinship pass took 128 ms instead of
-1,033 ms (cached: 64 ms).
+Prepared genotypes are never stored projected. Preparation keeps, per
+variant, the three standardized call values, the covariate coefficients
+c = z Q and the squared norm of the projected values Z = z (I - QQ'). With
+Numba one compiled kernel computes them in float64 over 64-variant tiles,
+summing each variant's samples in order, so every thread count and storage
+order gives the same values. Later passes decode unprojected rows by table
+lookup and remove the covariates elsewhere: operator products project their
+n x c operands (Z P = z (I - QQ') P, and sums of Z' t are projected once),
+variational fitting corrects each 128-SNP block's products by its
+coefficients, and Gram matrices, the HE diagonal and LD scores add rank-q
+corrections to products of unprojected rows. The genotype cache holds the
+same unprojected values when `itemsize * n * m <= cache_bytes` (inclusive;
+the default 4e9 bytes is not a total-memory limit), and `cache_bytes=0`
+decodes them on every pass; the two routes agree bit for bit. One thread
+decodes about 0.26 ns per genotype from variant-major (PLINK) storage and
+0.7 ns from sample-major arrays. One-pass consumers decode 16 MiB slices
+(at least 256 variants, at most 512 MiB) into reused buffers. BOLT-LMM's
+in-sample LD scores stream each chromosome through a sliding position
+window, holding the widest window rather than the genotype matrix. The
+int8 input, Gram matrices, residuals and workspaces are separate
+allocations.
 PLINK input decoding and genotype validation also use bounded tiles. None of
 these changes makes the full analysis out of core.
 
-Parallel preparation and matrix products change reduction order, so a fixed
-seed does not imply bitwise identity across thread counts. This is separate
+Parallel matrix products change reduction order (preparation does not), so
+a fixed seed does not imply bitwise identity across thread counts. This is separate
 from the choice between HE and REML. Defaults, model order and convergence
 criteria have not been changed to obtain the speedups.
 

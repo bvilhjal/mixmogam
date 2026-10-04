@@ -25,7 +25,13 @@ def _full_block_oracle(G, idx, Q, dtype):
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("cache_bytes", [0, 10**9])
 @pytest.mark.parametrize("project", [False, True])
-def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes, project):
+@pytest.mark.parametrize("compiled", [False, True])
+def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes, project, compiled):
+    if compiled:
+        pytest.importorskip("numba")
+    else:
+        # The NumPy route: bounded float64 tiles and a NumPy table gather.
+        monkeypatch.setattr(loco, "HAS_NUMBA", False)
     rng = np.random.default_rng(762)
     # Strided input and interleaved groups exercise noncontiguous sample and
     # variant access; each group also crosses several conversion tiles.
@@ -45,33 +51,41 @@ def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes,
     monkeypatch.setattr(loco, "_STANDARDIZE_WORK_BYTES", 24 * 1024)
     lg = loco.LocoGenotypes(gt, groups, Q, block=31, dtype=dtype,
                            cache_bytes=cache_bytes)
+    assert lg._compiled == compiled
     assert (lg._cache is None) == (cache_bytes == 0)
+    eps = np.finfo(np.float64).eps
+    tiny = np.finfo(dtype).eps
     expected = np.empty((gt.n_variants, gt.n_samples), dtype=dtype)
     for idx, _, Z in lg.blocks():
         mean, sd, want = _full_block_oracle(G, idx, Q, dtype)
+        _, _, unprojected = _full_block_oracle(G, idx, np.empty((gt.n_samples, 0)), np.float64)
+        scale = max(1.0, float(np.abs(unprojected).max()))
         np.testing.assert_array_equal(lg.mean[idx], mean)
-        np.testing.assert_array_equal(lg.sd[idx], sd)
+        if compiled:
+            # Sequential sample sums differ from pairwise NumPy by O(n eps).
+            np.testing.assert_allclose(lg.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
+        else:
+            np.testing.assert_array_equal(lg.sd[idx], sd)
         assert Z.dtype == dtype
         assert Z.flags.c_contiguous
-        if not project:
+        if not project and not compiled:
             np.testing.assert_array_equal(Z, want)
         else:
-            # Only the BLAS tile dimensions differ: allow double reduction
-            # rounding and, for float32 storage, one final rounding step.
-            rtol = 2e-7 if dtype == np.float32 else 2e-14
-            np.testing.assert_allclose(Z, want, rtol=rtol, atol=2e-14)
-        expected[idx] = want
+            # Projection from the prepared coefficients and, for float32,
+            # rounding of the unprojected and the projected values.
+            np.testing.assert_allclose(Z, want, rtol=0,
+                                       atol=4 * tiny * scale + 64 * eps * gt.n_samples * scale)
+        expected[idx] = Z
     np.testing.assert_array_equal(gt.G, original)
     assert lg.trace == pytest.approx(np.einsum("ij,ij->", expected, expected,
                                               dtype=np.float64) / gt.n_variants,
-                                    rel=2e-14)
+                                    rel=1e-6 if dtype == np.float32 else 2e-14)
     assert np.all(expected[:3] == 0)
-    # Re-deriving uncached blocks must preserve moments and storage precision.
+    # Re-deriving blocks reproduces the same storage values.
     again = np.empty_like(expected)
     for idx, _, Z in lg.blocks():
         again[idx] = Z
-    np.testing.assert_allclose(again, expected, rtol=rtol if project else 0,
-                               atol=2e-14 if project else 0)
+    np.testing.assert_array_equal(again, expected)
 
 
 def test_standardization_reads_small_tiles(monkeypatch):

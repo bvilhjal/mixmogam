@@ -318,7 +318,10 @@ class VBEngine:
 
     Parameters
     ----------
-    lg : LocoGenotypes (standardized, covariate-projected blocks)
+    lg : LocoGenotypes. Sweeps read its unprojected standardized rows z and
+        keep the residual unprojected, correcting each sub-block's products
+        by its coefficients (see :meth:`fit`); Gram matrices add rank-q
+        corrections to products of unprojected rows.
     folds : (n,) fold index per sample (0..F-1) for cross-validation, or None
     sub_block : SNPs per Gauss-Seidel block
     gram_cache_bytes : cache per-block Gram matrices (full and requested folds)
@@ -343,7 +346,7 @@ class VBEngine:
         self.folds = None if folds is None else np.asarray(folds, dtype=np.int64)
         self.n_folds = 0 if self.folds is None else int(self.folds.max()) + 1
         self.gram_cache_bytes = gram_cache_bytes
-        self._grams = None
+        self._grams = self._coefs = None
         self._gram_folds = np.empty(0, dtype=np.int64)
 
     def _prepare_grams(self, col_fold):
@@ -352,13 +355,16 @@ class VBEngine:
         if self._grams is None or not np.isin(needed, self._gram_folds).all():
             # Drop old storage before changing its labels or allocating a
             # replacement: an interrupted rebuild must not leave stale Grams.
-            self._grams = None
+            self._grams = self._coefs = None
             self._gram_folds = needed
-            size = sum(sum(min(self.sub_block, idx.size - s)**2
+            q = self.lg.Q.shape[1]
+            size = sum(sum(min(self.sub_block, idx.size - s) * (min(self.sub_block, idx.size - s) + q)
                            for s in range(0, idx.size, self.sub_block))
                        for idx, _ in self.lg._blocks) * (needed.size + 1) * 8
-            self._grams = ([self._gram(Zs, needed) for _, _, Zs in self._subblocks()]
-                           if size <= self.gram_cache_bytes else None)
+            if size <= self.gram_cache_bytes:
+                prepared = [self._gram(Zs, idx, needed) for idx, _, Zs in self._subblocks()]
+                self._grams = [grams for grams, _ in prepared]
+                self._coefs = [coefs for _, coefs in prepared]
         # In the uncached case use only this fit's folds, including none for LOCO.
         active = self._gram_folds if self._grams is not None else needed
         gidx = np.zeros(col_fold.size, dtype=np.int64)
@@ -367,31 +373,41 @@ class VBEngine:
         return active, gidx
 
     def _subblocks(self):
-        B = self.sub_block
-        if self.lg._cache is None and self.lg._table is not None:
-            # Streamed blocks decode from value tables and prepared projection
-            # coefficients. Decode only the current VB subblock, retaining
-            # every original parent-block boundary and the exact variant order,
-            # into one reused buffer: each subblock is consumed before the next.
-            buffer = np.empty((B, self.n), dtype=self.lg.dtype)
-            scratch = np.empty((B, self.n))  # float64 covariate corrections
-            for idx, g in self.lg._blocks:
-                for s in range(0, idx.size, B):
-                    take = idx[s : s + B]
-                    yield take, g, self.lg._decode(take, out=buffer[: take.size], scratch=scratch)
-            return
-        for idx, g, Z in self.lg.blocks():
-            for s in range(0, idx.size, B):
-                yield idx[s : s + B], g, Z[s : s + B]
+        """Unprojected sub-blocks (idx, g, z), aligned to the parent blocks:
+        cache views or decoded rows in one reused buffer."""
+        return self.lg.raw_slices(self.sub_block)
 
-    def _gram(self, Zs: np.ndarray, folds: np.ndarray) -> np.ndarray:
+    def _gram(self, Zs: np.ndarray, idx: np.ndarray, folds: np.ndarray):
+        """Gram matrices of the projected sub-block Z = z - c Q' (float64),
+        from its unprojected rows: Z Z' = z z' - S c' - c S' + c (Q'Q) c'
+        with S = z Q, for all samples and for each held-out fold. Only
+        rank-q corrections are added; no projected rows are formed.
+
+        Also returns S and each held-out fold's H = z_f Q_f, (folds + 1, k, q),
+        which let the sweeps keep their residual unprojected (see :meth:`fit`).
+        """
         Z64 = Zs.astype(np.float64)
+        c = self.lg._projection[idx]
+        Q = self.lg.Q
+        q = Q.shape[1]
         G = np.empty((folds.size + 1, Z64.shape[0], Z64.shape[0]))
+        coefs = np.empty((folds.size + 1, Z64.shape[0], q))
         G[0] = Z64 @ Z64.T
+        if q:
+            coefs[0] = Z64 @ Q
+            cross = coefs[0] @ c.T
+            G[0] -= cross + cross.T - c @ c.T
         for i, f in enumerate(folds):
-            Zt = Z64[:, self.folds == f]
-            G[i + 1] = G[0] - Zt @ Zt.T
-        return G
+            held = self.folds == f
+            Zt = Z64[:, held]
+            H = Zt @ Zt.T
+            if q:
+                Qt = Q[held]
+                coefs[i + 1] = Zt @ Qt
+                cross = coefs[i + 1] @ c.T
+                H -= cross + cross.T - c @ (Qt.T @ Qt) @ c.T
+            G[i + 1] = G[0] - H
+        return G, coefs
 
     def fit(
         self,
@@ -446,6 +462,26 @@ class VBEngine:
         products = np.empty((self.sub_block, P), dtype=zdt)
         changes = np.empty((self.sub_block, P), dtype=zdt)
         delta = np.empty((n, P), dtype=zdt)
+        # Deferred covariate projection. R holds the unprojected residual
+        # image R~ = mask (Y - sum z' beta); the true residual is
+        # R~ + mask (Q A) with A = sum c' beta, the covariate image of the
+        # fitted values. With S = z Q and the held-out H = z_f Q_f of each
+        # sub-block, Z R = z R~ + (S - H) A - c (Q'R~ + (I - Q_f'Q_f) A), so
+        # every correction is k x q x P: no n x P pass beyond the GEMMs.
+        Q = self.lg.Q
+        q = Q.shape[1]
+        if q:
+            A = np.zeros((q, P))
+            s_proj = np.empty((q, P))  # Q' R~, re-anchored every sweep
+            column_sets, train = [], {}
+            for g_val in np.unique(gidx):
+                cols = np.flatnonzero(gidx == g_val)
+                column_sets.append((int(g_val), slice(None) if cols.size == P else cols))
+                if g_val:
+                    held = self.folds == gram_folds[g_val - 1]
+                    train[int(g_val)] = np.eye(q) - Q[held].T @ Q[held]
+                else:
+                    train[0] = np.eye(q)
         sweep = _sweep_block_parallel if parallel else _sweep_block
         with ExitStack() as stack:
             if parallel:
@@ -467,8 +503,13 @@ class VBEngine:
                     gemm.pool = stack.enter_context(ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mixmogam-vb"))
             for it in range(1, max_iter + 1):
                 change = np.zeros(P)
+                if q:
+                    np.matmul(Q.T, R, out=s_proj)
                 for b, (idx, g, Zs) in enumerate(self._subblocks()):
-                    grams = self._grams[b] if self._grams is not None else self._gram(Zs, gram_folds)
+                    if self._grams is not None:
+                        grams, coefs = self._grams[b], self._coefs[b]
+                    else:
+                        grams, coefs = self._gram(Zs, idx, gram_folds)
                     # GEMMs in the storage precision (float32 by default): no
                     # per-sweep widening of the genotype block, and the residual
                     # is recomputed exactly below
@@ -478,6 +519,11 @@ class VBEngine:
                         Ub[:] = products[:idx.size]
                     else:
                         Ub[:] = gemm.forward(Zs, work, products[:idx.size])
+                    if q:
+                        coef = self.lg._projection[idx]
+                        for g_val, cols in column_sets:
+                            T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                            Ub[:, cols] += T @ A[:, cols] - coef @ (s_proj[:, cols] + train[g_val] @ A[:, cols])
                     skip = col_group == g
                     bb = np.ascontiguousarray(beta[idx])
                     Db = D[: idx.size]
@@ -492,6 +538,20 @@ class VBEngine:
                     # Keep the sample-major residual pass contiguous and
                     # preserve its serial sample-order norm accumulation.
                     _refresh_residual(R, work, delta, mask, change)
+                    if q:
+                        # The applied update z' d leaves Q'R~ by (S - H)' d and
+                        # A by c' d; the masked change of the projected fit is
+                        # |mask z'd|^2 - 2 d'(S - H) e + e'(I - Q_f'Q_f) e.
+                        d64 = changes[:idx.size].astype(np.float64)
+                        e = coef.T @ d64
+                        for g_val, cols in column_sets:
+                            T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                            W = T.T @ d64[:, cols]
+                            s_proj[:, cols] -= W
+                            ec = e[:, cols]
+                            change[cols] += (np.einsum("kp,kp->p", ec, train[g_val] @ ec)
+                                             - 2.0 * np.einsum("kp,kp->p", W, ec))
+                        A += e
                 rel = change / ynorm
                 if rel.max() < tol:
                     break
@@ -504,9 +564,10 @@ class VBEngine:
                 "converged": bool(rel.max() < tol), "rel_change": rel, "mask": mask}
 
     def predict(self, beta: np.ndarray) -> np.ndarray:
-        """Fitted values Z' beta (n, P) for every column."""
+        """Fitted values Z' beta = z' beta - Q (c' beta), (n, P) per column."""
         out = np.zeros((self.n, beta.shape[1]))
-        for idx, _, Z in self.lg.blocks(reuse=True):
+        cb = np.zeros((self.lg.Q.shape[1], beta.shape[1]))
+        for idx, _, Z in self.lg.raw_slices():
             # Tile samples, keeping the complete variant reduction in each
             # product. Widening scratch is bounded by 16 MiB (or one row).
             rows = max(1, (16 * 1024**2) // (8 * idx.size))
@@ -514,4 +575,7 @@ class VBEngine:
             for start in range(0, self.n, rows):
                 stop = min(start + rows, self.n)
                 out[start:stop] += Z[:, start:stop].T.astype(np.float64) @ bb
+            cb += self.lg._projection[idx].T @ bb
+        if cb.shape[0]:
+            out -= self.lg.Q @ cb
         return out

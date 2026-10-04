@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Memory
+
+- Prepared genotypes are never stored covariate-projected. Preparation keeps
+  each variant's three standardized call values, its covariate coefficients
+  c = z Q and the squared norm of its projected values. Operator products
+  project their n x c operands instead; variational sweeps keep their
+  residual unprojected and correct each 128-variant block's products by
+  k x q terms; Gram matrices, the HE diagonal and LD scores add rank-q
+  corrections to products of unprojected rows. No pass projects variants.
+  The optional cache holds the same values, so cached and streamed fits
+  still agree bit for bit.
+- One compiled kernel prepares the variants for every thread count and
+  storage order, over 64-variant tiles, with identical values; the
+  one-thread default no longer uses NumPy. Decoding follows the storage
+  order: one M2 Pro thread decodes about 0.26 ns per genotype from
+  variant-major (PLINK) storage and 0.7 ns from sample-major arrays, against
+  0.6 and 3.7 ns in 2.0.0.dev5.
+- One-pass consumers decode 16 MiB slices (at least 256 variants, at most
+  512 MiB) into reused buffers.
+- BOLT-LMM's in-sample LD scores stream each chromosome through a sliding
+  position window. They held every projected genotype (4 bytes per genotype)
+  whatever `cache_bytes`.
+- The spectral denominator projects one LOCO basis at a time.
+
 ### Benchmarks
 
 - Rerun the mixmogam methods of the matched phensim (n = 800, 2,000 and

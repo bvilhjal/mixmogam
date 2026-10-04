@@ -25,11 +25,50 @@ def _old_gram(Z, folds):
     return grams
 
 
+def _projected_gram(lg, idx, z, folds):
+    """Gram matrices of the sub-block's projected rows, float64, by the
+    production arithmetic: unprojected products plus rank-q corrections."""
+    Z64 = z.astype(np.float64)
+    c, Q = lg._projection[idx], lg.Q
+    grams = _old_gram(Z64, folds)
+    if not Q.shape[1]:
+        return grams
+    cross = (Z64 @ Q) @ c.T
+    grams[0] -= cross + cross.T - c @ c.T
+    n_folds = 0 if folds is None else int(folds.max()) + 1
+    for f in range(n_folds):
+        held = folds == f
+        Zt = Z64[:, held]
+        H = Zt @ Zt.T
+        cross = (Zt @ Q[held]) @ c.T
+        H -= cross + cross.T - c @ (Q[held].T @ Q[held]) @ c.T
+        grams[f + 1] = grams[0] - H
+    return grams
+
+
+def _projected_coefs(lg, idx, z, folds):
+    """z Q and each fold's held-out z_f Q_f, as the production Grams form them."""
+    Z64, Q = z.astype(np.float64), lg.Q
+    n_folds = 0 if folds is None else int(folds.max()) + 1
+    coefs = np.zeros((n_folds + 1, z.shape[0], Q.shape[1]))
+    if Q.shape[1]:
+        coefs[0] = Z64 @ Q
+        for f in range(n_folds):
+            held = folds == f
+            coefs[f + 1] = Z64[:, held] @ Q[held]
+    return coefs
+
+
 def _old_prediction(lg, beta):
-    """Original prediction: widen each whole genotype block to float64."""
+    """Dense prediction: widen each whole slice to float64, then remove the
+    covariates through the prepared coefficients."""
     out = np.zeros((lg.n, beta.shape[1]))
-    for idx, _, Z in lg.blocks():
-        out += Z.T.astype(np.float64) @ beta[idx]
+    cb = np.zeros((lg.Q.shape[1], beta.shape[1]))
+    for idx, _, z in lg.raw_slices():
+        out += z.T.astype(np.float64) @ beta[idx]
+        cb += lg._projection[idx].T @ beta[idx]
+    if cb.shape[0]:
+        out -= lg.Q @ cb
     return out
 
 
@@ -57,27 +96,55 @@ class _DenseWorkspaceOracle(VBEngine):
         beta = np.zeros((self.lg.m, p))
         changes = np.empty((self.sub_block, p))
         gidx = col_fold + 1
-        blocks = list(self._subblocks())
-        cache = ([_old_gram(Z, self.folds) for _, _, Z in blocks]
+        blocks = [(idx, g, z.copy()) for idx, g, z in self._subblocks()]
+        cache = ([_projected_gram(self.lg, idx, z, self.folds) for idx, _, z in blocks]
                  if self.gram_cache_bytes > 0 else None)
+        Q = self.lg.Q
+        q = Q.shape[1]
+        # The residual stays unprojected (see VBEngine.fit): A = sum c' beta
+        # per column, with columns grouped by their held-out fold.
+        A = np.zeros((q, p))
+        sets = []
+        for f in np.unique(col_fold):
+            cols = np.flatnonzero(col_fold == f)
+            held = self.folds == f if f >= 0 else np.zeros(self.n, dtype=bool)
+            sets.append((int(f) + 1, slice(None) if cols.size == p else cols,
+                         np.eye(q) - Q[held].T @ Q[held] if f >= 0 else np.eye(q)))
         sweep = getattr(self, "_oracle_sweep", _vb._sweep_block)
         it, rel = 0, np.full(p, np.inf)
         for it in range(1, max_iter + 1):
             change = np.zeros(p)
+            s_proj = Q.T @ residual
             for b, (idx, group, Z) in enumerate(blocks):
-                grams = cache[b] if cache is not None else _old_gram(Z, self.folds)
-                products = (Z @ residual.astype(self.lg.dtype)).astype(np.float64)
+                grams = cache[b] if cache is not None else _projected_gram(self.lg, idx, Z, self.folds)
+                coefs = _projected_coefs(self.lg, idx, Z, self.folds)
+                coef = self.lg._projection[idx]
+                r32 = residual.astype(self.lg.dtype)
+                products = (Z @ r32).astype(np.float64)
+                for g_val, cols, train in sets if q else ():
+                    T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                    products[:, cols] += T @ A[:, cols] - coef @ (s_proj[:, cols] + train @ A[:, cols])
                 bb = np.ascontiguousarray(beta[idx])
                 block_change = changes[:idx.size]
                 sweep(products, bb, grams, gidx, col_group == group,
                       prior_type, prior, np.ascontiguousarray(scale[idx]), s2e,
                       block_change)
                 beta[idx] = bb
-                delta = (Z.T @ block_change.astype(self.lg.dtype)).astype(np.float64)
+                d32 = block_change.astype(self.lg.dtype)
+                delta = (Z.T @ d32).astype(np.float64)
                 if mask is not None:
                     delta *= mask
                 residual -= delta
                 change += np.einsum("ij,ij->j", delta, delta)
+                d64 = d32.astype(np.float64)
+                e = coef.T @ d64
+                for g_val, cols, train in sets if q else ():
+                    T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                    W = T.T @ d64[:, cols]
+                    s_proj[:, cols] -= W
+                    ec = e[:, cols]
+                    change[cols] += np.einsum("kp,kp->p", ec, train @ ec) - 2.0 * np.einsum("kp,kp->p", W, ec)
+                A += e
             rel = change / ynorm
             if rel.max() < tol:
                 break
@@ -151,8 +218,8 @@ def test_selective_workspace_matches_dense_and_uncached(workspace, prior_type):
     _assert_same_fit(_fit(uncached, Y, selected_folds, selected_groups, prior_type), expected)
     assert any(idx.size < 128 for idx, _, _ in cached._subblocks())
     assert any(idx.size == 128 for idx, _, _ in cached._subblocks())
-    for (_, _, Z), gram in zip(cached._subblocks(), cached._grams):
-        np.testing.assert_array_equal(gram, _old_gram(Z, folds)[[0, 1, 3]])
+    for (idx, _, Z), gram in zip(cached._subblocks(), cached._grams):
+        np.testing.assert_array_equal(gram, _projected_gram(lg, idx, Z, folds)[[0, 1, 3]])
         assert gram.dtype == np.float64
     for c, (f, g) in enumerate(zip(selected_folds, selected_groups)):
         if f >= 0:
@@ -207,9 +274,9 @@ def test_full_data_reuse_and_new_fold_match_fresh_fit(workspace, monkeypatch):
     original_gram = eng._gram
     prepared_folds = []
 
-    def track_gram(Z, active_folds):
+    def track_gram(Z, idx, active_folds):
         prepared_folds.append(tuple(active_folds))
-        return original_gram(Z, active_folds)
+        return original_gram(Z, idx, active_folds)
 
     monkeypatch.setattr(eng, "_gram", track_gram)
     _fit(eng, Y[:, :2], np.array([2, 0]), np.array([-1, -1]))
@@ -243,7 +310,7 @@ def test_interrupted_gram_rebuild_releases_old_cache_and_can_retry(workspace, mo
     assert old_arrays and all(ref() is not None for ref in old_arrays)
     original_gram = eng._gram
 
-    def fail_rebuild(Z, active_folds):
+    def fail_rebuild(Z, idx, active_folds):
         np.testing.assert_array_equal(active_folds, [1])
         # The previous allocation must be gone before building its successor,
         # both to bound peak memory and to prevent stale cache labels on error.
@@ -270,10 +337,13 @@ def test_workspace_projection_and_ridge_reference(workspace):
     sd = np.sqrt((centered * centered).sum(axis=0) / np.maximum(count, 1))
     Z = (centered / np.where(sd > 0, sd, 1)).T
     Z -= (Z @ lg.Q) @ lg.Q.T
+    scale = float(np.abs(Z).max()) + 1.0
     Z = Z.astype(lg.dtype).astype(np.float64)
     for idx, _, block in lg.blocks():
         assert block.dtype == lg.dtype
-        np.testing.assert_allclose(block, Z[idx], rtol=1e-13, atol=1e-13)
+        # Storage rounds the unprojected and the projected values.
+        np.testing.assert_allclose(block, Z[idx], rtol=0,
+                                   atol=4 * np.finfo(lg.dtype).eps * scale + 1e-13)
     eng = VBEngine(lg, folds=folds)
     selected_folds = np.array([0, 1, 2, -1])
     groups = np.array([-1, 0, 1, 2])
@@ -300,7 +370,8 @@ def test_sample_tiled_prediction_matches_dense(dtype):
     Z1 = rng.standard_normal((last, n)).astype(dtype)
     idx = rng.permutation(first + last)
     blocks = [(idx[:first], 0, Z0), (idx[first:], 1, Z1)]
-    lg = SimpleNamespace(n=n, m=first + last, blocks=lambda reuse=False: iter(blocks))
+    lg = SimpleNamespace(n=n, m=first + last, raw_slices=lambda rows=None: iter(blocks),
+                         Q=np.empty((n, 0)), _projection=np.empty((first + last, 0)))
     beta = rng.standard_normal((first + last, 3))
     prediction = VBEngine(lg).predict(beta)
     assert prediction.dtype == np.float64

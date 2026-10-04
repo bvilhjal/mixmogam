@@ -72,6 +72,16 @@ class _TrackedRows(np.ndarray):
             self.log["square"].append(self.nbytes)
         return np.asarray(self) * np.asarray(other)
 
+    def __array_ufunc__(self, ufunc, method, *inputs, out=None, **kwargs):
+        # Squares written into preallocated buffers bypass __mul__.
+        if (ufunc is np.multiply and method == "__call__" and len(inputs) == 2
+                and np.shape(inputs[0]) == np.shape(inputs[1])):
+            self.log["square"].append(np.asarray(inputs[0]).nbytes)
+        inputs = tuple(np.asarray(x) if isinstance(x, _TrackedRows) else x for x in inputs)
+        if out is not None:
+            kwargs["out"] = tuple(np.asarray(o) if isinstance(o, _TrackedRows) else o for o in out)
+        return getattr(ufunc, method)(*inputs, **kwargs)
+
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("large_block", [False, True])
@@ -92,8 +102,20 @@ def test_two_step_workspace_matches_original(dtype, large_block):
         groups = np.arange(m) % 3
     blocks = [(idx, g, Z if large_block else Z[idx]) for g in np.unique(groups)
               for idx in [np.flatnonzero(groups == g)]]
+
+    def raw_slices(rows=None):
+        # The interface of LocoGenotypes.raw_slices with no covariates (rank-0
+        # projection): bounded row slices within each block.
+        rows = max(1, (64 * 1024**2) // (n * Z.itemsize)) if rows is None else rows
+        for idx, g, block in blocks:
+            for start in range(0, idx.size, rows):
+                yield idx[start : start + rows], g, block[start : start + rows]
+
+    zz = np.einsum("ij,ij->i", np.asarray(Z), np.asarray(Z), dtype=np.float64)
     lg = SimpleNamespace(n=n, m=m, dtype=np.dtype(dtype), groups=groups,
-                         blocks=lambda reuse=False: iter(blocks))
+                         blocks=lambda reuse=False: iter(blocks), raw_slices=raw_slices,
+                         zz=zz, Q=np.empty((n, 0)), _projection=np.empty((m, 0)),
+                         project=lambda v: np.asarray(v, dtype=np.float64))
     y = rng.normal(size=n) + latent
     st = SimpleNamespace(lg=lg, n_eff=n - 2, y_p=y - y.mean())
     W = rng.normal(size=(n, 2 * len(blocks)))[:, ::2]  # noncontiguous columns

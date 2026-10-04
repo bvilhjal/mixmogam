@@ -94,9 +94,9 @@ latency to the first use of a kernel.
 
 `cache_bytes` controls only the float32 standardized-genotype cache. At 50,000
 samples and 20,000 variants its 4,000,000,000 bytes fit the default budget
-exactly. Use `cache_bytes=0` to decode blocks repeatedly from per-variant
-value tables and projection coefficients, reducing memory at a runtime cost;
-with Numba the decoded blocks equal the cached ones bit for bit. The int8
+exactly. Use `cache_bytes=0` to decode genotypes on every pass from
+per-variant value tables, reducing memory at a runtime cost; the decoded
+values equal the cached ones bit for bit. The int8
 input and other workspaces remain resident: this is neither a total-RSS limit
 nor a fully out-of-core fit. The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md)
 records the measured tradeoff, thread-path numerical differences, and timing

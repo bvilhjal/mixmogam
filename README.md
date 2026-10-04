@@ -53,11 +53,11 @@ The default is one thread. Detected BLAS pools are temporarily limited during
 the parallel matrix products; for Apple Accelerate, set
 `VECLIB_MAXIMUM_THREADS=1` before starting Python to avoid nested threading.
 Numba's configured thread limit must be at least the requested count. Speedup
-depends on the workload. `cache_bytes` budgets the standardized float genotype
-cache, not total memory; `cache_bytes=0` trades that cache for repeated decoding
-from prepared per-variant value tables and projection coefficients, which
-reproduces the cached blocks bit for bit (operator products project their
-n x c operands instead). The int8 input remains in memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
+depends on the workload. `cache_bytes` budgets the cache of standardized
+genotypes, not total memory; `cache_bytes=0` decodes them on every pass from
+per-variant value tables, with bit-identical results. Covariates are removed
+through prepared coefficients, never per variant. The int8 input remains in
+memory. See the [quickstart](docs/quickstart.md#larger-kvik-fits) for an explicit
 HE/four-thread configuration.
 
 The [20K benchmark](benchmarks/results/20261004-kvik-20k-dev5/README.md) measures

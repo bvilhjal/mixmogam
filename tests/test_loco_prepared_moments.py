@@ -39,17 +39,22 @@ def test_prepared_stream_matches_dense_formula_and_cached_blocks(dtype, project)
     Q = Q if project else None
     cached = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype)
     streamed = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype, cache_bytes=0)
-    # Once prepared, subsequent passes must leave the moments untouched.
-    streamed.mean.flags.writeable = False
-    streamed.sd.flags.writeable = False
+    # Prepared statistics are read-only; later passes cannot change them.
+    for name in ("mean", "sd", "_projection", "zz"):
+        assert not getattr(streamed, name).flags.writeable
+    eps = np.finfo(np.float64).eps
     for _ in range(2):
         for (idx, group, actual), (cached_idx, cached_group, stored) in zip(streamed.blocks(), cached.blocks()):
             mean, sd, expected = original_block(gt, idx, Q, dtype)
             np.testing.assert_array_equal(idx, cached_idx)
             assert group == cached_group
             np.testing.assert_array_equal(streamed.mean[idx], mean)
-            np.testing.assert_array_equal(streamed.sd[idx], sd)
-            np.testing.assert_array_equal(actual, expected)
+            # Sequential sample sums: O(n eps) from the pairwise NumPy oracle.
+            np.testing.assert_allclose(streamed.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
+            bound = 128 * eps * gt.n_samples
+            if dtype == np.float32:
+                bound += 4 * np.finfo(np.float32).eps * max(1.0, float(np.abs(expected).max()))
+            np.testing.assert_allclose(actual, expected, rtol=0, atol=bound)
             np.testing.assert_array_equal(actual, stored)
     assert streamed.trace == cached.trace
     assert streamed.trace == streamed._trace()
@@ -69,22 +74,21 @@ def test_rows_preserve_order_repeats_and_bound_requested_work(monkeypatch, dtype
     monkeypatch.setattr("mixmogam._loco._STANDARDIZE_WORK_BYTES", 2 * (32 * gt.n_samples + 8 * Q.shape[1] + 128))
     requested = np.array([18, 0, 4, 18, 9, 5, 1])
     converted = []
-    standardize = lg._standardize
+    decode = lg._decode
 
     def observe(idx, **kwargs):
         converted.append(idx.copy())
-        return standardize(idx, **kwargs)
+        return decode(idx, **kwargs)
 
-    monkeypatch.setattr(lg, "_standardize", observe)
+    monkeypatch.setattr(lg, "_decode", observe)
     actual = lg.rows(requested)
-    np.testing.assert_allclose(actual, expected[requested], rtol=1e-6 if dtype == np.float32 else 1e-14, atol=1e-15)
+    # Rows and blocks share one projection arithmetic: exactly equal.
+    np.testing.assert_array_equal(actual, expected[requested])
     np.testing.assert_array_equal(actual[0], actual[3])
     assert lg.rows([]).shape == (0, gt.n_samples)
-    if cache_bytes == 0:
-        np.testing.assert_array_equal(np.concatenate(converted), requested)
-        assert max(map(len, converted)) <= 2
-    else:
-        assert not converted
+    # Only the requested variants are decoded, a tile at a time.
+    np.testing.assert_array_equal(np.concatenate(converted), requested)
+    assert max(map(len, converted)) <= 2
 
 
 @pytest.mark.parametrize("indices, error", [
