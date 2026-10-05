@@ -113,8 +113,11 @@ proximal-contamination deflation.
   every LOCO group at once. Within a 128-SNP block, residual products
   come from one GEMM and are corrected through the block's Gram matrix
   as earlier SNPs move. Gram matrices are shared across fits and only
-  requested fold matrices are prepared. Reused workspaces avoid repeatedly
-  widening whole genotype blocks; residual accumulation remains float64.
+  requested fold matrices are prepared. They are computed in float64 and
+  stored in the genotype precision; blocks are cached in order up to a
+  1e9-byte budget and the rest recomputed each sweep, for the folds that
+  fit uses. Reused workspaces avoid repeatedly widening whole genotype
+  blocks; residual accumulation remains float64.
   The coordinate loop has an optional Numba implementation.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML
   on the operator: 24 Lanczos steps and 48 Rademacher probes. A pass over

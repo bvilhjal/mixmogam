@@ -26,13 +26,14 @@ def _old_gram(Z, folds):
 
 
 def _projected_gram(lg, idx, z, folds):
-    """Gram matrices of the sub-block's projected rows, float64, by the
-    production arithmetic: unprojected products plus rank-q corrections."""
+    """Gram matrices of the sub-block's projected rows by the production
+    arithmetic: float64 unprojected products plus rank-q corrections, stored
+    in the genotype precision."""
     Z64 = z.astype(np.float64)
     c, Q = lg._projection[idx], lg.Q
     grams = _old_gram(Z64, folds)
     if not Q.shape[1]:
-        return grams
+        return grams.astype(lg.dtype)
     cross = (Z64 @ Q) @ c.T
     grams[0] -= cross + cross.T - c @ c.T
     n_folds = 0 if folds is None else int(folds.max()) + 1
@@ -43,7 +44,7 @@ def _projected_gram(lg, idx, z, folds):
         cross = (Zt @ Q[held]) @ c.T
         H -= cross + cross.T - c @ (Q[held].T @ Q[held]) @ c.T
         grams[f + 1] = grams[0] - H
-    return grams
+    return grams.astype(lg.dtype)
 
 
 def _projected_coefs(lg, idx, z, folds):
@@ -220,12 +221,39 @@ def test_selective_workspace_matches_dense_and_uncached(workspace, prior_type):
     assert any(idx.size == 128 for idx, _, _ in cached._subblocks())
     for (idx, _, Z), gram in zip(cached._subblocks(), cached._grams):
         np.testing.assert_array_equal(gram, _projected_gram(lg, idx, Z, folds)[[0, 1, 3]])
-        assert gram.dtype == np.float64
+        assert gram.dtype == lg.dtype
     for c, (f, g) in enumerate(zip(selected_folds, selected_groups)):
         if f >= 0:
             assert np.all(result["resid"][folds == f, c] == 0)
         if g >= 0:
             assert np.all(result["beta"][lg.groups == g, c] == 0)
+
+
+def test_partial_gram_cache_matches_full_and_skips_unused_folds(workspace, monkeypatch):
+    # A budget for two sub-blocks caches exactly those; the rest are rebuilt
+    # every sweep, for the folds the fit uses, with identical results.
+    lg, folds, Y = workspace
+    col_fold, col_group = np.array([2, 0, -1, 2]), np.array([-1, 1, 2, 0])
+    expected = _fit(VBEngine(lg, folds=folds), Y, col_fold, col_group)
+    sizes = [idx.size for idx, _, _ in VBEngine(lg, folds=folds)._subblocks()]
+    q, item = lg.Q.shape[1], lg.dtype.itemsize
+    two = sum(3 * k * (k * item + q * 8) for k in sizes[:2])
+    eng = VBEngine(lg, folds=folds, gram_cache_bytes=two)
+    _assert_same_fit(_fit(eng, Y, col_fold, col_group), expected)
+    assert len(eng._grams) == len(eng._coefs) == 2 < len(sizes)
+
+    calls = []
+    original = eng._gram
+
+    def track(Z, idx, active_folds, used=None):
+        calls.append(used)
+        return original(Z, idx, active_folds, used)
+
+    monkeypatch.setattr(eng, "_gram", track)
+    # A full-data fit reuses the cached prefix and rebuilds only slot 0.
+    full = _fit(eng, Y[:, :2], np.full(2, -1), np.array([0, 1]))
+    assert calls and all(used == {0} for used in calls)
+    _assert_same_fit(full, _fit(VBEngine(lg, folds=folds), Y[:, :2], np.full(2, -1), np.array([0, 1])))
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])

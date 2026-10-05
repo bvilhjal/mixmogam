@@ -30,6 +30,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   position window. They held every projected genotype (4 bytes per genotype)
   whatever `cache_bytes`.
 - The spectral denominator projects one LOCO basis at a time.
+- Variational Gram matrices are stored in the genotype precision (half the
+  bytes with float32 storage), and blocks are cached in order up to the
+  1e9-byte budget instead of all or none; the rest are recomputed each sweep
+  for the folds that fit uses, so a full-data fit after cross-validation
+  rebuilds one Gram per block rather than one per fold. Paired fits
+  ([`20261004-gram-cache`](benchmarks/results/20261004-gram-cache/README.md)):
+  KVIK-HE at 2,000 samples and 300,000 markers peaked 0.27 GiB lower, and
+  BOLT-LMM's five-fold Grams, 1.87 GB in float64 and so recomputed every
+  sweep, now fit (0.95 GB); the cache makes those cross-validation fits
+  1.5 (BOLT-LMM) and 2.5 (KVIK) times faster.
 - KVIK and BOLT-LMM release the cross-validation fit's effects, residuals and
   masks once its scores are taken, and the LOCO fit's effects and the
   variational engine's Gram cache once its residuals are extracted.

@@ -1,0 +1,300 @@
+{
+  "argv": [
+    "benchmarks/efficiency_paired.py",
+    "--baseline",
+    "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-12aa504",
+    "--optimized",
+    "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-item3",
+    "--reps",
+    "2",
+    "--out",
+    "benchmarks/results/20261004-gram-cache",
+    "--workloads",
+    "bolt-gram",
+    "kvik-he-gram",
+    "bolt",
+    "kvik-he",
+    "kvik-he-streamed-m80000"
+  ],
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+  "numpy": "2.4.6",
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": null,
+    "NUMBA_NUM_THREADS": null
+  },
+  "blas_note": "Apple Accelerate keeps its default threads; OPENBLAS/OMP/MKL limits do not apply to it",
+  "sources": {
+    "baseline": {
+      "original_root": "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-12aa504",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-gram-cache/sources/baseline",
+      "git": null,
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "beb55851575557f773fd8deab478d122871c69c42fe24930b4834c853fdda050",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "c9adfa31dae2b717d73f38d0457cff79b3fbbab5d40b5a23f02c5f479d126caa",
+        "mixmogam/_vb.py": "abdfd3629efae9da54426d4ddb8a23b466505fd9a45059a7848a070e47accab5",
+        "mixmogam/association.py": "501fd7e4bb45805a50cf4312bec09d36c7b22e05b548379df02de3dce7c886b0",
+        "mixmogam/genotypes.py": "9695eaa067c97ba5d07e87a648f674b1cf7a91a86fbb53c123db9f8dba1308f0",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
+        "mixmogam/lmm.py": "9d9ab51f8d34ef5669898d8028d444330b62cee1affa8a369259c449f0654f64",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "fadb23c014477a74403eba93bee4c96eb34eaca6899e0114e058cd86b90a131d",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "45d23e4bb209b145a518d16c0d142cccd27fac0838d83bbdf77c1c1470d381cb"
+      }
+    },
+    "optimized": {
+      "original_root": "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-item3",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-gram-cache/sources/optimized",
+      "git": null,
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "beb55851575557f773fd8deab478d122871c69c42fe24930b4834c853fdda050",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "c9adfa31dae2b717d73f38d0457cff79b3fbbab5d40b5a23f02c5f479d126caa",
+        "mixmogam/_vb.py": "f6f01dee9ab49de3f415515166e246ed673a75dbb6d0b6854180828bd063f308",
+        "mixmogam/association.py": "501fd7e4bb45805a50cf4312bec09d36c7b22e05b548379df02de3dce7c886b0",
+        "mixmogam/genotypes.py": "9695eaa067c97ba5d07e87a648f674b1cf7a91a86fbb53c123db9f8dba1308f0",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
+        "mixmogam/lmm.py": "9d9ab51f8d34ef5669898d8028d444330b62cee1affa8a369259c449f0654f64",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "fadb23c014477a74403eba93bee4c96eb34eaca6899e0114e058cd86b90a131d",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "45d23e4bb209b145a518d16c0d142cccd27fac0838d83bbdf77c1c1470d381cb"
+      }
+    }
+  },
+  "panels": {
+    "gram_n2000": {
+      "spec": {
+        "n": 2000,
+        "m": 300000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 61
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "7581eb7967c8cdf2d47086b79f8938db6ff55935fb7259c99652dd5d606f1bef",
+          "bytes": 600000128
+        },
+        "y.npy": {
+          "sha256": "b303aab2f7beabcaea4dd05f2595f5c2ab3a1d31043f07c21c29c0bb6340aafe",
+          "bytes": 16128
+        },
+        "X.npy": {
+          "sha256": "a8e22a55cfb2a957b65c15cc67213e09a70ec1258b06afb0d675068468add501",
+          "bytes": 16128
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 10000,
+        "m": 80000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4f611b8489cd874e66a67069575e6b6fdead70a502041990f694cef01f77870d",
+          "bytes": 800000128
+        },
+        "y.npy": {
+          "sha256": "d6fe644d8e817ced5cb4115df4abb1683762bfca35295d7034109e4b3aa4f436",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "df53f3ae476aa944297004876d56466ef58e5d65cd3f411451d014cf7e357a55",
+          "bytes": 80128
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 10000,
+        "m": 30000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "96af8c8a7e0f838bb8a848ac16fb78f97e17af8301a31999b7327d234c634e8d",
+          "bytes": 300000128
+        },
+        "y.npy": {
+          "sha256": "a7625aa7281ec522adc58631f5a9d0a7404c3399b122791f9eca8998d31153e7",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "6f1181875fb08e4abf3cbd3f8ace605a9f77fc0fd9c3a82b8cbdbcb2ff884511",
+          "bytes": 80128
+        }
+      }
+    }
+  },
+  "warmup_panels": {
+    "gram_n2000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 61
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "c1c7d4458e97d318be4b671a724da90b978219ffad8345efa8f2b75a816cc827",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "2331995eedfbdaed0e0b28eac9fd98eabaa909acd4afd200138a9c02028f0c9e",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "b64a121c4861f35ca78f6789a452e01cb9a76c6df04a219bebe4ace09969bf6b",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "50793fede15661977789b86aba218aafc40226289a1cb7b008fcab239204b064",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "f949500551c7c5eecf4f2967c9475238df9b8d6df1dd55bb76362f435925dcf3",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "844623d1d4653d777619e9f079a61b5a3944ae5336701968b00b75a579e27db4",
+          "bytes": 2528
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "263d956fb337ecf1499df2bc81072818c8de01cf5fe3d93eba90a32abef95002",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "3c0622ce0ee67091223b597ab2b9e11aa8ccab12e465037a8277977dbcfde59d",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "e9568a53000b72f792f423a7bb16c36da357d08203100b928406bfbcd7e9e24b",
+          "bytes": 2528
+        }
+      }
+    }
+  },
+  "workloads": {
+    "bolt-gram": [
+      "gram_n2000",
+      {
+        "method": "bolt"
+      }
+    ],
+    "kvik-he-gram": [
+      "gram_n2000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "bolt": [
+      "structured_n10000",
+      {
+        "method": "bolt"
+      }
+    ],
+    "kvik-he": [
+      "structured_n10000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed-m80000": [
+      "scaling_m80000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ]
+  },
+  "reps": 2,
+  "order": "baseline first in even repetitions, optimized first in odd ones"
+}
