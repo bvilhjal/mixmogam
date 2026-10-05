@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- `cache_bytes` from `bolt_inf`, `bolt`, `kvik` and `LocoGenotypes`: the
+  float copy of the standardized genotypes is gone, and every pass decodes
+  them. The cache only helped data small enough to fit its 4e9-byte budget.
+  In paired fits at 10,000 samples
+  ([`20261004-packed-calls`](benchmarks/results/20261004-packed-calls/README.md))
+  KVIK-HE and BOLT-LMM took 1.2 to 1.3 times as long as with the cache (as
+  long as 2.0.0.dev5 took with it), while KVIK-HE's peak RSS grew by 1.16
+  bytes per genotype instead of 5.14, and by 0.42 with two-bit calls: 0.61
+  instead of 4.10 GiB at 80,000 markers.
+
 ### Memory
 
+- Calls can be stored two bits each, a quarter of the int8 bytes:
+  `Genotypes(G, packed=True)`, or `read_plink(prefix, packed=True)` to hold
+  the bed's codes in memory and `mmap=True` to map them from the file.
+  `PackedCalls` keeps PLINK's bed layout; indexing returns int8 calls,
+  filters keep the calls packed and `write_plink` copies the codes. The
+  two-step engines read the codes directly, with results identical to int8
+  storage. Preparation now takes each variant's mean and variance from exact
+  call counts, the same for every thread count, layout and storage format;
+  prepared values move by floating-point rounding.
 - Prepared genotypes are never stored covariate-projected. Preparation keeps
   each variant's three standardized call values, its covariate coefficients
   c = z Q and the squared norm of its projected values. Operator products
@@ -16,8 +37,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   residual unprojected and correct each 128-variant block's products by
   k x q terms; Gram matrices, the HE diagonal and LD scores add rank-q
   corrections to products of unprojected rows. No pass projects variants.
-  The optional cache holds the same values, so cached and streamed fits
-  still agree bit for bit.
 - One compiled kernel prepares the variants for every thread count and
   storage order, over 64-variant tiles, with identical values; the
   one-thread default no longer uses NumPy. Decoding follows the storage

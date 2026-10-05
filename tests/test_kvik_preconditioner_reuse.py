@@ -11,10 +11,10 @@ from mixmogam._cg import SpectralPreconditioner
 from mixmogam.genotypes import Genotypes
 
 
-def _data(seed=71, n=80, m=120):
+def _data(seed=71, n=80, m=120, packed=False):
     rng = np.random.default_rng(seed)
     dosage = rng.binomial(2, rng.uniform(0.1, 0.9, m), size=(n, m)).astype(np.int8)
-    gt = Genotypes(dosage, chromosome=np.repeat(np.arange(4), m // 4))
+    gt = Genotypes(dosage, chromosome=np.repeat(np.arange(4), m // 4), packed=packed)
     return gt, 0.3 * dosage[:, 0] + rng.standard_normal(n)
 
 
@@ -43,12 +43,12 @@ def count_bases(monkeypatch):
     return calls
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 10**8])
-def test_kvik_strong_structure_shares_the_reml_basis(monkeypatch, count_bases, cache_bytes):
-    gt, y = _data()
+@pytest.mark.parametrize("packed", [False, True])
+def test_kvik_strong_structure_shares_the_reml_basis(monkeypatch, count_bases, packed):
+    gt, y = _data(packed=packed)
     monkeypatch.setattr(twostep, "structure_test", lambda *args: {"strong": True})
     kwargs = dict(alphas=(-1.0,), grid=[(0.0, 1.0)], he_probes=3, n_calibration=8,
-                  vb_max_iter=300, random_state=7, block=64, cache_bytes=cache_bytes)
+                  vb_max_iter=300, random_state=7, block=64)
     shared = twostep.kvik(y, gt, **kwargs)
     # One basis serves the REML deflation and the ridge preconditioner.
     assert count_bases == {"eigh": 1, "fresh": 0}

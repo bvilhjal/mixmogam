@@ -13,7 +13,7 @@ def test_he_alpha_rejects_zero_kinship_without_dividing_by_zero():
     from mixmogam.twostep import _he_alpha, _setup
 
     gt = Genotypes(np.ones((12, 6), dtype=np.int8), chromosome=np.repeat([1, 2], 3))
-    st = _setup(np.arange(12.0), gt, None, 25, 3, 1e6)
+    st = _setup(np.arange(12.0), gt, None, 25, 3)
     with pytest.raises(ValueError, match="no identifiable finite candidate"):
         _he_alpha(st, st.lg.mean / 2, [-1.0], 8, np.random.default_rng(42), fit_h2=True)
 

@@ -8,19 +8,19 @@ from mixmogam.lmm import LMM
 from mixmogam.twostep import _KOp, _setup, fit_variance_components
 
 
-def setup(cache_bytes):
+def setup(packed):
     rng = np.random.default_rng(852)
     dosage = rng.binomial(2, rng.uniform(.1, .9, 72), size=(48, 72)).astype(np.int8)
-    gt = Genotypes(dosage, chromosome=np.repeat(np.arange(3), 24))
+    gt = Genotypes(dosage, chromosome=np.repeat(np.arange(3), 24), packed=packed)
     X = rng.normal(size=(48, 1))
     y = .4 * dosage[:, 5] + .5 * X[:, 0] + rng.normal(size=48)
-    return _setup(y, gt, X, 25, 19, cache_bytes)
+    return _setup(y, gt, X, 25, 19)
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
+@pytest.mark.parametrize("packed", [False, True])
 @pytest.mark.parametrize("weighted", [False, True])
-def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, cache_bytes, weighted):
-    st = setup(cache_bytes)
+def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, packed, weighted):
+    st = setup(packed)
     rng = np.random.default_rng(946)
     weights = rng.uniform(.2, 1.5, st.lg.m) if weighted else None
     blocks = list(st.lg.blocks())
@@ -69,10 +69,10 @@ def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, cache_bytes, weigh
     assert op.trace == expected_trace
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
+@pytest.mark.parametrize("packed", [False, True])
 @pytest.mark.parametrize("weighted", [False, True])
-def test_two_step_variances_match_complete_fit_without_gls_or_trace(monkeypatch, cache_bytes, weighted):
-    st = setup(cache_bytes)
+def test_two_step_variances_match_complete_fit_without_gls_or_trace(monkeypatch, packed, weighted):
+    st = setup(packed)
     weights = np.linspace(.2, 1.5, st.lg.m) if weighted else None
     options = dict(ngrids=12, slq_probes=4, slq_steps=24, slq_deflate=4)
     complete = LMM(st.y, X=st.X, K=_KOp(st.lg, weights), add_intercept=False,

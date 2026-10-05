@@ -23,10 +23,10 @@ def _full_block_oracle(G, idx, Q, dtype):
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize("cache_bytes", [0, 10**9])
+@pytest.mark.parametrize("packed", [False, True])
 @pytest.mark.parametrize("project", [False, True])
 @pytest.mark.parametrize("compiled", [False, True])
-def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes, project, compiled):
+def test_tiled_standardization_matches_original(monkeypatch, dtype, packed, project, compiled):
     if compiled:
         pytest.importorskip("numba")
     else:
@@ -43,16 +43,14 @@ def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes,
     G[7, 2] = 1
     original = G.copy()
     G.flags.writeable = False
-    gt = Genotypes(G)
+    gt = Genotypes(G, packed=packed)
     groups = np.arange(gt.n_variants) % 3
     Q = (np.linalg.qr(np.column_stack((np.ones(gt.n_samples),
          rng.normal(size=(gt.n_samples, 2)))))[0] if project
          else np.empty((gt.n_samples, 0)))
     monkeypatch.setattr(loco, "_STANDARDIZE_WORK_BYTES", 24 * 1024)
-    lg = loco.LocoGenotypes(gt, groups, Q, block=31, dtype=dtype,
-                           cache_bytes=cache_bytes)
+    lg = loco.LocoGenotypes(gt, groups, Q, block=31, dtype=dtype)
     assert lg._compiled == compiled
-    assert (lg._cache is None) == (cache_bytes == 0)
     eps = np.finfo(np.float64).eps
     tiny = np.finfo(dtype).eps
     expected = np.empty((gt.n_variants, gt.n_samples), dtype=dtype)
@@ -62,7 +60,7 @@ def test_tiled_standardization_matches_original(monkeypatch, dtype, cache_bytes,
         scale = max(1.0, float(np.abs(unprojected).max()))
         np.testing.assert_array_equal(lg.mean[idx], mean)
         if compiled:
-            # Sequential sample sums differ from pairwise NumPy by O(n eps).
+            # Count-based variance differs from two-pass NumPy by O(n eps).
             np.testing.assert_allclose(lg.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
         else:
             np.testing.assert_array_equal(lg.sd[idx], sd)
@@ -103,8 +101,7 @@ def test_standardization_reads_small_tiles(monkeypatch):
     store = RecordingStore(gt.G)
     gt.G = store
     monkeypatch.setattr(loco, "_STANDARDIZE_WORK_BYTES", 4096)
-    lg = loco.LocoGenotypes(gt, np.zeros(30, dtype=np.int64),
-                           block=30, cache_bytes=0)
+    lg = loco.LocoGenotypes(gt, np.zeros(30, dtype=np.int64), block=30)
     assert max(store.widths) <= 2
     assert sum(store.widths) == 30  # moments and trace share the preparation pass
     assert np.isfinite(lg.trace)
@@ -114,7 +111,7 @@ def test_standardization_one_variant_floor(monkeypatch):
     # A deliberately tiny budget still permits the minimum one-variant tile.
     monkeypatch.setattr(loco, "_STANDARDIZE_WORK_BYTES", 1)
     gt = Genotypes(np.array([[0, -1], [1, 2], [2, 0]], dtype=np.int8))
-    lg = loco.LocoGenotypes(gt, [0, 0], dtype=np.float64, cache_bytes=0)
+    lg = loco.LocoGenotypes(gt, [0, 0], dtype=np.float64)
     _, _, got = next(lg.blocks())
     np.testing.assert_allclose(got, [[-np.sqrt(1.5), 0, np.sqrt(1.5)], [0, 1, -1]],
                                rtol=0, atol=2e-16)

@@ -399,10 +399,11 @@ def test_uncached_parallel_decode_retains_parent_boundaries(phensim_problem, mon
     _require_threads(2)
     gt, groups, Q, folds, Y = phensim_problem
     cached = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2)
-    uncached = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2, cache_bytes=0)
+    uncached = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2)
     reference = _vb.VBEngine(cached, folds=folds, n_threads=2)
     actual = _vb.VBEngine(uncached, folds=folds, n_threads=2)
-    expected_blocks = list(reference._subblocks())
+    # Streamed subblocks share one buffer: copy what outlives an iteration.
+    expected_blocks = [(i, g, b.copy()) for i, g, b in reference._subblocks()]
     original = uncached._decode
     decoded = []
 
@@ -413,7 +414,6 @@ def test_uncached_parallel_decode_retains_parent_boundaries(phensim_problem, mon
 
     with monkeypatch.context() as context:
         context.setattr(uncached, "_decode", track_decode)
-        # Streamed subblocks share one buffer: copy what outlives an iteration.
         actual_blocks = [(i, g, b.copy()) for i, g, b in actual._subblocks()]
     assert len(actual_blocks) == len(expected_blocks) == len(decoded)
     for (idx, group, block), (want_idx, want_group, want_block), observed in zip(actual_blocks, expected_blocks, decoded):

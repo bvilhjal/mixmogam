@@ -94,7 +94,7 @@ def load_dataset(name: str, quick: bool) -> Genotypes:
 def structure_loading(gt, k: int = 10) -> np.ndarray:
     """Share of each standardized SNP's squared norm in the top-k kinship
     eigenvectors (covariate: intercept)."""
-    st = _setup(np.zeros(gt.n_samples) + 1.0, gt, None, 25, 4096, 4e9)
+    st = _setup(np.zeros(gt.n_samples) + 1.0, gt, None, 25, 4096)
     op = _KOp(st.lg)
     pre = SpectralPreconditioner(op.matmul, st.lg.n, op.trace, k=k)
     load = np.zeros(gt.n_variants)

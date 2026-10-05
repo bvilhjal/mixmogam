@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mixmogam"
+dynamic = ["version"]
+description = "Super-efficient mixed linear models for genome-wide association mapping"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Bjarni Vilhjálmsson" }]
+dependencies = ["numpy>=1.26", "scipy>=1.11"]
+
+[project.urls]
+Homepage = "https://github.com/bvilhjal/mixmogam"
+Repository = "https://github.com/bvilhjal/mixmogam"
+Issues = "https://github.com/bvilhjal/mixmogam/issues"
+
+[project.optional-dependencies]
+fast = ["numba>=0.59", "threadpoolctl>=3"]
+plot = ["matplotlib>=3.7"]
+hdf5 = ["h5py>=3.8"]
+dataframe = ["pandas>=1.5"]
+test = ["pytest>=7"]
+lint = ["ruff>=0.5"]
+
+[tool.setuptools]
+packages = ["mixmogam", "mixmogam.io"]
+
+[tool.setuptools.dynamic]
+version = { attr = "mixmogam.__version__" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = [
+    "slow: heavier reference-oracle or simulation test",
+    "integration: end-to-end pipeline test (e.g. bundled A. thaliana data)",
+    "external: requires an external tool not installed in CI",
+    "numba: exercises or requires the Numba JIT path",
+]
+
+[tool.ruff]
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["F"]

@@ -295,7 +295,7 @@ def test_unconverged_loco_is_rejected(problem, monkeypatch):
     from mixmogam import twostep
 
     gt, _, y = problem
-    st = twostep._setup(y, gt, None, 25, 16, 0)
+    st = twostep._setup(y, gt, None, 25, 16)
     monkeypatch.setattr(twostep, "batched_pcg", lambda *a, **k: (np.zeros((40, 2)), {"converged": False}))
     with pytest.raises(RuntimeError, match="did not converge"):
         twostep._loco_solve(st, 1.0, np.tile(y[:, None], (1, 2)), np.arange(2), pre=lambda x: x)

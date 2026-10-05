@@ -170,7 +170,7 @@ def main():
             # replace y and its projection, retaining the identical genotypes.
             initial = _simulate_trait(G, K=K0, eigendecomposition=eig, h2=0,
                                       architecture="infinitesimal", n_causal=0, seed=genotype_seed)
-            st = _setup(initial["liability"], gt, X, 25, 173, 10**8)
+            st = _setup(initial["liability"], gt, X, 25, 173)
             Q = st.lg.Q
             S = np.eye(args.n) - Q @ Q.T
             Z = np.empty((args.m, args.n))

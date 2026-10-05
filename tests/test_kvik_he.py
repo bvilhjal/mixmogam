@@ -52,7 +52,7 @@ def test_he_skips_reml_and_respects_covariates_and_phenotype_scale(problem, monk
 
 def test_reused_he_products_match_independent_dense_moments(problem):
     _, gt, X, y, _, _ = problem
-    st = twostep._setup(y, gt, X, 25, 37, 10**8)
+    st = twostep._setup(y, gt, X, 25, 37)
     Z = np.empty((gt.n_variants, gt.n_samples))
     for idx, _, block in st.lg.blocks():
         Z[idx] = block
@@ -100,7 +100,7 @@ def test_he_boundary_fits_have_valid_association_limit(problem, boundary, monkey
     else:
         assert fit.extra["h2"] == 0 and not shifts
         assert fit.extra["lambda"] == 1
-        st = twostep._setup(y, gt, None, 25, 4096, 10**8)
+        st = twostep._setup(y, gt, None, 25, 4096)
         expected = twostep._retro_stats(st, np.repeat(st.y_p[:, None], st.lg.n_groups, axis=1))
         np.testing.assert_allclose(fit.f_stat, expected["chi2"], rtol=1e-12, atol=1e-12)
 

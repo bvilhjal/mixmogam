@@ -30,7 +30,7 @@ def small():
     G = simulate_genotypes(n=500, m=1200, seed=11)
     gt = _gt(G, 4)
     y = simulate_traits(G, h2=0.5, n_causal=20, seed=12)["y"]
-    st = _setup(y, gt, None, 25, 256, 4e9)
+    st = _setup(y, gt, None, 25, 256)
     return gt, y, st
 
 
@@ -148,8 +148,8 @@ def _covariate_panel(seed, n, m, n_chrom):
     return rng, G, Q
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 4e9])
-def test_ld_scores_stream_windows_like_dense_projected_rows(cache_bytes):
+@pytest.mark.parametrize("packed", [False, True])
+def test_ld_scores_stream_windows_like_dense_projected_rows(packed):
     # Unsorted storage, tied positions, covariates and blocks smaller than
     # the window: every sliding-window step against a dense calculation.
     rng, G, Q = _covariate_panel(5, 300, 240, 3)
@@ -157,9 +157,9 @@ def test_ld_scores_stream_windows_like_dense_projected_rows(cache_bytes):
     pos = np.concatenate([np.sort(rng.choice(60_000, 80, replace=False)) for _ in range(3)])
     pos[10:14] = pos[10]
     perm = rng.permutation(240)
-    gt = Genotypes(G[:, perm], chromosome=chrom[perm], position=pos[perm])
+    gt = Genotypes(G[:, perm], chromosome=chrom[perm], position=pos[perm], packed=packed)
     groups, _ = loco_groups(gt.chromosome)
-    lg = LocoGenotypes(gt, groups, Q, block=64, dtype=np.float64, cache_bytes=cache_bytes)
+    lg = LocoGenotypes(gt, groups, Q, block=64, dtype=np.float64)
     ell = ld_scores(lg, window_bp=5000, block=16)
     Z = lg.rows(np.arange(lg.m))
     norms = np.einsum("ij,ij->i", Z, Z)
@@ -168,7 +168,9 @@ def test_ld_scores_stream_windows_like_dense_projected_rows(cache_bytes):
         near = np.flatnonzero((c_ == c_[j]) & (np.abs(p_ - p_[j]) <= 5000))
         r2 = (Z[near] @ Z[j]) ** 2 / (norms[near] * norms[j])
         assert ell[j] == pytest.approx(np.sum(r2 - (1 - r2) / (lg.n - 2)), rel=1e-10, abs=1e-12)
-    other = LocoGenotypes(gt, groups, Q, block=64, dtype=np.float64, cache_bytes=4e9 - cache_bytes)
+    # The other storage format gives identical scores.
+    other = Genotypes(G[:, perm], chromosome=chrom[perm], position=pos[perm], packed=not packed)
+    other = LocoGenotypes(other, groups, Q, block=64, dtype=np.float64)
     np.testing.assert_array_equal(ld_scores(other, window_bp=5000, block=16), ell)
 
 
@@ -176,7 +178,7 @@ def test_he_alpha_with_covariates_matches_dense_kinship():
     # The HE diagonal comes from unprojected rows plus rank-q corrections.
     rng, G, Q = _covariate_panel(7, 240, 180, 3)
     gt = Genotypes(G, chromosome=np.repeat([1, 2, 3], 60))
-    lg = LocoGenotypes(gt, np.repeat([0, 1, 2], 60), Q, block=50, dtype=np.float64, cache_bytes=0)
+    lg = LocoGenotypes(gt, np.repeat([0, 1, 2], 60), Q, block=50, dtype=np.float64)
     y = rng.normal(size=lg.n)
     y_p = y - Q @ (Q.T @ y)
     st = SimpleNamespace(lg=lg, n_eff=lg.n - Q.shape[1], y_p=y_p)
@@ -301,7 +303,7 @@ def test_loco_eigh_matches_dense_loco_spectrum():
     from mixmogam.twostep import _loco_eigh
     G = simulate_genotypes(n=400, m=2000, n_pop=4, pop_fst=0.2, seed=13)
     gt = _gt(G, 4)
-    st = _setup(np.random.default_rng(14).standard_normal(400), gt, None, 25, 256, 4e9)
+    st = _setup(np.random.default_rng(14).standard_normal(400), gt, None, 25, 256)
     Z = _dense_Z(st)
     bases = _loco_eigh(st, k=5, n_iter=8)
     for g in range(st.lg.n_groups):
@@ -322,7 +324,7 @@ def test_spectral_denominator_fixes_structure_gradient():
     y = simulate_traits(G, h2=0.5, n_causal=20, seed=52)["y"]
     ex = gwas(y, gt, method="exact")
     chi_ex = stats.chi2.isf(np.clip(ex.p, 1e-300, 1), 1)
-    st = _setup(y, gt, None, 25, 4096, 4e9)
+    st = _setup(y, gt, None, 25, 4096)
     pre = SpectralPreconditioner(_KOp(st.lg).matmul, st.lg.n, st.lg.trace, k=10)
     Z = _dense_Z(st)
     P = Z @ pre.vectors

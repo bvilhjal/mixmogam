@@ -7,7 +7,7 @@ from mixmogam import Genotypes
 from mixmogam._loco import LocoGenotypes
 
 
-def dataset():
+def dataset(packed=False):
     rng = np.random.default_rng(317)
     G = rng.choice([-1, 0, 1, 2], size=(47, 19), p=[.12, .3, .4, .18]).astype(np.int8)
     G[:, :4] = [-1, 0, 1, 2]  # all missing and all three monomorphic calls
@@ -15,7 +15,7 @@ def dataset():
     G[::3, 4] = -1
     groups = np.arange(G.shape[1]) % 4
     Q, _ = np.linalg.qr(np.column_stack([np.ones(47), rng.normal(size=(47, 2))]))
-    return Genotypes(G), groups, Q
+    return Genotypes(G, packed=packed), groups, Q
 
 
 def original_block(gt, idx, Q, dtype):
@@ -34,11 +34,12 @@ def original_block(gt, idx, Q, dtype):
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("project", [False, True])
-def test_prepared_stream_matches_dense_formula_and_cached_blocks(dtype, project):
+def test_prepared_stream_matches_dense_formula_and_packed_calls(dtype, project):
     gt, groups, Q = dataset()
     Q = Q if project else None
-    cached = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype)
-    streamed = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype, cache_bytes=0)
+    # Two-bit storage prepares and decodes exactly the same values.
+    cached = LocoGenotypes(dataset(packed=True)[0], groups, Q, block=4, dtype=dtype)
+    streamed = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype)
     # Prepared statistics are read-only; later passes cannot change them.
     for name in ("mean", "sd", "_projection", "zz"):
         assert not getattr(streamed, name).flags.writeable
@@ -49,7 +50,7 @@ def test_prepared_stream_matches_dense_formula_and_cached_blocks(dtype, project)
             np.testing.assert_array_equal(idx, cached_idx)
             assert group == cached_group
             np.testing.assert_array_equal(streamed.mean[idx], mean)
-            # Sequential sample sums: O(n eps) from the pairwise NumPy oracle.
+            # Count-based variance against the oracle's two-pass sums.
             np.testing.assert_allclose(streamed.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
             bound = 128 * eps * gt.n_samples
             if dtype == np.float32:
@@ -62,10 +63,10 @@ def test_prepared_stream_matches_dense_formula_and_cached_blocks(dtype, project)
 
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
-def test_rows_preserve_order_repeats_and_bound_requested_work(monkeypatch, dtype, cache_bytes):
-    gt, groups, Q = dataset()
-    lg = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype, cache_bytes=cache_bytes)
+@pytest.mark.parametrize("packed", [False, True])
+def test_rows_preserve_order_repeats_and_bound_requested_work(monkeypatch, dtype, packed):
+    gt, groups, Q = dataset(packed)
+    lg = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype)
     expected = np.empty((gt.n_variants, gt.n_samples), dtype=np.float64)
     for idx, _, Z in lg.blocks():
         expected[idx] = Z
@@ -97,18 +98,16 @@ def test_rows_preserve_order_repeats_and_bound_requested_work(monkeypatch, dtype
     ([0.5], ValueError), ([True], ValueError), (["1"], ValueError),
     (0, ValueError), ([[1]], ValueError),
 ])
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
-def test_rows_reject_invalid_indices(indices, error, cache_bytes):
+def test_rows_reject_invalid_indices(indices, error):
     gt, groups, Q = dataset()
-    lg = LocoGenotypes(gt, groups, Q, cache_bytes=cache_bytes)
+    lg = LocoGenotypes(gt, groups, Q)
     with pytest.raises(error):
         lg.rows(indices)
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
-def test_prepared_covariates_and_groups_are_independent(cache_bytes):
+def test_prepared_covariates_and_groups_are_independent():
     gt, groups, Q = dataset()
-    lg = LocoGenotypes(gt, groups, Q, cache_bytes=cache_bytes)
+    lg = LocoGenotypes(gt, groups, Q)
     before = [(idx.copy(), group, Z.copy()) for idx, group, Z in lg.blocks()]
     groups[:] = 0
     Q[:] = 0
@@ -118,11 +117,10 @@ def test_prepared_covariates_and_groups_are_independent(cache_bytes):
         np.testing.assert_array_equal(Z, old_Z)
 
 
-@pytest.mark.parametrize("cache_bytes", [0, 1e9])
 @pytest.mark.parametrize("change", ["replace", "reshape", "dtype"])
-def test_replaced_or_reinterpreted_storage_requires_new_preparation(cache_bytes, change):
+def test_replaced_or_reinterpreted_storage_requires_new_preparation(change):
     gt, groups, Q = dataset()
-    lg = LocoGenotypes(gt, groups, Q, cache_bytes=cache_bytes)
+    lg = LocoGenotypes(gt, groups, Q)
     if change == "replace":
         gt.G = gt.G.copy()
     elif change == "reshape":

@@ -70,7 +70,7 @@ def make_setup(case: dict):
     y = (Z @ rng.standard_normal(causal.size) * np.sqrt(case["h2"] / causal.size)
          + rng.standard_normal(n) * np.sqrt(1 - case["h2"]) + case["mean_shift"] * pop)
     X = np.eye(k)[pop][:, 1:] if case["pcs"] else None
-    return twostep._setup(y, gt, X, 25, 4096, 4e9), m
+    return twostep._setup(y, gt, X, 25, 4096), m
 
 
 def exact_h2(st) -> float:

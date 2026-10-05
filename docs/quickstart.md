@@ -70,7 +70,7 @@ In that script, after loading and aligning `y` and `gt`:
 ```python
 result = gwas(
     y, gt, method="kvik", heritability_method="he",
-    n_threads=4, cache_bytes=4_000_000_000, random_state=0,
+    n_threads=4, random_state=0,
 )
 print(result.extra["he_variance"])
 print(result.extra["cv_converged"], result.extra["loco_converged"])
@@ -92,15 +92,14 @@ Apple Accelerate needs the `VECLIB_MAXIMUM_THREADS` setting above. The requested
 count cannot exceed Numba's configured limit. Initial Numba compilation adds
 latency to the first use of a kernel.
 
-`cache_bytes` controls only the float32 standardized-genotype cache. At 50,000
-samples and 20,000 variants its 4,000,000,000 bytes fit the default budget
-exactly. Use `cache_bytes=0` to decode genotypes on every pass from
-per-variant value tables, reducing memory at a runtime cost; the decoded
-values equal the cached ones bit for bit. The int8
-input and other workspaces remain resident: this is neither a total-RSS limit
-nor a fully out-of-core fit. The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md)
-records the measured tradeoff, thread-path numerical differences, and timing
-limitations. Preserve `result.extra` separately if needed; CSV does not include it.
+Genotypes are decoded on every pass; no float copy is kept. For large
+panels, store the calls two bits each: `read_plink(prefix, packed=True)`
+holds the bed's codes in memory (a quarter of the int8 bytes) and
+`read_plink(prefix, mmap=True)` maps them from the file; `Genotypes(G,
+packed=True)` packs an array. Results are identical to int8 storage.
+Residuals and other workspaces remain resident: this is not a fully
+out-of-core fit. Preserve `result.extra` separately if needed; CSV does not
+include it.
 
 ## The mixed model by hand
 

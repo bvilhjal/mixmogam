@@ -173,12 +173,13 @@ lookup and remove the covariates elsewhere: operator products project their
 n x c operands (Z P = z (I - QQ') P, and sums of Z' t are projected once),
 variational fitting corrects each 128-SNP block's products by its
 coefficients, and Gram matrices, the HE diagonal and LD scores add rank-q
-corrections to products of unprojected rows. The genotype cache holds the
-same unprojected values when `itemsize * n * m <= cache_bytes` (inclusive;
-the default 4e9 bytes is not a total-memory limit), and `cache_bytes=0`
-decodes them on every pass; the two routes agree bit for bit. One thread
-decodes about 0.26 ns per genotype from variant-major (PLINK) storage and
-0.7 ns from sample-major arrays. One-pass consumers decode 16 MiB slices
+corrections to products of unprojected rows. No float copy of the
+genotypes is retained: every pass decodes them. Calls may be stored two bits
+each (`PackedCalls`, PLINK's bed layout, in memory or memory-mapped), and
+preparation computes the mean and variance from exact call counts, so int8
+and two-bit storage give identical values. One thread decodes about 0.2 ns
+per genotype from two-bit storage, 0.26 ns from variant-major (PLINK order)
+int8 and 0.7 ns from sample-major int8 arrays. One-pass consumers decode 16 MiB slices
 (at least 256 variants, at most 512 MiB) into reused buffers. BOLT-LMM's
 in-sample LD scores stream each chromosome through a sliding position
 window, holding the widest window rather than the genotype matrix. The
