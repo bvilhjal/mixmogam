@@ -1,0 +1,203 @@
+{
+  "result": {
+    "statistic": "chi2",
+    "n": 50000,
+    "n_loco_groups": 6,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ]
+    ],
+    "method": "kvik",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.49543184448498645,
+    "alpha_method": "he",
+    "alpha_scores": [
+      114338.66590668791,
+      113305.14195024702,
+      112202.9555958794,
+      111042.40123569172,
+      109832.60900900562
+    ],
+    "structure": {
+      "excess": -0.005987440563208657,
+      "z": -1.9250286345645384,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.6050493742220479,
+      0.6039626170009271,
+      0.6050125730695387,
+      0.6034140955183007,
+      0.6055281875370836,
+      0.6251888889995849,
+      0.6024626058948426,
+      0.6083291010570387,
+      0.6415978862785157,
+      0.6280866535867
+    ],
+    "cv_best": [
+      0.01,
+      0.5
+    ],
+    "cv_converged": true,
+    "loco_iterations": 9,
+    "loco_converged": true,
+    "lambda": 1.0
+  },
+  "vb_fits": [
+    {
+      "iterations": 10,
+      "converged": true,
+      "rel_change": [
+        1.425331075540926e-06,
+        1.2404335777747871e-06,
+        7.779420704902441e-07,
+        1.2777110670533178e-06,
+        7.113829417975127e-07,
+        6.554183234148096e-06,
+        7.091947438573369e-07,
+        1.8273433708132849e-06,
+        3.653610479459815e-06,
+        1.4483564684667783e-06
+      ]
+    },
+    {
+      "iterations": 9,
+      "converged": true,
+      "rel_change": [
+        2.2233578963829494e-06,
+        7.15961440177558e-06,
+        6.414380431998198e-06,
+        6.70838086511796e-06,
+        5.49435578410061e-06,
+        6.0370169270670885e-06
+      ]
+    }
+  ],
+  "genotype_storage": [
+    {
+      "fit_index": 1,
+      "n_samples": 50000,
+      "n_variants": 12000,
+      "dtype": "float32",
+      "cached": false,
+      "cache_nbytes": 0,
+      "calls": "int8",
+      "n_loco_groups": 6,
+      "group_variant_counts": [
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000
+      ]
+    },
+    {
+      "fit_index": 2,
+      "n_samples": 50000,
+      "n_variants": 12000,
+      "dtype": "float32",
+      "cached": false,
+      "cache_nbytes": 0,
+      "calls": "int8",
+      "n_loco_groups": 6,
+      "group_variant_counts": [
+        2000,
+        2000,
+        2000,
+        2000,
+        2000,
+        2000
+      ]
+    }
+  ],
+  "fit_seconds": 35.48117658303818,
+  "package_file": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261005-kvik-he-e4089d8/source/mixmogam/__init__.py",
+  "versions": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "mixmogam": "2.0.0.dev5",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "numba": "0.66.0"
+  },
+  "threadpools": [],
+  "n": 50000,
+  "m": 12000,
+  "seed": 20262486,
+  "warmup": false,
+  "kvik_threads": null,
+  "cache_bytes": null,
+  "storage": "int8",
+  "fit_options": {
+    "heritability_method": "reml"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "1"
+  },
+  "numba_pool_ceiling": 1
+}

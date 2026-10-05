@@ -157,8 +157,10 @@ sources and exports inputs without running association methods. The
 the retained indices, chromosome counts and export checks. The
 [20K results](results/20261003-kvik-20k/README.md) include 24 one/four-thread
 fits and 12 paired cache fits under the [frozen plan](results/20261003-kvik-20k/plan.md).
-At this size the float32 cache is exactly the
-default 4 GB budget; workers record its actual allocation. These are new fixed
+At this size the float32 cache was exactly the
+default 4 GB budget; workers record its actual allocation. The cache is gone
+since commit e4089d8, whose rerun compares int8 with two-bit calls instead
+(`--storage packed`). These are new fixed
 panels, not nested subsets of the earlier 12,000-variant data.
 
 **2.0.0.dev5 work reduction.** `efficiency_paired.py` compares two frozen
@@ -186,11 +188,16 @@ the local methods on an existing archive's inputs. All other files, including
 the official LDAK-KVIK outputs, are linked unchanged, but only after the
 genotype files match their export hashes. `kvik_thread_scaling.py` and
 `kvik_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
-omitted. The 2.0.0.dev5 reruns are:
-- `20261004-phensim-kvik-dev5`, with `-n2000` and `-n4000`;
-- `20261004-hapnest-kvik-dev5-n10000` and `-n50000`;
-- `20261004-kvik-he-dev5`;
-- `20261004-kvik-20k-dev5`.
+omitted. The reruns with commit e4089d8, which the report uses, are:
+- `20261005-phensim-kvik-e4089d8`, with `-n2000` and `-n4000`;
+- `20261005-hapnest-kvik-e4089d8-n10000` and `-n50000`;
+- `20261005-kvik-he-e4089d8`;
+- `20261005-kvik-20k-e4089d8`.
+
+The 2.0.0.dev5 reruns (`20261004-*-dev5`) remain beside them. Same-day
+checks separate code from host conditions:
+[`20261004-same-day-dev4-dev5`](results/20261004-same-day-dev4-dev5/README.md) and
+[`20261005-same-day-dev5-e4089d8`](results/20261005-same-day-dev5-e4089d8/README.md).
 
 Official results are reused only on byte-identical inputs. Their timings
 come from the original runs, so cross-program time ratios also span the
@@ -201,7 +208,7 @@ python benchmarks/kvik_simulation.py --rerun-from benchmarks/results/OLD_RUN \
   --methods exact bolt-inf kvik --ldak /path/to/ldak --out NEW_DIRECTORY
 python benchmarks/kvik_thread_scaling.py --source . --methods mixmogam-he \
   --case CASE --case CASE --threads 1 4 --parallel-kvik --blas-threads 1 \
-  --numba-threads 8 --cache-bytes 4000000000 --reps 3 --out NEW_DIRECTORY
+  --numba-threads 8 --reps 3 --out NEW_DIRECTORY
 ```
 
 ```sh

@@ -1,0 +1,177 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 5 pairs of arguments:
+--kvik-step1 reference
+--bfile ../geno
+--pheno phenotype.txt
+--max-threads 1
+--random-seed 20266483
+
+Note that "--kvik-step1 reference" is equivalent to using "--elastic reference.step1" with "--LOCO YES"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Constructing LOCO elastic net PRS
+
+Consider using "--covar" and/or "--factors" to provide quantitative or categorical covariates
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+LDAK will only save selected files (to save all files, use "--verbose YES")
+
+The random number generator seed is set to 20266483
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 800 samples from ../geno.fam
+
+Checking responses for 800 samples from phenotype.txt
+
+Reading details for 6000 predictors from ../geno.bim
+
+Data contain 800 samples and 6000 predictors (will be using 800 and 6000)
+
+Reading phenotypes for 800 samples from phenotype.txt
+
+When performing cross-validation, will use 720 training samples and 80 test samples
+
+Warning, the number of comparison predictors has been reduced to 6000 (the total number of predictors)
+
+Testing for structure using 512 pedigree predictors
+
+Will decide there is high structure if the estimated maximum average inflation is above 0.1000, and the corresponding p-value is below 1.0000e-03 (change these values using "--MAI-threshold" and "--MAI-significance")
+
+Average cross-chromosome squared correlation is 3.3161e-03 (chi-squared test statistic 148902.6505; p-value 0.0000e+00); estimated maximum average inflation of test statistics is 1.6516
+
+This is relatively high structure, so will estimate the test statistic scaling factor (instead of setting it to one)
+
+Estimating per-predictor heritabilities using Randomized Haseman-Elston Regression with 10 random vectors
+
+Will divide the predictors into 20 partitions (change this using "--num-divides")
+Will exclude chunks containing a predictor with estimated variance explained greater than 0.1250 (change this using "--max-cor")
+
+Calculating traces for Chunk 1 of 24
+Warning, excluding Chunk 9 because it contains a predictor with estimated variance explained 0.1299
+Warning, excluding Chunk 10 because it contains a predictor with estimated variance explained 0.1368
+Warning, excluding Chunk 16 because it contains a predictor with estimated variance explained 0.1418
+
+Best power is -0.2500 and estimated heritability is 4.9795 (SD 0.0369)
+Warning, the heritability is very high, so has been reduced to 0.8000
+
+Time check: have so far spent 0.00 hours
+
+Constructing 10 PRS using training samples
+Will also make 33 MCMC REML models (using all samples)
+
+Scan 1: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 6.04
+
+Scan 2: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 4.54
+
+Scan 3: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 4.08
+
+Scan 4: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 3.75
+
+Scan 5: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 3.00
+
+Scan 6: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.75
+
+Scan 7: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.17
+
+Scan 8: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.25
+
+Scan 9: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.12
+
+Scan 10: estimating training effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.12
+
+Warning, Variational Bayes did not converge after 10 scans (this is not normally a problem)
+
+The revised estimate of heritability is 0.8000
+
+Measuring accuracy of each model
+Model 1: heritability 0.8000, p 0.0000, f2 1.0000, mean squared error 0.8329
+Model 2: heritability 0.8000, p 0.5000, f2 0.5000, mean squared error 0.8166
+Model 3: heritability 0.8000, p 0.5000, f2 0.3000, mean squared error 0.8008
+Model 4: heritability 0.8000, p 0.5000, f2 0.1000, mean squared error 0.7711
+Model 5: heritability 0.8000, p 0.1000, f2 0.5000, mean squared error 0.7856
+Model 6: heritability 0.8000, p 0.1000, f2 0.3000, mean squared error 0.7487
+Model 7: heritability 0.8000, p 0.1000, f2 0.1000, mean squared error 0.7074
+Model 8: heritability 0.8000, p 0.0100, f2 0.5000, mean squared error 0.7790
+Model 9: heritability 0.8000, p 0.0100, f2 0.3000, mean squared error 0.7219
+Model 10: heritability 0.8000, p 0.0100, f2 0.1000, mean squared error 0.6958
+
+Time check: have so far spent 0.00 hours
+
+Constructing final PRS (heritability 0.8000, p 0.0100, f2 0.1000) using all samples
+Will also make 12 LOCO PRS, and 20 calibration models
+
+Scan 1: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 5.00
+
+Scan 2: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 3.88
+
+Scan 3: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 3.08
+
+Scan 4: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.75
+
+Scan 5: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.33
+
+Scan 6: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.46
+
+Scan 7: estimating final effect sizes for Chunk 1 of 24
+Average number of iterations per chunk: 2.08
+
+Scan 8: estimating final effect sizes for Chunk 1 of 22
+Average number of iterations per chunk: 1.95
+
+Scan 9: estimating final effect sizes for Chunk 1 of 19
+Average number of iterations per chunk: 2.05
+
+Scan 10: estimating final effect sizes for Chunk 1 of 18
+Average number of iterations per chunk: 1.83
+
+Warning, Variational Bayes did not converge after 10 scans (this is not normally a problem)
+
+The ridge regression test statistic scaling factor is 1.1911 (SE 0.0141)
+
+Comparing test statistics for 6000 predictors
+Computing test statistics for Chunk 1 of 24
+
+The revised test statistic scaling factor is 1.0956 (SE 0.0225)
+Warning, this is very imprecise, it may be better to repeat using "--ridge" instead of "--elastic"
+The effect size calibration is 1.5139 (SE 0.0000)
+
+Best-fitting model saved in reference.step1.effects
+
+LOCO results saved in reference.step1.loco.prs and reference.step1.loco.details
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Sat Oct  3 18:28:19 2026 and ended at Sat Oct  3 18:28:21 2026
+The elapsed time was 0.00 hours
+Given the command used one thread, this means the CPU time was also 0.00 hours
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

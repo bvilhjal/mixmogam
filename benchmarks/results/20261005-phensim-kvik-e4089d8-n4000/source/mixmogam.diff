@@ -1,0 +1,261 @@
+diff --git a/benchmarks/kvik_efficiency.py b/benchmarks/kvik_efficiency.py
+index 85f61fc..82d1600 100644
+--- a/benchmarks/kvik_efficiency.py
++++ b/benchmarks/kvik_efficiency.py
+@@ -150,7 +150,9 @@ def worker(args):
+         y, X, seed = rng.normal(size=128), None, 9187
+     else:
+         config = json.loads((args.worker / "case.json").read_text())
+-        gt = read_plink(str(args.worker.parent / "geno"))
++        # Two-bit calls only on request; older sources have no packed reader.
++        gt = (read_plink(str(args.worker.parent / "geno"), packed=True) if args.storage == "packed"
++              else read_plink(str(args.worker.parent / "geno")))
+         y = np.loadtxt(args.worker / "phenotype.txt", usecols=2)
+         X = np.loadtxt(args.worker / "covariates.txt", usecols=(2, 3)) if config["pcs"] else None
+         seed = config["method_seed"]
+@@ -162,9 +164,11 @@ def worker(args):
+         vb_fits.append({key: fitted[key] for key in ("iterations", "converged", "rel_change")})
+         vb_arrays[f"vb_{len(vb_fits):02d}_beta"] = fitted["beta"]
+         lg = engine.lg
++        cache = getattr(lg, "_cache", None)  # removed after 2.0.0.dev5: always streamed
+         genotype_storage.append({"fit_index": len(vb_fits), "n_samples": lg.n, "n_variants": lg.m,
+-                                 "dtype": str(lg.dtype), "cached": lg._cache is not None,
+-                                 "cache_nbytes": sum(block.nbytes for block in lg._cache) if lg._cache is not None else 0,
++                                 "dtype": str(lg.dtype), "cached": cache is not None,
++                                 "cache_nbytes": sum(block.nbytes for block in cache) if cache is not None else 0,
++                                 "calls": "two-bit" if getattr(lg.gt, "packed", False) else "int8",
+                                  "n_loco_groups": lg.n_groups,
+                                  "group_variant_counts": lg.m_group.astype(int).tolist()})
+         return fitted
+@@ -212,7 +216,7 @@ def worker(args):
+                      "numpy": np.__version__, "scipy": scipy.__version__, "numba": numba_version},
+         "threadpools": threadpool_info(), "n": gt.n_samples, "m": gt.n_variants,
+         "seed": seed, "warmup": args.warmup, "kvik_threads": args.kvik_threads,
+-        "cache_bytes": args.cache_bytes, "fit_options": fit_options,
++        "cache_bytes": args.cache_bytes, "storage": args.storage, "fit_options": fit_options,
+         "thread_environment": {key: os.environ.get(key) for key in THREAD_VARS},
+         "numba_pool_ceiling": numba_limit})
+ 
+@@ -337,6 +341,11 @@ def main():
+                         help="Optimized genotype cache budget (or worker); omitted preserves its source default")
+     parser.add_argument("--baseline-cache-bytes", type=float,
+                         help="Baseline genotype cache budget; omitted preserves its source default")
++    parser.add_argument("--storage", choices=("int8", "packed"), default="int8",
++                        help="Optimized (or worker) genotype storage; packed reads two-bit calls "
++                             "and needs a source after 2.0.0.dev5")
++    parser.add_argument("--baseline-storage", choices=("int8", "packed"), default="int8",
++                        help="Baseline genotype storage")
+     parser.add_argument("--no-warmup", action="store_true")
+     parser.add_argument("--rtol", type=float, default=1e-6)
+     parser.add_argument("--atol", type=float, default=1e-8)
+@@ -378,6 +387,7 @@ def main():
+                 "thread_environment": thread_environment(args.threads, blas_threads=args.blas_threads,
+                                                           numba_threads=numba_threads),
+                 "cache_bytes": {"baseline": args.baseline_cache_bytes, "optimized": args.cache_bytes},
++                "storage": {"baseline": args.baseline_storage, "optimized": args.storage},
+                 "profiled": args.profile, "warmup": not args.no_warmup,
+                 "heritability_method": args.heritability_method,
+                 "kvik_threads": {"baseline": args.baseline_kvik_threads,
+@@ -398,6 +408,9 @@ def main():
+         cache_bytes = args.cache_bytes if label == "optimized" else args.baseline_cache_bytes
+         if cache_bytes is not None:
+             command += ["--cache-bytes", str(cache_bytes)]
++        storage = args.storage if label == "optimized" else args.baseline_storage
++        if storage != "int8" and case is not None:
++            command += ["--storage", storage]
+         if args.profile and case is not None:
+             command.append("--profile")
+         return measured(command, destination, args.threads, out / "jit-cache" / label,
+diff --git a/benchmarks/kvik_thread_scaling.py b/benchmarks/kvik_thread_scaling.py
+index 2f38e3c..e55579a 100644
+--- a/benchmarks/kvik_thread_scaling.py
++++ b/benchmarks/kvik_thread_scaling.py
+@@ -120,7 +120,9 @@ def main():
+     parser.add_argument("--numba-threads", type=int,
+                         help="Local Numba pool ceiling; parallel mode defaults to the largest requested count")
+     parser.add_argument("--cache-bytes", type=float,
+-                        help="Local genotype cache budget; omitted preserves the package default")
++                        help="Local genotype cache budget (sources up to 2.0.0.dev5); omitted preserves the package default")
++    parser.add_argument("--storage", choices=("int8", "packed"), default="int8",
++                        help="Local genotype storage; packed reads two-bit calls (sources after 2.0.0.dev5)")
+     parser.add_argument("--no-warmup", action="store_true")
+     parser.add_argument("--rtol", type=float, default=1e-6)
+     parser.add_argument("--atol", type=float, default=1e-8)
+@@ -172,7 +174,7 @@ def main():
+                 "thread_levels": levels, "thread_environment_variables": list(THREAD_VARS),
+                 "parallel_kvik": args.parallel_kvik,
+                 "local_blas_threads": args.blas_threads, "local_numba_pool_ceiling": numba_ceiling,
+-                "local_cache_bytes": args.cache_bytes,
++                "local_cache_bytes": args.cache_bytes, "local_storage": args.storage,
+                 "local_thread_environments": {str(level): thread_environment(
+                     level, blas_threads=args.blas_threads, numba_threads=numba_ceiling) for level in levels},
+                 "official_thread_environments": {str(level): thread_environment(level) for level in levels},
+@@ -195,6 +197,8 @@ def main():
+             command += ["--kvik-threads", str(threads)]
+         if args.cache_bytes is not None:
+             command += ["--cache-bytes", str(args.cache_bytes)]
++        if args.storage != "int8":
++            command += ["--storage", args.storage]
+         return measured(command, directory, threads, out / "jit-cache",
+                         blas_threads=args.blas_threads, numba_threads=numba_ceiling)
+ 
+@@ -224,6 +228,7 @@ def main():
+                 "blas_threads": (args.blas_threads if args.blas_threads is not None else threads) if method == "mixmogam-he" else threads,
+                 "numba_pool_ceiling": (numba_ceiling if numba_ceiling is not None else threads) if method == "mixmogam-he" else None,
+                 "cache_bytes": args.cache_bytes if method == "mixmogam-he" else None,
++                "storage": args.storage if method == "mixmogam-he" else None,
+                 **{key: config[key] for key in ("n", "m", "cell", "trait", "rho", "fst")}}
+         try:
+             measurement = (run_reference(case, directory, executable, threads, truth["variant_ids"])
+diff --git a/report/make_efficiency_tables.py b/report/make_efficiency_tables.py
+index 9cae757..59d2cdb 100644
+--- a/report/make_efficiency_tables.py
++++ b/report/make_efficiency_tables.py
+@@ -1,9 +1,10 @@
+ #!/usr/bin/env python
+ """Typeset the 20K workload evidence; never run an association fit.
+ 
+-mixmogam fits are the 2.0.0.dev5 reruns; official LDAK-KVIK fits are reused
+-from the 2.0.0.dev3 experiment, whose inputs must be byte-identical. The
+-primary and cache experiments have separate timing baselines. Read their
++mixmogam fits are reruns with commit e4089d8; official LDAK-KVIK fits are
++reused from the 2.0.0.dev3 experiment, whose inputs must be byte-identical.
++The primary and storage (int8 against two-bit calls) experiments have
++separate timing baselines. Read their
+ individual measurements, check the complete design, and retain that separation
+ in the tables. Numerical-tolerance results are reported, not suppressed.
+ """
+@@ -15,7 +16,7 @@ from statistics import median
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261004-kvik-20k-dev5"
++RUN = ROOT / "benchmarks/results/20261005-kvik-20k-e4089d8"
+ REFERENCE = ROOT / "benchmarks/results/20261003-kvik-20k"
+ OUT = ROOT / "report"
+ LABELS = {1: "Unstructured", 2: "Structure, environment, two PCs"}
+@@ -48,27 +49,27 @@ def main():
+               REFERENCE / "thread-scaling/measurements.csv",
+               REFERENCE / "thread-scaling/verification.json",
+               REFERENCE / "thread-scaling/manifest.json",
+-              RUN / "cache/measurements.csv", RUN / "cache/status.json",
+-              RUN / "cache/comparisons.json"]
++              RUN / "storage/measurements.csv", RUN / "storage/status.json",
++              RUN / "storage/comparisons.json"]
+     local = read_csv(inputs[0])
+     status = json.loads(inputs[1].read_text())
+     manifest = json.loads(inputs[2].read_text())
+     official = [r for r in read_csv(inputs[4]) if r["method"] == "ldak-kvik"]
+     audit = json.loads(inputs[5].read_text())
+     reference_manifest = json.loads(inputs[6].read_text())
+-    cache = read_csv(inputs[7])
+-    cache_status = json.loads(inputs[8].read_text())
+-    cache_pairs = json.loads(inputs[9].read_text())
++    storage_runs = read_csv(inputs[7])
++    storage_status = json.loads(inputs[8].read_text())
++    storage_pairs = json.loads(inputs[9].read_text())
+     if not status["complete"] or status["failed_method_runs"] or manifest["methods"] != ["mixmogam-he"]:
+-        raise ValueError("the dev5 primary rerun is incomplete or not mixmogam-only")
++        raise ValueError("the primary rerun is incomplete or not mixmogam-only")
+     if not audit["archive_integrity_verified"] or audit["errors"]:
+         raise ValueError("the reused official archive integrity is not verified")
+     if input_hashes(manifest) != input_hashes(reference_manifest):
+         raise ValueError("official fits can be reused only on byte-identical inputs")
+-    if not cache_status["complete"] or len(cache_pairs) != 6:
+-        raise ValueError("the dev5 cache experiment is incomplete")
+-    cache_exact = all(item["arrays"][key].get("exact", False)
+-                      for item in cache_pairs for key in item["arrays"])
++    if not storage_status["complete"] or len(storage_pairs) != 6:
++        raise ValueError("the storage experiment is incomplete")
++    storage_exact = all(item["arrays"][key].get("exact", False)
++                        for item in storage_pairs for key in item["arrays"])
+     primary = local + official
+     expected = {(c, t, m, r) for c in LABELS for t in (1, 4)
+                 for m in NAMES for r in (1, 2, 3)}
+@@ -76,11 +77,11 @@ def main():
+                  int(r["rep"])) for r in primary]
+     if len(observed) != 24 or set(observed) != expected:
+         raise ValueError("primary design must contain exactly 24 distinct fits")
+-    expected_cache = {(c, s, r) for c in LABELS for s in ("baseline", "optimized")
+-                      for r in (1, 2, 3)}
+-    observed_cache = [(int(r["case_index"]), r["source"], int(r["rep"])) for r in cache]
+-    if len(observed_cache) != 12 or set(observed_cache) != expected_cache:
+-        raise ValueError("cache design must contain exactly 12 distinct fits")
++    expected_storage = {(c, s, r) for c in LABELS for s in ("baseline", "optimized")
++                        for r in (1, 2, 3)}
++    observed_storage = [(int(r["case_index"]), r["source"], int(r["rep"])) for r in storage_runs]
++    if len(observed_storage) != 12 or set(observed_storage) != expected_storage:
++        raise ValueError("storage design must contain exactly 12 distinct fits")
+     if any((int(r["n"]), int(r["m"]), int(r["n_null"])) != (50000, 20000, 3300)
+            for r in primary):
+         raise ValueError("unexpected primary genotype geometry")
+@@ -111,8 +112,8 @@ def main():
+                     values = [float(rs[0][k]) for k in keys]
+                     science.append(f"{name} & {values[0]:.4f} & {values[1]:.4f} & "
+                                    + " & ".join(f"{100*v:.3f}" for v in values[2:]) + r" \\")
+-        for source, name in [("baseline", "Cached"), ("optimized", "Uncached")]:
+-            rs = [r for r in cache if int(r["case_index"]) == case and r["source"] == source]
++        for source, name in [("baseline", "int8 calls"), ("optimized", "Two-bit calls")]:
++            rs = [r for r in storage_runs if int(r["case_index"]) == case and r["source"] == source]
+             storage.append(f"{name} & {spread(rs, 'wall_seconds')} & "
+                            f"{spread(rs, 'peak_rss_bytes', 1024**3, 3)}" + r" \\")
+         resources.append(r"\addlinespace")
+@@ -121,26 +122,26 @@ def main():
+ 
+     outputs = []
+     for name, lines in [("kvik_20k_resources.tex", resources),
+-                        ("kvik_20k_science.tex", science), ("kvik_20k_cache.tex", storage)]:
++                        ("kvik_20k_science.tex", science), ("kvik_20k_storage.tex", storage)]:
+         path = OUT / "tables" / name
+-        path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam 2.0.0.dev5 reruns,\n"
++        path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam e4089d8 reruns,\n"
+                         "% official LDAK-KVIK fits reused from 20261003-kvik-20k.\n"
+                         + "\n".join(lines) + "\n")
+         outputs.append(path)
+     record = {"purpose": "Render measured evidence only; no simulation or fitting",
+-              "timed_versions": {"mixmogam-he": "2.0.0.dev5 (20261004-kvik-20k-dev5)",
++              "timed_versions": {"mixmogam-he": "commit e4089d8 (20261005-kvik-20k-e4089d8)",
+                                  "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"},
+               "generator_sha256": sha256(Path(__file__)),
+               "inputs": {str(p.relative_to(ROOT)): sha256(p) for p in inputs},
+               "outputs": {str(p.relative_to(ROOT)): sha256(p) for p in outputs},
+               "primary_fits": len(primary), "local_fits_rerun": len(local),
+-              "official_fits_reused": len(official), "cache_fits": len(cache),
++              "official_fits_reused": len(official), "storage_fits": len(storage_runs),
+               "input_hashes_identical": True,
+-              "dev5_thread_comparisons": status["within_method_comparisons"],
+-              "dev5_thread_comparisons_outside_tolerance": status["comparisons_outside_tolerance"],
+-              "exact_cache_invariance_passed": cache_exact}
++              "thread_comparisons": status["within_method_comparisons"],
++              "thread_comparisons_outside_tolerance": status["comparisons_outside_tolerance"],
++              "exact_storage_invariance_passed": storage_exact}
+     (OUT / "efficiency_table_manifest.json").write_text(json.dumps(record, indent=2) + "\n")
+-    print(json.dumps({"tables": len(outputs), "primary_fits": len(primary), "cache_fits": len(cache)}))
++    print(json.dumps({"tables": len(outputs), "primary_fits": len(primary), "storage_fits": len(storage_runs)}))
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/report/make_kvik_figures.py b/report/make_kvik_figures.py
+index ed618bd..76eacfd 100644
+--- a/report/make_kvik_figures.py
++++ b/report/make_kvik_figures.py
+@@ -1,7 +1,7 @@
+ #!/usr/bin/env python
+ """Render the phensim/reference comparison, without rerunning scans.
+ 
+-The archives are the 2.0.0.dev5 reruns: mixmogam methods ran again on the
++The archives are reruns with commit e4089d8: mixmogam methods ran again on the
+ original inputs, and the official LDAK-KVIK outputs were reused unchanged.
+ Every reused file is checked against the hash recorded at rerun time.
+ """
+@@ -17,8 +17,8 @@ import numpy as np
+ from scipy import stats
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261004-phensim-kvik-dev5"
+-HAPNEST = "benchmarks/results/20261004-hapnest-kvik-dev5-n{n}"
++RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
++HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
+ OUT = ROOT / "report"
+ METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
+ NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam KVIK", "LDAK-KVIK"]

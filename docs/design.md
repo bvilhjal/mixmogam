@@ -3,7 +3,8 @@
 These notes describe the current implementation and label historical evidence
 separately. The [2026-10-03 review](review-2026-10-03.md) identifies input-encoding,
 MAC, prediction, and permutation corrections. The original external LDAK
-comparison remains withdrawn. The verified [20K workload comparison](../benchmarks/results/20261003-kvik-20k/README.md)
+comparison remains withdrawn. The verified [20K workload comparison](../benchmarks/results/20261003-kvik-20k/README.md),
+[rerun with commit e4089d8](../benchmarks/results/20261005-kvik-20k-e4089d8/README.md),
 uses new phensim inputs and frozen sources; the [research report](../report/README.md)
 sets out the statistical evidence and research agenda.
 
@@ -284,8 +285,9 @@ statistics.
 
 ## Measured resources and numerical agreement
 
-The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md) uses two
-fixed phensim HAPNEST panels, each with 50,000 samples and exactly 20,000
+The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md), rerun
+with commit e4089d8 ([archive](../benchmarks/results/20261005-kvik-20k-e4089d8/README.md)),
+uses two fixed phensim HAPNEST panels, each with 50,000 samples and exactly 20,000
 retained variants across six LOCO groups. One panel is unstructured; the
 other has population structure, environmental confounding and two PC
 covariates. Three fresh-process repetitions per setting measure time, not
@@ -293,28 +295,28 @@ biological replication. Official timing sums its two native steps; local
 timing includes imports, input reading, fitting and result writing. Common
 preparation and initial Numba compilation are excluded.
 
-Table 4. Median full-fit time and four-thread peak RSS in the primary 20K experiment.
+Table 4. Median full-fit time and four-thread peak RSS: mixmogam e4089d8
+reruns (5 October) and the original official runs (3 October).
 
 | Panel | Method | 1 thread (s) | 4 threads (s) | 4-thread RSS (GiB) |
 |---|---|---:|---:|---:|
-| Unstructured | mixmogam HE | 58.84 | 33.22 | 4.369 |
+| Unstructured | mixmogam HE | 32.69 | 20.36 | 1.426 |
 | Unstructured | Official LDAK-KVIK | 33.49 | 25.45 | 0.652 |
-| Structure/confounding + PCs | mixmogam HE | 39.00 | 32.06 | 4.228 |
+| Structure/confounding + PCs | mixmogam HE | 29.24 | 19.01 | 1.442 |
 | Structure/confounding + PCs | Official LDAK-KVIK | 39.63 | 30.09 | 0.653 |
 
-The matched [cache experiment](../benchmarks/results/20261003-kvik-20k/cache/README.md)
-reduces peak RSS by median paired 52% and 49%, at 31% and 39% longer elapsed
-time. Every cached fit retains exactly 4,000,000,000 float32 bytes; uncached
-fits retain zero float-cache bytes but still hold the 1 GB int8 input. All
-six cache pairs have exactly equal saved association arrays, VB coefficients
-and fit diagnostics.
+Two-bit calls (`read_plink(prefix, packed=True)`) halve mixmogam's four-thread
+peak to 0.73 GiB, with exactly equal saved association arrays, VB coefficients
+and fit diagnostics in all six pairs. The original runs, with the float
+genotype cache, peaked at 4.2-4.4 GiB; the cache is gone.
 
 All local CV and LOCO fits converged. Same-setting repetitions are exact,
 but all six local one-versus-four-thread comparisons exceed the original
 array tolerance (`rtol=1e-6`, `atol=1e-8`); those failures remain archived.
 Selected priors, iteration counts and convergence agree. Maximum absolute
-changes are 1.4312e-6 in p and 9.7892e-9 in association beta. No variant
-decision changes at p < 0.05, 0.01, 0.001, 0.05/20,000 or 5e-8. This is
+changes are 2.0e-5 in p and 1.3e-7 in association beta, on the PC-adjusted
+panel; with the cache they were 1.4e-6 and 9.8e-9. No variant decision
+changes at p < 0.05, 0.01, 0.001, 0.05/20,000 or 5e-8. This is
 numerical evidence for these panels, not proof of equivalence across inputs
 or statistical identity with official LDAK.
 

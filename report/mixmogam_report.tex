@@ -38,7 +38,7 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{4 October 2026\\\small Research report for version 2.0.0.dev5}
+\date{5 October 2026\\\small Research report for version 2.0.0.dev5 and commit e4089d8}
 
 \begin{document}
 \maketitle
@@ -73,12 +73,12 @@ under the genetic null; adjustment for two genotype PCs reduces this to
 These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
-moment-based variance fitting and optional parallel computation give
-mixmogam median complete-fit times of 24.29 and 22.28 seconds on two
-fixed panels. Official LDAK-KVIK took 25.45 and 30.09 seconds a day
-earlier, when identical mixmogam code ran 27\% slower, so these
-cross-day ratios mostly reflect host conditions. Disabling the genotype
-cache reduces peak resident memory by 63\% at 13--25\% more time.
+moment-based variance fitting with four workers gives mixmogam median
+complete-fit times of 20.36 and 19.01 seconds on two fixed panels, with
+1.4~GiB peak resident memory, or 0.73~GiB with calls stored two bits
+each. Official LDAK-KVIK took 25.45 and 30.09 seconds and 0.65~GiB on
+3 October, when identical mixmogam code ran 27\% slower than a day later,
+so these cross-day ratios mostly reflect host conditions.
 Thread changes exceed a prespecified strict numerical tolerance,
 although the tested significance decisions are unchanged. These
 workstation timings establish a workload-specific tradeoff rather than
@@ -86,7 +86,11 @@ general performance or calibration.
 Version 2.0.0.dev5 computes the same estimators with less work: in paired
 runs, an exact LOCO scan of 3,000 samples took 13.3 instead of 79.6
 seconds, and fewer Lanczos steps with more trace probes reduced Monte
-Carlo error. REML remains the default variance estimator. The research agenda emphasizes
+Carlo error. A later revision streams genotypes instead of caching them:
+with two-bit calls, KVIK's peak memory grows by 0.42 instead of 5.24
+bytes per genotype, and fits take 0.8 to 1.25 times as long as dev5's
+cached fits.
+REML remains the default variance estimator. The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
 approximations and measured failure limits.
 \end{abstract}
@@ -186,13 +190,13 @@ implementation & New input handling and fitting changes need fresh
 end-to-end runs. \\
 Matched phensim benchmark & Independent BED decoding and reference-reader
 checks; null calibration, QTL detection and process resource measurements;
-mixmogam methods rerun with 2.0.0.dev5 on the same inputs &
+mixmogam methods rerun with commit e4089d8 on the same inputs &
 Six independent panels per cell; small quantitative-trait simulations,
-controlled LD and three discrete populations; official timings from the
-previous day. \\
-Computational extension, 2.0.0.dev3 and dev5 reruns & Projected-moment validation;
-paired implementation, thread and cache comparisons; at 50,000 samples and
-20,000 markers, 24 mixmogam fits rerun with 2.0.0.dev5 and 12 official
+controlled LD and three discrete populations; official timings from
+two days earlier. \\
+Computational extension, 2.0.0.dev3 and e4089d8 reruns & Projected-moment validation;
+paired implementation, thread and storage comparisons; at 50,000 samples and
+20,000 markers, 24 mixmogam fits rerun with commit e4089d8 and 12 official
 fits & Two fixed timing panels; different variance estimators across
 programs; strict thread-tolerance failures retained; official timings
 from a day when identical mixmogam code ran 27\% slower. \\
@@ -201,6 +205,10 @@ Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
 50,000 samples; Lanczos steps and probes against dense REML on six panels &
 Two repetitions on a loaded host; simulated panels; two-step results move
 by Monte Carlo amounts. \\
+Genotype streaming, commits 12aa504 to e4089d8 & Paired fits against frozen
+predecessors at 10,000 samples, with result agreement; a same-day check of
+dev5 against e4089d8 at 50,000 samples & Two repetitions; simulated
+panels; one host. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -516,10 +524,10 @@ Equation~\eqref{eq:f}. Dense factorization costs $O(n^3)$ time and
 $O(n^2)$ storage, with a dense transformation cost of order $n^2m$ for
 $m$ tested variants. Streaming methods replace stored kinships by
 products with standardized genotype blocks. A product with $r$ right-hand
-sides costs order $nMr$ arithmetic; its memory consists of the right-hand
-sides, working blocks, and configured caches. Avoiding an $n\times n$
-kinship does not mean constant memory: a genotype cache can still
-approach the size of the standardized data.
+sides costs order $nMr$ arithmetic; its memory consists of the stored
+calls, the right-hand sides and working blocks. Avoiding an $n\times n$
+kinship does not mean constant memory: the calls alone take one byte, or
+a quarter byte, per genotype.
 
 Conjugate gradients supplies covariance solves, and stochastic Lanczos
 quadrature estimates likelihood terms for large samples. Both introduce
@@ -549,8 +557,9 @@ gives these identities and their interpretation.
 
 The computational changes first remove work whose result is already
 available. Variational fitting caches only requested fold-specific Gram
-matrices, reuses full-block Gram matrices for LOCO, and reuses final
-predictions. A persistent matrix-product workspace replaces repeated
+matrices, in the genotype storage precision and block by block up to a
+$10^9$-byte budget; it reuses full-block Gram matrices for LOCO, and
+reuses final predictions. A persistent matrix-product workspace replaces repeated
 allocations. Residual updates retain float64 accumulation while preparing
 the next matrix-product input in the genotype storage precision, float32
 by default. This distinction matters: converting the entire calculation
@@ -563,8 +572,9 @@ target); prediction, HE diagonal terms and retrospective statistics use
 16 MiB targets. These are explicit temporary-workspace budgets, not process RSS
 limits. Genotype validation and PLINK reading also use bounded chunks;
 reading no longer retains an entire packed BED beside its decoded copy.
-The stored input is still an int8 hard-call matrix, not a packed or fully
-out-of-core genotype backend.
+Calls are stored as an int8 matrix or, two bits each, in PLINK's
+variant-major layout, in memory or memory-mapped
+(Section~\ref{sec:streaming-methods}).
 
 With Numba, one compiled kernel prepares the markers for every thread
 count (Section~\ref{sec:streaming-methods}); \code{n\_threads>1}
@@ -572,8 +582,8 @@ distributes its 64-marker tiles across workers. Sample reductions remain
 serial within a marker, with no fast-math reassociation, so the prepared
 values do not depend on the thread count. Retaining $Mp$ float64
 projection coefficients permits every later pass to decode directly from
-int8 calls (Sections~\ref{sec:dev5-methods}
-and~\ref{sec:streaming-methods}). Uncached passes decode bounded slices,
+the stored calls (Sections~\ref{sec:dev5-methods}
+and~\ref{sec:streaming-methods}). Passes decode bounded slices,
 128 markers per variational subblock and 16 MiB elsewhere. This bounds
 the decoding workspace, not total memory.
 
@@ -589,14 +599,11 @@ requires an external thread limit because it is not detected by
 change floating-point rounding; a scientifically unchanged algorithm is
 not a promise of bitwise equality.
 
-The standardized-genotype cache has a default budget of $4\times10^9$
-bytes and is retained when its size is less than or equal to that budget.
-Consequently a float32 cache at $n=50{,}000$, $M=20{,}000$ lies exactly on
-the inclusion boundary. Disabling it saves retained storage but repeats
-decoding during fitting. The comparison in Section~\ref{sec:20k-results}
-measures this exchange in complete fits rather than inferring it from a
-decoder microbenchmark. That experiment used the 2.0.0.dev3 decoder;
-Section~\ref{sec:dev5-methods} describes its replacement.
+Through 2.0.0.dev5 a standardized-genotype cache, with a default budget
+of $4\times10^9$ bytes, held four bytes per genotype; a float32 cache at
+$n=50{,}000$, $M=20{,}000$ lay exactly on its inclusion boundary. The
+streaming revision removed it (Section~\ref{sec:streaming-methods}):
+every pass now decodes the calls.
 
 \subsection{Version 2.0.0.dev5: the same estimators with less work}
 \label{sec:dev5-methods}
@@ -729,9 +736,14 @@ rank-$q$ correction,
 \end{equation}
 In the measured revision (commit 12aa504) the optional float cache held
 the same unprojected values, so cached and streamed fits agreed bit for
-bit. Decoding follows the storage order: on
-one core of the test machine it costs about 0.26 ns per genotype from
-marker-major (PLINK) storage and 0.7 ns from sample-major arrays.
+bit. Commit e4089d8 removed that cache. It also stores calls two bits
+each, as PLINK BED rows, in memory or memory-mapped, and decodes them
+directly; preparation takes each marker's mean and variance from exact
+call counts, so int8 and two-bit storage, every layout and every thread
+count prepare identical values. Decoding follows the storage order: on
+one core of the test machine it costs about 0.2 ns per genotype from
+two-bit calls, 0.26 ns from marker-major int8 calls and 0.7 ns from
+sample-major arrays.
 One-pass consumers decode 16 MiB slices, which at 10,000 samples stay in
 cache between decoding and their two products; a floor of 256 markers per
 slice amortizes the per-slice $n\times c$ accumulation at larger $n$.
@@ -986,10 +998,12 @@ and validation run separately from association processes.
 
 The prespecified primary design contains 24 complete fits: two methods,
 two requested thread counts (one and four), three timing repetitions and
-two fixed panels. A separate 12-fit experiment compares cache budgets
-$4\times10^9$ and zero bytes with four mixmogam workers. Every local fit
+two fixed panels. A separate 12-fit experiment with four mixmogam
+workers, prespecified to compare cache budgets of $4\times10^9$ and zero
+bytes, now compares calls stored as int8 and two bits each, since no
+cache remains. Every local fit
 explicitly selects HE; the model grid and convergence settings are held
-fixed. Method-first order and thread positions are balanced; cache-first
+fixed. Method-first order and thread positions are balanced; storage
 order is balanced across the six pairs. Each fit starts in a fresh
 process, with tiny compilation/cache warm-ups excluded. Local time
 includes startup, imports, input, fitting and output. Official time sums
@@ -1003,8 +1017,8 @@ of eight; \code{n\_threads} requests one or four workers. The official
 Mac executable receives the corresponding environment limit and native
 \code{--max-threads} argument. Requested counts do not assert identical
 thread execution across implementations. The fitted data and drivers are
-frozen. The reported mixmogam fits are 2.0.0.dev5 reruns, and the official
-fits come from the original 2.0.0.dev3 experiment on the same inputs.
+frozen. The reported mixmogam fits are reruns with commit e4089d8, and the
+official fits come from the original 2.0.0.dev3 experiment on the same inputs.
 Repeated timings on two phenotypes measure computational
 variability, not biological replication. The new data are also distinct
 from the small known-covariance HE validation panels.
@@ -1082,20 +1096,22 @@ by an earlier implementation.
 
 The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
 (Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
-\ref{sec:he-results} and~\ref{sec:20k-results}) are 2.0.0.dev5 reruns.
-Each repeated the mixmogam methods on the
+\ref{sec:he-results} and~\ref{sec:20k-results}) are reruns with commit
+e4089d8 (Section~\ref{sec:streaming-methods}), whose version string still
+reads 2.0.0.dev5. Each repeated the mixmogam methods on the
 archived inputs, after checking the genotype files against their export
 hashes. The official LDAK-KVIK outputs, logs and process measurements of
 the original runs were reused unchanged. Input identity makes the official
 results reusable; it does not make the timings simultaneous. The reruns
-took place on 4 October 2026, a day after the official runs. An unrelated
-memory-intensive job overlapped the matched, workload-extension and HAPNEST
-reruns, with up to 143,847 system swap-out pages in one step. It had ended
-before the HE and 20,000-marker reruns, which recorded no swap-outs. Host
-conditions matter: identical 2.0.0.dev4 code took 33.22 seconds on
+ran one after another on 5 October 2026, two days after the official runs.
+Host conditions matter: identical 2.0.0.dev4 code took 33.22 seconds on
 3 October and 24.1 seconds on 4 October for the same 20,000-marker fit.
-Cross-program time ratios therefore include day-to-day and load
-differences. The original archives remain as provenance.
+Exact LOCO, unchanged since 2.0.0.dev5, took 38.1 seconds for one
+4,000-sample case in the dev5 rerun of 4 October, when an unrelated job
+loaded the host, and 26.0 seconds on 5 October. Cross-program time ratios
+therefore include day-to-day and load differences, and
+Section~\ref{sec:20k-results} compares dev5 and e4089d8 on one day. The
+dev5 reruns and the original archives remain as provenance.
 
 \section{Results}
 
@@ -1177,7 +1193,7 @@ sampling variation of the reported summaries.
 \label{sec:kvik-results}
 
 All 384 method runs returned valid p-values for every retained variant:
-288 mixmogam runs repeated with 2.0.0.dev5 and the 96 original official
+288 mixmogam runs repeated with commit e4089d8 and the 96 original official
 runs. Execution is distinct from convergence: mixmogam KVIK reported
 incomplete cross-validation in six unadjusted confounded mixed-trait runs,
 one of which also had incomplete LOCO fits (two in the original runs).
@@ -1185,8 +1201,9 @@ These remain in the summaries. In the original archive, an independently
 regenerated structured/PC-adjusted case reproduced the serialized inputs
 and all four methods' p-values exactly using frozen source snapshots.
 Exact LOCO reproduces every original rejection rate; BOLT-inf and KVIK
-change by Monte Carlo amounts, from new Lanczos probes and calibration
-draws.
+change by Monte Carlo amounts, from the new Lanczos probes and calibration
+draws of 2.0.0.dev5. Streaming changed no rejection rate or detection of
+the dev5 reruns and moved $\log_{10}p$ by at most $5\times10^{-6}$.
 
 Figure~\ref{fig:kvik-phensim} separates genetic-null rejection, mixed-trait
 rejection on chromosome 6, and causal-marker detection. In unstructured
@@ -1219,7 +1236,7 @@ nor one favourable cell establishes general equivalence.
  \centering
  \includegraphics[width=\textwidth]{figures/kvik_phensim.pdf}
  \caption{Matched phensim comparison at 800 samples and 6,000 markers;
- mixmogam methods are 2.0.0.dev5 reruns on the original inputs.
+ mixmogam methods are reruns with commit e4089d8 on the original inputs.
  Bars show one Monte Carlo standard error across six independent panels.
  Dashed lines indicate nominal 1\% rejection. The middle row uses only
  the chromosome without generating effects; the last row measures ten
@@ -1407,24 +1424,24 @@ are separate requirements.
 New timings use an Apple M2 Pro with 16 GB RAM, Python 3.14.6,
 NumPy 2.4.6 and Numba 0.66.0, with one thread per method. mixmogam KVIK
 uses its compiled kernels. Across the 96 primary inputs its median time
-is 1.79 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
-237.4 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
+is 1.89 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
+199.1 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
 2.0.0.dev2 runs took 2.57 seconds and 319.5 MiB. The approximately
-2.4-fold ratio of medians is workload-specific; startup and loading matter
+2.6-fold ratio of medians is workload-specific; startup and loading matter
 at this size, and the two programs were timed on different days. The native Mac LDAK build lacks MKL, so this is not
 a comparison of each program's fastest available hardware build.
 
 Figure~\ref{fig:kvik-scaling} and Table~\ref{tab:kvik-scaling} extend the
 controlled LD workloads to 4,000 samples and 24,000 markers. Dense exact
 scans become substantially more expensive, although at 4,000 samples they
-now take about 39 seconds instead of 91. LDAK-KVIK retains lower observed
+now take about 26 seconds instead of 91. LDAK-KVIK retains lower observed
 time and RSS than mixmogam KVIK. Because n and m both increase, the slopes
 do not identify a sample-size complexity exponent.
 
 \begin{table}[htbp]
  \centering\small
  \caption{Primary end-to-end resources at n=800 and m=6,000. Each row
- covers the same 96 inputs. mixmogam rows are 2.0.0.dev5 reruns; LDAK-KVIK
+ covers the same 96 inputs. mixmogam rows are e4089d8 reruns; LDAK-KVIK
  rows are the original measurements. LDAK-KVIK time sums both stages; its
  RSS is the larger stage peak. Common data preparation is excluded.}
  \label{tab:kvik-resources}
@@ -1444,7 +1461,7 @@ do not identify a sample-size complexity exponent.
  workloads. Points are medians; bars span the observed range across six
  replicates at n=800 and two at n=2,000 or 4,000. Cost axes are logarithmic.
  Sample and marker counts increase together. mixmogam points are
- 2.0.0.dev5 reruns; LDAK-KVIK points are the original measurements.
+ e4089d8 reruns; LDAK-KVIK points are the original measurements.
  These are measurements, not extrapolations or fitted complexity laws.}
  \label{fig:kvik-scaling}
 \end{figure}
@@ -1489,10 +1506,12 @@ genotype and interpreter; they are not measurements of an allocation alone.
 
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
 association comparison to n=50,000, with mixmogam KVIK at its default REML.
-At 50,000 samples the 2.0.0.dev5 reruns took 31.55 and 38.53 seconds,
-against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs and 24.45
-and 35.42 seconds for official LDAK-KVIK. Peak RSS rose from 2.93 and
-3.16 GiB to 4.07 and 3.44 GiB. Fitted heritabilities, inflation and
+At 50,000 samples the e4089d8 reruns took 38.19 and 40.20 seconds,
+against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs, 31.55
+and 38.53 seconds with dev5's genotype cache, and 24.45 and 35.42 seconds
+for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16 GiB in the
+original runs, and 4.07 and 3.44 GiB with the cache, to 1.94 and
+1.97 GiB. Fitted heritabilities, inflation and
 rejection change only slightly. These are single-panel timing and
 feasibility observations. Their null-chromosome summaries are useful
 diagnostics, but neither nominal-looking rejection nor greater detection
@@ -1522,7 +1541,7 @@ for all markers.
 \begin{table}[htbp]
  \centering\small
  \caption{HAPNEST-model workloads, m=12,000, one realization per cell.
- mixmogam KVIK (2.0.0.dev5 rerun) uses REML; LDAK-KVIK rows are the
+ mixmogam KVIK (e4089d8 rerun) uses REML; LDAK-KVIK rows are the
  original measurements on the same inputs.
  Time is end-to-end seconds; RSS is peak MiB. Inflation and 1\%
  rejection use the chromosome with no generating genetic effects.
@@ -1553,19 +1572,20 @@ Removing redundant products and allocations helped, but repeated kinship
 products for variance fitting remained a major cost.
 
 In a separate one-thread comparison on the two 50,000-sample,
-12,000-marker panels, rerun with 2.0.0.dev5, choosing HE reduced median
-complete-fit time from 31.27 to 16.83 seconds and from 31.77 to 17.06
+12,000-marker panels, rerun with commit e4089d8, choosing HE reduced median
+complete-fit time from 38.17 to 17.56 seconds and from 39.70 to 18.77
 seconds, respectively. These are within-experiment comparisons; the REML
 times should not be substituted for the baseline of the preceding
 experiment. The original runs on 3 October, with older code, took 76.13
-and 26.28 seconds, and 73.57 and 27.20. On the rerun day, 2.0.0.dev4 took
+and 26.28 seconds, and 73.57 and 27.20. On 4 October, 2.0.0.dev4 took
 49.8 seconds for the first REML fit against 31.5 for 2.0.0.dev5, which
-isolates the code effect. HE changed the fitted
+isolates that code effect; without dev5's genotype cache, REML takes 1.20
+times as long on one day (Section~\ref{sec:20k-results}). HE changed the fitted
 covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087.
 Its time saving is therefore an estimator tradeoff, not a numerically
-equivalent acceleration of REML. REML also needs more memory: 4.09
-against 3.22 GiB peak RSS with 2.0.0.dev5, and 4.15 GiB with 2.0.0.dev4
-on the same day.
+equivalent acceleration of REML. REML also needs more memory: 1.94
+against 1.02 GiB peak RSS without the cache, and 4.09 against 3.22 GiB
+with dev5's.
 
 The independent known-covariance study supports the narrower claim that
 the projected moment equations target their stated coefficients.
@@ -1587,27 +1607,32 @@ calibration or validity under environmental confounding.
 \label{sec:20k-results}
 
 All 24 rerun mixmogam fits and the 12 reused official fits are complete,
-and every local cross-validation and LOCO fit converged. The rerun arrays
-and scientific summaries are bit-identical to the original 2.0.0.dev3
-run's; only the resources changed (Table~\ref{tab:20k-resources}). Four
-requested workers reduce mixmogam's median wall time by factors 1.25 and
-1.21 on the unstructured and PC-adjusted confounded panels, to 24.29 and
-22.28 seconds. The official executable took 25.45 and 30.09 seconds on
+and every local cross-validation and LOCO fit converged. The descriptive
+summaries of Table~\ref{tab:20k-science} equal the original 2.0.0.dev3
+run's at their displayed precision; streaming moved $h^2$ by less than
+$10^{-6}$ and $\log_{10}p$ by at most $1.8\times10^{-4}$. Four
+requested workers reduce mixmogam's median wall time by factors 1.61 and
+1.54 on the unstructured and PC-adjusted confounded panels, to 20.36 and
+19.01 seconds (Table~\ref{tab:20k-resources}); with dev5's genotype cache
+the factors were 1.25 and 1.21, and the times 24.29 and 22.28 seconds.
+The official executable took 25.45 and 30.09 seconds on
 3 October. These times cannot be compared directly. On 4 October,
 identical 2.0.0.dev4 code took 24.1 seconds for the first panel's
 four-worker fit, against 33.22 seconds on 3 October, when system-wide
-swapping was recorded. On this HE workload 2.0.0.dev5 matches 2.0.0.dev4
-in time, memory and p-values, so the change from the original table
-reflects host conditions, not code. mixmogam's median peak RSS of 5.1 GiB
-is about 7.8 times the official executable's. The original 4.0--4.4 GiB
-was below the 4.66 GiB that the float cache and int8 input occupy, so
-swapping had lowered it. These results support useful optional
+swapping was recorded. A same-day check on 5 October ran the first
+panel's four-worker fit with both versions: 24.6 seconds and 4.4--5.1~GiB
+peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
+12,000-marker panel, one-thread REML took 31.8 and 38.2 seconds; exact
+LOCO, unchanged, took the same time and memory under both versions, with
+identical p-values. mixmogam's
+median peak RSS of 1.4~GiB is about 2.2 times the official executable's
+0.65~GiB. These results support useful optional
 parallelism on this workload; they do not establish efficiency parity.
 
 \begin{table}[htbp]
  \centering\small
  \caption{Complete fits at 50,000 samples and 20,000 markers on identical
- inputs: mixmogam 2.0.0.dev5 reruns (4 October) and the original official
+ inputs: mixmogam e4089d8 reruns (5 October) and the original official
  fits (3 October). Wall time and peak RSS are median [minimum, maximum]
  of three fresh-process repetitions on each fixed panel. Speedup is
  relative to the same method's one-thread median. Timing boundaries
@@ -1627,13 +1652,18 @@ The numerical audit preserves its original elementwise tolerances,
 $\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 16 repeated-run
 comparisons within a method and worker count are exact, eight of them from
 the reruns. All six local four-versus-one comparisons, however, exceed the
-strict array tolerance by the same amounts as in the original run; none of
-the six official comparisons does. Selected exponents and priors,
-integer iteration counts and convergence flags agree across counts.
-The largest local absolute differences are $9.7892\times10^{-9}$ for
-association effects, $3.0826\times10^{-11}$ for standard errors, and
-$1.4312\times10^{-6}$ for p-values; the maximum absolute log-base-ten
-p-value difference is $1.15\times10^{-5}$. All-variant significance
+strict array tolerance; none of the six official comparisons does.
+Selected exponents and priors, integer iteration counts and convergence
+flags agree across counts. On the unstructured panel the differences are
+of the original run's size. On the PC-adjusted panel they grew about
+tenfold: the largest are $1.3446\times10^{-7}$ for association effects,
+$2.1913\times10^{-10}$ for standard errors and $1.9618\times10^{-5}$ for
+p-values, and $1.06\times10^{-4}$ in log-base-ten p-values, against
+$9.7892\times10^{-9}$, $3.0826\times10^{-11}$, $1.4312\times10^{-6}$ and
+$1.15\times10^{-5}$ before. Covariates are now removed by subtracting
+rank-$q$ corrections from products of unprojected genotypes
+(Equation~\eqref{eq:rank-q}), which probably amplifies summation-order
+differences when PCs explain genotype variance. All-variant significance
 masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
 in all 30 checks. Unchanged decisions are useful evidence of stability
 for these particular data and thresholds; they do not turn the six
@@ -1666,33 +1696,28 @@ supplies independent replication of a calibration claim.
  \end{tabular}
 \end{table}
 
-The separate cache experiment makes the memory tradeoff explicit
-(Table~\ref{tab:20k-cache}). Every cached fit retains exactly
-4,000,000,000 float32 genotype bytes, while every uncached fit retains
-zero float-cache bytes. Disabling the cache reduces peak RSS by median
-paired fractions of 63\% on both panels, with 13\% and 25\% longer wall
-time; the original run, under swapping, recorded 52\% and 49\%, with
-31\% and 39\%.
-All six cache pairs have exactly equal saved association arrays,
-variational coefficients and nested fit diagnostics; all eight within-route
-repeat comparisons are also exact. The 1,000,000,000-byte int8 input,
-prepared moments, projection coefficients and fitting workspaces remain.
-Cache-free fitting is therefore a lower-memory option, not an out-of-core
-analysis. The cache experiment has its own paired baseline and must not
-replace the primary experiment's cached timing with a more favourable one.
+The separate storage experiment replaces the cache experiment, since no
+cache remains (Table~\ref{tab:20k-storage}). With dev5, disabling the
+cache had cut peak RSS by 63\% at 13\% and 25\% longer wall time. Calls
+stored two bits each halve the remaining peak, to 0.73~GiB against the
+official executable's 0.65~GiB, and shorten wall time by 2\% and 3\%.
+All six storage pairs have exactly equal saved association arrays,
+variational coefficients and nested fit diagnostics. The calls, prepared
+per-marker values, Gram matrices and fitting workspaces remain, so this
+is lower-memory fitting, not an out-of-core analysis.
 
 \begin{table}[htbp]
  \centering\small
- \caption{Separate cache experiment at 50,000 samples and 20,000 markers,
- explicit HE and four workers, 2.0.0.dev5 reruns. Entries are median [minimum, maximum]
- over three matched repetitions. The only changed fitting option is
- the standardized-genotype cache budget, $4\times10^9$ versus zero bytes.}
- \label{tab:20k-cache}
+ \caption{Separate storage experiment at 50,000 samples and 20,000 markers,
+ explicit HE and four workers, commit e4089d8. Entries are median [minimum, maximum]
+ over three matched repetitions. The only change is how the calls are
+ stored: one byte or two bits each.}
+ \label{tab:20k-storage}
  \begin{tabular}{@{}lrr@{}}
  \toprule
- Cache route & Wall seconds & Peak RSS (GiB) \\
+ Calls & Wall seconds & Peak RSS (GiB) \\
  \midrule
- \tabinput{tables/kvik_20k_cache.tex}
+ \tabinput{tables/kvik_20k_storage.tex}
  \bottomrule
  \end{tabular}
 \end{table}
@@ -1701,8 +1726,9 @@ Resource interpretation has two additional limits. In the original
 run, system-wide VM observations spanning the period after primary run
 nine through the end of all fits record 32,093 additional swap-in pages
 and 111,568 swap-out pages. They cannot identify which program or fit
-caused swapping. The local reruns recorded 7,682 swap-in pages and no
-swap-outs, which is consistent with their narrow ranges.
+caused swapping. The dev5 reruns recorded 7,682 swap-in pages and no
+swap-outs; the e4089d8 reruns kept no VM counters, but their ranges are
+as narrow.
 Second, the pinned official Mac binary links Accelerate and inspection
 finds no OpenMP library linkage or matching symbols. Source-level OpenMP
 directives cannot be assumed active in this executable. These measurements
@@ -1812,6 +1838,21 @@ genotype even without the cache; streaming them lowered its peak RSS from
 repetition returned identical arrays, cached and uncached fits of the new
 source agreed bit for bit, and between versions $\log_{10}p$ differed by at
 most $6\times10^{-5}$.
+
+Two later steps, together commit e4089d8, keep the estimators. Paired fits
+against 12aa504 with its cache (\code{20261004-}\allowbreak\code{packed-calls})
+price the cache's removal: KVIK-HE and BOLT-LMM took 1.2 to 1.3 times as
+long, KVIK-HE at dev5's cached speed, while KVIK-HE's peak RSS grew by
+1.16 instead of 5.14 bytes per genotype, and by 0.42 with two-bit calls:
+0.61 instead of 4.10~GiB at 80{,}000 markers. Two-bit and int8 storage
+gave identical arrays; against the baseline $\log_{10}p$ moved by at most
+$5\times10^{-13}$, since preparation now takes moments from exact call
+counts. Variational Gram matrices are stored in float32 and cached block
+by block up to $10^9$ bytes (\code{20261004-}\allowbreak\code{gram-cache}),
+which moved $\log_{10}p$ by at most $4\times10^{-6}$. Where BOLT-LMM's
+cross-validation Grams had exceeded the budget in float64 they now fit,
+and direct fits of that cross-validation ran 1.5 (BOLT-LMM) and 2.5
+(KVIK) times faster.
 
 \begin{table}[htbp]
  \centering\small
@@ -2140,25 +2181,23 @@ decoding work can reduce the remaining memory gap without forfeiting the
 speed gained by reusing matrix products.
 
 The immediate experiment is a same-day repeat of both programs in the
-20,000-marker comparison on an otherwise idle host. The 2.0.0.dev5 reruns
-repeated only the mixmogam half, so the cross-program ratios still span two
-days with different host conditions. The pinned Linux OpenMP/MKL reference
+20,000-marker comparison on an otherwise idle host. The reruns repeated
+only the mixmogam half, so the cross-program ratios still span days with
+different host conditions. The pinned Linux OpenMP/MKL reference
 build should follow. Use the same
 datasets, balanced order, measured CPU time and complete-fit boundaries.
 Requested thread counts alone do not identify parallel work. Vary sample
-size and marker density separately, placing marker counts on both sides
-of the inclusive 4 GB cache boundary with explicit cache budgets.
-The jump from retained float blocks to repeated decoding is a software
-threshold, not evidence of a statistical complexity transition.
+size and marker density separately, reporting peak memory per genotype
+for int8 and two-bit calls.
 
 Version 2.0.0.dev5 decodes through prepared per-variant value tables and
-covariate coefficients, and the subsequent revision no longer projects
-markers at all (Sections~\ref{sec:dev5-methods}
-and~\ref{sec:streaming-methods}). A
-subsequent implementation study should compare retained int8 calls with
-two-bit storage and profile decoding together with matrix products.
-Reducing bytes read need not reduce time if unpacking prevents efficient
-matrix operations. Missing calls, noncontiguous chromosomes, repeated
+covariate coefficients; the subsequent revisions no longer project
+markers, keep no float copy and decode two-bit calls directly
+(Sections~\ref{sec:dev5-methods} and~\ref{sec:streaming-methods}).
+Two-bit calls were at least as fast as int8 calls in every measured median,
+but one-thread REML still takes 1.13 to 1.2 times as long as with dev5's
+cache; profile decoding together with matrix products before trading
+memory back for time. Missing calls, noncontiguous chromosomes, repeated
 indices and high covariate dimension need independent precision oracles.
 The current $Mp$ projection store is modest for two PCs but its cost
 must be included when $p$ grows. Measure setup, variance fitting,
@@ -2187,8 +2226,8 @@ A speedup is scientifically useful only if the inferential target and
 accuracy are preserved. Release artifacts should reproduce a compact
 set of known-truth calculations and input round trips before any larger
 performance claim is made. A compact backend should advance only when
-it improves a prespecified time--memory tradeoff over the measured cached
-and uncached routes, without hiding estimator changes or numerical failures.
+it improves a prespecified time--memory tradeoff over the measured int8
+and two-bit routes, without hiding estimator changes or numerical failures.
 
 \section*{Data, software, and reproducibility}
 
@@ -2228,7 +2267,7 @@ The 20,000-marker inputs and their all-call audit are archived as
 \begin{quote}\small
 \code{20261003-hapnest-kvik-n50000-m20000}.
 \end{quote}
-The thread and cache experiments are in \code{20261003-kvik-20k}.
+The original thread and cache experiments are in \code{20261003-kvik-20k}.
 They retain commands, raw measurements, association arrays, model
 diagnostics and verification records, including numerical failures and
 VM observations. Their frozen source version is 2.0.0.dev3. This report's
@@ -2250,15 +2289,21 @@ with its source snapshot.
 Tables~\ref{tab:dev5-paired} and~\ref{tab:dev5-slq} from these files and
 records hashes in \code{dev5\_table\_}\allowbreak\code{manifest.json}.
 
-The benchmark reruns with 2.0.0.dev5 are archived as
-\code{20261004-}\allowbreak\code{phensim-kvik-}\allowbreak\code{dev5} (with
-\code{-n2000} and \code{-n4000}), \code{20261004-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{dev5-n10000}
-and \code{-n50000}, \code{20261004-}\allowbreak\code{kvik-he-}\allowbreak\code{dev5} and
-\code{20261004-}\allowbreak\code{kvik-20k-}\allowbreak\code{dev5}. Each records its frozen source,
-its commands and the hash of every reused file. The same-day check is
-\code{20261004-}\allowbreak\code{same-day-dev4-dev5}. The figure and table
+The benchmark reruns with commit e4089d8 are archived as
+\code{20261005-}\allowbreak\code{phensim-kvik-}\allowbreak\code{e4089d8} (with
+\code{-n2000} and \code{-n4000}), \code{20261005-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{e4089d8-n10000}
+and \code{-n50000}, \code{20261005-}\allowbreak\code{kvik-he-}\allowbreak\code{e4089d8} and
+\code{20261005-}\allowbreak\code{kvik-20k-}\allowbreak\code{e4089d8}, beside the 2.0.0.dev5 reruns
+(\code{20261004-}\allowbreak\code{*-dev5}). Each records its frozen source,
+its commands and the hash of every reused file. The same-day checks are
+\code{20261004-}\allowbreak\code{same-day-dev4-dev5} and
+\code{20261005-}\allowbreak\code{same-day-dev5-e4089d8}. The figure and table
 generators read the reruns, take official LDAK-KVIK results from the
-original archives, and verify reused inputs and outputs by hash.
+original archives, and verify reused inputs and outputs by hash. The
+streaming evidence is in \code{20261004-}\allowbreak\code{genotype-streaming},
+\code{20261004-}\allowbreak\code{gram-cache} and
+\code{20261004-}\allowbreak\code{packed-calls}; \code{report/}\allowbreak\code{make\_streaming\_tables.py}
+renders Tables~\ref{tab:streaming-paired} and~\ref{tab:streaming-scaling}.
 
 \code{report/README.md} gives the reproduction commands, exact archive
 identities, and evidence map. The figure generator reads recorded results and does not silently

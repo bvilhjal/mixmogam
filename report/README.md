@@ -8,12 +8,14 @@ includes a matched comparison with official LDAK-KVIK, optimized workloads at
 through 100,000 samples. Historical evidence retains its original limitations.
 Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
 with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
-support it. Sections 2.11 and 4.10 cover the subsequent revision, which
-streams genotypes without projecting covariates out of each marker, and its
-paired fits against 2.0.0.dev5. The benchmark results are 2.0.0.dev5 reruns of the mixmogam
-methods on the archived inputs. Official LDAK-KVIK results are reused from
-the original runs. Their timings come from the previous day, when identical
-mixmogam code ran 27% slower, so cross-program time ratios span both days.
+support it. Sections 2.11 and 4.10 cover the subsequent revisions, which
+stream genotypes without projecting covariates out of each marker, drop the
+float genotype cache and store calls two bits each, with their paired fits.
+The benchmark results are reruns of the mixmogam methods with commit e4089d8
+on the archived inputs. Official LDAK-KVIK results are reused from the
+original runs of 3 October, when identical mixmogam code ran 27% slower than
+a day later, so cross-program time ratios span days; same-day checks compare
+the mixmogam versions directly.
 
 The manuscript distinguishes the original REML-default workloads from the
 subsequent explicit HE option and computational optimizations. The
@@ -35,16 +37,17 @@ Table 1. Evidence and provenance used in the manuscript.
 | Evidence | Archive under `benchmarks/results/` | Interpretation |
 |---|---|---|
 | Known-covariance denominator experiment | `20261003-manuscript-geometry` | New analytic and simulated conditional calibration; separate calibration/audit variants |
-| Matched phensim comparison | `20261003-phensim-kvik`; rerun `20261004-phensim-kvik-dev5` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
-| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000`; reruns `20261004-phensim-kvik-dev5-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
-| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261004-hapnest-kvik-dev5-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
-| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261004-kvik-he-dev5` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
+| Matched phensim comparison | `20261003-phensim-kvik`; rerun `20261005-phensim-kvik-e4089d8` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
+| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000`; reruns `20261005-phensim-kvik-e4089d8-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
+| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261005-hapnest-kvik-e4089d8-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
+| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261005-kvik-he-e4089d8` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
 | Explicit parallelism and memory | `20261003-kvik-parallel`, `20261003-kvik-cache` | Full 12K fits and numerical audits; optional parallel paths preserve model order but can change rounding |
-| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261004-kvik-20k-dev5` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations, observed swapping |
+| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261005-kvik-20k-e4089d8` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations; the rerun's int8 versus two-bit storage fits replace the cache fits |
+| Superseded reruns and same-day checks | `20261004-*-dev5`, `20261004-same-day-dev4-dev5`, `20261005-same-day-dev5-e4089d8` | 2.0.0.dev5 reruns kept as provenance; same-day checks separate code from host conditions |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
 | Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults`, `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
-| Genotype streaming without projection | `20261004-genotype-streaming` | Paired dev5/12aa504 fits on seven workloads and KVIK-HE at 10K samples and 10K-80K markers, with and without the float cache; two repetitions on an idle host |
+| Genotype streaming without projection | `20261004-genotype-streaming`, `20261004-gram-cache`, `20261004-packed-calls` | Paired fits of dev5 against 12aa504, then of the float32 Gram cache and of two-bit calls without the float cache; KVIK-HE at 10K samples and 10K-80K markers; two repetitions on an idle host |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -88,6 +91,7 @@ python report/make_figures.py
 python report/make_kvik_figures.py
 python report/make_efficiency_tables.py
 python report/make_dev5_tables.py
+python report/make_streaming_tables.py
 cd report
 tectonic mixmogam_report.tex
 ```
@@ -96,7 +100,7 @@ This is a multi-file LaTeX project: its figures and tables must remain beside th
 source. The figure script reads the archived CSVs, excludes the invalid external
 comparison, and writes input/output hashes to `figure_manifest.json`.
 The matched comparison has separate figure and HAPNEST manifests. The
-20K tables are regenerated directly from the primary and cache result archives;
+20K tables are regenerated directly from the primary and storage result archives;
 `efficiency_table_manifest.json` records their inputs and output hashes;
 `dev5_table_manifest.json` does the same for the two 2.0.0.dev5 tables. The earlier
 association results use mixmogam `2.0.0.dev2` at `db232216`, with exact phensim

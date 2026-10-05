@@ -88,6 +88,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   dev4 code ran 27% faster than on the day of the original runs, so most of
   the differences from those archives in time and peak RSS reflect host
   conditions.
+- Rerun the same benchmarks with commit e4089d8 (`20261005-*-e4089d8`); the
+  report now uses these reruns. At 50,000 samples and 20,000 markers,
+  four-thread KVIK-HE peaked at 1.4 GiB instead of 5.1, or 0.73 GiB with
+  two-bit calls (official LDAK-KVIK: 0.65). A same-day check against dev5
+  ([`20261005-same-day-dev5-e4089d8`](benchmarks/results/20261005-same-day-dev5-e4089d8/README.md))
+  found four-thread HE 17% faster and one-thread REML 1.2 times slower
+  without the cache. Rejection rates, power and QTL detection are unchanged,
+  and log10 p moved by at most 1.8e-4. One- versus four-thread differences
+  on the PC-adjusted 20K panel grew tenfold (up to 2.0e-5 in p), with
+  unchanged decisions. The 20K cache experiment is now an int8 against
+  two-bit storage experiment: `kvik_efficiency.py` and
+  `kvik_thread_scaling.py` gained `--storage`.
 
 ## [2.0.0.dev5] - 2026-10-04
 

@@ -62,19 +62,19 @@ packed=True)`, or `read_plink(prefix, mmap=True)` to leave them in the
 mapped bed file. See the [quickstart](docs/quickstart.md#larger-kvik-fits)
 for an explicit HE/four-thread configuration.
 
-The [20K benchmark](benchmarks/results/20261004-kvik-20k-dev5/README.md) measures
-50,000 samples on two fixed phensim HAPNEST panels, with three fresh-process
-timings per setting. Rerun with 2.0.0.dev5, four-thread mixmogam HE took
-median 24.29 s without structure and 22.28 s with structure/confounding and
-PCs. Official LDAK-KVIK took 25.45 s and 30.09 s in the
-[original run](benchmarks/results/20261003-kvik-20k/README.md) a day earlier,
-when identical mixmogam code was 27% slower. Those cross-day ratios mostly
-reflect host conditions
-([same-day check](benchmarks/results/20261004-same-day-dev4-dev5/README.md)).
-Disabling the cache cut peak RSS by 63%, at 13% and 25% longer elapsed time,
-with exactly equal saved numerical results. One- versus four-thread results
-have small rounding differences that exceed the original strict array
-tolerance; the tested significance decisions agree. These are different
+The [20K benchmark](benchmarks/results/20261005-kvik-20k-e4089d8/README.md) measures
+50,000 samples and 20,000 variants on two fixed phensim HAPNEST panels, with
+three fresh-process timings per setting. Four-thread mixmogam HE took median
+20.36 s without structure and 19.01 s with structure/confounding and PCs, at
+1.4 GiB peak RSS, or 0.73 GiB with two-bit calls and identical results.
+Official LDAK-KVIK took 25.45 s and 30.09 s at 0.65 GiB in the
+[original run](benchmarks/results/20261003-kvik-20k/README.md) on 3 October,
+when identical mixmogam code was 27% slower than a day later, so those
+cross-day ratios mostly reflect host conditions. On one day, 2.0.0.dev5 with
+its genotype cache took 24.6 s at 4.4-5.1 GiB for the first panel
+([same-day check](benchmarks/results/20261005-same-day-dev5-e4089d8/README.md)).
+One- versus four-thread results have small rounding differences that exceed
+the original strict array tolerance; the tested significance decisions agree. These are different
 estimators on two biological realizations, not a calibration study.
 Timings use explicit HE and exclude initial Numba compilation;
 **REML and one thread remain the defaults**.

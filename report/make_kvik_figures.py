@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """Render the phensim/reference comparison, without rerunning scans.
 
-The archives are the 2.0.0.dev5 reruns: mixmogam methods ran again on the
+The archives are reruns with commit e4089d8: mixmogam methods ran again on the
 original inputs, and the official LDAK-KVIK outputs were reused unchanged.
 Every reused file is checked against the hash recorded at rerun time.
 """
@@ -17,8 +17,8 @@ import numpy as np
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN = ROOT / "benchmarks/results/20261004-phensim-kvik-dev5"
-HAPNEST = "benchmarks/results/20261004-hapnest-kvik-dev5-n{n}"
+RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
+HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
 OUT = ROOT / "report"
 METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
 NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam KVIK", "LDAK-KVIK"]
