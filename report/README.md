@@ -11,8 +11,9 @@ with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
 support it. Sections 2.11 and 4.10 cover the subsequent revisions, which
 stream genotypes without projecting covariates out of each marker, drop the
 float genotype cache and store calls two bits each, with their paired fits.
-The package's two-step method inspired by LDAK-KVIK is called HRATT; runs
-archived before the rename keep its earlier name.
+The package's two-step method inspired by LDAK-KVIK is HRATT, the
+Heritability-weighted Residual Association Two-step Test; runs archived
+before the rename keep its earlier name.
 The benchmark results are reruns of the mixmogam methods with commit e4089d8
 on the archived inputs. Official LDAK-KVIK results are reused from the
 original runs of 3 October, when identical mixmogam code ran 27% slower than

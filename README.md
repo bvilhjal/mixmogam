@@ -28,7 +28,8 @@ Table 1. Association methods implemented by the current package.
 | `"hratt"` | HRATT: elastic-net LOCO scores and structure-dependent calibration |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
 
-HRATT is inspired by LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) and follows
+HRATT, the Heritability-weighted Residual Association Two-step Test, is
+inspired by LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) and follows
 its two-step design: an elastic-net LOCO prediction under LDAK's heritability
 model, then retrospective score tests with a structure-dependent calibration.
 It is not LDAK-KVIK. The two-step paths are research implementations with

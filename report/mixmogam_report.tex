@@ -69,8 +69,9 @@ uses six independent panels per cell, with and without local LD, and
 verifies every exported genotype. At $n=800$ with LD, environmental
 confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
 under the genetic null; adjustment for two genotype PCs reduces this to
-0.97\%. Corresponding rates for mixmogam's HRATT, a two-step method
-inspired by LDAK-KVIK, are 0.66\% and 0.94\%.
+0.97\%. Corresponding rates for mixmogam's Heritability-weighted Residual
+Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.66\% and
+0.94\%.
 These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
@@ -118,8 +119,9 @@ whole-genome prediction, and approximate association statistics.
 BOLT-LMM combines mixed-model association with a mixture prior on marker
 effects \citep{loh2015}; REGENIE constructs whole-genome predictions
 through successive ridge regressions \citep{mbatchou2021}; and newer
-approaches include LDAK-KVIK \citep{hof2025} and the variational method
-Quickdraws \citep{loya2025}. These programs have distinct fitting and
+approaches include LDAK-KVIK \citep{hof2025}, which inspired this
+package's Heritability-weighted Residual Association Two-step Test (HRATT),
+and the variational method Quickdraws \citep{loya2025}. These programs have distinct fitting and
 testing procedures. A claim about one denominator approximation should
 therefore be evaluated at the level of that approximation, rather than
 assigned to all methods with a two-step workflow.
@@ -863,8 +865,9 @@ mixmogam HRATT and official LDAK-KVIK use their default fitting and
 calibration settings with explicit seeds and one thread. These are
 comparisons of supplied procedures, whose priors and tuning searches
 differ; matching inputs does not make their statistical models identical.
-Here ``mixmogam HRATT'' denotes this package's two-step method, inspired
-by LDAK-KVIK \citep{hof2025} and following its design, while
+Here ``mixmogam HRATT'' denotes this package's Heritability-weighted
+Residual Association Two-step Test, inspired by LDAK-KVIK \citep{hof2025}
+and following its design, while
 ``LDAK-KVIK'' denotes the official standalone executable. The distinction
 includes statistical choices, such as variance-component estimation, as well
 as implementation language. Versions up to commit e4089d8 called the method

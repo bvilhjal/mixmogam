@@ -9,7 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- The KVIK-style method is now HRATT: `gwas(..., method="hratt")`,
+- The KVIK-style method is now HRATT, the Heritability-weighted Residual
+  Association Two-step Test: `gwas(..., method="hratt")`,
   `twostep.hratt`, `HRATT_GRID` and `HRATT_ALPHAS`, and results report
   `extra["method"] == "hratt"`. HRATT is inspired by LDAK-KVIK (Hof & Speed
   2025) and follows its two-step design, but its variance fitting,

@@ -18,8 +18,9 @@ and in the calibration:
   BOLT's 18-point grid); calibrated so its LD Score regression intercept
   matches BOLT-LMM-inf's. Falls back to BOLT-LMM-inf when the mixture
   does not predict better in CV.
-- HRATT, this package's method inspired by LDAK-KVIK (Hof & Speed 2025,
-  Nat Genet) and following its design: w = y minus an elastic-net
+- HRATT, the Heritability-weighted Residual Association Two-step Test:
+  this package's method inspired by LDAK-KVIK (Hof & Speed 2025, Nat
+  Genet) and following its design: w = y minus an elastic-net
   LOCO polygenic score under the LDAK-Thin heritability model; lambda = 1
   unless a test of inter-chromosome correlation finds strong structure, in
   which case lambda is matched to the GRAMMAR-Gamma-calibrated ridge
@@ -731,9 +732,10 @@ def hratt(y, gt, X=None, *, max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
           cg_tol: float = 1e-6, random_state: int = 0, block: int = 4096,
           n_threads: int = 1) -> GwasResult:
-    """HRATT: elastic-net LOCO polygenic scores as offsets, OLS score tests.
+    """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
-    Inspired by LDAK-KVIK (Hof & Speed 2025) and following its technical
+    Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
+    by LDAK-KVIK (Hof & Speed 2025) and following its technical
     documentation, but not LDAK-KVIK: variance fitting, the variational
     sweep and the calibration solves are this package's own (below), and
     results differ from the reference program's. (1a) structure test;

@@ -1,12 +1,12 @@
 {
-  "revision": "2026-10-05-hratt-and-current-paired-evidence",
-  "recorded_at_utc": "2026-10-05T07:42:15.095938+00:00",
+  "revision": "2026-10-05-hratt-expansion",
+  "recorded_at_utc": "2026-10-05T14:38:09.244775+00:00",
   "package_version": "2.0.0.dev5",
-  "parent_commit": "b7c30b737140201a7165d95b46d37e4a503eabd9",
-  "revision_state": "Delivered by the Git commit containing this manifest, after b7c30b7. Package sources are e4089d8's with the KVIK-style method renamed HRATT (method, function, constants and docstrings; computations unchanged). Tables 13-16 come from the improved paired driver (dev5 against the current source, gated on host load) and a rerun of the Lanczos study.",
+  "parent_commit": "d51b4c384dbbebd9b7f63a6801c66d05c8284a7f",
+  "revision_state": "Delivered by the Git commit containing this manifest, after d51b4c3. Adds HRATT's expansion, Heritability-weighted Residual Association Two-step Test, to the docstrings, documentation and report; no computation, table or figure changes.",
   "pdf": {
     "path": "report/mixmogam_report.pdf",
-    "sha256": "da48b00c90bc610497749e23729b1cb25524ecd78605bdb010462a8f51a6c2ca",
+    "sha256": "58f0d48452edf67a5889b26445f0d1e97dc15c3d2135e3f2a6197767a4d3988a",
     "pages": 40
   },
   "counts": {
@@ -17,9 +17,9 @@
     "research_priorities": 6
   },
   "input_sha256": {
-    "CHANGELOG.md": "358865dd9a886e6e967763589d7be2256a52bf2bd656cc8a5285fb2f05daf37a",
+    "CHANGELOG.md": "1fa94712c064bd73419533243c2581e308ccd7de29780d49120815851736a61d",
     "MANIFEST.in": "f29debcf3d6f9435b50505112bac3d851f97fe8f081e6e100ea0227b2120b037",
-    "README.md": "d1ebdb5f06c020cb7175ea5b784d88720e001f8a2503af9ca9c77223271dc9b5",
+    "README.md": "898a09097e705efae47159d227eb3e5854ed7e03a3870ada6b32676ca399053a",
     "benchmarks/README.md": "d928460a178706fc12006c967d5a6c304358d2d0d9b71af880e0cb1c29f6ac99",
     "benchmarks/denominator_geometry.py": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
     "benchmarks/efficiency_paired.py": "af041304bb3b4bd827769648c493879e21664a2a1d1b7c5df9538bcc9261bd34",
@@ -390,11 +390,11 @@
     "benchmarks/results/20261005-slq-defaults-e4089d8/slq_defaults.py": "57d4b8a40784fa1e43981f3747252caa37bc22dc18455d762b529988ee93e360",
     "benchmarks/results/20261005-slq-defaults-e4089d8/summary.json": "3eda8b19c7ab650c833500d1c398cb27f4d74a39d63368dd71757c08ed1d2350",
     "benchmarks/slq_defaults.py": "57d4b8a40784fa1e43981f3747252caa37bc22dc18455d762b529988ee93e360",
-    "docs/design.md": "c8c25d690c1f49f5ba9fc1a6dca5e5284253f670cde45544f75e3543273e7cd7",
+    "docs/design.md": "34e581ba1aa6717a1d1858d634cdfe09bec79223906ec8c2eedc9438e84c3901",
     "docs/quickstart.md": "c446879fae4abdb579571e059088b45456576fb605774a3d645e7b4ea8efc832",
     "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
     "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
-    "report/README.md": "cf0f8e262a2a646c670fee197cdbaaef00a7a99f55ddd94ac30c23624e31e921",
+    "report/README.md": "386a2a9ff111078975da98c05ee6e7727571014afa8938c79db55bdfee158f66",
     "report/dev5_table_manifest.json": "9b9dc2bb79c50e12a7a41a3669ce09c6ceeff0979aed1e07c91080baf23a399c",
     "report/efficiency_table_manifest.json": "0e621abbde6a0b45f64868bfb5ffd742ab97649f053fb8648a7d1cc296ccacc1",
     "report/figure_manifest.json": "117e8c9e67af2fe9aefdecf89c63441b51cace9f168045b841e305cce182a403",
@@ -413,7 +413,7 @@
     "report/make_figures.py": "c3b5be01ab4114478231d82bcb2f0960c39904a56e159220a63469ccbfe70860",
     "report/make_kvik_figures.py": "96b1e706bf1344ab16b4e7a61d1810894d17ab96ed540db21816e1f89b501646",
     "report/make_streaming_tables.py": "6d89096fe0705c13adada736cf7a1645ebc52e2d5a7146e764915b37c92175b9",
-    "report/mixmogam_report.tex": "195557a303909753cbfc1cd495bbdcbb7eb096f42cf8dab37af873b613832c7e",
+    "report/mixmogam_report.tex": "a280290dfa44775126477d340e1540df9ee0009f57989d66b422780339d5cd50",
     "report/references.json": "7eb3a7691bce14e1546533b4c87279f9e206e361bb20c9296d8ec356e9979cd9",
     "report/streaming_table_manifest.json": "3218d2e84ecb872187a4a2dc16ba01c0b6043ea8afd5ea97c380e09f4bda4907",
     "report/tables/calibration.tex": "c6a0896f7ce1675cc2b41b446b328676e7c233b6a806bf7f2f4916a481e7e9ea",
@@ -464,7 +464,7 @@
     "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
     "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
     "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
-    "mixmogam/twostep.py": "92eee7cc5967a60cbd9a6dfc31666fe47d025e874f7032feda976f854c8d6662"
+    "mixmogam/twostep.py": "c806b9a3e7b8acca79ad6019a368457da3160d53d94023bd87438e673071be4f"
   },
   "benchmark_code_identity": {
     "renamed_from_e4089d8": [
@@ -582,72 +582,53 @@
     "reproduction_note": "Large genotypes and external binaries are excluded. Frozen sources, references, seeds,retained-marker indices and phenotype metadata permit regeneration. Archived commands contain original absolute paths and finalizers may compare live-source hashes; reruns need rebased paths and the frozen code/version."
   },
   "historical_delivery": {
-    "commit": "b7c30b7",
+    "commit": "d51b4c3",
     "manifest_path": "report/report_manifest.json",
-    "manifest_sha256": "2a235467574dd9fcede0d7fa93f86fb6423f89e321213ff81c985a7bd4c8ea9b",
+    "manifest_sha256": "030d377ccca664b1a878a9fd962587f944570b4a7b9589fdbeec9b53b092f5fc",
     "package_version": "2.0.0.dev5",
-    "pdf_sha256": "da7c69a851c59759f32bf88866afaee7744bdc8c018e56e351d08d4e5f8e3854",
-    "scope": "2026-10-05-benchmark-reruns-e4089d8",
+    "pdf_sha256": "da48b00c90bc610497749e23729b1cb25524ecd78605bdb010462a8f51a6c2ca",
+    "scope": "2026-10-05-hratt-and-current-paired-evidence",
     "previous": {
-      "commit": "82e9226",
+      "commit": "b7c30b7",
       "manifest_path": "report/report_manifest.json",
-      "manifest_sha256": "fe48088f807f5390234491a02bf34d3343aad294f118447ebf90d929b45ad10d",
+      "manifest_sha256": "2a235467574dd9fcede0d7fa93f86fb6423f89e321213ff81c985a7bd4c8ea9b",
       "package_version": "2.0.0.dev5",
-      "pdf_sha256": "25510c485851df6650701496ae8ebdbac1d16d25391e8c999b745158b73e7d76",
-      "scope": "2026-10-04-genotype-streaming",
+      "pdf_sha256": "da7c69a851c59759f32bf88866afaee7744bdc8c018e56e351d08d4e5f8e3854",
+      "scope": "2026-10-05-benchmark-reruns-e4089d8",
       "previous": {
-        "commit": "4db5034",
+        "commit": "82e9226",
         "manifest_path": "report/report_manifest.json",
-        "manifest_sha256": "d1588a38c2f4a8aa00fa9f07ff76913efb7248e3ee0b2a5a0e0be6e54865c9c9",
+        "manifest_sha256": "fe48088f807f5390234491a02bf34d3343aad294f118447ebf90d929b45ad10d",
         "package_version": "2.0.0.dev5",
-        "pdf_sha256": "b67fda6c339abcb660b24b9354ee0263055ac7fb6eebea76cb9f3d40755a6412",
-        "scope": "2026-10-04-benchmark-reruns-2.0.0.dev5",
+        "pdf_sha256": "25510c485851df6650701496ae8ebdbac1d16d25391e8c999b745158b73e7d76",
+        "scope": "2026-10-04-genotype-streaming",
         "previous": {
-          "commit": "5353a23",
+          "commit": "4db5034",
           "manifest_path": "report/report_manifest.json",
-          "manifest_sha256": "6ac628b6d97a25a32b63cb6f3fb72f63ae8e289264c793f11fd406d2ea17973a",
+          "manifest_sha256": "d1588a38c2f4a8aa00fa9f07ff76913efb7248e3ee0b2a5a0e0be6e54865c9c9",
           "package_version": "2.0.0.dev5",
-          "pdf_sha256": "49cabe80aa2f7a433d8e6972ba16c6ff29a1085f5e8e70609e827d8a154cddf8",
-          "scope": "2.0.0.dev5 release: Section 2.10 methods, paired dev4/dev5 evidence and release checks.",
-          "unchanged_figures_and_bibliography": [
-            "report/figures/calibration.pdf",
-            "report/figures/geometry.pdf",
-            "report/figures/s2_loading.pdf",
-            "report/references.json"
-          ],
+          "pdf_sha256": "b67fda6c339abcb660b24b9354ee0263055ac7fb6eebea76cb9f3d40755a6412",
+          "scope": "2026-10-04-benchmark-reruns-2.0.0.dev5",
           "previous": {
-            "commit": "0fa3da82ac0e5a6d33c47d1307a9e3e117ecfbc2",
+            "commit": "5353a23",
             "manifest_path": "report/report_manifest.json",
-            "manifest_sha256": "c8ca661611ea3cebf158fc2e5acc04a0ea595c1a4c8d1b9c5006f4193054e25e",
-            "package_version": "2.0.0.dev4",
-            "pdf_sha256": "1d97bebdbeb6e02c5869f44b10308ed98f189d59b878bcbf0174747b5aa6924c",
-            "scope": "Optimized KVIK, explicit HE, the 20K thread and cache experiments and their release checks. Test and source claims of that delivery apply to its tree, not this release.",
+            "manifest_sha256": "6ac628b6d97a25a32b63cb6f3fb72f63ae8e289264c793f11fd406d2ea17973a",
+            "package_version": "2.0.0.dev5",
+            "pdf_sha256": "49cabe80aa2f7a433d8e6972ba16c6ff29a1085f5e8e70609e827d8a154cddf8",
+            "scope": "2.0.0.dev5 release: Section 2.10 methods, paired dev4/dev5 evidence and release checks.",
             "unchanged_figures_and_bibliography": [
               "report/figures/calibration.pdf",
               "report/figures/geometry.pdf",
-              "report/figures/kvik_phensim.pdf",
-              "report/figures/kvik_phensim.png",
-              "report/figures/kvik_scaling.pdf",
-              "report/figures/kvik_scaling.png",
               "report/figures/s2_loading.pdf",
               "report/references.json"
             ],
             "previous": {
-              "commit": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+              "commit": "0fa3da82ac0e5a6d33c47d1307a9e3e117ecfbc2",
               "manifest_path": "report/report_manifest.json",
-              "manifest_sha256": "6246b11ff99606950850098c08d901eeb482711404a3ed14c4f35714d7e44463",
-              "package_version": "2.0.0.dev3",
-              "pdf_sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",
-              "scope": "Initial correctness review, known-covariance experiment, matched n=800 study and preoptimization 12K association/simulator extension. Earlier source-comparison and test claims apply to that delivered tree, not this release.",
-              "association_archives": [
-                "benchmarks/results/20261003-phensim-kvik",
-                "benchmarks/results/20261003-phensim-kvik-n2000",
-                "benchmarks/results/20261003-phensim-kvik-n4000",
-                "benchmarks/results/20261003-hapnest-kvik-n10000",
-                "benchmarks/results/20261003-hapnest-kvik-n50000"
-              ],
-              "phensim_version": "1.0.0.dev2",
-              "phensim_publication_commit": "f1937dbd9921546cb05fc7119ebeb9f719f7e694",
+              "manifest_sha256": "c8ca661611ea3cebf158fc2e5acc04a0ea595c1a4c8d1b9c5006f4193054e25e",
+              "package_version": "2.0.0.dev4",
+              "pdf_sha256": "1d97bebdbeb6e02c5869f44b10308ed98f189d59b878bcbf0174747b5aa6924c",
+              "scope": "Optimized KVIK, explicit HE, the 20K thread and cache experiments and their release checks. Test and source claims of that delivery apply to its tree, not this release.",
               "unchanged_figures_and_bibliography": [
                 "report/figures/calibration.pdf",
                 "report/figures/geometry.pdf",
@@ -657,7 +638,34 @@
                 "report/figures/kvik_scaling.png",
                 "report/figures/s2_loading.pdf",
                 "report/references.json"
-              ]
+              ],
+              "previous": {
+                "commit": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+                "manifest_path": "report/report_manifest.json",
+                "manifest_sha256": "6246b11ff99606950850098c08d901eeb482711404a3ed14c4f35714d7e44463",
+                "package_version": "2.0.0.dev3",
+                "pdf_sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",
+                "scope": "Initial correctness review, known-covariance experiment, matched n=800 study and preoptimization 12K association/simulator extension. Earlier source-comparison and test claims apply to that delivered tree, not this release.",
+                "association_archives": [
+                  "benchmarks/results/20261003-phensim-kvik",
+                  "benchmarks/results/20261003-phensim-kvik-n2000",
+                  "benchmarks/results/20261003-phensim-kvik-n4000",
+                  "benchmarks/results/20261003-hapnest-kvik-n10000",
+                  "benchmarks/results/20261003-hapnest-kvik-n50000"
+                ],
+                "phensim_version": "1.0.0.dev2",
+                "phensim_publication_commit": "f1937dbd9921546cb05fc7119ebeb9f719f7e694",
+                "unchanged_figures_and_bibliography": [
+                  "report/figures/calibration.pdf",
+                  "report/figures/geometry.pdf",
+                  "report/figures/kvik_phensim.pdf",
+                  "report/figures/kvik_phensim.png",
+                  "report/figures/kvik_scaling.pdf",
+                  "report/figures/kvik_scaling.png",
+                  "report/figures/s2_loading.pdf",
+                  "report/references.json"
+                ]
+              }
             }
           }
         }

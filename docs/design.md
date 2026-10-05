@@ -43,7 +43,8 @@ Table 1. Association paths and calibration.
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
 | `hratt` | y minus the elastic-net LOCO score | lambda = 1, or LDAK-KVIK's rule under strong structure |
 
-`auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT is mixmogam's
+`auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT, the
+Heritability-weighted Residual Association Two-step Test, is mixmogam's
 method inspired by LDAK-KVIK (Hof & Speed 2025): it follows that design, with
 the departures listed below, and is not LDAK-KVIK.
 
