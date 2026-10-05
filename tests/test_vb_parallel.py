@@ -191,7 +191,7 @@ def test_invalid_threads_fail_before_genotype_access(n_threads):
     with pytest.raises(ValueError, match="positive integer"):
         _vb.VBEngine(object(), n_threads=n_threads)
     with pytest.raises(ValueError, match="positive integer"):
-        twostep.kvik(None, None, n_threads=n_threads)
+        twostep.hratt(None, None, n_threads=n_threads)
 
 
 def test_numba_thread_limit_is_validated_before_genotype_access():
@@ -200,7 +200,7 @@ def test_numba_thread_limit_is_validated_before_genotype_access():
     with pytest.raises(ValueError, match="Numba thread limit"):
         _vb.VBEngine(object(), n_threads=requested)
     with pytest.raises(ValueError, match="Numba thread limit"):
-        twostep.kvik(None, None, n_threads=requested)
+        twostep.hratt(None, None, n_threads=requested)
     assert _vb._validate_n_threads(np.int64(1)) == 1
 
 
@@ -215,16 +215,16 @@ def test_numpy_fallback_only_requires_numba_for_multiple_threads(monkeypatch):
         fallback.VBEngine(object(), n_threads=2)
 
 
-def test_kvik_parallel_matches_serial_with_phensim_data(phensim_problem):
+def test_hratt_parallel_matches_serial_with_phensim_data(phensim_problem):
     _require_threads(4)
     gt, _, Q, _, Y = phensim_problem
     options = dict(X=Q[:, 1:], heritability_method="he", alphas=(-1.0,),
                    grid=[(0.0, 1.0), (0.3, 0.3), (0.5, 0.5)],
                    n_calibration=8, vb_max_iter=200, random_state=761, block=173)
-    expected = twostep.kvik(Y[:, 0], gt, n_threads=1, **options)
+    expected = twostep.hratt(Y[:, 0], gt, n_threads=1, **options)
     assert expected.extra["cv_converged"] and expected.extra["loco_converged"]
     for n_threads in (2, 4):
-        actual = twostep.kvik(Y[:, 0], gt, n_threads=n_threads, **options)
+        actual = twostep.hratt(Y[:, 0], gt, n_threads=n_threads, **options)
         for key in ("beta", "se", "f_stat", "p"):
             # The missing/constant-variant fixture also changes a few
             # near-zero projected genotypes by float64 reduction rounding.

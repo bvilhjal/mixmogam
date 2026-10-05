@@ -1,5 +1,5 @@
 """Two-step engines: LOCO operator, CG, variational Bayes, LD scores,
-BOLT-LMM / LDAK-KVIK statistics against the exact LOCO scan."""
+BOLT-LMM / HRATT statistics against the exact LOCO scan."""
 
 import math
 from types import SimpleNamespace
@@ -250,7 +250,7 @@ def test_bolt_mixture_gains_on_sparse_trait():
     assert np.median(bo.f_stat[null]) == pytest.approx(np.median(bi.f_stat[null]), rel=0.02)
 
 
-@pytest.mark.parametrize("method", ["kvik", "bolt"])
+@pytest.mark.parametrize("method", ["hratt", "bolt"])
 def test_cv_and_loco_fit_state_is_released_after_use(small, monkeypatch, method):
     # Cross-validation effects (m x folds x grid) must be gone before the LOCO
     # fit starts, and the LOCO effects and the engine's Gram cache before the
@@ -274,17 +274,17 @@ def test_cv_and_loco_fit_state_is_released_after_use(small, monkeypatch, method)
     monkeypatch.setattr(VBEngine, "fit", fit)
     monkeypatch.setattr(twostep, "_retro_stats", retro)
     # A negative CV margin keeps BOLT-LMM on its mixture (LOCO) path.
-    options = {"heritability_method": "he"} if method == "kvik" else {"min_cv_gain": -1.0}
+    options = {"heritability_method": "he"} if method == "hratt" else {"min_cv_gain": -1.0}
     gwas(y, gt, method=method, **options)
     assert len(effects) == 2
 
 
 @pytest.mark.slow
-def test_kvik_runs_and_detects_structure():
+def test_hratt_runs_and_detects_structure():
     G = simulate_genotypes(n=800, m=4000, n_pop=4, pop_fst=0.3, seed=41)
     gt = _gt(G, 4)
     sim = simulate_traits(G, h2=0.5, n_causal=20, seed=42)
-    res = gwas(sim["y"], gt, method="kvik", alphas=(-1.0, -0.25))
+    res = gwas(sim["y"], gt, method="hratt", alphas=(-1.0, -0.25))
     assert res.extra["structure"]["strong"]
     assert res.extra["lambda"] > 0
     assert np.isfinite(res.p).mean() > 0.99

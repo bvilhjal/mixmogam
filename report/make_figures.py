@@ -87,7 +87,7 @@ def geometry():
 def historical_calibration():
     data = [r for r in rows(CAL) if r['dataset'] == 'sim_strong']
     methods = [('exact', 'Exact LOCO'), ('bolt-inf', 'Infinitesimal, constant'),
-               ('bolt-inf-spectral', 'Infinitesimal, spectral'), ('kvik', 'KVIK-style')]
+               ('bolt-inf-spectral', 'Infinitesimal, spectral'), ('kvik', 'HRATT')]
     fig, axes = plt.subplots(1, 2, figsize=(6.6, 2.8))
     q = np.arange(1, 6)
     lines = []

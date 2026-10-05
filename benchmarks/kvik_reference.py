@@ -95,7 +95,7 @@ def main():
         chi["exact"] = stats.chi2.isf(np.clip(ex.p, 1e-300, 1), 1)
         chi["bolt-inf"] = gwas(y, gt, method="bolt-inf").f_stat
         chi["bolt-inf-spectral"] = gwas(y, gt, method="bolt-inf", denominator="spectral").f_stat
-        chi["kvik (mixmogam)"] = gwas(y, gt, method="kvik").f_stat
+        chi["hratt (mixmogam)"] = gwas(y, gt, method="hratt").f_stat
         for name, c in chi.items():
             valid_exact = np.isfinite(c) & np.isfinite(chi["exact"])
             valid_ref = np.isfinite(c) & np.isfinite(chi["ldak-kvik (reference)"])

@@ -110,7 +110,7 @@ def test_preparation_ignores_unused_padding_bits():
 
 
 @pytest.mark.parametrize("method, options", [
-    ("kvik", {"heritability_method": "he"}),
+    ("hratt", {"heritability_method": "he"}),
     ("bolt-inf", {}),
     ("bolt", {"min_cv_gain": -1.0}),
 ])

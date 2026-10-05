@@ -54,8 +54,8 @@ METHODS = {
     "bolt-inf-spectral": dict(method="bolt-inf", denominator="spectral"),
     "bolt": dict(method="bolt"),
     "bolt-spectral": dict(method="bolt", denominator="spectral"),
-    "kvik": dict(method="kvik"),
-    "kvik-spectral": dict(method="kvik", denominator="spectral"),
+    "hratt": dict(method="hratt"),
+    "hratt-spectral": dict(method="hratt", denominator="spectral"),
 }
 CHI2_MED = stats.chi2.ppf(0.5, 1)
 
@@ -170,8 +170,8 @@ def main():
                 diag = {"calibration": ex.get("calibration"),
                         "calibration_cv": ex.get("calibration_cv"),
                         "use_mixture": ex.get("use_mixture"),
-                        "kvik_lambda": ex.get("lambda"),
-                        "kvik_strong": (ex.get("structure") or {}).get("strong"),
+                        "hratt_lambda": ex.get("lambda"),
+                        "hratt_strong": (ex.get("structure") or {}).get("strong"),
                         "calibration_method": ex.get("calibration_method")}
                 for r in summarize(chi2, null_idx, bins, qtl):
                     rows.append({"dataset": ds, "rep": rep, "method": name,

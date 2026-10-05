@@ -15,7 +15,7 @@ from pathlib import Path
 import numpy as np
 
 ORDER = ["exact", "bolt-inf", "bolt-inf-spectral", "bolt", "bolt-spectral",
-         "kvik", "kvik-spectral"]
+         "hratt", "hratt-spectral"]
 BINS = ["all", "q1", "q2", "q3", "q4", "q5"]
 
 
@@ -57,12 +57,12 @@ def main(archive: str) -> str:
             if a:
                 use = np.mean([r.get("use_mixture") == "True" for r in a])
                 extra.append(f"{m}: mixture used in {use:.0%} of replicates")
-        for m in ("kvik", "kvik-spectral"):
+        for m in ("hratt", "hratt-spectral"):
             a = by.get((ds, m, "all"), [])
             if a:
-                strong = np.mean([r.get("kvik_strong") == "True" for r in a])
+                strong = np.mean([r.get("hratt_strong") == "True" for r in a])
                 extra.append(f"{m}: strong structure in {strong:.0%}; mean lambda "
-                             f"{mean(a, 'kvik_lambda'):.3f}")
+                             f"{mean(a, 'hratt_lambda'):.3f}")
         out.extend(extra)
     text = "\n".join(out) + "\n"
     (Path(archive) / "aggregate.txt").write_text(text)

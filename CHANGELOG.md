@@ -7,15 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The KVIK-style method is now HRATT: `gwas(..., method="hratt")`,
+  `twostep.hratt`, `HRATT_GRID` and `HRATT_ALPHAS`, and results report
+  `extra["method"] == "hratt"`. HRATT is inspired by LDAK-KVIK (Hof & Speed
+  2025) and follows its two-step design, but its variance fitting,
+  variational sweep and calibration solves are this package's own and its
+  results differ from the reference program's, so it no longer carries that
+  name. `method="kvik"`, `twostep.kvik`, `KVIK_GRID` and `KVIK_ALPHAS` are
+  removed without aliases; archived benchmark runs keep the old name.
+
 ### Removed
 
-- `cache_bytes` from `bolt_inf`, `bolt`, `kvik` and `LocoGenotypes`: the
+- `cache_bytes` from `bolt_inf`, `bolt`, `hratt` and `LocoGenotypes`: the
   float copy of the standardized genotypes is gone, and every pass decodes
   them. The cache only helped data small enough to fit its 4e9-byte budget.
   In paired fits at 10,000 samples
   ([`20261004-packed-calls`](benchmarks/results/20261004-packed-calls/README.md))
-  KVIK-HE and BOLT-LMM took 1.2 to 1.3 times as long as with the cache (as
-  long as 2.0.0.dev5 took with it), while KVIK-HE's peak RSS grew by 1.16
+  HRATT-HE and BOLT-LMM took 1.2 to 1.3 times as long as with the cache (as
+  long as 2.0.0.dev5 took with it), while HRATT-HE's peak RSS grew by 1.16
   bytes per genotype instead of 5.14, and by 0.42 with two-bit calls: 0.61
   instead of 4.10 GiB at 80,000 markers.
 
@@ -55,11 +66,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   for the folds that fit uses, so a full-data fit after cross-validation
   rebuilds one Gram per block rather than one per fold. Paired fits
   ([`20261004-gram-cache`](benchmarks/results/20261004-gram-cache/README.md)):
-  KVIK-HE at 2,000 samples and 300,000 markers peaked 0.27 GiB lower, and
+  HRATT-HE at 2,000 samples and 300,000 markers peaked 0.27 GiB lower, and
   BOLT-LMM's five-fold Grams, 1.87 GB in float64 and so recomputed every
   sweep, now fit (0.95 GB); the cache makes those cross-validation fits
-  1.5 (BOLT-LMM) and 2.5 (KVIK) times faster.
-- KVIK and BOLT-LMM release the cross-validation fit's effects, residuals and
+  1.5 (BOLT-LMM) and 2.5 (HRATT) times faster.
+- HRATT and BOLT-LMM release the cross-validation fit's effects, residuals and
   masks once its scores are taken, and the LOCO fit's effects and the
   variational engine's Gram cache once its residuals are extracted.
   BOLT-LMM's cross-validation held 90 float64 effect columns (720 bytes per
@@ -70,7 +81,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Paired fits of 2.0.0.dev5 against 12aa504
   ([`20261004-genotype-streaming`](benchmarks/results/20261004-genotype-streaming/README.md),
   idle host, two fresh-process repetitions): without the float cache,
-  KVIK-HE at 10,000 samples ran as fast as dev5 with it (15.5 against 15.6 s
+  HRATT-HE at 10,000 samples ran as fast as dev5 with it (15.5 against 15.6 s
   at 80,000 markers) while peak RSS grew by 1.25 instead of 5.24 bytes per
   genotype; BOLT-LMM without the cache peaked at 1.16 instead of 2.50 GiB.
   Associations agree to 6e-5 in log10 p. Report Sections 2.11 and 4.10
@@ -90,7 +101,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   conditions.
 - Rerun the same benchmarks with commit e4089d8 (`20261005-*-e4089d8`); the
   report now uses these reruns. At 50,000 samples and 20,000 markers,
-  four-thread KVIK-HE peaked at 1.4 GiB instead of 5.1, or 0.73 GiB with
+  four-thread HRATT-HE peaked at 1.4 GiB instead of 5.1, or 0.73 GiB with
   two-bit calls (official LDAK-KVIK: 0.65). A same-day check against dev5
   ([`20261005-same-day-dev5-e4089d8`](benchmarks/results/20261005-same-day-dev5-e4089d8/README.md))
   found four-thread HE 17% faster and one-thread REML 1.2 times slower
@@ -100,6 +111,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged decisions. The 20K cache experiment is now an int8 against
   two-bit storage experiment: `kvik_efficiency.py` and
   `kvik_thread_scaling.py` gained `--storage`.
+- `efficiency_paired.py` compares any number of labelled sources
+  (`--source LABEL=PATH`), skips workloads a source cannot run (the float
+  genotype cache, two-bit calls) instead of failing or running a fit twice,
+  calls older sources by the method's earlier name, rotates the source order
+  over repetitions, and with `--max-load` starts each measurement only below
+  a given load average; it records the load and the wait. dev5 against the
+  current source, three gated repetitions
+  ([`20261005-efficiency-paired-hratt`](benchmarks/results/20261005-efficiency-paired-hratt/README.md)):
+  the two-step paths need 2.4 to 2.8 times less memory with int8 calls and
+  3.1 to 4.2 times less with two-bit calls; HRATT-HE runs 4% (one thread)
+  and 14% (four threads) faster, BOLT-LMM-inf, BOLT-LMM and HRATT with REML
+  1.19 to 1.23 times slower; HRATT-HE's peak RSS grows by 0.36 bytes per
+  genotype with two-bit calls against 4.06 with dev5's cache. Report
+  Tables 15 and 16 now come from this archive. The Lanczos study, rerun
+  with commit e4089d8
+  ([`20261005-slq-defaults-e4089d8`](benchmarks/results/20261005-slq-defaults-e4089d8/README.md)),
+  reproduces dev5's to 5e-7 and renders Table 14.
 
 ## [2.0.0.dev5] - 2026-10-04
 

@@ -10,7 +10,7 @@ Example::
 Defaults are 1, 2, 4 and 8 requested threads and three timing repetitions:
 two cases yield 48 full fits. Each process gets identical thread limits for
 BLAS, OpenMP and Numba by default; official LDAK also receives --max-threads.
-With --parallel-kvik, --blas-threads 1 keeps local library work serial while
+With --parallel-hratt, --blas-threads 1 keeps local library work serial while
 --numba-threads sets an independent Numba pool ceiling. These overrides do
 not alter LDAK's requested threads. Warm-ups are excluded, and all timed
 fits start in fresh processes.
@@ -113,7 +113,7 @@ def main():
     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
                         help="Omit ldak-kvik to time new local code against archived official runs")
     parser.add_argument("--threads", type=int, nargs="+", default=[1, 2, 4, 8])
-    parser.add_argument("--parallel-kvik", action="store_true",
+    parser.add_argument("--parallel-hratt", action="store_true",
                         help="Also set mixmogam n_threads, enabling its optional parallel kernels")
     parser.add_argument("--blas-threads", type=int,
                         help="Local library/OpenMP limit; official LDAK keeps its requested thread count")
@@ -139,9 +139,9 @@ def main():
         parser.error("local BLAS and Numba thread limits must be positive")
     if args.cache_bytes is not None and (not math.isfinite(args.cache_bytes) or args.cache_bytes < 0):
         parser.error("cache-bytes must be finite and nonnegative")
-    if args.parallel_kvik and args.numba_threads is not None and args.numba_threads < max(levels):
-        parser.error("Numba pool ceiling must accommodate every requested parallel KVIK count")
-    numba_ceiling = args.numba_threads if args.numba_threads is not None else (max(levels) if args.parallel_kvik else None)
+    if args.parallel_hratt and args.numba_threads is not None and args.numba_threads < max(levels):
+        parser.error("Numba pool ceiling must accommodate every requested parallel HRATT count")
+    numba_ceiling = args.numba_threads if args.numba_threads is not None else (max(levels) if args.parallel_hratt else None)
     cases = [case.resolve() for case in args.case]
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -172,7 +172,7 @@ def main():
                 "methods": list(methods),
                 "platform": platform.platform(), "python": sys.executable,
                 "thread_levels": levels, "thread_environment_variables": list(THREAD_VARS),
-                "parallel_kvik": args.parallel_kvik,
+                "parallel_hratt": args.parallel_hratt,
                 "local_blas_threads": args.blas_threads, "local_numba_pool_ceiling": numba_ceiling,
                 "local_cache_bytes": args.cache_bytes, "local_storage": args.storage,
                 "local_thread_environments": {str(level): thread_environment(
@@ -193,8 +193,8 @@ def main():
         command = [sys.executable, str(worker_driver), "--source", source["snapshot"],
                    "--result-dir", str(directory), "--heritability-method", "he"]
         command += ["--warmup"] if case is None else ["--worker", str(case)]
-        if args.parallel_kvik:
-            command += ["--kvik-threads", str(threads)]
+        if args.parallel_hratt:
+            command += ["--hratt-threads", str(threads)]
         if args.cache_bytes is not None:
             command += ["--cache-bytes", str(args.cache_bytes)]
         if args.storage != "int8":
@@ -205,7 +205,7 @@ def main():
     if not args.no_warmup:
         warm = local_run(out / "warmup", 1)
         print(f"Numba cache warm-up: {warm['wall_seconds']:.2f}s (excluded)", flush=True)
-        if args.parallel_kvik and max(levels) > 1:
+        if args.parallel_hratt and max(levels) > 1:
             warm = local_run(out / "warmup-parallel", min(2, max(levels)))
             print(f"Parallel cache warm-up: {warm['wall_seconds']:.2f}s (excluded)", flush=True)
     import numpy as np
@@ -224,7 +224,7 @@ def main():
         truth = truth_by_case[case_index]
         directory = out / "runs" / f"case{case_index:02d}" / f"rep{rep:02d}" / f"threads{threads:02d}" / method
         base = {**job, "schedule_index": schedule_index, "case": str(case), "seed": config["method_seed"],
-                "kvik_threads": threads if method == "mixmogam-he" and args.parallel_kvik else (1 if method == "mixmogam-he" else None),
+                "hratt_threads": threads if method == "mixmogam-he" and args.parallel_hratt else (1 if method == "mixmogam-he" else None),
                 "blas_threads": (args.blas_threads if args.blas_threads is not None else threads) if method == "mixmogam-he" else threads,
                 "numba_pool_ceiling": (numba_ceiling if numba_ceiling is not None else threads) if method == "mixmogam-he" else None,
                 "cache_bytes": args.cache_bytes if method == "mixmogam-he" else None,

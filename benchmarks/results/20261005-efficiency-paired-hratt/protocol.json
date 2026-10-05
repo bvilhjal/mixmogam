@@ -1,0 +1,902 @@
+{
+  "argv": [
+    "benchmarks/efficiency_paired.py",
+    "--source",
+    "dev5=/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/e4089d8/src-dev5",
+    "--source",
+    "current=.",
+    "--reps",
+    "3",
+    "--max-load",
+    "5",
+    "--out",
+    "benchmarks/results/20261005-efficiency-paired-hratt",
+    "--workloads",
+    "exact",
+    "mlmm",
+    "bolt-inf",
+    "bolt-inf-packed",
+    "bolt",
+    "bolt-packed",
+    "hratt-reml",
+    "hratt-reml-packed",
+    "hratt-he",
+    "hratt-he-packed",
+    "hratt-he-4t",
+    "hratt-he-4t-packed",
+    "hratt-he-m10000",
+    "hratt-he-m20000",
+    "hratt-he-m40000",
+    "hratt-he-m80000",
+    "hratt-he-streamed-m10000",
+    "hratt-he-streamed-m20000",
+    "hratt-he-streamed-m40000",
+    "hratt-he-streamed-m80000",
+    "hratt-he-packed-m10000",
+    "hratt-he-packed-m20000",
+    "hratt-he-packed-m40000",
+    "hratt-he-packed-m80000"
+  ],
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+  "numpy": "2.4.6",
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; finishing charge; (no estimate) present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by runningboardd, Finder, powerd, ChatGPT, Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": null,
+    "NUMBA_NUM_THREADS": null
+  },
+  "blas_note": "Apple Accelerate keeps its default threads; OPENBLAS/OMP/MKL limits do not apply to it",
+  "sources": {
+    "dev5": {
+      "original_root": "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/e4089d8/src-dev5",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261005-efficiency-paired-hratt/sources/dev5",
+      "git": null,
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "bc00cb045420e04a58185825dcb80238cd1a88ff5dcfc4b8508f914ebaecbb00",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "8ebdedc0e6a7ac1b80d00607ea489394af792d93b07715ce056e01a3618ec0d8",
+        "mixmogam/_vb.py": "595c66e9223380b355075dd03fa878c8b7797e07a1763e4d7d519b67421e978a",
+        "mixmogam/association.py": "501fd7e4bb45805a50cf4312bec09d36c7b22e05b548379df02de3dce7c886b0",
+        "mixmogam/genotypes.py": "9695eaa067c97ba5d07e87a648f674b1cf7a91a86fbb53c123db9f8dba1308f0",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6386263e0ef73177bc10efb637baa63ada8dc5f23c9dd8c67ba76b13bf1c5627",
+        "mixmogam/lmm.py": "9d9ab51f8d34ef5669898d8028d444330b62cee1affa8a369259c449f0654f64",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "00722f69d01d03fc31f8f432628a450a5f36c325fe78a14aad2c71dcbf4533d9",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "4518da56a884c3f8f0962b067cf32063b6dc9709e8961c57f14f7339b5d59167"
+      }
+    },
+    "current": {
+      "original_root": "/Users/au507860/REPOS/mixmogam",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261005-efficiency-paired-hratt/sources/current",
+      "git": {
+        "head": "b7c30b737140201a7165d95b46d37e4a503eabd9",
+        "status": "M benchmarks/README.md\n M benchmarks/aggregate_structure_calibration.py\n M benchmarks/efficiency_paired.py\n M benchmarks/kvik_efficiency.py\n M benchmarks/kvik_he_comparison.py\n M benchmarks/kvik_he_validation.py\n M benchmarks/kvik_reference.py\n M benchmarks/kvik_simulation.py\n M benchmarks/kvik_thread_scaling.py\n M benchmarks/sim_study.py\n M benchmarks/structure_calibration.py\n M mixmogam/_vb.py\n M mixmogam/association.py\n M mixmogam/lmm.py\n M mixmogam/twostep.py\n M report/make_dev5_tables.py\n M report/make_streaming_tables.py\nRM tests/test_kvik_he.py -> tests/test_hratt_he.py\nRM tests/test_kvik_parallel.py -> tests/test_hratt_parallel.py\nRM tests/test_kvik_preconditioner_reuse.py -> tests/test_hratt_preconditioner_reuse.py\n M tests/test_packed.py\n M tests/test_twostep.py\n M tests/test_vb_parallel.py\n?? benchmarks/results/20261005-efficiency-paired-hratt/\n?? benchmarks/results/20261005-slq-defaults-e4089d8/"
+      },
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "139df3983135c02d8908d72beafa2dbd8a03c072773871ae0fbbed2540175f10",
+        "mixmogam/_packed.py": "4303d0b34294ce00afeb668b6eb77bca4d70032c0230ecdfa3ca946f9a476c15",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "6645718958671529c5abb76f7ec72ddae554679f2801aa08c4790d3fa5d06019",
+        "mixmogam/_vb.py": "7b82ae9283a846c0e32b26dfb9bb4c59d842fae2bba96273b0be3e14212fdf30",
+        "mixmogam/association.py": "26959c2f124acb877b54d7294749ab4ca4f0ba96b7ce42732a7d09a19396b567",
+        "mixmogam/genotypes.py": "7340db22721c0e0f050c5aa0901209062c89b4b2b227791fdd020cc2b7e47ff3",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "a12491580e0a2d57d3d22e8518439e5fc25d678d83dee568af1db0c97f7301cc",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
+        "mixmogam/lmm.py": "801e85d68f8e663b8e094b2d0f9834ecb22b16a2b678507f05d490a64039f29e",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "92eee7cc5967a60cbd9a6dfc31666fe47d025e874f7032feda976f854c8d6662",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "3edc3775d7f8a85285fa6b31e741c96eccdffc985bfe4ac2499192d8843b7bcb"
+      }
+    }
+  },
+  "labels": [
+    "dev5",
+    "current"
+  ],
+  "reference": "current",
+  "capabilities": {
+    "dev5": {
+      "version": "2.0.0.dev5",
+      "file": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261005-efficiency-paired-hratt/sources/dev5/mixmogam/__init__.py",
+      "packed": false,
+      "genotype_cache": true
+    },
+    "current": {
+      "version": "2.0.0.dev5",
+      "file": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261005-efficiency-paired-hratt/sources/current/mixmogam/__init__.py",
+      "packed": true,
+      "genotype_cache": false
+    }
+  },
+  "panels": {
+    "exact_n3000": {
+      "spec": {
+        "n": 3000,
+        "m": 44000,
+        "chromosomes": 22,
+        "populations": 1,
+        "fst": 0.0,
+        "causal": 300,
+        "seed": 7
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "6eb390a85d553de65c891bcc7a87aa4db6f07169fc2665b0d62455e390f24b19",
+          "bytes": 132000128
+        },
+        "G2bit.npy": {
+          "sha256": "42d482f47f9499769e9993c9698b28d5580e73d9bff54ec1226df78733e530bb",
+          "bytes": 33000128
+        },
+        "y.npy": {
+          "sha256": "99fa36c7209f3bb2da9fdb6f44004586cf3617d0e33733c9e6f223787ca0bbf0",
+          "bytes": 24128
+        },
+        "X.npy": {
+          "sha256": "e805d81ecf550ce427e99c89274b26911f71d70aecfb02b90c5d66dfc24e6a23",
+          "bytes": 128
+        }
+      }
+    },
+    "populations_n2000": {
+      "spec": {
+        "n": 2000,
+        "m": 50000,
+        "chromosomes": 5,
+        "populations": 3,
+        "fst": 0.1,
+        "causal": 8,
+        "seed": 41
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "625813139ef191d5b0ba30ee667c5bdb175e393a365abb604980bd6793cb32ed",
+          "bytes": 100000128
+        },
+        "G2bit.npy": {
+          "sha256": "8163ac66943f2b1d6176c18fff7bb7a2e27216e68589040899900cf26fc9d052",
+          "bytes": 25000128
+        },
+        "y.npy": {
+          "sha256": "6eaf784b4a5de25096491458bcee8b035b964ea5e8d9b69c6d8aa499c3fbd622",
+          "bytes": 16128
+        },
+        "X.npy": {
+          "sha256": "04791fad1d409eb32def65bf4ce8e4578cc34ec3fb357966d2f35af5b9876aef",
+          "bytes": 32128
+        }
+      }
+    },
+    "scaling_m10000": {
+      "spec": {
+        "n": 10000,
+        "m": 10000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 51
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4e931ce75a20d125638a04346d2685e1243321d93bd8d7e7cad463fd263c16d3",
+          "bytes": 100000128
+        },
+        "G2bit.npy": {
+          "sha256": "69efd77464c9658220dd2c2d57d1516dfea3d2d910c7372ff2fcc7bbe55de3ba",
+          "bytes": 25000128
+        },
+        "y.npy": {
+          "sha256": "5e1654f873bf152ed9aee66af3a13e165838aac62f64d63531a963158a6ed54b",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "64c6e0f9b6468092c6154cf2ad87b7c6a927beb864401b56cefd04ae78c93d05",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m20000": {
+      "spec": {
+        "n": 10000,
+        "m": 20000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 52
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "af1211b91b5373a2e0de1491b650c12bc68cd05a08ee81c9f46575c069c8463a",
+          "bytes": 200000128
+        },
+        "G2bit.npy": {
+          "sha256": "dd1d06780601c13c33ac111f7d976425c7d23cf4571a1ddcb6a78dc2835f652e",
+          "bytes": 50000128
+        },
+        "y.npy": {
+          "sha256": "6a2567955bd040e28188827de44c6952c2327bb31164e7210d67a44dd9fbdfb4",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "60c6b1eb1267b7eaca1db79651025e4d1ac952053eeabf1de4dc3b808ce87d9f",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m40000": {
+      "spec": {
+        "n": 10000,
+        "m": 40000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 54
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "ad68d97abaef13b7fe874a4bb7953349098ca7cd86d91491fb955fc34e34cf0c",
+          "bytes": 400000128
+        },
+        "G2bit.npy": {
+          "sha256": "8cfefba647303b3eb4fcc0e81e8642b76f77c3a9f63295bdb50194e7b4e9de9f",
+          "bytes": 100000128
+        },
+        "y.npy": {
+          "sha256": "545401ae15509b66fc2724234c1a863e2bccca9a3b0abb09e110fd73fb54e026",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "2c27a5dd33fdcdfeb49260727ff856a2d7a5e601e2bbbff1b827f42e5670cdde",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 10000,
+        "m": 80000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4f611b8489cd874e66a67069575e6b6fdead70a502041990f694cef01f77870d",
+          "bytes": 800000128
+        },
+        "G2bit.npy": {
+          "sha256": "134506d81d954df1c8f69323b59f746c71838494ce0159fb349e39dd13ebf53b",
+          "bytes": 200000128
+        },
+        "y.npy": {
+          "sha256": "d6fe644d8e817ced5cb4115df4abb1683762bfca35295d7034109e4b3aa4f436",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "df53f3ae476aa944297004876d56466ef58e5d65cd3f411451d014cf7e357a55",
+          "bytes": 80128
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 10000,
+        "m": 30000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "96af8c8a7e0f838bb8a848ac16fb78f97e17af8301a31999b7327d234c634e8d",
+          "bytes": 300000128
+        },
+        "G2bit.npy": {
+          "sha256": "01024adb7ad9d596f3d75132be537962d27b754ae3c52df666d327bb53bfbb69",
+          "bytes": 75000128
+        },
+        "y.npy": {
+          "sha256": "a7625aa7281ec522adc58631f5a9d0a7404c3399b122791f9eca8998d31153e7",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "6f1181875fb08e4abf3cbd3f8ace605a9f77fc0fd9c3a82b8cbdbcb2ff884511",
+          "bytes": 80128
+        }
+      }
+    },
+    "structured_n20000": {
+      "spec": {
+        "n": 20000,
+        "m": 20000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 31
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "726c865709d9acccb59f5755daae03e97872e7aa36bf0dfe873ad713c59713b6",
+          "bytes": 400000128
+        },
+        "G2bit.npy": {
+          "sha256": "ea4e230ea765f5cd149926cced738eb26da59d8ceba995f4126ef457111cea5c",
+          "bytes": 100000128
+        },
+        "y.npy": {
+          "sha256": "cb02818c1f326ae7a4e571a9bc63a3e23af2bcce3ddc389424de5d43aaf45031",
+          "bytes": 160128
+        },
+        "X.npy": {
+          "sha256": "3addbb1eb0b74b062b067936a7e1eaff3f6a3ef75b29d3e3b6ffc72c39c46104",
+          "bytes": 160128
+        }
+      }
+    }
+  },
+  "warmup_panels": {
+    "exact_n3000": {
+      "spec": {
+        "n": 300,
+        "m": 660,
+        "chromosomes": 22,
+        "populations": 1,
+        "fst": 0.0,
+        "causal": 8,
+        "seed": 7
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "b91664face472f70b2975a8f8e173b59c321110877060fbd9c578608815cb995",
+          "bytes": 198128
+        },
+        "G2bit.npy": {
+          "sha256": "a7b28d6def726166e14cf1d960aef30e654c1c4a0c6ceee51bb63d5975436f7a",
+          "bytes": 49628
+        },
+        "y.npy": {
+          "sha256": "ad084cd4646fb1c5b7d7afb24dcd95c80c5c50bd73fa19291479bf69781fdfcf",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "6a2101838e0110151029ea7bcf36cdc0f58d3434f939ff9b5661a11ce03a15b2",
+          "bytes": 128
+        }
+      }
+    },
+    "populations_n2000": {
+      "spec": {
+        "n": 300,
+        "m": 150,
+        "chromosomes": 5,
+        "populations": 3,
+        "fst": 0.1,
+        "causal": 8,
+        "seed": 41
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4042711c04ba0c0b6ebf4679964f5781b4cb21a27049e48fab06acf8aa69487c",
+          "bytes": 45128
+        },
+        "G2bit.npy": {
+          "sha256": "85930f8ae9bc1ac65e3eb8f1afda55bcedee7764f1f96d5beff88420c73b4261",
+          "bytes": 11378
+        },
+        "y.npy": {
+          "sha256": "467b7b8682eef54cdd9a8574cb54e247cf9398dd6fe598b4291d09d67be48c1f",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "0312f88d0468f3bab160d1244b586f75947459b02c2f3f560eddd57a6f293eed",
+          "bytes": 4928
+        }
+      }
+    },
+    "scaling_m10000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 51
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "3b72dab0407626eec0fb5383b878f31f183df33d2f9c92c46e21ee4a2840a47c",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "0a35af59fe24dc933da6929b475f80cc28bbb45bc9b6208f4de1cb6755ff6b4e",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "714180ac6f86cc15662ef2f4e0d3d6acbc19f74f5901c277d7223e48ce9218e3",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "c8865bca96cd9a34464dd409a43faaa75af984b4a21e27687021342b391b19f4",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m20000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 52
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "2d2ae138d1a1cef32cd1de8b414923cd284ce6f3080e9e03c84501946ec6258c",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "9ccb51d1c602936f6733c97195d261f941859e6bb528f123aa349b7063e48551",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "fe7cdc309080232ddc2af5793eb203d1a6f52795cee94d88b2124f87c2c4d794",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "112cea9df42d99f37ca18aa1c9b71cf909d674eceba217a99823c61b7b944f31",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m40000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 54
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "a59558bd4817b3c6b78d3cbc092215720d7715c0f3b92a5a3cda29a5f699b021",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "7d739ae9e8ecc10a669b194908c1c9469d6aab246a16dbb728eec8cfae66671d",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "22af9ba83095fae87973e1aac4397efe567f9d83c2a1cb0e3de05a39c7f451ee",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "99f2d0580215d93af789709dcc843dc56d6d7bb5f88bb93fb7a569cf58e843a3",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "50793fede15661977789b86aba218aafc40226289a1cb7b008fcab239204b064",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "cb5c14b5040219a13de19c024a2e0197e7c6cc844b0298a657c05ee4d299af68",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "f949500551c7c5eecf4f2967c9475238df9b8d6df1dd55bb76362f435925dcf3",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "844623d1d4653d777619e9f079a61b5a3944ae5336701968b00b75a579e27db4",
+          "bytes": 2528
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "263d956fb337ecf1499df2bc81072818c8de01cf5fe3d93eba90a32abef95002",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "216b24e67acef0a1a0d34cc2f3489d75a874dc19488f19db28ae3a24862dd281",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "3c0622ce0ee67091223b597ab2b9e11aa8ccab12e465037a8277977dbcfde59d",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "e9568a53000b72f792f423a7bb16c36da357d08203100b928406bfbcd7e9e24b",
+          "bytes": 2528
+        }
+      }
+    },
+    "structured_n20000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 31
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "bd6e24d7c4afe5afb24f9f67c6f990bdc981e0c2f8bd00798228bd07784601b1",
+          "bytes": 90128
+        },
+        "G2bit.npy": {
+          "sha256": "a7553e1d0270889076ffbe1c393ac5fb2463e827f5ce9796466a8913fede5a06",
+          "bytes": 22628
+        },
+        "y.npy": {
+          "sha256": "9bb427722006457fa572debeab2cd22fe037bf180c553f90ed26a31acf9037ff",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "19eacb6e5353e8a0b9b5ccf123514fb6379b18109cea9a4ae97c35176be737c4",
+          "bytes": 2528
+        }
+      }
+    }
+  },
+  "workloads": {
+    "exact": [
+      "exact_n3000",
+      {
+        "method": "exact"
+      },
+      []
+    ],
+    "mlmm": [
+      "populations_n2000",
+      {
+        "max_steps": 10
+      },
+      []
+    ],
+    "bolt-inf": [
+      "structured_n10000",
+      {
+        "method": "bolt-inf"
+      },
+      []
+    ],
+    "bolt-inf-packed": [
+      "structured_n10000",
+      {
+        "method": "bolt-inf",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "bolt": [
+      "structured_n10000",
+      {
+        "method": "bolt"
+      },
+      []
+    ],
+    "bolt-packed": [
+      "structured_n10000",
+      {
+        "method": "bolt",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-reml": [
+      "structured_n10000",
+      {
+        "method": "hratt"
+      },
+      []
+    ],
+    "hratt-reml-packed": [
+      "structured_n10000",
+      {
+        "method": "hratt",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he": [
+      "structured_n10000",
+      {
+        "method": "hratt",
+        "heritability_method": "he"
+      },
+      []
+    ],
+    "hratt-he-packed": [
+      "structured_n10000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he-4t": [
+      "structured_n20000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "n_threads": 4
+      },
+      []
+    ],
+    "hratt-he-4t-packed": [
+      "structured_n20000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "n_threads": 4,
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he-m10000": [
+      "scaling_m10000",
+      {
+        "method": "hratt",
+        "heritability_method": "he"
+      },
+      []
+    ],
+    "hratt-he-m20000": [
+      "scaling_m20000",
+      {
+        "method": "hratt",
+        "heritability_method": "he"
+      },
+      []
+    ],
+    "hratt-he-m40000": [
+      "scaling_m40000",
+      {
+        "method": "hratt",
+        "heritability_method": "he"
+      },
+      []
+    ],
+    "hratt-he-m80000": [
+      "scaling_m80000",
+      {
+        "method": "hratt",
+        "heritability_method": "he"
+      },
+      []
+    ],
+    "hratt-he-streamed-m10000": [
+      "scaling_m10000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      },
+      [
+        "genotype_cache"
+      ]
+    ],
+    "hratt-he-streamed-m20000": [
+      "scaling_m20000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      },
+      [
+        "genotype_cache"
+      ]
+    ],
+    "hratt-he-streamed-m40000": [
+      "scaling_m40000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      },
+      [
+        "genotype_cache"
+      ]
+    ],
+    "hratt-he-streamed-m80000": [
+      "scaling_m80000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      },
+      [
+        "genotype_cache"
+      ]
+    ],
+    "hratt-he-packed-m10000": [
+      "scaling_m10000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he-packed-m20000": [
+      "scaling_m20000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he-packed-m40000": [
+      "scaling_m40000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ],
+    "hratt-he-packed-m80000": [
+      "scaling_m80000",
+      {
+        "method": "hratt",
+        "heritability_method": "he",
+        "storage": "packed"
+      },
+      [
+        "packed"
+      ]
+    ]
+  },
+  "skipped": {
+    "exact": [],
+    "mlmm": [],
+    "bolt-inf": [],
+    "bolt-inf-packed": [
+      "dev5"
+    ],
+    "bolt": [],
+    "bolt-packed": [
+      "dev5"
+    ],
+    "hratt-reml": [],
+    "hratt-reml-packed": [
+      "dev5"
+    ],
+    "hratt-he": [],
+    "hratt-he-packed": [
+      "dev5"
+    ],
+    "hratt-he-4t": [],
+    "hratt-he-4t-packed": [
+      "dev5"
+    ],
+    "hratt-he-m10000": [],
+    "hratt-he-m20000": [],
+    "hratt-he-m40000": [],
+    "hratt-he-m80000": [],
+    "hratt-he-streamed-m10000": [
+      "current"
+    ],
+    "hratt-he-streamed-m20000": [
+      "current"
+    ],
+    "hratt-he-streamed-m40000": [
+      "current"
+    ],
+    "hratt-he-streamed-m80000": [
+      "current"
+    ],
+    "hratt-he-packed-m10000": [
+      "dev5"
+    ],
+    "hratt-he-packed-m20000": [
+      "dev5"
+    ],
+    "hratt-he-packed-m40000": [
+      "dev5"
+    ],
+    "hratt-he-packed-m80000": [
+      "dev5"
+    ]
+  },
+  "reps": 3,
+  "max_load": 5.0,
+  "order": "sources in the given order in repetition 0, rotated by one per repetition"
+}

@@ -1,4 +1,4 @@
-"""Conditional-covariance check of KVIK's optional HE variance estimator.
+"""Conditional-covariance check of HRATT's optional HE variance estimator.
 
 Genotypes and every phenotype draw come from phensim. The primary lane fixes
 alpha=-1 and supplies phensim with the same empirical genotype covariance.
@@ -24,7 +24,7 @@ from scipy import stats
 
 import mixmogam
 from mixmogam.genotypes import Genotypes
-from mixmogam.twostep import KVIK_ALPHAS, _he_alpha, _setup, kvik
+from mixmogam.twostep import HRATT_ALPHAS, _he_alpha, _setup, hratt
 import phensim
 from phensim.phenotypes import _simulate_trait
 
@@ -67,7 +67,7 @@ def _association(args, hashes, power, settings, thread_keys):
                 row = {"cell": cell, "panel": int(panel), "replicate": rep,
                        "heritability_method": method, "input_file": name}
                 try:
-                    fit = kvik(y, gt, X=X if X.shape[1] else None,
+                    fit = hratt(y, gt, X=X if X.shape[1] else None,
                                heritability_method=method, random_state=4000 + rep)
                     valid = np.isfinite(fit.p)
                     row.update({"lambda_gc": float(np.median(fit.f_stat[valid]) / stats.chi2.ppf(0.5, 1)),
@@ -206,7 +206,7 @@ def main():
                            "phenotype_seed": phenotype_seed, "probe_seed": probe_seed,
                            "dense_h2": dense["h2"], "dense_raw_vg": dense["raw_vg"],
                            "dense_raw_ve": dense["raw_ve"]}
-                    for lane, alphas in (("fixed", [-1.0]), ("adaptive", KVIK_ALPHAS)):
+                    for lane, alphas in (("fixed", [-1.0]), ("adaptive", HRATT_ALPHAS)):
                         try:
                             fit = _he_alpha(st, f, alphas, args.probes,
                                             np.random.default_rng(probe_seed), fit_h2=True)

@@ -41,9 +41,11 @@ Table 1. Association paths and calibration.
 | `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | plug-in F test |
 | `bolt-inf` | V_{-g}^{-1} y by batched CG | one constant from 30 exact prospective statistics |
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
-| `kvik` | y minus the elastic-net LOCO score | lambda = 1, or KVIK's rule under strong structure |
+| `hratt` | y minus the elastic-net LOCO score | lambda = 1, or LDAK-KVIK's rule under strong structure |
 
-`auto` uses `exact` up to n = 5,000 and `bolt-inf` above.
+`auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT is mixmogam's
+method inspired by LDAK-KVIK (Hof & Speed 2025): it follows that design, with
+the departures listed below, and is not LDAK-KVIK.
 
 A kinship alone does not guarantee control of an environment that tracks
 ancestry. It models covariance, whereas a systematic environmental mean
@@ -130,7 +132,7 @@ proximal-contamination deflation.
   unused fixed-effect solves and scan preparation; public `LMM.fit()` still
   produces a complete fit.
 
-KVIK normally selects the frequency-weight exponent `alpha` by randomized
+HRATT normally selects the frequency-weight exponent `alpha` by randomized
 single-component HE, then fits heritability by REML. Explicit
 `heritability_method="he"` reuses the selected alpha's products to fit
 `vg K + ve (I - QQ')`, with nonnegative variance components in the covariate
@@ -143,7 +145,7 @@ HE fits. Probe precision is not sampling uncertainty in heritability.
 
 Where mixmogam departs from the reference implementations, the
 docstrings of `mixmogam.twostep` say so. The departures: REML instead
-of MC REML for BOLT-LMM; KVIK's single-component HE rather than LDAK's
+of MC REML for BOLT-LMM; HRATT's single-component HE rather than LDAK-KVIK's
 partitioned HE with large-effect exclusions, followed by REML h2 by default
 (`alpha_method="reml"` scans REML likelihoods instead); no LD thinning in the
 LDAK-Thin weights; a 1% relative CV R^2 margin
@@ -151,7 +153,7 @@ before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
 median matching instead of the LDSC intercept when LD scores do not
 vary (coefficient of variation < 0.2).
 
-### Optional KVIK parallelism and memory budgets
+### Optional HRATT parallelism and memory budgets
 
 `n_threads=1` remains the default. Above one, the `fast` extra parallelizes
 genotype preparation over variants and coordinate updates over independent
@@ -162,7 +164,7 @@ residual matrix products over sample rows. Smaller products retain the
 ordinary matrix-product path. Temporary Numba and detected BLAS limits are
 restored on exit. Apple Accelerate needs `VECLIB_MAXIMUM_THREADS=1` before
 Python starts; it is not detected by threadpoolctl. See the
-[quickstart](quickstart.md#larger-kvik-fits) for a complete configuration.
+[quickstart](quickstart.md#larger-hratt-fits) for a complete configuration.
 
 Prepared genotypes are never stored projected. Preparation keeps, per
 variant, the three standardized call values, the covariate coefficients
@@ -233,14 +235,14 @@ These are historical mixmogam results, not official-program comparisons:
 
 Table 2. Historical null calibration by dataset.
 
-| data | exact LOCO | `bolt-inf` | + spectral | `kvik` | + spectral |
+| data | exact LOCO | `bolt-inf` | + spectral | `hratt` | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
 | *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 | 0.97-1.03 |
 
 FPR at p < 0.01 follows suit (strong simulated structure: BOLT-LMM-inf
-2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through KVIK's
+2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through HRATT's
 lambda rule the transferred correction flattens the gradient but leaves
 about 7% overall inflation under strong simulated structure.
 

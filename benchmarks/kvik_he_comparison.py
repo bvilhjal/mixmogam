@@ -3,7 +3,7 @@
 
 Each existing phensim case supplies the same PLINK genotypes, phenotype,
 covariates and seed to all three methods. All settings except the local
-heritability estimator remain at their defaults. Official KVIK runs both
+heritability estimator remain at their defaults. Official LDAK-KVIK runs both
 steps with its defaults; it may revise its initial HE estimate internally.
 
 Example::
@@ -129,7 +129,7 @@ def run_reference(case, directory, executable, threads, variant_ids):
               "user_seconds": sum(item["user_seconds"] for item in resources),
               "system_seconds": sum(item["system_seconds"] for item in resources),
               "fit_seconds": None, "exit_code": 0,
-              "measurement": "both native KVIK steps; summed wall/CPU time and maximum peak RSS"}
+              "measurement": "both native LDAK-KVIK steps; summed wall/CPU time and maximum peak RSS"}
     save_json(directory / "measurement.json", result)
     return result
 

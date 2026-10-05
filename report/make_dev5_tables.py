@@ -2,8 +2,9 @@
 """Typeset the 2.0.0.dev5 computational evidence; never run an analysis.
 
 Reads the paired dev4/dev5 measurements and the stochastic Lanczos defaults
-study from their archives, checks that the paired design is complete, and
-writes table rows plus a manifest of input and output hashes.
+study, rerun with commit e4089d8, from their archives, checks that the paired
+design is complete, and writes table rows plus a manifest of input and output
+hashes.
 """
 import csv
 import hashlib
@@ -13,14 +14,14 @@ from statistics import median
 
 ROOT = Path(__file__).resolve().parents[1]
 PAIRED = ROOT / "benchmarks/results/20261004-efficiency-paired"
-SLQ = ROOT / "benchmarks/results/20261004-slq-defaults"
+SLQ = ROOT / "benchmarks/results/20261005-slq-defaults-e4089d8"
 OUT = ROOT / "report"
 WORKLOADS = {
     "exact": r"Exact LOCO, 3{,}000/44{,}000",
     "mlmm": r"MLMM, ten steps, 2{,}000/50{,}000",
     "bolt-inf": r"BOLT-LMM-inf, 10{,}000/30{,}000",
-    "kvik-reml": r"KVIK with REML, 10{,}000/30{,}000",
-    "kvik-he-uncached-4t": r"KVIK-HE, no cache, four threads, 20{,}000/20{,}000",
+    "kvik-reml": r"HRATT with REML, 10{,}000/30{,}000",
+    "kvik-he-uncached-4t": r"HRATT-HE, no cache, four threads, 20{,}000/20{,}000",
 }
 CASES = {
     "unstructured_pc": r"Two populations, covariate, 5{,}000/29{,}998",

@@ -45,7 +45,7 @@ tool failures remain visible. The excluded pilot is not calibration evidence.
 
 The runtime extension in `kvik_scaling_plan.md` adds n=2,000 and 4,000. A
 further HAPNEST-model extension uses `--simulator hapnest --bounded-memory`
-at n=10,000 and 50,000 with 12,000 markers. It compares mixmogam KVIK and
+at n=10,000 and 50,000 with 12,000 markers. It compares mixmogam HRATT and
 official LDAK-KVIK with unchanged fitting defaults, one thread, one realization per
 unstructured or PC-adjusted confounded cell. The planned design is archived
 with each run; the common preparation has separate time/RSS measurements.
@@ -124,7 +124,7 @@ the math library, executable build and matrix shapes determine how much
 parallel work actually occurs.
 
 The [initial thread comparison](results/20261003-kvik-thread-scaling/README.md)
-uses frozen source from before explicit model threading. Add `--parallel-kvik`
+uses frozen source from before explicit model threading. Add `--parallel-hratt`
 to exercise the new `n_threads` option. For explicit workers, use
 `--blas-threads 1 --numba-threads 8` to avoid nesting local BLAS work inside
 the worker pool. These overrides apply only to mixmogam; LDAK keeps its
@@ -135,7 +135,7 @@ for complete fits, numerical changes and memory measurements.
 ```sh
 python benchmarks/kvik_thread_scaling.py --source . --ldak /path/to/ldak \
   --case PATH_TO_UNSTRUCTURED_CASE --case PATH_TO_STRUCTURED_CASE \
-  --parallel-kvik --threads 1 4 8 --blas-threads 1 --numba-threads 8 \
+  --parallel-hratt --threads 1 4 8 --blas-threads 1 --numba-threads 8 \
   --out NEW_DIRECTORY
 ```
 
@@ -163,23 +163,35 @@ since commit e4089d8, whose rerun compares int8 with two-bit calls instead
 (`--storage packed`). These are new fixed
 panels, not nested subsets of the earlier 12,000-variant data.
 
-**2.0.0.dev5 work reduction.** `efficiency_paired.py` compares two frozen
-source trees on five seeded synthetic workloads, one per association path:
-exact LOCO, BOLT-LMM-inf, KVIK with REML, uncached KVIK-HE on four threads,
-and MLMM. Each source warms its own Numba cache on a small panel. Measured
-fits run in fresh processes in alternating order, and fit time, CPU time,
-peak RSS and saved results are compared across sources. Panel arrays are
-ignored by Git; their hashes are kept. See
-[`20261004-efficiency-paired`](results/20261004-efficiency-paired/README.md).
-`slq_defaults.py` compares two-step Lanczos REML with exact REML on the
-same projected genotypes, across Lanczos steps, probe counts and probe
-seeds. See [`20261004-slq-defaults`](results/20261004-slq-defaults/README.md).
+**Paired version comparisons.** `efficiency_paired.py` compares labelled
+frozen source trees (`--source LABEL=PATH`, oldest first; the last is the
+reference for agreement) on seeded synthetic workloads covering every
+association path: exact LOCO, MLMM, BOLT-LMM-inf, BOLT-LMM, HRATT with REML,
+and HRATT-HE on one and four threads, plus HRATT-HE at 10,000 samples and
+10,000 to 80,000 variants for memory growth. A capability probe skips
+workloads a source cannot run: `*-streamed` disable the float genotype cache
+of sources up to 2.0.0.dev5, and `*-packed` fit two-bit calls; sources up to
+commit e4089d8 are called with the method's earlier name. Each source
+warms its own Numba cache on a small panel. Measured fits run in fresh
+processes, the source order rotating across repetitions, and fit time, CPU
+time, peak RSS, the load average and saved results are recorded (`--max-load`
+waits for a quiet host before each measurement); repeats,
+versions and two-bit against int8 storage are compared. Panel arrays are
+ignored by Git; their hashes are kept. Archives:
+[`20261004-efficiency-paired`](results/20261004-efficiency-paired/README.md)
+(dev4 against dev5) and
+[`20261005-efficiency-paired-hratt`](results/20261005-efficiency-paired-hratt/README.md)
+(dev5 against the current code). `slq_defaults.py` compares two-step Lanczos
+REML with exact REML on the same projected genotypes, across Lanczos steps,
+probe counts and probe seeds:
+[`20261004-slq-defaults`](results/20261004-slq-defaults/README.md) (dev5) and
+[`20261005-slq-defaults-e4089d8`](results/20261005-slq-defaults-e4089d8/README.md).
 
 ```sh
-mkdir -p /tmp/mixmogam-dev4
-git archive 0fa3da8 mixmogam | tar -x -C /tmp/mixmogam-dev4
-python benchmarks/efficiency_paired.py --baseline /tmp/mixmogam-dev4 \
-  --optimized . --reps 2 --out NEW_DIRECTORY
+mkdir -p /tmp/mixmogam-dev5
+git archive 4db5034 mixmogam | tar -x -C /tmp/mixmogam-dev5
+python benchmarks/efficiency_paired.py --source dev5=/tmp/mixmogam-dev5 \
+  --source current=. --reps 3 --max-load 5 --out NEW_DIRECTORY
 OPENBLAS_NUM_THREADS=1 python benchmarks/slq_defaults.py --out NEW_DIRECTORY
 ```
 
@@ -205,9 +217,9 @@ days and host loads of both runs.
 
 ```sh
 python benchmarks/kvik_simulation.py --rerun-from benchmarks/results/OLD_RUN \
-  --methods exact bolt-inf kvik --ldak /path/to/ldak --out NEW_DIRECTORY
+  --methods exact bolt-inf hratt --ldak /path/to/ldak --out NEW_DIRECTORY
 python benchmarks/kvik_thread_scaling.py --source . --methods mixmogam-he \
-  --case CASE --case CASE --threads 1 4 --parallel-kvik --blas-threads 1 \
+  --case CASE --case CASE --threads 1 4 --parallel-hratt --blas-threads 1 \
   --numba-threads 8 --reps 3 --out NEW_DIRECTORY
 ```
 

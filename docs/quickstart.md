@@ -32,7 +32,7 @@ result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
 result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
 result = gwas(y, gt, method="bolt-inf")      # BOLT-LMM-inf-style, K-free
 result = gwas(y, gt, method="bolt")          # two-Gaussian mixture
-result = gwas(y, gt, method="kvik")          # KVIK-style elastic-net model
+result = gwas(y, gt, method="hratt")         # elastic net, after LDAK-KVIK
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
@@ -55,7 +55,7 @@ two-step methods. The spectral option is an approximation, and its use with mixt
 statistics is heuristic; use the exact path when feasible and validate
 calibration in the intended population (see the [design notes](design.md)).
 
-## Larger KVIK fits
+## Larger HRATT fits
 
 Install the `fast` extra for Numba, then set thread limits **before starting
 Python**. For example, launch your analysis script with:
@@ -69,7 +69,7 @@ In that script, after loading and aligning `y` and `gt`:
 
 ```python
 result = gwas(
-    y, gt, method="kvik", heritability_method="he",
+    y, gt, method="hratt", heritability_method="he",
     n_threads=4, random_state=0,
 )
 print(result.extra["he_variance"])

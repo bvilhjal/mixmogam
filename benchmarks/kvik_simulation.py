@@ -7,7 +7,7 @@ Example (from the repository root, with phensim installed):
 To time new local code on an archive's unchanged inputs, reusing its official
 LDAK-KVIK outputs:
     python benchmarks/kvik_simulation.py --rerun-from OLD_RUN --methods exact \
-        bolt-inf kvik --ldak /path/to/ldak --out NEW_RUN
+        bolt-inf hratt --ldak /path/to/ldak --out NEW_RUN
 
 Every association worker reads the same on-disk PLINK inputs. A failed worker
 is retained as a failed result; its missing markers never become p=1.
@@ -34,7 +34,7 @@ from scipy.sparse.linalg import LinearOperator, eigsh
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
-METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
+METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
 CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
 THREAD_VARS = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
                "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS"]

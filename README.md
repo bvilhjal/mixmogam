@@ -25,16 +25,20 @@ Table 1. Association methods implemented by the current package.
 | `"exact"` | EMMAX with an exact REML refit per LOCO group, by Cholesky factorizations |
 | `"bolt-inf"` | BOLT-LMM-inf-style CG solves and retrospective calibration |
 | `"bolt"` | Two-Gaussian mixture, variational fitting and cross-validation |
-| `"kvik"` | KVIK-style elastic-net LOCO scores and structure-dependent calibration |
+| `"hratt"` | HRATT: elastic-net LOCO scores and structure-dependent calibration |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
 
-The two-step paths are research implementations with documented departures
-from the original programs, including their variance-component estimators.
+HRATT is inspired by LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) and follows
+its two-step design: an elastic-net LOCO prediction under LDAK's heritability
+model, then retrospective score tests with a structure-dependent calibration.
+It is not LDAK-KVIK. The two-step paths are research implementations with
+documented departures from the original programs, including their
+variance-component estimators.
 `denominator="spectral"` is a mixmogam extension for the two-step methods.
 Its transfer to mixture and elastic-net statistics is heuristic.
 
-KVIK can reuse its randomized HE products for heritability fitting:
-`gwas(y, gt, method="kvik", heritability_method="he")`. This projected,
+HRATT can reuse its randomized HE products for heritability fitting:
+`gwas(y, gt, method="hratt", heritability_method="he")`. This projected,
 single-component HE option avoids the REML stage and reports unconstrained
 estimates, boundary fits and probe uncertainty in `result.extra["he_variance"]`.
 It differs from LDAK's partitioned HE with large-effect exclusions. The
@@ -44,7 +48,7 @@ not a heritability confidence interval.
 
 With the `fast` extra, `gwas(..., method="exact", n_threads=4)` decodes
 genotype blocks in parallel with unchanged results, and
-`gwas(..., method="kvik", n_threads=4)` parallelizes
+`gwas(..., method="hratt", n_threads=4)` parallelizes
 genotype preparation and independent candidate-model and LOCO coordinate
 updates. Large fits also distribute residual matrix products across sample
 rows. Model sweeps retain their SNP order; genotype preparation and numerical
@@ -59,7 +63,7 @@ covariates are removed through prepared coefficients, never per variant.
 Calls can be stored two bits each, a quarter of the int8 memory, with
 identical results: `Genotypes(G, packed=True)`, `read_plink(prefix,
 packed=True)`, or `read_plink(prefix, mmap=True)` to leave them in the
-mapped bed file. See the [quickstart](docs/quickstart.md#larger-kvik-fits)
+mapped bed file. See the [quickstart](docs/quickstart.md#larger-hratt-fits)
 for an explicit HE/four-thread configuration.
 
 The [20K benchmark](benchmarks/results/20261005-kvik-20k-e4089d8/README.md) measures

@@ -11,6 +11,8 @@ with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
 support it. Sections 2.11 and 4.10 cover the subsequent revisions, which
 stream genotypes without projecting covariates out of each marker, drop the
 float genotype cache and store calls two bits each, with their paired fits.
+The package's two-step method inspired by LDAK-KVIK is called HRATT; runs
+archived before the rename keep its earlier name.
 The benchmark results are reruns of the mixmogam methods with commit e4089d8
 on the archived inputs. Official LDAK-KVIK results are reused from the
 original runs of 3 October, when identical mixmogam code ran 27% slower than
@@ -46,8 +48,8 @@ Table 1. Evidence and provenance used in the manuscript.
 | Superseded reruns and same-day checks | `20261004-*-dev5`, `20261004-same-day-dev4-dev5`, `20261005-same-day-dev5-e4089d8` | 2.0.0.dev5 reruns kept as provenance; same-day checks separate code from host conditions |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
-| Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults`, `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
-| Genotype streaming without projection | `20261004-genotype-streaming`, `20261004-gram-cache`, `20261004-packed-calls` | Paired fits of dev5 against 12aa504, then of the float32 Gram cache and of two-bit calls without the float cache; KVIK-HE at 10K samples and 10K-80K markers; two repetitions on an idle host |
+| Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults` (rerun `20261005-slq-defaults-e4089d8`), `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
+| Genotype streaming without projection | `20261005-efficiency-paired-hratt`; steps `20261004-genotype-streaming`, `20261004-gram-cache`, `20261004-packed-calls` | dev5 against the current source on every path and HRATT-HE at 10K samples and 10K-80K markers, three repetitions gated on host load; the step archives pair each change with its predecessor |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |

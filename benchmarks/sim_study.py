@@ -115,7 +115,7 @@ def _null_calibration(res: GwasResult, null: np.ndarray, load: np.ndarray) -> di
 
 
 def run_large_replicate(scenario: str, cfg: dict, seed: int, rows: list):
-    """Large-n regime, K-free (BOLT/KVIK style): the kinship enters only
+    """Large-n regime, K-free (BOLT-LMM/HRATT style): the kinship enters only
     as a streaming operator over the genotypes; no n x n matrix is ever
     formed. The dense-exact reference runs only where feasible (n <= 12k)."""
     from mixmogam.kinship import GenotypeKinship

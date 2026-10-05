@@ -20,8 +20,9 @@ ROOT = Path(__file__).resolve().parents[1]
 RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
 HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
 OUT = ROOT / "report"
+# Archive keys: runs before the rename stored HRATT under its earlier name.
 METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
-NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam KVIK", "LDAK-KVIK"]
+NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam HRATT", "LDAK-KVIK"]
 COLORS = ["#0072B2", "#009E73", "#CC79A7", "#D55E00"]
 CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
 LABELS = ["Unstructured", "Structured", "Structured +\nenvironment", "Same trait\n+ 2 PCs"]

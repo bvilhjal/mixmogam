@@ -69,7 +69,8 @@ uses six independent panels per cell, with and without local LD, and
 verifies every exported genotype. At $n=800$ with LD, environmental
 confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
 under the genetic null; adjustment for two genotype PCs reduces this to
-0.97\%. Corresponding mixmogam KVIK rates are 0.66\% and 0.94\%.
+0.97\%. Corresponding rates for mixmogam's HRATT, a two-step method
+inspired by LDAK-KVIK, are 0.66\% and 0.94\%.
 These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
@@ -87,8 +88,8 @@ Version 2.0.0.dev5 computes the same estimators with less work: in paired
 runs, an exact LOCO scan of 3,000 samples took 13.3 instead of 79.6
 seconds, and fewer Lanczos steps with more trace probes reduced Monte
 Carlo error. A later revision streams genotypes instead of caching them:
-with two-bit calls, KVIK's peak memory grows by 0.42 instead of 5.24
-bytes per genotype, and fits take 0.8 to 1.25 times as long as dev5's
+with two-bit calls, HRATT's peak memory grows by 0.36 instead of 4.06
+bytes per genotype, and fits take 0.86 to 1.23 times as long as dev5's
 cached fits.
 REML remains the default variance estimator. The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
@@ -205,10 +206,10 @@ Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
 50,000 samples; Lanczos steps and probes against dense REML on six panels &
 Two repetitions on a loaded host; simulated panels; two-step results move
 by Monte Carlo amounts. \\
-Genotype streaming, commits 12aa504 to e4089d8 & Paired fits against frozen
-predecessors at 10,000 samples, with result agreement; a same-day check of
-dev5 against e4089d8 at 50,000 samples & Two repetitions; simulated
-panels; one host. \\
+Genotype streaming, commits 12aa504 to e4089d8 & Paired fits of 2.0.0.dev5
+against the current source on every path, three repetitions gated on host
+load, with result agreement; archives of each step; a same-day check at
+50,000 samples & Simulated panels; one host. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -313,11 +314,11 @@ overlap between the tested region and its background predictor; it does
 not imply statistical independence across groups or correct an omitted
 phenotype mean.
 
-\subsection{An explicit moment-estimation option for KVIK}
+\subsection{An explicit moment-estimation option for HRATT}
 \label{sec:he-method}
 
 Variance estimation can dominate a streaming fit even after individual
-matrix products are efficient. KVIK already computes randomized
+matrix products are efficient. HRATT already computes randomized
 Haseman--Elston (HE) quantities to choose the frequency-weight exponent
 $a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}.
 The optional \code{heritability\_method="he"} reuses these products to
@@ -489,9 +490,9 @@ For mixture-prior and elastic-net residuals, an infinitesimal spectral
 factor is transferred before further calibration. Once the residual is
 a nonlinear, data-adaptive function of $\y$, the proof of
 Equation~\eqref{eq:score} no longer supplies its null law. This transfer
-is a heuristic. The names ``BOLT-style'' and ``KVIK-style'' below denote
-mixmogam implementations inspired by the corresponding methods; they
-do not establish equivalence to the reference programs.
+is a heuristic. ``BOLT-style'' and HRATT below denote mixmogam methods
+inspired by BOLT-LMM and LDAK-KVIK; they do not establish equivalence
+to the reference programs.
 
 \subsection{Environmental mean misspecification}
 \label{sec:environment}
@@ -667,7 +668,7 @@ Streaming genotype blocks are stored after covariate projection. The
 streaming kinship therefore already equals the REML operator
 $\mathbf S\K\mathbf S$, with $\mathbf S=\I-\mathbf Q\mathbf Q^\top$ for an
 orthonormal covariate basis $\mathbf Q$. In the BOLT-style paths, and in
-KVIK under strong structure, one randomized subspace iteration of width
+HRATT under strong structure, one randomized subspace iteration of width
 128 supplies both the REML deflation and the 64-pair conjugate-gradient
 preconditioner; previously each ran its own passes. The infinitesimal
 calibration of Section~\ref{sec:spectral} uses random markers whose
@@ -858,14 +859,16 @@ environmental effects, structured data with the exposure, and the same
 confounded phenotype adjusted for the two leading genotype PCs. PCs are
 computed without phenotypes and supplied identically to all methods.
 Every analysis includes an intercept. Exact LOCO EMMAX, mixmogam BOLT-inf,
-mixmogam KVIK and official LDAK-KVIK use their default fitting and
+mixmogam HRATT and official LDAK-KVIK use their default fitting and
 calibration settings with explicit seeds and one thread. These are
 comparisons of supplied procedures, whose priors and tuning searches
 differ; matching inputs does not make their statistical models identical.
-Here ``mixmogam KVIK'' denotes this package's Python/Numba implementation
-of a KVIK-style procedure, while ``LDAK-KVIK'' denotes the official
-standalone executable. The distinction includes statistical choices,
-such as variance-component estimation, as well as implementation language.
+Here ``mixmogam HRATT'' denotes this package's two-step method, inspired
+by LDAK-KVIK \citep{hof2025} and following its design, while
+``LDAK-KVIK'' denotes the official standalone executable. The distinction
+includes statistical choices, such as variance-component estimation, as well
+as implementation language. Versions up to commit e4089d8 called the method
+KVIK, and archived runs keep that name.
 The official documentation states that LDAK-KVIK has primarily been
 tested above 50,000 samples, while also supporting smaller datasets with
 potentially less benefit from LOCO prediction.\footnote{LDAK-KVIK
@@ -1194,13 +1197,13 @@ sampling variation of the reported summaries.
 
 All 384 method runs returned valid p-values for every retained variant:
 288 mixmogam runs repeated with commit e4089d8 and the 96 original official
-runs. Execution is distinct from convergence: mixmogam KVIK reported
+runs. Execution is distinct from convergence: mixmogam HRATT reported
 incomplete cross-validation in six unadjusted confounded mixed-trait runs,
 one of which also had incomplete LOCO fits (two in the original runs).
 These remain in the summaries. In the original archive, an independently
 regenerated structured/PC-adjusted case reproduced the serialized inputs
 and all four methods' p-values exactly using frozen source snapshots.
-Exact LOCO reproduces every original rejection rate; BOLT-inf and KVIK
+Exact LOCO reproduces every original rejection rate; BOLT-inf and HRATT
 change by Monte Carlo amounts, from the new Lanczos probes and calibration
 draws of 2.0.0.dev5. Streaming changed no rejection rate or detection of
 the dev5 reruns and moved $\log_{10}p$ by at most $5\times10^{-6}$.
@@ -1216,7 +1219,7 @@ denominator approximation.
 Omitting the environmental mean shift produces the largest disagreement.
 With LD, LDAK-KVIK gives $\lgc=3.455$ and 15.83\% genetic-null
 rejection at 1\%; exact LOCO and mixmogam BOLT-inf give 1.34\% and 1.25\%,
-and mixmogam KVIK gives 0.66\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
+and mixmogam HRATT gives 0.66\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
 rejection is 21.5--25.2\% in four panels and 1.52--1.82\% in two.
 Some inflated runs reach LDAK-KVIK's lower heritability
 boundary after revision of the initial estimate. This motivates a
@@ -1224,7 +1227,7 @@ diagnostic experiment; it does not identify the cause. The mixmogam deflation
 also fails nominal calibration.
 
 Adding the same two PCs reduces LD global-null rejection to 0.94\%
-(mixmogam KVIK) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
+(mixmogam HRATT) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
 is 1.17\% and 1.05\%. Both detect 50.00\% of causal markers, with the same
 count in each of the six panels; ten causal markers per panel cannot
 resolve a power difference. Detection gains in inflated, unadjusted cells must not
@@ -1271,7 +1274,7 @@ but the lowest and highest loading quintiles have $\lgc=1.34$ and
 0.64, and rejection fractions of 2.45\% and 0.11\% at 1\%. The
 historical spectral correction gives 1.14\% and 1.06\% in those
 quintiles, close to the dense LOCO results of 1.12\% and 1.11\%.
-The KVIK-style implementation retains a pronounced gradient.
+The historical HRATT implementation retains a pronounced gradient.
 
 \begin{table}[htbp]
 \centering\small
@@ -1422,7 +1425,7 @@ are separate requirements.
 \label{sec:kvik-resources}
 
 New timings use an Apple M2 Pro with 16 GB RAM, Python 3.14.6,
-NumPy 2.4.6 and Numba 0.66.0, with one thread per method. mixmogam KVIK
+NumPy 2.4.6 and Numba 0.66.0, with one thread per method. mixmogam HRATT
 uses its compiled kernels. Across the 96 primary inputs its median time
 is 1.89 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
 199.1 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
@@ -1435,7 +1438,7 @@ Figure~\ref{fig:kvik-scaling} and Table~\ref{tab:kvik-scaling} extend the
 controlled LD workloads to 4,000 samples and 24,000 markers. Dense exact
 scans become substantially more expensive, although at 4,000 samples they
 now take about 26 seconds instead of 91. LDAK-KVIK retains lower observed
-time and RSS than mixmogam KVIK. Because n and m both increase, the slopes
+time and RSS than mixmogam HRATT. Because n and m both increase, the slopes
 do not identify a sample-size complexity exponent.
 
 \begin{table}[htbp]
@@ -1505,7 +1508,7 @@ writer includes them. These preparation measurements include the resident
 genotype and interpreter; they are not measurements of an allocation alone.
 
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
-association comparison to n=50,000, with mixmogam KVIK at its default REML.
+association comparison to n=50,000, with mixmogam HRATT at its default REML.
 At 50,000 samples the e4089d8 reruns took 38.19 and 40.20 seconds,
 against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs, 31.55
 and 38.53 seconds with dev5's genotype cache, and 24.45 and 35.42 seconds
@@ -1518,7 +1521,7 @@ diagnostics, but neither nominal-looking rejection nor greater detection
 would establish calibration or superiority. Independent reference panels,
 more phenotype replicates, realistic marker density and stronger donor-
 sharing audits remain necessary.
-All four rerun mixmogam KVIK fits at these larger sizes report completed
+All four rerun mixmogam HRATT fits at these larger sizes report completed
 cross-validation and LOCO convergence. Both programs return valid p-values
 for all markers.
 
@@ -1541,7 +1544,7 @@ for all markers.
 \begin{table}[htbp]
  \centering\small
  \caption{HAPNEST-model workloads, m=12,000, one realization per cell.
- mixmogam KVIK (e4089d8 rerun) uses REML; LDAK-KVIK rows are the
+ mixmogam HRATT (e4089d8 rerun) uses REML; LDAK-KVIK rows are the
  original measurements on the same inputs.
  Time is end-to-end seconds; RSS is peak MiB. Inflation and 1\%
  rejection use the chromosome with no generating genetic effects.
@@ -1550,7 +1553,7 @@ for all markers.
  \label{tab:hapnest-kvik}
  \begin{tabular}{@{}rllrrrr@{}}
  \toprule
- Samples & Cell & KVIK & Seconds & MiB & $\lgc$ & Rejection (\%) \\
+ Samples & Cell & Program & Seconds & MiB & $\lgc$ & Rejection (\%) \\
  \midrule
  \tabinput{tables/hapnest_kvik.tex}
  \bottomrule
@@ -1775,11 +1778,11 @@ times faster and selected the same cofactors under all three criteria;
 its new float32 default accounts for part of that gain.
 
 The two-step paths gained less, 1.8-fold for BOLT-LMM-inf and 1.5-fold for
-KVIK with REML, because their genotype passes were already batched. Their
+HRATT with REML, because their genotype passes were already batched. Their
 heritability estimate moved from 0.4440 to 0.4369 with the new Lanczos
 probes. With new calibration markers, $\log_{10}p$ moved by up to 0.07 at
 $p\approx4\times10^{-31}$. These are Monte Carlo changes, not errors of
-either version. Uncached KVIK-HE draws neither probes nor calibration
+either version. Uncached HRATT-HE draws neither probes nor calibration
 markers here, and its p-values were identical. Its peak RSS fell from
 1.14 to 0.93 GiB at similar speed. A same-day check at 50,000 samples
 gives the same picture. With 12,000 markers, REML fits took 31.5 seconds
@@ -1789,7 +1792,9 @@ with 20,000 markers took 24.0 seconds in both versions. Peak RSS was
 
 Table~\ref{tab:dev5-slq} supports the new Lanczos defaults. Each panel
 compares two-step REML with exact REML on a dense kinship formed from the
-same projected genotype blocks, over independent probe seeds.
+same projected genotype blocks, over independent probe seeds. The table
+comes from a rerun with commit e4089d8, which reproduced the dev5 study to
+within $5\times10^{-7}$ in every summary.
 Twenty-four steps reproduced 96 to within $1.1\times10^{-7}$ in $h^2$ on
 every panel. Sixteen steps missed by $1.1\times10^{-4}$ when markers were
 fewer than samples. The remaining error came from the probes. With six
@@ -1803,7 +1808,8 @@ $h^2$.
 \begin{minipage}{\textwidth}
  \centering\small
  \captionof{table}{Two-step REML heritability at 24 Lanczos steps against
- exact REML on the same projected genotypes (samples/markers). Entries are
+ exact REML on the same projected genotypes (samples/markers), commit
+ e4089d8. Entries are
  mean $\pm$ standard deviation over six probe seeds (twelve at $n=500$),
  with the largest absolute error in parentheses. The last column is the
  largest change from 24 to 96 steps. In the first simulated $h^2=0.95$
@@ -1822,50 +1828,52 @@ $h^2$.
 \subsection{Genotype streaming: paired fits and memory growth}
 \label{sec:streaming-results}
 
-Table~\ref{tab:streaming-paired} compares frozen 2.0.0.dev5 and
-streaming-revision sources (commit 12aa504, Section~\ref{sec:streaming-methods})
-under the protocol of Section~\ref{sec:dev5-results}, on an otherwise idle
-host. Without the float genotype cache, KVIK-HE took 5.6 instead of 9.1
-seconds at 10{,}000 samples and 30{,}000 markers, as fast as dev5 with its
-cache, and peaked at 0.65~GiB against that fit's 1.76~GiB. Cached fits were
-faster too, 4.4 instead of 5.6 seconds. Table~\ref{tab:streaming-scaling}
-varies the number of markers at 10{,}000 samples. Without the cache, peak RSS
-grew by 1.25 bytes per genotype, one of them the int8 input, against 5.24
-with dev5's default cache, at equal speed: 15.5 against 15.6 seconds at
-80{,}000 markers. BOLT-LMM's in-sample LD scores had held every projected
-genotype even without the cache; streaming them lowered its peak RSS from
-2.50 to 1.16~GiB without the cache and from 3.42 to 2.30~GiB with it. Every
-repetition returned identical arrays, cached and uncached fits of the new
-source agreed bit for bit, and between versions $\log_{10}p$ differed by at
-most $6\times10^{-5}$.
+Table~\ref{tab:streaming-paired} compares frozen 2.0.0.dev5 with the current
+source, commit e4089d8 with HRATT renamed (Section~\ref{sec:streaming-methods}),
+on every association path. Each source runs with its defaults: dev5 caches
+standardized genotypes wherever they fit its $4\times10^9$-byte budget, as on
+every panel here, and the current source decodes int8 or two-bit calls on
+every pass. Each fit ran three times per source in fresh processes, the source
+order rotating, and every measurement waited until the host's one-minute load
+average was below 5.
 
-Two later steps, together commit e4089d8, keep the estimators. Paired fits
-against 12aa504 with its cache (\code{20261004-}\allowbreak\code{packed-calls})
-price the cache's removal: KVIK-HE and BOLT-LMM took 1.2 to 1.3 times as
-long, KVIK-HE at dev5's cached speed, while KVIK-HE's peak RSS grew by
-1.16 instead of 5.14 bytes per genotype, and by 0.42 with two-bit calls:
-0.61 instead of 4.10~GiB at 80{,}000 markers. Two-bit and int8 storage
-gave identical arrays; against the baseline $\log_{10}p$ moved by at most
-$5\times10^{-13}$, since preparation now takes moments from exact call
-counts. Variational Gram matrices are stored in float32 and cached block
-by block up to $10^9$ bytes (\code{20261004-}\allowbreak\code{gram-cache}),
-which moved $\log_{10}p$ by at most $4\times10^{-6}$. Where BOLT-LMM's
-cross-validation Grams had exceeded the budget in float64 they now fit,
-and direct fits of that cross-validation ran 1.5 (BOLT-LMM) and 2.5
-(KVIK) times faster.
+The two-step paths need 2.4 to 2.8 times less memory with int8 calls and 3.1
+to 4.2 times less with two-bit calls. HRATT-HE ran 4\% faster than dev5 on one
+thread and 14\% faster on four. BOLT-LMM-inf, BOLT-LMM and HRATT with REML took
+1.19 to 1.23 times as long, since every pass now decodes the calls, and 1.14 to
+1.18 times with two-bit calls. Exact LOCO and MLMM, whose code did not change,
+took the same time. Every repetition returned identical arrays, two-bit and int8
+calls gave identical arrays in every workload, exact LOCO and MLMM matched dev5
+exactly, and the two-step paths moved by at most $4.2\times10^{-5}$ in
+$\log_{10}p$. Table~\ref{tab:streaming-scaling} varies the number of markers
+for HRATT-HE at 10{,}000 samples. Peak RSS grows by 0.36 bytes per genotype
+with two-bit calls and 1.14 with int8 calls, against 4.06 with dev5's cache and
+1.26 without it. The current source runs slightly faster than dev5 with its
+cache, 16.3 against 17.9 seconds at 80{,}000 markers, and needs 40\% less time
+than dev5 without it.
+
+The steps between the two versions are archived separately:
+\code{20261004-}\allowbreak\code{genotype-streaming} (12aa504, covariates no
+longer projected per marker), \code{20261004-}\allowbreak\code{gram-cache}
+(Gram matrices stored in float32 and cached in part, which made
+cross-validation 1.5 and 2.5 times faster for BOLT-LMM and HRATT where float64
+Grams had exceeded the budget) and \code{20261004-}\allowbreak\code{packed-calls}
+(two-bit calls, no float cache).
 
 \begin{table}[htbp]
  \centering\small
- \caption{Paired fits of frozen 2.0.0.dev5 and streaming-revision sources
- on simulated panels of 10{,}000 samples and 30{,}000 markers unless stated
- (samples/markers). Fit seconds are median [minimum, maximum] over two
- fresh-process repetitions; the ratio compares medians. Peak RSS is the
- median whole-process value in GiB. Agreement is the largest absolute
- difference in $\log_{10}p$ between versions.}
+ \caption{Paired fits of frozen 2.0.0.dev5 and the current source on simulated
+ panels (samples/markers), each with its defaults: dev5 with its float
+ genotype cache, the current source with int8 calls or, on the two-step
+ paths, two-bit calls. Fit seconds and whole-process peak RSS (GiB) are
+ medians over three fresh-process repetitions per source, each started below
+ a one-minute load average of 5; repetitions were within 8\% of their median,
+ 14\% for four-thread fits. Agreement is the largest absolute difference in
+ $\log_{10}p$ between versions; two-bit and int8 results were identical.}
  \label{tab:streaming-paired}
- \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrrl@{}}
+ \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrrrl@{}}
  \toprule
- Workload & dev5 s & New s & Ratio & dev5 GiB & New GiB & Agreement \\
+ Workload & dev5 s & int8 s & Two-bit s & dev5 GiB & int8 GiB & Two-bit GiB & Agreement \\
  \midrule
  \tabinput{tables/streaming_paired.tex}
  \bottomrule
@@ -1874,15 +1882,16 @@ and direct fits of that cross-validation ran 1.5 (BOLT-LMM) and 2.5
 
 \begin{table}[htbp]
  \centering\small
- \caption{KVIK-HE at 10{,}000 samples: median fit seconds / peak RSS (GiB)
- over two repetitions, with the default float genotype cache, which held
- every panel, and without it. The last row is the least-squares growth of
- peak RSS per genotype. Agreement as in Table~\ref{tab:streaming-paired},
- for the worse of the two cache settings.}
+ \caption{HRATT-HE at 10{,}000 samples: median fit seconds / peak RSS (GiB)
+ over three repetitions, for dev5 with its default float genotype cache,
+ which held every panel, and with the cache disabled, and for the current
+ source with int8 and two-bit calls. The last row is the least-squares growth
+ of peak RSS per genotype. Agreement compares dev5's default with the current
+ source; two-bit and int8 results were identical.}
  \label{tab:streaming-scaling}
  \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrl@{}}
  \toprule
- Markers & dev5 cache & New cache & dev5 no cache & New no cache & Agreement \\
+ Markers & dev5 cache & dev5 no cache & int8 & Two-bit & Agreement \\
  \midrule
  \tabinput{tables/streaming_scaling.tex}
  \bottomrule
@@ -2194,10 +2203,10 @@ Version 2.0.0.dev5 decodes through prepared per-variant value tables and
 covariate coefficients; the subsequent revisions no longer project
 markers, keep no float copy and decode two-bit calls directly
 (Sections~\ref{sec:dev5-methods} and~\ref{sec:streaming-methods}).
-Two-bit calls were at least as fast as int8 calls in every measured median,
-but one-thread REML still takes 1.13 to 1.2 times as long as with dev5's
-cache; profile decoding together with matrix products before trading
-memory back for time. Missing calls, noncontiguous chromosomes, repeated
+Two-bit calls took 0.95 to 1.04 times as long as int8 calls, but REML and
+BOLT-LMM still take 1.14 to 1.23 times as long as with dev5's cache;
+profile decoding together with matrix products before trading memory back
+for time. Missing calls, noncontiguous chromosomes, repeated
 indices and high covariate dimension need independent precision oracles.
 The current $Mp$ projection store is modest for two PCs but its cost
 must be included when $p$ grows. Measure setup, variance fitting,
@@ -2286,8 +2295,9 @@ Lanczos archive, \code{20261004-}\allowbreak\code{slq-defaults}, comes from
 \code{benchmarks/}\allowbreak\code{slq\_defaults.py} and keeps every fit
 with its source snapshot.
 \code{report/}\allowbreak\code{make\_dev5\_tables.py} renders
-Tables~\ref{tab:dev5-paired} and~\ref{tab:dev5-slq} from these files and
-records hashes in \code{dev5\_table\_}\allowbreak\code{manifest.json}.
+Table~\ref{tab:dev5-paired} from the paired archive and
+Table~\ref{tab:dev5-slq} from the Lanczos rerun, and records hashes in
+\code{dev5\_table\_}\allowbreak\code{manifest.json}.
 
 The benchmark reruns with commit e4089d8 are archived as
 \code{20261005-}\allowbreak\code{phensim-kvik-}\allowbreak\code{e4089d8} (with
@@ -2299,11 +2309,18 @@ its commands and the hash of every reused file. The same-day checks are
 \code{20261004-}\allowbreak\code{same-day-dev4-dev5} and
 \code{20261005-}\allowbreak\code{same-day-dev5-e4089d8}. The figure and table
 generators read the reruns, take official LDAK-KVIK results from the
-original archives, and verify reused inputs and outputs by hash. The
-streaming evidence is in \code{20261004-}\allowbreak\code{genotype-streaming},
+original archives, and verify reused inputs and outputs by hash.
+
+The paired dev5/current archive is
+\code{20261005-}\allowbreak\code{efficiency-paired-}\allowbreak\code{hratt}.
+\code{benchmarks/}\allowbreak\code{efficiency\_paired.py} produced it, and
+\code{report/}\allowbreak\code{make\_streaming\_tables.py} renders
+Tables~\ref{tab:streaming-paired} and~\ref{tab:streaming-scaling} from it.
+The steps between the versions are in
+\code{20261004-}\allowbreak\code{genotype-streaming},
 \code{20261004-}\allowbreak\code{gram-cache} and
-\code{20261004-}\allowbreak\code{packed-calls}; \code{report/}\allowbreak\code{make\_streaming\_tables.py}
-renders Tables~\ref{tab:streaming-paired} and~\ref{tab:streaming-scaling}.
+\code{20261004-}\allowbreak\code{packed-calls}. The Lanczos rerun is
+\code{20261005-}\allowbreak\code{slq-defaults-}\allowbreak\code{e4089d8}.
 
 \code{report/README.md} gives the reproduction commands, exact archive
 identities, and evidence map. The figure generator reads recorded results and does not silently
