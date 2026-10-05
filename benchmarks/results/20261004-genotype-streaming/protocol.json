@@ -1,0 +1,535 @@
+{
+  "argv": [
+    "benchmarks/efficiency_paired.py",
+    "--baseline",
+    "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-dev5",
+    "--optimized",
+    "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-12aa504",
+    "--reps",
+    "2",
+    "--out",
+    "benchmarks/results/20261004-genotype-streaming",
+    "--workloads",
+    "bolt-inf",
+    "bolt",
+    "bolt-streamed",
+    "kvik-reml",
+    "kvik-he",
+    "kvik-he-streamed",
+    "kvik-he-uncached-4t",
+    "kvik-he-m10000",
+    "kvik-he-streamed-m10000",
+    "kvik-he-m20000",
+    "kvik-he-streamed-m20000",
+    "kvik-he-m40000",
+    "kvik-he-streamed-m40000",
+    "kvik-he-m80000",
+    "kvik-he-streamed-m80000"
+  ],
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+  "numpy": "2.4.6",
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+    "settings": "System-wide power settings:\nCurrently in use:\n standby              1\n Sleep On Power Button 1\n hibernatefile        /var/vm/sleepimage\n powernap             1\n networkoversleep     0\n disksleep            10\n sleep                0 (sleep prevented by Claude)\n hibernatemode        3\n ttyskeepawake        1\n displaysleep         60\n tcpkeepalive         1\n lowpowermode         0\n womp                 1\n"
+  },
+  "thread_environment": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": null,
+    "NUMBA_NUM_THREADS": null
+  },
+  "blas_note": "Apple Accelerate keeps its default threads; OPENBLAS/OMP/MKL limits do not apply to it",
+  "sources": {
+    "baseline": {
+      "original_root": "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-dev5",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-genotype-streaming/sources/baseline",
+      "git": null,
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "bc00cb045420e04a58185825dcb80238cd1a88ff5dcfc4b8508f914ebaecbb00",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "8ebdedc0e6a7ac1b80d00607ea489394af792d93b07715ce056e01a3618ec0d8",
+        "mixmogam/_vb.py": "595c66e9223380b355075dd03fa878c8b7797e07a1763e4d7d519b67421e978a",
+        "mixmogam/association.py": "501fd7e4bb45805a50cf4312bec09d36c7b22e05b548379df02de3dce7c886b0",
+        "mixmogam/genotypes.py": "9695eaa067c97ba5d07e87a648f674b1cf7a91a86fbb53c123db9f8dba1308f0",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6386263e0ef73177bc10efb637baa63ada8dc5f23c9dd8c67ba76b13bf1c5627",
+        "mixmogam/lmm.py": "9d9ab51f8d34ef5669898d8028d444330b62cee1affa8a369259c449f0654f64",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "00722f69d01d03fc31f8f432628a450a5f36c325fe78a14aad2c71dcbf4533d9",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "4518da56a884c3f8f0962b067cf32063b6dc9709e8961c57f14f7339b5d59167"
+      }
+    },
+    "optimized": {
+      "original_root": "/private/tmp/claude-1963871236/-Users-au507860-REPOS/e4d231c5-f515-410b-9aa1-db484c2908e0/scratchpad/mixmogam-12aa504",
+      "snapshot": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261004-genotype-streaming/sources/optimized",
+      "git": null,
+      "sha256": {
+        "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
+        "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
+        "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
+        "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
+        "mixmogam/_he.py": "60edb239dbdfc31eac85fd4cca7c769b2f22aef9542cc438126f529ad798ae2a",
+        "mixmogam/_loco.py": "beb55851575557f773fd8deab478d122871c69c42fe24930b4834c853fdda050",
+        "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
+        "mixmogam/_standardize.py": "c9adfa31dae2b717d73f38d0457cff79b3fbbab5d40b5a23f02c5f479d126caa",
+        "mixmogam/_vb.py": "abdfd3629efae9da54426d4ddb8a23b466505fd9a45059a7848a070e47accab5",
+        "mixmogam/association.py": "501fd7e4bb45805a50cf4312bec09d36c7b22e05b548379df02de3dce7c886b0",
+        "mixmogam/genotypes.py": "9695eaa067c97ba5d07e87a648f674b1cf7a91a86fbb53c123db9f8dba1308f0",
+        "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
+        "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
+        "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
+        "mixmogam/io/phenofile.py": "7a022a12da503ab4aeb0cabd65fc2216d3bc337ac9fffbc200e2c7ba8e25928d",
+        "mixmogam/io/plink.py": "b30378bfad1d9983deb1d7478274b842f26ca491c51da97098bd38442c066386",
+        "mixmogam/io/regmap.py": "4f0d376376d97f56ff82af5fe2b64c311e79e247e4eeb3677aa94a3e6bb1b05f",
+        "mixmogam/kinship.py": "2982a60288609e10bb701d1bf5e21705683afdfdf013a9ffe69f1245ff56d565",
+        "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
+        "mixmogam/lmm.py": "9d9ab51f8d34ef5669898d8028d444330b62cee1affa8a369259c449f0654f64",
+        "mixmogam/phenotypes.py": "5609b9ffdef0dfa643750ff18ee1f70e222f7622aea25a0dc538db6485b3f937",
+        "mixmogam/plotting.py": "b2e2daff19894ce70f938b082b8131fda2fc7d733e073b780993d5849d325ffb",
+        "mixmogam/results.py": "41ebfcd16184a073c9821805388807a88e40bd040b11a81a75fb6ff48c65fad2",
+        "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
+        "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
+        "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+        "mixmogam/twostep.py": "fadb23c014477a74403eba93bee4c96eb34eaca6899e0114e058cd86b90a131d",
+        "pyproject.toml": "9b8709db975fd82aca620b8e06af2d1c134c8126922f9f0c02cbefc7804a80d9",
+        "README.md": "45d23e4bb209b145a518d16c0d142cccd27fac0838d83bbdf77c1c1470d381cb"
+      }
+    }
+  },
+  "panels": {
+    "scaling_m10000": {
+      "spec": {
+        "n": 10000,
+        "m": 10000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 51
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4e931ce75a20d125638a04346d2685e1243321d93bd8d7e7cad463fd263c16d3",
+          "bytes": 100000128
+        },
+        "y.npy": {
+          "sha256": "5e1654f873bf152ed9aee66af3a13e165838aac62f64d63531a963158a6ed54b",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "64c6e0f9b6468092c6154cf2ad87b7c6a927beb864401b56cefd04ae78c93d05",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m20000": {
+      "spec": {
+        "n": 10000,
+        "m": 20000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 52
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "af1211b91b5373a2e0de1491b650c12bc68cd05a08ee81c9f46575c069c8463a",
+          "bytes": 200000128
+        },
+        "y.npy": {
+          "sha256": "6a2567955bd040e28188827de44c6952c2327bb31164e7210d67a44dd9fbdfb4",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "60c6b1eb1267b7eaca1db79651025e4d1ac952053eeabf1de4dc3b808ce87d9f",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m40000": {
+      "spec": {
+        "n": 10000,
+        "m": 40000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 54
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "ad68d97abaef13b7fe874a4bb7953349098ca7cd86d91491fb955fc34e34cf0c",
+          "bytes": 400000128
+        },
+        "y.npy": {
+          "sha256": "545401ae15509b66fc2724234c1a863e2bccca9a3b0abb09e110fd73fb54e026",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "2c27a5dd33fdcdfeb49260727ff856a2d7a5e601e2bbbff1b827f42e5670cdde",
+          "bytes": 80128
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 10000,
+        "m": 80000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "4f611b8489cd874e66a67069575e6b6fdead70a502041990f694cef01f77870d",
+          "bytes": 800000128
+        },
+        "y.npy": {
+          "sha256": "d6fe644d8e817ced5cb4115df4abb1683762bfca35295d7034109e4b3aa4f436",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "df53f3ae476aa944297004876d56466ef58e5d65cd3f411451d014cf7e357a55",
+          "bytes": 80128
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 10000,
+        "m": 30000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "96af8c8a7e0f838bb8a848ac16fb78f97e17af8301a31999b7327d234c634e8d",
+          "bytes": 300000128
+        },
+        "y.npy": {
+          "sha256": "a7625aa7281ec522adc58631f5a9d0a7404c3399b122791f9eca8998d31153e7",
+          "bytes": 80128
+        },
+        "X.npy": {
+          "sha256": "6f1181875fb08e4abf3cbd3f8ace605a9f77fc0fd9c3a82b8cbdbcb2ff884511",
+          "bytes": 80128
+        }
+      }
+    },
+    "structured_n20000": {
+      "spec": {
+        "n": 20000,
+        "m": 20000,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 300,
+        "seed": 31
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "726c865709d9acccb59f5755daae03e97872e7aa36bf0dfe873ad713c59713b6",
+          "bytes": 400000128
+        },
+        "y.npy": {
+          "sha256": "cb02818c1f326ae7a4e571a9bc63a3e23af2bcce3ddc389424de5d43aaf45031",
+          "bytes": 160128
+        },
+        "X.npy": {
+          "sha256": "3addbb1eb0b74b062b067936a7e1eaff3f6a3ef75b29d3e3b6ffc72c39c46104",
+          "bytes": 160128
+        }
+      }
+    }
+  },
+  "warmup_panels": {
+    "scaling_m10000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 51
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "3b72dab0407626eec0fb5383b878f31f183df33d2f9c92c46e21ee4a2840a47c",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "714180ac6f86cc15662ef2f4e0d3d6acbc19f74f5901c277d7223e48ce9218e3",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "c8865bca96cd9a34464dd409a43faaa75af984b4a21e27687021342b391b19f4",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m20000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 52
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "2d2ae138d1a1cef32cd1de8b414923cd284ce6f3080e9e03c84501946ec6258c",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "fe7cdc309080232ddc2af5793eb203d1a6f52795cee94d88b2124f87c2c4d794",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "112cea9df42d99f37ca18aa1c9b71cf909d674eceba217a99823c61b7b944f31",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m40000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 54
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "a59558bd4817b3c6b78d3cbc092215720d7715c0f3b92a5a3cda29a5f699b021",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "22af9ba83095fae87973e1aac4397efe567f9d83c2a1cb0e3de05a39c7f451ee",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "99f2d0580215d93af789709dcc843dc56d6d7bb5f88bb93fb7a569cf58e843a3",
+          "bytes": 2528
+        }
+      }
+    },
+    "scaling_m80000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 58
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "50793fede15661977789b86aba218aafc40226289a1cb7b008fcab239204b064",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "f949500551c7c5eecf4f2967c9475238df9b8d6df1dd55bb76362f435925dcf3",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "844623d1d4653d777619e9f079a61b5a3944ae5336701968b00b75a579e27db4",
+          "bytes": 2528
+        }
+      }
+    },
+    "structured_n10000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 11
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "263d956fb337ecf1499df2bc81072818c8de01cf5fe3d93eba90a32abef95002",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "3c0622ce0ee67091223b597ab2b9e11aa8ccab12e465037a8277977dbcfde59d",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "e9568a53000b72f792f423a7bb16c36da357d08203100b928406bfbcd7e9e24b",
+          "bytes": 2528
+        }
+      }
+    },
+    "structured_n20000": {
+      "spec": {
+        "n": 300,
+        "m": 300,
+        "chromosomes": 10,
+        "populations": 2,
+        "fst": 0.02,
+        "causal": 8,
+        "seed": 31
+      },
+      "files": {
+        "G.npy": {
+          "sha256": "bd6e24d7c4afe5afb24f9f67c6f990bdc981e0c2f8bd00798228bd07784601b1",
+          "bytes": 90128
+        },
+        "y.npy": {
+          "sha256": "9bb427722006457fa572debeab2cd22fe037bf180c553f90ed26a31acf9037ff",
+          "bytes": 2528
+        },
+        "X.npy": {
+          "sha256": "19eacb6e5353e8a0b9b5ccf123514fb6379b18109cea9a4ae97c35176be737c4",
+          "bytes": 2528
+        }
+      }
+    }
+  },
+  "workloads": {
+    "bolt-inf": [
+      "structured_n10000",
+      {
+        "method": "bolt-inf"
+      }
+    ],
+    "bolt": [
+      "structured_n10000",
+      {
+        "method": "bolt"
+      }
+    ],
+    "bolt-streamed": [
+      "structured_n10000",
+      {
+        "method": "bolt",
+        "cache_bytes": 0
+      }
+    ],
+    "kvik-reml": [
+      "structured_n10000",
+      {
+        "method": "kvik"
+      }
+    ],
+    "kvik-he": [
+      "structured_n10000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed": [
+      "structured_n10000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ],
+    "kvik-he-uncached-4t": [
+      "structured_n20000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0,
+        "n_threads": 4
+      }
+    ],
+    "kvik-he-m10000": [
+      "scaling_m10000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed-m10000": [
+      "scaling_m10000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ],
+    "kvik-he-m20000": [
+      "scaling_m20000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed-m20000": [
+      "scaling_m20000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ],
+    "kvik-he-m40000": [
+      "scaling_m40000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed-m40000": [
+      "scaling_m40000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ],
+    "kvik-he-m80000": [
+      "scaling_m80000",
+      {
+        "method": "kvik",
+        "heritability_method": "he"
+      }
+    ],
+    "kvik-he-streamed-m80000": [
+      "scaling_m80000",
+      {
+        "method": "kvik",
+        "heritability_method": "he",
+        "cache_bytes": 0
+      }
+    ]
+  },
+  "reps": 2,
+  "order": "baseline first in even repetitions, optimized first in odd ones"
+}

@@ -557,25 +557,25 @@ by default. This distinction matters: converting the entire calculation
 to float32 would be a different numerical contract.
 
 Temporary widening is bounded without dividing the reduction axis:
-genotype standardization uses variant tiles with a 64 MiB scratch target;
-prediction, HE diagonal terms and retrospective statistics use 16 MiB
-targets. These are explicit temporary-workspace budgets, not process RSS
+compiled genotype preparation keeps a few float64 values per marker of a
+64-marker tile (the NumPy fallback uses tiles with a 64 MiB scratch
+target); prediction, HE diagonal terms and retrospective statistics use
+16 MiB targets. These are explicit temporary-workspace budgets, not process RSS
 limits. Genotype validation and PLINK reading also use bounded chunks;
 reading no longer retains an entire packed BED beside its decoded copy.
 The stored input is still an int8 hard-call matrix, not a packed or fully
 out-of-core genotype backend.
 
-With \code{n\_threads>1}, an optional Numba kernel prepares independent
-variants in parallel. Each worker computes called-sample means, a
-two-pass float64 variance and the covariate projection before storing
-float32 values. Sample reductions remain serial within a variant, with
-no fast-math reassociation. The initial scratch is $8(n+p)$ bytes per
-active worker, separate from outputs. Retaining $Mp$ float64 projection
-coefficients permits later decoding directly from int8 calls and prepared
-moments (Section~\ref{sec:dev5-methods}). On the uncached variational path, at most 128 markers are decoded
-per subblock. Other stages may still materialize their configured parent
-blocks, so this is a bounded fitting workspace rather than constant total
-memory. The one-thread default retains the NumPy preparation path.
+With Numba, one compiled kernel prepares the markers for every thread
+count (Section~\ref{sec:streaming-methods}); \code{n\_threads>1}
+distributes its 64-marker tiles across workers. Sample reductions remain
+serial within a marker, with no fast-math reassociation, so the prepared
+values do not depend on the thread count. Retaining $Mp$ float64
+projection coefficients permits every later pass to decode directly from
+int8 calls (Sections~\ref{sec:dev5-methods}
+and~\ref{sec:streaming-methods}). Uncached passes decode bounded slices,
+128 markers per variational subblock and 16 MiB elsewhere. This bounds
+the decoding workspace, not total memory.
 
 Coordinate sweeps parallelize independent candidate models and LOCO
 fits while preserving the Gauss--Seidel marker order within each model.
@@ -675,7 +675,8 @@ markers than before.
 
 \paragraph{Streamed genotypes.}
 With the float cache disabled, every pass rebuilds standardized, projected
-blocks from int8 calls. A hard call takes only three values. Preparation
+blocks from int8 calls; the subsequent revision drops this per-marker
+projection (Section~\ref{sec:streaming-methods}). A hard call takes only three values. Preparation
 therefore stores per-variant tables $t_j(c)=(c-\mu_j)/s_j$ for
 $c\in\{0,1,2\}$, computed in float64 by the preparation's own operations,
 and decoding becomes a lookup; missing calls decode to zero. To reproduce
@@ -699,6 +700,45 @@ buffers: a fresh allocation per block faulted in every page and doubled
 the decoding time. With Numba, dense relationship matrices also
 standardize each genotype block in one compiled pass, optionally parallel
 across variants, instead of with float64 array temporaries.
+
+\subsection{Genotype streaming without per-marker projection}
+\label{sec:streaming-methods}
+
+The development revision after 2.0.0.dev5 keeps the estimators and moves
+the covariate projection off the markers. With $\mathbf z_j$ a marker's
+standardized, unprojected values and $\mathbf Q$ the orthonormal
+covariate basis, preparation stores the three standardized call values,
+the coefficients $\mathbf c_j=\mathbf Q^\top\mathbf z_j$ and the squared
+norm $\|\mathbf S\mathbf z_j\|^2=\|\mathbf z_j\|^2-\|\mathbf c_j\|^2$. One
+compiled kernel computes them in float64 over tiles of 64 markers,
+reading one sample at a time and summing each marker's samples in order,
+so every thread count and storage order prepares identical values. No
+projected block is formed. Later passes decode unprojected values by
+table lookup and remove the covariates where that is cheapest. Operator
+products follow Equation~\eqref{eq:rhs-projection}. The variational sweep
+corrects each 128-marker subblock's products,
+$\mathbf Z_b^\top\mathbf S\mathbf r=\mathbf Z_b^\top\mathbf r-\mathbf C_b^\top(\mathbf Q^\top\mathbf r)$
+with $\mathbf C_b=\mathbf Q^\top\mathbf Z_b$, and its residual updates
+alike. Subblock Gram matrices, the HE diagonal and LD scores need
+products of projected markers, which are unprojected products plus a
+rank-$q$ correction,
+\begin{equation}
+ (\mathbf S\mathbf z_j)^\top(\mathbf S\mathbf z_k)
+ =\mathbf z_j^\top\mathbf z_k-\mathbf c_j^\top\mathbf c_k .
+ \label{eq:rank-q}
+\end{equation}
+In the measured revision (commit 12aa504) the optional float cache held
+the same unprojected values, so cached and streamed fits agreed bit for
+bit. Decoding follows the storage order: on
+one core of the test machine it costs about 0.26 ns per genotype from
+marker-major (PLINK) storage and 0.7 ns from sample-major arrays.
+One-pass consumers decode 16 MiB slices, which at 10,000 samples stay in
+cache between decoding and their two products; a floor of 256 markers per
+slice amortizes the per-slice $n\times c$ accumulation at larger $n$.
+BOLT-LMM's in-sample LD scores previously held every projected genotype,
+four bytes each, whatever the cache budget. They now stream each
+chromosome through a sliding position window and hold only its widest
+window.
 
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
@@ -1753,6 +1793,61 @@ $h^2$.
 \end{minipage}
 \medskip
 
+\subsection{Genotype streaming: paired fits and memory growth}
+\label{sec:streaming-results}
+
+Table~\ref{tab:streaming-paired} compares frozen 2.0.0.dev5 and
+streaming-revision sources (commit 12aa504, Section~\ref{sec:streaming-methods})
+under the protocol of Section~\ref{sec:dev5-results}, on an otherwise idle
+host. Without the float genotype cache, KVIK-HE took 5.6 instead of 9.1
+seconds at 10{,}000 samples and 30{,}000 markers, as fast as dev5 with its
+cache, and peaked at 0.65~GiB against that fit's 1.76~GiB. Cached fits were
+faster too, 4.4 instead of 5.6 seconds. Table~\ref{tab:streaming-scaling}
+varies the number of markers at 10{,}000 samples. Without the cache, peak RSS
+grew by 1.25 bytes per genotype, one of them the int8 input, against 5.24
+with dev5's default cache, at equal speed: 15.5 against 15.6 seconds at
+80{,}000 markers. BOLT-LMM's in-sample LD scores had held every projected
+genotype even without the cache; streaming them lowered its peak RSS from
+2.50 to 1.16~GiB without the cache and from 3.42 to 2.30~GiB with it. Every
+repetition returned identical arrays, cached and uncached fits of the new
+source agreed bit for bit, and between versions $\log_{10}p$ differed by at
+most $6\times10^{-5}$.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Paired fits of frozen 2.0.0.dev5 and streaming-revision sources
+ on simulated panels of 10{,}000 samples and 30{,}000 markers unless stated
+ (samples/markers). Fit seconds are median [minimum, maximum] over two
+ fresh-process repetitions; the ratio compares medians. Peak RSS is the
+ median whole-process value in GiB. Agreement is the largest absolute
+ difference in $\log_{10}p$ between versions.}
+ \label{tab:streaming-paired}
+ \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrrl@{}}
+ \toprule
+ Workload & dev5 s & New s & Ratio & dev5 GiB & New GiB & Agreement \\
+ \midrule
+ \tabinput{tables/streaming_paired.tex}
+ \bottomrule
+ \end{tabularx}
+\end{table}
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{KVIK-HE at 10{,}000 samples: median fit seconds / peak RSS (GiB)
+ over two repetitions, with the default float genotype cache, which held
+ every panel, and without it. The last row is the least-squares growth of
+ peak RSS per genotype. Agreement as in Table~\ref{tab:streaming-paired},
+ for the worse of the two cache settings.}
+ \label{tab:streaming-scaling}
+ \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}Xrrrrl@{}}
+ \toprule
+ Markers & dev5 cache & New cache & dev5 no cache & New no cache & Agreement \\
+ \midrule
+ \tabinput{tables/streaming_scaling.tex}
+ \bottomrule
+ \end{tabularx}
+\end{table}
+
 \FloatBarrier
 \section{Discussion}
 
@@ -2056,8 +2151,10 @@ of the inclusive 4 GB cache boundary with explicit cache budgets.
 The jump from retained float blocks to repeated decoding is a software
 threshold, not evidence of a statistical complexity transition.
 
-Version 2.0.0.dev5 already decodes through prepared per-variant value
-tables and covariate coefficients (Section~\ref{sec:dev5-methods}). A
+Version 2.0.0.dev5 decodes through prepared per-variant value tables and
+covariate coefficients, and the subsequent revision no longer projects
+markers at all (Sections~\ref{sec:dev5-methods}
+and~\ref{sec:streaming-methods}). A
 subsequent implementation study should compare retained int8 calls with
 two-bit storage and profile decoding together with matrix products.
 Reducing bytes read need not reduce time if unpacking prevents efficient

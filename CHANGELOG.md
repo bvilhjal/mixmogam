@@ -38,6 +38,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Benchmarks
 
+- Paired fits of 2.0.0.dev5 against 12aa504
+  ([`20261004-genotype-streaming`](benchmarks/results/20261004-genotype-streaming/README.md),
+  idle host, two fresh-process repetitions): without the float cache,
+  KVIK-HE at 10,000 samples ran as fast as dev5 with it (15.5 against 15.6 s
+  at 80,000 markers) while peak RSS grew by 1.25 instead of 5.24 bytes per
+  genotype; BOLT-LMM without the cache peaked at 1.16 instead of 2.50 GiB.
+  Associations agree to 6e-5 in log10 p. Report Sections 2.11 and 4.10
+  describe the method and results; `efficiency_paired.py` gained the
+  BOLT-LMM, uncached and marker-scaling workloads.
 - Rerun the mixmogam methods of the matched phensim (n = 800, 2,000 and
   4,000), HAPNEST (10K and 50K), HE-versus-REML and 20,000-marker benchmarks
   with 2.0.0.dev5, on their archived inputs. Official LDAK-KVIK outputs are

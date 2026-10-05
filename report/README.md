@@ -8,7 +8,9 @@ includes a matched comparison with official LDAK-KVIK, optimized workloads at
 through 100,000 samples. Historical evidence retains its original limitations.
 Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
 with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
-support it. The benchmark results are 2.0.0.dev5 reruns of the mixmogam
+support it. Sections 2.11 and 4.10 cover the subsequent revision, which
+streams genotypes without projecting covariates out of each marker, and its
+paired fits against 2.0.0.dev5. The benchmark results are 2.0.0.dev5 reruns of the mixmogam
 methods on the archived inputs. Official LDAK-KVIK results are reused from
 the original runs. Their timings come from the previous day, when identical
 mixmogam code ran 27% slower, so cross-program time ratios span both days.
@@ -42,6 +44,7 @@ Table 1. Evidence and provenance used in the manuscript.
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
 | Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults`, `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
+| Genotype streaming without projection | `20261004-genotype-streaming` | Paired dev5/12aa504 fits on seven workloads and KVIK-HE at 10K samples and 10K-80K markers, with and without the float cache; two repetitions on an idle host |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
