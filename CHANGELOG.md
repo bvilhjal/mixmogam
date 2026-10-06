@@ -45,7 +45,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   host and day, 2.0.0.dev6 took 1.07 (exact LOCO) and 1.03 (HRATT) times as
   long as commit e4089d8 at n = 800
   ([`20261006-same-day-e4089d8-dev6`](benchmarks/results/20261006-same-day-e4089d8-dev6/README.md)).
-  The 20,000-variant workload still shows the e4089d8 rerun.
+- The 20,000-variant workload was rerun with 2.0.0.dev6
+  ([`20261006-kvik-20k-dev6`](benchmarks/results/20261006-kvik-20k-dev6/README.md)),
+  with cross-fitted and with in-sample scores. Cross-fitting took 1.28-1.38
+  times the in-sample time on one thread and 1.53-1.59 on four: its five
+  fold fits stay below the six columns from which the variational sweep
+  threads its genotype products (`_vb._GEMM_MIN_COLUMNS`), so four threads
+  gained 1.27-1.33-fold instead of 1.47-1.57. One and four threads then give
+  identical association results.
 
 ## [2.0.0.dev6] - 2026-10-06
 

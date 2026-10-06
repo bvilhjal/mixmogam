@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{6 October 2026\\\small Research report for 2.0.0.dev6; benchmark reruns
-use 2.0.0.dev6, at 20,000 markers commit e4089d8}
+\date{6 October 2026\\\small Research report for 2.0.0.dev6;
+benchmark reruns use 2.0.0.dev6}
 
 \begin{document}
 \maketitle
@@ -77,8 +77,9 @@ These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
 moment-based variance fitting with four workers gives mixmogam median
-complete-fit times of 20.36 and 19.01 seconds on two fixed panels, with
-1.4~GiB peak resident memory, or 0.73~GiB with calls stored two bits
+complete-fit times of 34.6 and 31.6 seconds on two fixed panels with its
+default cross-fitted scores (21.7 and 20.7 with in-sample scores), with
+1.4~GiB peak resident memory, or 0.8~GiB with calls stored two bits
 each. Official LDAK-KVIK took 25.45 and 30.09 seconds and 0.65~GiB on
 3 October, when identical mixmogam code took 38\% longer than a day later;
 these cross-day ratios mostly reflect host conditions.
@@ -210,10 +211,10 @@ mixmogam methods rerun with 2.0.0.dev6 on the same inputs &
 Six independent panels per cell; small quantitative-trait simulations,
 controlled LD and three discrete populations; official timings from
 three days earlier. \\
-Computational extension, 2.0.0.dev3 and e4089d8 reruns & Projected-moment validation;
+Computational extension, 2.0.0.dev3 and dev6 reruns & Projected-moment validation;
 paired implementation, thread and storage comparisons; at 50,000 samples and
-20,000 markers, 24 mixmogam fits rerun with commit e4089d8 and 12 official
-fits & Two fixed timing panels; different variance estimators across
+20,000 markers, 24 mixmogam fits rerun with 2.0.0.dev6, 12 more with
+in-sample scores and 12 official fits & Two fixed timing panels; different variance estimators across
 programs; strict thread-tolerance failures retained; official timings
 from a day when identical mixmogam code took 38\% longer. \\
 Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
@@ -1207,8 +1208,9 @@ of eight; \code{n\_threads} requests one or four workers. The official
 Mac executable receives the corresponding environment limit and native
 \code{--max-threads} argument. Requested counts do not assert identical
 thread execution across implementations. The fitted data and drivers are
-frozen. The reported mixmogam fits are reruns with commit e4089d8, and the
-official fits come from the original 2.0.0.dev3 experiment on the same inputs.
+frozen. The reported mixmogam fits are reruns with 2.0.0.dev6, with
+cross-fitted and with in-sample scores, and the official fits come from the
+original 2.0.0.dev3 experiment on the same inputs.
 Repeated timings on two phenotypes measure computational
 variability, not biological replication. The new data are also distinct
 from the small known-covariance HE validation panels.
@@ -1284,11 +1286,10 @@ and outputs. Historical archives retain their original source snapshots;
 we do not attach the current version number to computations performed
 by an earlier implementation.
 
-The matched phensim, HAPNEST and HE-versus-REML results
-(Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources}
-and~\ref{sec:he-results}) are reruns with 2.0.0.dev6; the 20,000-marker
-results (Section~\ref{sec:20k-results}) are still the reruns with commit
-e4089d8 of 5 October. Each repeated the mixmogam methods on the
+The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
+(Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
+\ref{sec:he-results} and~\ref{sec:20k-results}) are reruns with
+2.0.0.dev6. Each repeated the mixmogam methods on the
 archived inputs, after checking the genotype files against their export
 hashes. The official LDAK-KVIK outputs, logs and process measurements of
 the original runs were reused unchanged. Input identity makes the official
@@ -1797,16 +1798,27 @@ calibration or validity under environmental confounding.
 \subsection{Twenty thousand markers: speed, memory and numerical stability}
 \label{sec:20k-results}
 
-All 24 rerun mixmogam fits and the 12 reused official fits are complete,
-and every local cross-validation and LOCO fit converged. The descriptive
-summaries of Table~\ref{tab:20k-science} equal the original 2.0.0.dev3
-run's at their displayed precision; streaming moved $h^2$ by less than
-$10^{-6}$ and $\log_{10}p$ by at most $1.8\times10^{-4}$. Four
-requested workers reduce mixmogam's median wall time by factors 1.61 and
-1.54 on the unstructured and PC-adjusted confounded panels, to 20.36 and
-19.01 seconds (Table~\ref{tab:20k-resources}). The official executable
-took 25.45 and 30.09 seconds on 3 October, when the host was slower
-(Section~\ref{sec:summaries}), so these times cannot be compared directly.
+All 36 rerun mixmogam fits and the 12 reused official fits are complete,
+and every local cross-validation and LOCO fit converged. The mixmogam fits
+use the default cross-fitted LOCO scores, repeated with in-sample scores
+(\code{loco\_folds=1}), which reproduce the summaries of the reruns with
+commit e4089d8 exactly. With cross-fitted scores $h^2$ is unchanged, and
+the null chromosome's $\lgc$ moved from 0.951 to 0.946 and from 0.978 to
+0.984 (Table~\ref{tab:20k-science}).
+
+Four requested workers reduce the median wall time of the cross-fitted fits
+only by factors 1.27 and 1.33 on the unstructured and PC-adjusted
+confounded panels, to 34.63 and 31.64 seconds, against 1.57 and 1.47, to
+21.74 and 20.70 seconds, with in-sample scores
+(Table~\ref{tab:20k-resources}). Cross-fitting thus costs 1.28 and 1.38
+times the in-sample time on one thread and 1.59 and 1.53 times on four.
+The variational sweep threads its genotype products only from six columns
+on, and the cross-fit fits five, one per fold; the four-worker fits ran at
+a CPU-to-wall ratio of 1.2, against 1.4 with in-sample scores. The
+in-sample fits took 1.04--1.09 times as long as on 5 October. The official
+executable took 25.45 and 30.09 seconds on 3 October, when the host was
+slower (Section~\ref{sec:summaries}), so these times cannot be compared
+directly.
 A same-day check on 5 October ran the first
 panel's four-worker fit with both versions: 24.6 seconds and 4.4--5.1~GiB
 peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
@@ -1814,18 +1826,20 @@ peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
 LOCO, unchanged, took the same time and memory under both versions, with
 identical p-values. mixmogam's
 median peak RSS of 1.4~GiB is about 2.2 times the official executable's
-0.65~GiB. These results support useful optional
-parallelism on this workload; they do not establish efficiency parity.
+0.65~GiB. These results support useful optional parallelism with in-sample
+scores, and show that the cross-fitted default leaves most of it unused;
+they do not establish efficiency parity.
 
 \begin{table}[htbp]
  \centering\small
  \caption{Complete fits at 50,000 samples and 20,000 markers on identical
- inputs: mixmogam e4089d8 reruns (5 October) and the original official
- fits (3 October). Wall time and peak RSS are median [minimum, maximum]
+ inputs: mixmogam 2.0.0.dev6 reruns (6 October) with its default
+ cross-fitted LOCO scores and with in-sample scores, and the original
+ official fits (3 October). Wall time and peak RSS are median [minimum, maximum]
  of three fresh-process repetitions on each fixed panel. Speedup is
  relative to the same method's one-thread median. Timing boundaries
  are defined in Section~\ref{sec:20k-design}; cross-program ratios span
- two days with different host conditions.}
+ three days with different host conditions.}
  \label{tab:20k-resources}
  \begin{tabular}{@{}lrrrr@{}}
  \toprule
@@ -1837,28 +1851,33 @@ parallelism on this workload; they do not establish efficiency parity.
 \end{table}
 
 The numerical audit preserves its original elementwise tolerances,
-$\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 16 repeated-run
-comparisons within a method and worker count are exact, eight of them from
-the reruns. All six local four-versus-one comparisons, however, exceed the
-strict array tolerance; none of the six official comparisons does.
-Selected exponents and priors, integer iteration counts and convergence
-flags agree across counts. On the unstructured panel the differences are
-of the original run's size. On the PC-adjusted panel they grew about
-tenfold: the largest are $1.3446\times10^{-7}$ for association effects,
-$2.1913\times10^{-10}$ for standard errors and $1.9618\times10^{-5}$ for
-p-values, and $1.06\times10^{-4}$ in log-base-ten p-values, against
+$\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 24 repeated-run
+comparisons within a method and worker count are exact: eight cross-fitted,
+eight in-sample and eight official. Selected exponents and priors, integer
+iteration counts and convergence flags agree across counts. With
+cross-fitted scores, one and four workers give identical association
+arrays, since the fold fits' products are not threaded; only the
+cross-validation fit's coefficients, which select the prior, differ beyond
+the strict tolerance, so all six four-versus-one comparisons still fail it.
+With in-sample scores the differences equal those of the reruns with commit
+e4089d8. On the unstructured panel they are of the original run's size. On
+the PC-adjusted panel they are about tenfold: the largest are
+$1.3446\times10^{-7}$ for association effects, $2.1913\times10^{-10}$ for
+standard errors and $1.9618\times10^{-5}$ for p-values, and
+$1.06\times10^{-4}$ in log-base-ten p-values, against
 $9.7892\times10^{-9}$, $3.0826\times10^{-11}$, $1.4312\times10^{-6}$ and
-$1.15\times10^{-5}$ before. Covariates are now removed by subtracting
+$1.15\times10^{-5}$ in the original run. None of the six official
+comparisons exceeds the tolerance. Covariates are now removed by subtracting
 rank-$q$ corrections from products of unprojected genotypes
 (Equation~\eqref{eq:rank-q}), which probably amplifies summation-order
 differences when PCs explain genotype variance. All-variant significance
 masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
-in all 30 checks. Unchanged decisions are useful evidence of stability
+in all 60 checks. Unchanged decisions are useful evidence of stability
 for these particular data and thresholds; they do not turn the six
 tolerance failures into passes or exclude threshold crossings elsewhere.
 
 Table~\ref{tab:20k-science} reports descriptive chromosome-6 diagnostics
-from four-worker fits. Local HE ratios are approximately 0.52 and 0.50,
+from four-worker cross-fitted fits. Local HE ratios are approximately 0.52 and 0.50,
 whereas the official values are approximately 0.25. The different
 partitioning, large-effect handling and fitted covariance definitions
 preclude interpreting this discrepancy as bias against a shared target.
@@ -1887,8 +1906,9 @@ supplies independent replication of a calibration claim.
 The separate storage experiment replaces the cache experiment, since no
 cache remains (Table~\ref{tab:20k-storage}). With dev5, disabling the
 cache had cut peak RSS by 63\% at 13\% and 25\% longer wall time. Calls
-stored two bits each halve the remaining peak, to 0.73~GiB against the
-official executable's 0.65~GiB, and shorten wall time by 2\% and 3\%.
+stored two bits each about halve the remaining peak, to 0.77 and 0.79~GiB
+(0.73~GiB with in-sample scores on 5 October) against the official
+executable's 0.65~GiB, at the same wall time.
 All six storage pairs have exactly equal saved association arrays,
 variational coefficients and nested fit diagnostics. The calls, prepared
 per-marker values, Gram matrices and fitting workspaces remain, so this
@@ -1897,7 +1917,7 @@ is lower-memory fitting, not an out-of-core analysis.
 \begin{table}[htbp]
  \centering\small
  \caption{Separate storage experiment at 50,000 samples and 20,000 markers,
- explicit HE and four workers, commit e4089d8. Entries are median [minimum, maximum]
+ explicit HE, cross-fitted scores and four workers, 2.0.0.dev6. Entries are median [minimum, maximum]
  over three matched repetitions. The only change is how the calls are
  stored: one byte or two bits each.}
  \label{tab:20k-storage}
@@ -1915,8 +1935,7 @@ run, system-wide VM observations spanning the period after primary run
 nine through the end of all fits record 32,093 additional swap-in pages
 and 111,568 swap-out pages. They cannot identify which program or fit
 caused swapping. The dev5 reruns recorded 7,682 swap-in pages and no
-swap-outs; the e4089d8 reruns kept no VM counters, but their ranges are
-as narrow.
+swap-outs; the later reruns kept no VM counters.
 Second, the pinned official Mac binary links Accelerate and inspection
 finds no OpenMP library linkage or matching symbols. Source-level OpenMP
 directives cannot be assumed active in this executable. These measurements
@@ -2671,9 +2690,9 @@ Table~\ref{tab:dev5-slq} from the Lanczos rerun, and records hashes in
 The benchmark reruns with 2.0.0.dev6 are archived as
 \code{20261006-}\allowbreak\code{phensim-kvik-}\allowbreak\code{dev6} (with
 \code{-n2000} and \code{-n4000}), \code{20261006-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{dev6-n10000}
-and \code{-n50000} and \code{20261006-}\allowbreak\code{kvik-he-}\allowbreak\code{dev6}, beside the
-earlier reruns with commit e4089d8 (\code{20261005-}\allowbreak\code{*-e4089d8},
-including the 20,000-marker workload) and 2.0.0.dev5
+and \code{-n50000}, \code{20261006-}\allowbreak\code{kvik-he-}\allowbreak\code{dev6} and
+\code{20261006-}\allowbreak\code{kvik-20k-}\allowbreak\code{dev6}, beside the earlier reruns with
+commit e4089d8 (\code{20261005-}\allowbreak\code{*-e4089d8}) and 2.0.0.dev5
 (\code{20261004-}\allowbreak\code{*-dev5}). Each records its frozen source,
 its commands and the hash of every reused file. The same-day checks are
 \code{20261004-}\allowbreak\code{same-day-dev4-dev5},

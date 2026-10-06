@@ -10,7 +10,7 @@ SciPy; Numba accelerates optional kernels.
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads through 50,000 samples and 20,000 variants, and historical evidence,
 with a testable research agenda. Its LDAK-KVIK benchmarks were rerun with
-2.0.0.dev6, apart from the 20,000-variant workload.
+2.0.0.dev6.
 The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 
@@ -76,10 +76,12 @@ stored two bits each, a quarter of the int8 memory, with identical results
 and `mmap=True` to leave them in the mapped bed file). See the
 [quickstart](docs/quickstart.md#larger-hratt-fits) for a configuration.
 
-On two 50,000 × 20,000 HAPNEST panels, four-thread HRATT-HE took 19-20 s at
-1.4 GiB peak RSS, or 0.73 GiB with two-bit calls; official LDAK-KVIK, timed on
-3 October when the host was slower, took 25-30 s at 0.65 GiB
-([archive](benchmarks/results/20261005-kvik-20k-e4089d8/README.md)). These are
+On two 50,000 × 20,000 HAPNEST panels, four-thread HRATT-HE took 32-35 s at
+1.4 GiB peak RSS, or 0.8 GiB with two-bit calls, and 21-22 s with in-sample
+scores (`loco_folds=1`): its five cross-fit fold fits are not yet threaded.
+Official LDAK-KVIK, timed on 3 October when the host was slower, took
+25-30 s at 0.65 GiB
+([archive](benchmarks/results/20261006-kvik-20k-dev6/README.md)). These are
 different estimators on two realizations, not a calibration study.
 
 ## Install

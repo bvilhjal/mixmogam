@@ -1,31 +1,34 @@
 {
   "purpose": "Render measured evidence only; no simulation or fitting",
   "timed_versions": {
-    "mixmogam-he": "commit e4089d8 (20261005-kvik-20k-e4089d8)",
+    "mixmogam-he": "2.0.0.dev6 (20261006-kvik-20k-dev6), cross-fitted and in-sample scores",
     "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"
   },
-  "generator_sha256": "af00a66c7377c8876b1092d9b33a613aecc6bbcc52233f6c751e3d977aa63762",
+  "generator_sha256": "4684c78b83b25718a743f312e0ae749d71baa7b3b06c4ef234f98ba4efb7baf4",
   "inputs": {
-    "benchmarks/results/20261005-kvik-20k-e4089d8/thread-scaling/measurements.csv": "3b2e60af1a606c0d562919712e655228b2f81c40f57490ef598750e41c2e8c23",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/thread-scaling/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/thread-scaling/manifest.json": "e81be4bd9e8f09d14fe546722d2d5ee3e301330a7fccab42e087a0e7b4d9b7be",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/thread-scaling/comparisons.json": "c70b7b02e2936ecf37b267aa4b0fe0fa653e27b9e47291d34dffb71ac12175b3",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/measurements.csv": "9cb598f090788ddf657f0e56ba425b4dcb347bd3452e330a06cec86795674440",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/manifest.json": "81685392fe9953fa7a51f1c7ef3b7f20d879c54965de886bdf1526b02832e610",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/comparisons.json": "59eae50a1904c654141474fd43cc9f060cf77a33646886f02a71565367bc7914",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/measurements.csv": "ef0322e31d43124bdf3b460d21f18bd71dc67bbc0b9a973b953a7273249b92a7",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/verification.json": "f2566591f69a8125424a6c670f5151d26548d6caeb593fb97ee89ed70545fd07",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/manifest.json": "47d74c0b3e10c19d58970f120ba24354c43cb4958efbfe15b710811fb93822c8",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/storage/measurements.csv": "3ad52bb790a738dee80ba018264f11f8bdba5d1c5723dee8a3fe6632355a9e6e",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/storage/status.json": "b1144b5d10321df98ba0112f332bc92313b36373052479962bad5fad7019b42b",
-    "benchmarks/results/20261005-kvik-20k-e4089d8/storage/comparisons.json": "a60a8bd9ce82815657a6dae1fdf0c79c993512476c0eea77e95b6fd42d883b4e"
+    "benchmarks/results/20261006-kvik-20k-dev6/storage/measurements.csv": "df88b2a4fd7439fd85298ab5bd36cdd56b22d8afcca3850c06c7664ffb243d89",
+    "benchmarks/results/20261006-kvik-20k-dev6/storage/status.json": "b1144b5d10321df98ba0112f332bc92313b36373052479962bad5fad7019b42b",
+    "benchmarks/results/20261006-kvik-20k-dev6/storage/comparisons.json": "f28643e8013cfcf9d4a84fbfa32fd3aeebca5170108ba7b136da3d42f708cca8",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling-insample/measurements.csv": "75d9f118f30251fc67fb075ad4f954d2ccae631259499f03ed5a990afdd62923",
+    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling-insample/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a"
   },
   "outputs": {
-    "report/tables/kvik_20k_resources.tex": "5f452a572fca25ce8c702276f7dd4a363fa97ad3816444dfb544807b62d52d8b",
-    "report/tables/kvik_20k_science.tex": "f9c4a81bc88f78f65d603660d46508d4a22fcc8fcf7029617eb8aea04ea8042c",
-    "report/tables/kvik_20k_storage.tex": "13d0cecb4d9b568002c6cc0688134f269f06383c64ed1760e75a04cd7188f335"
+    "report/tables/kvik_20k_resources.tex": "294e97ac251d2267d5e241da27d69410e5704786b8cba82dad26e83e532cef46",
+    "report/tables/kvik_20k_science.tex": "f3b9da75afe5d2d2aaff4ef65004a9454dca7bbc9ffc58602740a66e213ded4d",
+    "report/tables/kvik_20k_storage.tex": "3d3da29c8471b442a9dd9f7eb76f10b0fe972a3b774b7ab82310bc8c41a02825"
   },
   "primary_fits": 24,
   "local_fits_rerun": 12,
   "official_fits_reused": 12,
   "storage_fits": 12,
+  "insample_fits": 12,
   "input_hashes_identical": true,
   "thread_comparisons": 14,
   "thread_comparisons_outside_tolerance": 6,

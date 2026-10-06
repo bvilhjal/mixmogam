@@ -1,9 +1,8 @@
 # Research report
 
 This revision describes [2.0.0.dev6](../CHANGELOG.md). Its LDAK-KVIK
-comparisons and HE-versus-REML fits were rerun with it; the 20,000-variant
-workload is still the rerun with commit e4089d8, and older studies keep the
-versions they ran with.
+comparisons, HE-versus-REML fits and 20,000-variant workloads were rerun with
+it; older studies keep the versions they ran with.
 
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
@@ -25,7 +24,7 @@ prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
 covariate-specific genotype distributions, and Section 4.12 validates them.
 The benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
 on the archived inputs, each timed fit waiting for a one-minute load average
-below 5 (at 20,000 variants, with commit e4089d8). Official LDAK-KVIK results are reused from the
+below 5. Official LDAK-KVIK results are reused from the
 original runs of 3 October, when identical mixmogam code took 38% longer than
 a day later, so cross-program time ratios span days; same-day checks compare
 the mixmogam versions directly. Archived sources and measurements are
@@ -41,7 +40,7 @@ Table 1. Evidence and provenance used in the manuscript.
 | HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261006-hapnest-kvik-dev6-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
 | Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261006-kvik-he-dev6` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
 | Explicit parallelism and memory | `20261003-kvik-parallel`, `20261003-kvik-cache` | Full 12K fits and numerical audits; optional parallel paths preserve model order but can change rounding |
-| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261005-kvik-20k-e4089d8` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations; the rerun's int8 versus two-bit storage fits replace the cache fits |
+| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261006-kvik-20k-dev6` | Verified 50K-by-20K inputs; three timings per setting, two biological realizations; the rerun adds in-sample-score fits and int8 versus two-bit storage fits |
 | Superseded reruns and same-day checks | `20261004-*-dev5`, `20261005-*-e4089d8`, `20261004-same-day-dev4-dev5`, `20261005-same-day-dev5-e4089d8`, `20261006-same-day-e4089d8-dev6` | 2.0.0.dev5 and e4089d8 reruns kept as provenance; same-day checks separate code from host conditions |
 | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
 | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |

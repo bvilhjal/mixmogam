@@ -231,12 +231,13 @@ the local methods on an existing archive's inputs. All other files, including
 the official LDAK-KVIK outputs, are linked unchanged, but only after the
 genotype files match their export hashes. `hratt_thread_scaling.py` and
 `hratt_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
-omitted. The report uses the reruns with 2.0.0.dev6:
+omitted. The reruns with 2.0.0.dev6, which the report uses, are:
 - `20261006-phensim-kvik-dev6`, with `-n2000` and `-n4000`;
 - `20261006-hapnest-kvik-dev6-n10000` and `-n50000`;
 - `20261006-kvik-he-dev6`;
+- `20261006-kvik-20k-dev6`, whose `thread-scaling-insample/` repeats the
+  thread experiment with in-sample scores (`--loco-folds 1`).
 
-and, for the 20,000-variant workload, still `20261005-kvik-20k-e4089d8`.
 Reruns of HRATT on archives from before its rename also hold the original
 run's `kvik.*` outputs, linked unchanged. The other reruns with commit
 e4089d8 (`20261005-*-e4089d8`) and 2.0.0.dev5 (`20261004-*-dev5`) remain
