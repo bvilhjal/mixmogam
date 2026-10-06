@@ -20,7 +20,7 @@ from mixmogam._spa import spa_pvalue
 from mixmogam._vb import VBEngine
 from mixmogam.genotypes import Genotypes
 from mixmogam.simulate import simulate_genotypes, simulate_traits
-from tests._retrospective import dense_rho
+from tests._retrospective import dense_rho, dense_probabilities
 
 
 def _gt(G, n_chrom, packed=False):
@@ -45,6 +45,32 @@ def binary_problem():
 
 BINARY = dict(alphas=(-1.0, -0.25), he_probes=16, grid=[(0.0, 1.0)], vb_max_iter=200,
               random_state=5)
+
+
+@pytest.mark.slow
+def test_weighted_binary_ancestry_null_through_public_api():
+    """Independent null SNPs, known ancestry, unequal weights/case fractions.
+
+    The pooled SPA rejected 57/30,000 at 1e-3 despite lambda_GC = 0.97.
+    A 99.98% binomial acceptance interval checks tails, not just the median.
+    """
+    rng = np.random.default_rng(20261010)
+    n, m = 5000, 30000
+    ancestry = np.r_[np.zeros(1000), np.ones(4000)]
+    y = np.zeros(n)
+    y[:10], y[1000:1800] = 1., 1.
+    weights = np.where(ancestry == 0, 20., 1.)
+    G = np.empty((n, m), dtype=np.int8)
+    af = np.where(ancestry[:, None] == 0, .02, .4)
+    for start in range(0, m, 1000):
+        G[:, start:start + 1000] = rng.binomial(2, af, (n, 1000))
+    gt = Genotypes(G, chromosome=np.repeat(np.arange(1, 7), m // 6),
+                   position=np.arange(m) * 1000, packed=True)
+    del G
+    result = gwas(y, gt, X=ancestry, method="hratt", trait="binary", sample_weights=weights)
+    assert np.isfinite(result.p).all() and result.extra["null_converged"]
+    low, high = stats.binom.ppf([.0001, .9999], m, .001)
+    assert low <= np.sum(result.p < .001) <= high
 
 
 def dense_z(G):
@@ -123,7 +149,7 @@ def test_genotype_spa_uses_each_variants_dense_support(binary_problem, weighted)
     G, gt, y, _, _, _ = binary_problem
     idx = np.arange(3, gt.n_variants, 37)
     z = dense_z(G)
-    st, _, fits = setup_and_fits(binary_problem, True, weighted)
+    st, _, fits = setup_and_fits(binary_problem, False, weighted)
     sp = score_pass(st.lg, y, st.X_raw, fits, weights=st.w, s=st.s)
     w = np.ones(y.size) if st.w is None else st.w
     A = np.column_stack([w * (y - f["mu"]) for f in fits])
@@ -170,10 +196,12 @@ def dense_scan(G, y, Xd, w, offsets, groups, free=False):
         stat = ref["U"] ** 2 / V
         pg = stats.chi2.sf(stat, 1)
         for k in np.flatnonzero(stat > 4.0):
-            values, freqs = genotype_support(g[:, sel[k]][None, :])
-            var = freqs[0] @ (values[0] - values[0] @ freqs[0]) ** 2
+            af = dense_probabilities(g[:, sel[k:k+1]], Xd).T
+            values = np.array([[0., 1., 2.]])
+            freqs = np.stack([(1 - af)**2, 2 * af * (1 - af), af**2], axis=-1)
+            var_score = ((2 * af * (1 - af)) @ (a * a)).item()
             pg[k] = spa_pvalue(ref["U"][k : k + 1], a, values, freqs,
-                               var_ratio=(a @ a) * var / V[k])[0][0]
+                               var_ratio=var_score / V[k])[0][0]
         p[sel], beta[sel], chi2[sel] = pg, ref["U"] / ref["J"], stat
     return (p, beta, chi2, np.array(slopes)) if free else (p, beta, chi2)
 
@@ -314,6 +342,28 @@ def test_intercept_only_binary_step_one_is_the_quantitative_one(binary_problem):
     np.testing.assert_allclose(binary.extra["alpha_scores"], linear.extra["alpha_scores"], rtol=1e-8)
     assert binary.extra["h2"] == pytest.approx(linear.extra["h2"], rel=1e-8)
     assert binary.extra["heritability_method"] == "reml"
+
+
+def test_binary_score_uncertainty_is_independent_of_tail_rule_and_survives_export(binary_problem, tmp_path):
+    from mixmogam.results import GwasResult
+    _, gt, y, X, _, _ = binary_problem
+    st = twostep._setup(y, gt, X, 25, 128, trait="binary")
+    offsets = np.zeros((gt.n_samples, st.lg.n_groups))
+    normal = twostep._hratt_binary_step2(st, gt, offsets, 1., 1., np.inf, 1, {})
+    for sided in ("distance", "doubled"):
+        result = twostep._hratt_binary_step2(st, gt, offsets, 1., 1., 2., 1, {}, two_sided=sided)
+        np.testing.assert_array_equal(result.beta, normal.beta)
+        np.testing.assert_array_equal(result.se, normal.se)
+        assert np.any(result.p != normal.p)
+        with pytest.raises(ValueError, match="one-step"):
+            result.posterior_probabilities(.01, prior_variance=.04)
+        path = tmp_path / f"{sided}.csv"
+        result.write_csv(path)
+        assert "beta_one_step,se_null_score" in path.read_text().splitlines()[0]
+        back = GwasResult.read_csv(path).take([0, 1])
+        np.testing.assert_array_equal(back.se, result.se[:2])
+        with pytest.raises(ValueError, match="one-step"):
+            back.posterior_probabilities(.01, prior_variance=.04)
 
 
 @pytest.mark.parametrize("recode, message", [

@@ -24,7 +24,7 @@ def test_null_pvalues_uniform():
 
 
 def test_null_with_confounded_phenotype():
-    """Structure-driven phenotype: the LMM must absorb the confounding."""
+    """Regression check for this fixed structure-driven null scenario."""
     G = simulate_genotypes(n=600, m=4000, n_pop=8, pop_fst=0.45, seed=111)
     K = simulate_kinship(G)
     lam, U = np.linalg.eigh(K)
@@ -34,11 +34,13 @@ def test_null_with_confounded_phenotype():
     y = (y - y.mean()) / y.std()
     res = LMM(y, K=K).fit().scan(G, dtype=np.float64)
     ps = res["ps"]
-    # modest tolerance: massive structure, LMM should largely correct it
-    assert (ps < 1e-5).mean() < 0.005
+    # Test a level with enough expected events to be informative (40).
+    # This replaces a bound that allowed 500-fold inflation at 1e-5.
+    low, high = stats.binom.ppf([.0001, .9999], ps.size, .01)
+    assert low <= np.sum(ps < .01) <= high
     lam_gc = GwasResult(chromosome=np.ones(ps.size), position=np.arange(ps.size),
                         p=ps).genomic_control()
-    assert 0.5 < lam_gc < 2.0, f"genomic inflation lambda={lam_gc}"
+    assert 0.8 < lam_gc < 1.2, f"genomic inflation lambda={lam_gc}"
 
 
 def test_power_recovers_causals():

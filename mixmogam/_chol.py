@@ -149,10 +149,10 @@ class CholeskyREML:
             fl = f(xl) if xl < x0 else math.inf
             if fl < f0:
                 sign, a, b, fb = -1.0, x0, xl, fl
-            elif xl < x0 < xr:
+            else:
+                # Also inspect the interval when the warm start is a
+                # boundary: a nearby interior optimum can beat both ends.
                 return self._refine(f, xl, x0, xr, f0)
-            else:  # x0 at a limit, both neighbours worse
-                return x0, f0
         step = LOCAL_STEP
         while True:
             step *= 1.618034
@@ -160,8 +160,10 @@ class CholeskyREML:
             if not lo < c < hi:
                 edge = hi if sign > 0 else lo
                 fe = f(edge)
-                if fe <= fb:  # still climbing at the limit
-                    return edge, fe
+                if fe <= fb:
+                    # The last expansion can jump over an interior optimum.
+                    # Compare the boundary with a refinement of that interval.
+                    return self._refine(f, b, edge, edge, fe)
                 return self._refine(f, a, b, edge, fb)
             fc = f(c)
             if fc > fb:

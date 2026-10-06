@@ -187,10 +187,64 @@ def test_extreme_scores_and_scores_beyond_the_support():
 
 
 def test_input_shapes_are_checked():
-    with pytest.raises(ValueError, match="equal"):
+    with pytest.raises(ValueError, match="freqs"):
         spa_pvalue(np.ones(1), np.ones(5), np.zeros((1, 4)), np.ones((1, 3)))
     with pytest.raises(ValueError, match="frequencies"):
         spa_pvalue(np.ones(1), np.ones(5), np.zeros((1, 2)), np.array([[0.5, -0.5]]))
+
+
+def test_individual_genotype_cgf_matches_independent_binomial_formula():
+    a = np.array([3., -2., 1., -4.])
+    af = np.array([.02, .1, .4, .8])
+    freqs = np.column_stack([(1 - af)**2, 2 * af * (1 - af), af**2])
+    for t in (-.4, 0., .3):
+        tilt = af * np.exp(t * a) / (1 - af + af * np.exp(t * a))
+        expected = (np.sum(2 * (np.log1p(af * np.expm1(t * a)) - t * a * af)),
+                    np.sum(2 * a * (tilt - af)), np.sum(2 * a * a * tilt * (1 - tilt)))
+        np.testing.assert_allclose(_cgf(t, a, np.arange(3.), freqs), expected, atol=1e-12)
+
+
+def test_ancestry_specific_tails_against_exact_null_convolution():
+    from scipy import optimize, signal
+    sizes = np.array([10, 990, 800, 3200])
+    coeff = np.array([99, -1, 4, -1])
+    af = np.array([.02, .02, .4, .4])
+    a, probabilities = np.repeat(coeff, sizes).astype(float), np.repeat(af, sizes)
+    frequencies = np.stack([(1 - probabilities)**2, 2 * probabilities * (1 - probabilities),
+                            probabilities**2], axis=-1)[None]
+    exact, low = np.ones(1), 0
+    for size, c, p in zip(sizes, coeff, af):
+        mass = stats.binom.pmf(np.arange(2 * size + 1), 2 * size, p)
+        if c < 0:
+            mass = mass[::-1]
+            low += 2 * size * c
+        expanded = np.zeros(2 * size * abs(c) + 1)
+        expanded[::abs(c)] = mass
+        exact = signal.fftconvolve(exact, expanded)
+    support = np.arange(exact.size) + low
+    sd = np.sqrt(np.sum(2 * sizes * coeff**2 * af * (1 - af)))
+    for level in (1e-3, 1e-4, 1e-5):
+        cutoff = optimize.brentq(lambda u: spa_pvalue([u], a, [[0., 1., 2.]], frequencies)[0][0] - level,
+                                  2 * sd, 15 * sd)
+        observed = exact[np.abs(support) >= cutoff].sum()
+        # Integer scores make the cutoff discrete. The old pooled CGF
+        # over-rejected 4.7-fold at 1e-4 despite an exact variance correction.
+        assert .8 < observed / level < 1.2
+
+
+def test_individual_probabilities_are_parallel_invariant_and_condition_on_missing_calls():
+    rng = np.random.default_rng(49)
+    a = rng.normal(size=80)
+    af = np.tile(np.linspace(.05, .5, 80), (3, 1))
+    f = np.stack([(1 - af)**2, 2 * af * (1 - af), af**2], axis=-1)
+    # Fixed genotype for one individual: neither its mean nor variance
+    # should remain in the centred score distribution.
+    f[:, 0] = [0., 1., 0.]
+    u = np.array([6., -7., 8.])
+    first = spa_pvalue(u, a, np.tile(np.arange(3.), (3, 1)), f)
+    without = spa_pvalue(u - a[0], a[1:], np.tile(np.arange(3.), (3, 1)), f[:, 1:])
+    np.testing.assert_allclose(first, without, rtol=1e-11)
+    np.testing.assert_array_equal(first, spa_pvalue(u, a, np.tile(np.arange(3.), (3, 1)), f, n_threads=2))
 
 
 @pytest.mark.numba

@@ -5,11 +5,12 @@ and, with HRATT, case-control outcomes and sampling-weighted samples, with
 leave-one-chromosome-out (LOCO) testing by default. The core uses NumPy and
 SciPy; Numba accelerates optional kernels.
 
-**Development version** after 2.0.0.dev5; unreleased changes are in the
-[changelog](CHANGELOG.md). The [research report](report/mixmogam_report.pdf)
+**Development version 2.0.0.dev6**; changes are in the
+[changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads through 50,000 samples and 20,000 variants, and historical evidence,
-with a testable research agenda. The [3 October review](docs/review-2026-10-03.md)
+with a testable research agenda. It predates the current correctness fixes.
+The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 
 Table 1. Association methods implemented by the current package.
@@ -26,10 +27,11 @@ HRATT, the Heritability-weighted Residual Association Two-step Test, is
 inspired by LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) and follows
 its two-step design: an elastic-net LOCO prediction under LDAK's heritability
 model, then retrospective score tests with a structure-dependent calibration.
-It is not LDAK-KVIK. Its LOCO scores are cross-fitted, as in REGENIE: no
-sample's phenotype enters its own score, so effect estimates are not
-attenuated (`loco_folds=1` restores LDAK-KVIK's in-sample scores, whose
-effects are about a third too small). The two-step paths are research implementations with
+It is not LDAK-KVIK. Its LOCO scores are cross-fitted, as in REGENIE: each
+fold's predictor is trained on the other samples. Variance components and
+model selection still use the whole trait; cross-fitting reduces the
+observed attenuation without guaranteeing unbiased effects.
+The two-step paths are research implementations with
 documented departures from the original programs, including their
 variance-component estimators.
 `denominator="spectral"` is a mixmogam extension for the two-step methods.
@@ -48,22 +50,16 @@ weights such as inverse probabilities of participation,
 fits a row-scaled weighted model (for binary traits the logistic working
 response, one IRLS step). Step 2 tests each variant's score, for binary
 traits that of the logistic model with the LOCO score as offset, against its
-variance when genotypes are exchangeable given the covariates, with a
-saddlepoint approximation of the genotype distribution in the tails. The
-Huber-White sandwich and the model-based logistic variance were rejected
-after pilots ([design notes](docs/design.md#case-control-outcomes-and-sampling-weights)).
-In a [prespecified simulation](benchmarks/results/20261005-hratt-weights-binary/README.md)
-the weighted quantitative test was calibrated, including under selection on
-the outcome, but two of seven criteria passed. The follow-ups address the
-failures:
-- cross-fitted LOCO scores, so effects are not attenuated and rare outcomes
-  do not get offsets that separate the cases;
-- allele frequencies taken from the covariates, so weights that depend on
-  ancestry need ancestry principal components among the covariates;
-- `spa_two_sided="doubled"` for per-tail calibration.
-
-Their [prespecified validation](benchmarks/hratt_followups_plan.md) is in
-progress.
+variance conditional on the covariates. With covariates, the saddlepoint
+tail uses sample-specific allele frequencies and assumes conditional
+Hardy-Weinberg equilibrium. Ancestry-dependent weights or case fractions
+require suitable ancestry covariates; these assumptions still need checking
+in the intended population. Binary effects are one-step approximations,
+not fitted logistic effects (see the [quickstart](docs/quickstart.md#case-control-outcomes-and-sampling-weights)).
+These paths remain experimental: only two of seven criteria passed the
+[earlier validation](benchmarks/results/20261005-hratt-weights-binary/README.md),
+and the broader [follow-up validation](benchmarks/hratt_followups_plan.md)
+is incomplete.
 
 With the `fast` extra, `n_threads` parallelizes the exact scan's decoding and
 HRATT's genotype preparation and coordinate sweeps. Model sweeps retain their
@@ -125,6 +121,8 @@ sample order.
   such confounding.
 - Only HRATT models case-control outcomes and sampling weights; the other
   methods assume a Gaussian trait without weights.
+- BOLT mixture p-values accompany infinitesimal-model effects and standard
+  errors, recorded by `extra["effect_method"] == "bolt-inf"`.
 - HRATT's weighted and binary tests take allele frequencies from the
   covariates: when weights or case fractions vary with ancestry, include
   ancestry principal components.

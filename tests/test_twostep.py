@@ -240,6 +240,9 @@ def test_bolt_mixture_gains_on_sparse_trait():
     bi = gwas(sim["y"], gt, method="bolt-inf")
     bo = gwas(sim["y"], gt, method="bolt")
     assert bo.extra["use_mixture"]
+    assert bo.extra["effect_method"] == "bolt-inf"
+    np.testing.assert_array_equal(bo.beta, bi.beta)
+    np.testing.assert_array_equal(bo.se, bi.se)
     c = sim["causal"]
     assert bo.f_stat[c].mean() > 1.1 * bi.f_stat[c].mean()
     # LD-free genotypes: the LDSC intercept is unidentified, so the bulk is matched

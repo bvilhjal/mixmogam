@@ -165,6 +165,21 @@ def test_phenotypes_align_and_nan():
     assert list(v) == [1.0, 3.0]
 
 
+def test_automatic_transformation_never_clips_a_trait_to_constant(monkeypatch):
+    from scipy import stats
+    shapiro = stats.shapiro
+
+    def checked(values):
+        assert np.ptp(values) > 0  # independent of SciPy's constant-input behaviour
+        return shapiro(values)
+
+    monkeypatch.setattr(stats, "shapiro", checked)
+    ph = Phenotypes(np.arange(100))
+    ph.add("height", np.arange(100.) + 100)
+    assert ph.most_normal("height") != "arcsin_sqrt"
+    assert np.unique(ph.values("height")).size == 100
+
+
 def test_phenotypes_replicate_averaging():
     ph = Phenotypes(["a", "a", "b", "b"])
     ph.replicates = np.array([1, 1, 2, 2])

@@ -170,8 +170,11 @@ fraction near df/n of the smoother.
 - Heritability on the Pearson scale was overestimated there (REML median
   0.10 on null traits, up to 1.0), which made it worse.
 
-Out-of-fold scores carry no sample's own phenotype, so effects are not
-attenuated and a null trait's offsets are noise around zero.
+The predictor for each fold excludes that fold's outcomes. Variance
+components and prior selection still use the whole trait, so cross-fitting
+does not make the entire procedure independent of the held-out outcomes.
+It reduced effect attenuation and extreme null offsets in these pilots;
+neither unbiasedness nor calibration follows automatically.
 
 LDAK-KVIK instead calibrates effects by the slope of effects without the
 score on effects against the residual. Under structure that reference is
@@ -200,6 +203,9 @@ LDAK-Thin weights; a 1% relative CV R^2 margin
 before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
 median matching instead of the LDSC intercept when LD scores do not
 vary (coefficient of variation < 0.2).
+BOLT mixture p-values accompany the infinitesimal model's effects and
+standard errors, as in BOLT-LMM. Slopes against in-sample mixture residuals
+were attenuated; calibrating their p-values did not repair their effects.
 
 ### Case-control outcomes and sampling weights
 
@@ -230,9 +236,13 @@ genotype count fitted on the covariates, as in SPAmix (Ma et al. 2025), its
 deviations from the mean shrunk by (F - 1) / F. Covariates unrelated to the
 genotype give rho_j = 1. Without weights and for quantitative traits this is
 the unweighted statistic, kept with normal tails. In weighted and binary analyses, above |z| = 2 a
-saddlepoint approximation gives the tail: genotypes drawn independently from
-the variant's empirical distribution with a fixed (the retrospective
-counterpart of SPACox's empirical CGF, which draws the residuals). Two departures from common practice
+saddlepoint approximation gives the tail. With covariates it draws each
+called genotype independently from Binomial(2, p_ij), conditional on the
+observed missing-call mask. This uses the whole conditional distribution,
+not just its variance, and assumes Hardy-Weinberg equilibrium given the
+covariates. An intercept-only design retains empirical genotype frequencies.
+A pooled distribution with a corrected variance still gave inflated tails
+when ancestry predicted both weights and allele frequency. Two departures from common practice
 follow from pilots: the Huber-White sandwich sum a^2 Z^2 of weighted GWAS
 replaces each genotype's variance by its own square and was inflated
 17-fold at 1e-3 for MAF 1-5% under selection on the outcome, because a few
@@ -241,18 +251,25 @@ sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample LOCO
 offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets and
 50 cases in 5,000).
 Quantitative effects are weighted least-squares slopes, binary ones
-one-step log odds ratios U / J. lambda keeps its rule and multiplies the
+one-step log odds approximations U / J. Their null-score standard errors
+are sqrt(V / lambda) / J, independent of the saddlepoint tail rule; these
+are not fitted logistic MLEs or likelihood-based uncertainty. Binary
+exports label them `beta_one_step` and `se_null_score`, and posterior
+probabilities reject them. lambda keeps its rule and multiplies the
 statistic. `denominator="spectral"` is unavailable with weights or binary
 traits, and `alpha_method="reml"` with weights. The validation follows
 `benchmarks/hratt_weights_binary_plan.md`. Its
 [results](../benchmarks/results/20261005-hratt-weights-binary/README.md)
-showed two limits, which the follow-ups address.
+showed two limits that motivated the follow-ups.
 - The pooled genotype variance failed when the weights depended on ancestry:
   low-frequency tails were 5.75-fold at 1e-3 at Fst 0.05. Ancestry
   covariates alone did not restore it (6.7-7.2-fold in a prototype); with
-  rho_j and principal components it was 1.2-1.4-fold.
+  rho_j and principal components it was 1.2-1.4-fold in that prototype.
+  This variance correction alone did not validate the pooled saddlepoint
+  tails, which have since been replaced by the conditional distribution.
 - In-sample LOCO scores attenuated every effect, by 32% in the simulation,
-  while p-values were unaffected. Cross-fitting removes this (above).
+  while p-values were unaffected in that simulation. Cross-fitting reduced
+  the observed attenuation (above).
 
 The follow-ups' validation follows `benchmarks/hratt_followups_plan.md`.
 `spa_two_sided="doubled"` doubles the tail beyond the score (LDAK's default)

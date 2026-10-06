@@ -1,13 +1,13 @@
 """Saddlepoint approximation (SPA) for retrospective score statistics.
 
 A score S = sum_i a_i x_i with fixed coefficients a (a weighted null
-residual) and genotypes x_i drawn independently from the sample's own
-distribution of genotype values has cumulant generating function
+residual) and independently drawn genotypes x_i has cumulant generating
+function
 
-    K(t) = sum_i log sum_k p_k exp(t a_i v_k)
+    K(t) = sum_i log sum_k p_ik exp(t a_i (v_k - E[x_i])).
 
-over the support v (centred at its mean) with frequencies p: the empirical
-genotype CGF of SPACox (Bi et al. 2020). Each tail is the Barndorff-Nielsen
+Frequencies may be pooled empirical frequencies or sample-specific
+probabilities conditional on covariates (as in SPAmix). Each tail is the Barndorff-Nielsen
 form p = Phi(-r*), r* = w + log(v / w) / w, with w = sign(t) sqrt(2 (t x -
 K(t))) and v = t sqrt(K''(t)) at the saddlepoint K'(t) = x, found by
 Newton's method inside a bracket (K' is increasing). This is the same order
@@ -37,19 +37,25 @@ def _cgf(t, a, v, p):
     k1 = 0.0
     k2 = 0.0
     for i in range(a.size):
+        pi = p[i] if p.ndim == 2 else p
+        center = 0.0
+        if p.ndim == 2:
+            for k in range(v.size):
+                center += pi[k] * v[k]
         top = -math.inf
         for k in range(v.size):
-            if p[k] > 0 and t * a[i] * v[k] > top:
-                top = t * a[i] * v[k]
+            if pi[k] > 0 and t * a[i] * (v[k] - center) > top:
+                top = t * a[i] * (v[k] - center)
         s0 = 0.0
         s1 = 0.0
         s2 = 0.0
         for k in range(v.size):
-            if p[k] > 0:
-                e = p[k] * math.exp(t * a[i] * v[k] - top)
+            if pi[k] > 0:
+                vk = v[k] - center
+                e = pi[k] * math.exp(t * a[i] * vk - top)
                 s0 += e
-                s1 += e * v[k]
-                s2 += e * v[k] * v[k]
+                s1 += e * vk
+                s2 += e * vk * vk
         mean = s1 / s0
         k0 += top + math.log(s0)
         k1 += a[i] * mean
@@ -59,6 +65,17 @@ def _cgf(t, a, v, p):
 
 def _support(a, v, p):
     """Infimum and supremum of S (the limits of K' at -inf and +inf)."""
+    if p.ndim == 2:
+        lo, hi = 0.0, 0.0
+        for i in range(a.size):
+            center, vmin, vmax = 0.0, math.inf, -math.inf
+            for k in range(v.size):
+                center += p[i, k] * v[k]
+                if p[i, k] > 0:
+                    vmin, vmax = min(vmin, v[k]), max(vmax, v[k])
+            x, y = a[i] * (vmin - center), a[i] * (vmax - center)
+            lo, hi = lo + min(x, y), hi + max(x, y)
+        return lo, hi
     vmin = math.inf
     vmax = -math.inf
     for k in range(v.size):
@@ -160,7 +177,11 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
     the observed scores sum_i a_i x_i. Row r of ``values`` and ``freqs``
     (k, s) is the support and frequency of variant r's genotype values
     (zero frequencies pad unused points); each support is centred at its
-    mean. The scores are multiplied by sqrt(``var_ratio``) (scalar or
+    mean. Alternatively, ``freqs`` has shape (k, n, s): each sample has
+    its own distribution, and its expectation is subtracted from the
+    observed score and CGF. This conditions the entire tail on covariates,
+    rather than correcting only the variance. The centred scores are
+    multiplied by sqrt(``var_ratio``) (scalar or
     (k,)) before the tails are evaluated: a variance correction (lambda, or
     the CGF variance over the test's) applied to the statistic, as SAIGE
     applies its variance ratio. ``two_sided="distance"`` adds the tails
@@ -173,15 +194,23 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
     a = np.ascontiguousarray(a, dtype=np.float64)
     values = np.atleast_2d(np.asarray(values, dtype=np.float64))
     freqs = np.ascontiguousarray(np.atleast_2d(freqs), dtype=np.float64)
-    if a.ndim != 1 or values.shape != freqs.shape or values.ndim != 2:
-        raise ValueError("a must be one-dimensional and values and freqs of equal (k, s) shape")
+    conditional = freqs.ndim == 3
+    expected = (values.shape[0], a.size, values.shape[-1]) if conditional else values.shape
+    if a.ndim != 1 or values.ndim != 2 or freqs.shape != expected:
+        raise ValueError("values must be (k, s), freqs (k, s) or (k, n, s), and a (n,)")
     k = values.shape[0]
-    total = freqs.sum(axis=1, keepdims=True)
-    if np.any(freqs < 0) or np.any(total <= 0):
+    total = freqs.sum(axis=-1, keepdims=True)
+    if (not np.isfinite(freqs).all() or not np.isfinite(values).all()
+            or not np.isfinite(a).all() or np.any(freqs < 0) or np.any(total <= 0)):
         raise ValueError("genotype frequencies must be nonnegative with a positive total")
     freqs = freqs / total
-    values = np.ascontiguousarray(values - np.sum(values * freqs, axis=1, keepdims=True))
-    x = np.ascontiguousarray(np.broadcast_to(np.asarray(u, dtype=np.float64), (k,)) * np.sqrt(
+    scores = np.broadcast_to(np.asarray(u, dtype=np.float64), (k,))
+    if conditional:
+        scores = scores - np.einsum("ris,rs,i->r", freqs, values, a)
+    else:
+        values = values - np.sum(values * freqs, axis=1, keepdims=True)
+    values = np.ascontiguousarray(values)
+    x = np.ascontiguousarray(scores * np.sqrt(
         np.broadcast_to(np.asarray(var_ratio, dtype=np.float64), (k,))))
     up, lo = np.empty(k), np.empty(k)
     both = two_sided == "distance"

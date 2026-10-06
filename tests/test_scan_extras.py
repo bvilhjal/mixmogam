@@ -52,6 +52,42 @@ def test_genotypic_three_levels():
     assert stats.kstest(ps, "uniform").pvalue > 1e-3
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_genotypic_contrasts_in_covariate_span_are_untestable(dtype):
+    rng = np.random.default_rng(271)
+    g = rng.binomial(1, .4, 100).astype(np.int8)
+    # The augmented design has exactly the same rank as the null design.
+    model = LMM(rng.normal(size=100), X=g)
+    result = scan_genotypic(model, Genotypes(g[:, None]), dtype=dtype)
+    assert np.isnan(result["ps"][0]) and result["df1"][0] == 0
+
+
+def test_two_kinship_boundary_and_nonidentification():
+    from mixmogam.kinship import scale_k
+    rng = np.random.default_rng(8)
+    n = 60
+    Q = np.linalg.qr(np.column_stack([np.ones(n), rng.normal(size=(n, 20))]))[0]
+    K1 = scale_k(Q[:, 1:6] @ Q[:, 1:6].T)
+    K2 = scale_k(Q[:, 6:21] @ Q[:, 6:21].T)
+    y = Q[:, 1:6] @ rng.normal(size=5) + rng.normal(0, .01, n)
+    result = fit_two_kinships(y, K1, K2, n_mixtures=9, refine_rounds=1)
+    oracle = LMM(y, K=K1).fit()
+    assert result["weight"] == 1.0
+    assert result["var_share"][1] == 0.0
+    assert result["ll"] == pytest.approx(oracle.ll, abs=1e-7)
+    swapped = fit_two_kinships(y, K2, K1, n_mixtures=9, refine_rounds=1)
+    assert swapped["weight"] == 0.0
+    noise = rng.normal(size=n)
+    noise -= Q @ (Q.T @ noise)  # lies outside either genetic component
+    null = fit_two_kinships(noise, K1, K2, n_mixtures=5, refine_rounds=0)
+    assert null["weight"] is None
+    np.testing.assert_array_equal(null["var_share"], np.zeros(2))
+    assert null["ll"] == pytest.approx(LMM(noise).fit().ll, abs=1e-7)
+    for K in [K1, 2 * K1, .5 * K1 + .5 * np.eye(n)]:
+        with pytest.raises(ValueError, match="not identifiable"):
+            fit_two_kinships(y, K1, K)
+
+
 def _gls_f(model, fit, cols_full, cols_null):
     """Direct GLS F test of the extra columns: whitened designs, two lstsq fits."""
     yw = model._apply_inv_sqrt(model.y, fit.delta, np.float64)

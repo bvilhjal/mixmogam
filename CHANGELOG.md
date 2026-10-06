@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0.dev6] - 2026-10-06
+
+### Fixed
+
+- Refine the last Cholesky REML search interval before accepting its
+  boundary; the missed interior optimum made exact LOCO results change
+  when chromosome labels were renamed.
+- Weighted/binary HRATT saddlepoint tails use sample-specific genotype
+  distributions with covariates, conditional on the missing-call mask.
+  Correcting only the pooled distribution's variance left extreme tails
+  inflated. The conditional model assumes Hardy-Weinberg equilibrium.
+- BOLT mixture results report infinitesimal-model effects and standard
+  errors (`extra["effect_method"]`), removing attenuation from slopes
+  against in-sample mixture residuals while retaining the mixture test.
+- Weighted/binary standard errors no longer depend on the saddlepoint
+  tail rule. Binary effects remain one-step approximations: CSV/DataFrame
+  labels are `beta_one_step` and `se_null_score`; CSV reload retains this
+  interpretation and `posterior_probabilities()` rejects them.
+- Two-kinship profiles include weights zero and one, reject nonidentifiable
+  covariance components, and return `weight=None` with zero shares when
+  the ordinary linear model wins. Only the best candidate fit is retained.
+- Genotypic tests reject covariate-confounded contrasts consisting only
+  of projection round-off, rather than treating them as extra degrees of
+  freedom.
+- EIGENSTRAT imports preserve both supplied allele columns through PLINK
+  export instead of replacing them with synthetic labels.
+- `Phenotypes.most_normal()` respects transformation domains and excludes
+  constant results; counts above one cannot collapse under arcsine-square-root.
+
 ### Added
 
 - HRATT for case-control outcomes and sampling weights:
@@ -46,8 +75,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- HRATT's LOCO scores are cross-fitted (`loco_folds=5`, new): no sample's
-  phenotype enters its own score.
+- HRATT's LOCO scores are cross-fitted (`loco_folds=5`, new): each fold's
+  predictor excludes that fold's outcomes, while variance components and
+  model selection still use the whole trait.
   - Five genome-wide variational fits run, each on four fifths of the
     samples (folds stratified by case status for binary traits).
   - A sample's score for chromosome group g is its own fold's fit without
@@ -77,7 +107,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     covariates unrelated to genotype leave the old variance.
   - The score variance becomes zvar |a|^2 rho_j.
   - With ancestry principal components among the covariates, weights that
-    depend on ancestry no longer inflate low-frequency tails: 1.2-1.4-fold
+    depend on ancestry gave low-frequency rejection rates of 1.2-1.4-fold
     at 1e-3 for MAF 1-5% in a prototype of the S4 scenario. The pooled
     variance gave 6.7-7.2-fold even with the PCs.
   - HRATT warns when strong structure remains after the covariates in

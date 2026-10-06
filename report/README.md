@@ -1,5 +1,10 @@
 # Research report
 
+The PDF and manuscript predate the correctness fixes in
+[2.0.0.dev6](../CHANGELOG.md), including conditional genotype
+tails and BOLT effect estimates. Their measurements describe the recorded
+revisions, not validation of the corrected implementation.
+
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. This revision
@@ -70,7 +75,7 @@ source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
 The 20K archive records its timed code as `2.0.0.dev3` with uncommitted
 optimizations frozen in full; its computational modules match `2.0.0.dev4`.
-This revision documents the unreleased changes after `2.0.0.dev5`; the
+This manuscript describes commit `7e3d44c9`, before the `2.0.0.dev6` fixes; the
 [changelog](../CHANGELOG.md) has the release history.
 
 ## Rebuild the manuscript

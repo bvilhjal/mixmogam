@@ -13,19 +13,28 @@ __all__ = ["read_eigenstrat"]
 def read_eigenstrat(prefix: str) -> Genotypes:
     """Read EIGENSTRAT genotype files (0/1/2, 9 = missing).
 
-    Returns sample-major genotypes; chromosome labels are preserved.
+    Returns sample-major genotypes counting the reference allele (column
+    five of .snp). Optional allele columns and chromosome labels are kept.
     """
     with open(f"{prefix}.ind") as fh:
         samples = [line.split()[0] for line in fh if line.strip()]
     chrom_l, rs_l, pos_l = [], [], []
+    a1, a2 = [], []
     with open(f"{prefix}.snp") as fh:
         for line in fh:
             parts = line.split()
             if not parts:
                 continue
+            if len(parts) not in (4, 6):
+                raise ValueError("snp rows require four columns, or six including both alleles")
             chrom_l.append(parts[1])
             rs_l.append(parts[0])
             pos_l.append(int(parts[3]) if parts[3].lstrip("-").isdigit() else 0)
+            if len(parts) == 6:
+                a1.append(parts[4])
+                a2.append(parts[5])
+    if a1 and len(a1) != len(rs_l):
+        raise ValueError("snp allele columns must be present on every row or absent on every row")
     rows = []
     with open(f"{prefix}.geno") as fh:
         for line in fh:
@@ -46,4 +55,6 @@ def read_eigenstrat(prefix: str) -> Genotypes:
         chromosome=chrom,
         position=np.array(pos_l, dtype=np.int64),
         variant_ids=np.array(rs_l, dtype=object),
+        allele1=np.array(a1) if a1 else None,
+        allele2=np.array(a2) if a2 else None,
     )

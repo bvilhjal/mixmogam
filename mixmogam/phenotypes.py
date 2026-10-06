@@ -147,16 +147,22 @@ class Phenotypes:
     def most_normal(self, pid: str) -> str:
         """Apply the most-normalizing transform from the standard set.
 
-        Candidates: identity, log, sqrt, anscombe, arcsin_sqrt (the latter
-        two only for non-negative data). Returns the winning name.
+        Candidates are restricted to their domains; arcsin_sqrt requires
+        values in [0, 1]. Constant transforms are excluded.
         """
         rec = self.data[pid]
         v = rec["values"]
         ok = np.isfinite(v)
         pos = v[ok]
-        candidates = ["identity", "log", "sqrt"]
+        candidates = ["identity"]
+        if pos.size < 3 or np.ptp(pos) == 0:
+            return "identity"
+        if (pos > 0).all():
+            candidates += ["log"]
         if (pos >= 0).all():
-            candidates += ["anscombe", "arcsin_sqrt"]
+            candidates += ["sqrt", "anscombe"]
+            if (pos <= 1).all():
+                candidates += ["arcsin_sqrt"]
         best, best_p = "identity", -np.inf
         for name in candidates:
             fwd, _ = _TRANSFORMS[name]
@@ -164,7 +170,7 @@ class Phenotypes:
                 t = fwd(pos)
             except ValueError:
                 continue
-            if not np.isfinite(t).all():
+            if not np.isfinite(t).all() or np.ptp(t) == 0:
                 continue
             p = stats.shapiro(t).pvalue
             if p > best_p:

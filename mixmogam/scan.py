@@ -61,10 +61,14 @@ def scan_genotypic(
                 D[li] = ((g == lv) & ok).astype(np.float64)
                 D[li, ~ok] = np.mean(g[ok] == lv)
             Dt = lmm._apply_inv_sqrt(D.T, fac["delta"], np.float64).T
+            norm0 = np.linalg.norm(Dt)
             Dt = Dt - (Dt @ Q) @ Q.T
             b = Dt @ r
-            beta, _, rank, _ = linalg.lstsq(Dt.T, r)
-            if rank < levels.size:
+            beta, _, rank, singular = linalg.lstsq(Dt.T, r)
+            # A residual contrast consisting only of projection round-off
+            # is not a new degree of freedom, however well-conditioned it
+            # looks relative to its own tiny norm.
+            if rank < levels.size or singular[-1] <= 32 * np.finfo(dtype).eps * norm0:
                 ps.append(np.nan)
                 fs.append(np.nan)
                 dfs.append(0)
@@ -318,42 +322,67 @@ def fit_two_kinships(
     """Fit vg1 K1 + vg2 K2 + ve I by mixture-weight profiling (v1
     get_estimates_3 successor).
 
-    A cascade of grids over log10(vg1/vg2) with an exact EMMA fit per candidate
-    mixture; the best bracket is refined, then the final mixture is fit
-    and returned with per-matrix variance shares.
+    Profile the weight in [0, 1], including either component alone, after
+    scaling both kinships to mean diagonal one and mean off-diagonal zero.
+    The best grid interval is refined. Covariance components that cannot
+    be distinguished after covariate adjustment raise ValueError.
+    ``weight`` is None when the ordinary linear model wins (zero genetic
+    variance); ``var_share`` then contains two zeros. ``seed`` is retained
+    for compatibility; this dense profile is deterministic.
     """
     from mixmogam.kinship import scale_k
+    from mixmogam.lmm import _design_matrix
 
     y = np.asarray(y, dtype=np.float64).ravel()
-    llim, ulim = -3.0, 3.0
+    if (not isinstance(n_mixtures, (int, np.integer)) or n_mixtures < 3
+            or not isinstance(refine_rounds, (int, np.integer)) or refine_rounds < 0):
+        raise ValueError("n_mixtures must be >= 3 and refine_rounds >= 0")
+    K1, K2 = scale_k(K1), scale_k(K2)
+    # Validate the covariance models before profiling, including their PSD.
+    for K in (K1, K2):
+        LMM(y, X=X, K=K).eigen()
+    Q = linalg.qr(_design_matrix(X, y.size, True), mode="economic")[0]
+    projected = []
+    for K in (K1, K2):
+        P = K - Q @ (Q.T @ K)
+        P -= (P @ Q) @ Q.T
+        projected.append(P)
+    A, B = projected
+    gram = np.array([[np.sum(A * A), np.sum(A * B), np.trace(A)],
+                     [np.sum(A * B), np.sum(B * B), np.trace(B)],
+                     [np.trace(A), np.trace(B), y.size - Q.shape[1]]])
+    norms = np.sqrt(np.diag(gram))
+    if np.any(norms == 0) or np.linalg.eigvalsh(gram / np.outer(norms, norms))[0] < 1e-10:
+        raise ValueError("two-kinship variance components are not identifiable after covariate adjustment")
+    del projected, A, B, P
+    lower, upper = 0.0, 1.0
     best = None
     for _ in range(refine_rounds + 1):
-        log_ratios = np.linspace(llim, ulim, n_mixtures)
-        fits = []
-        for lr in log_ratios:
-            ratio = float(np.exp(lr))
-            a = ratio / (1.0 + ratio)
-            K_mix = scale_k(a * K1 + (1.0 - a) * K2)
+        weights = np.linspace(lower, upper, n_mixtures)
+        for a in weights:
+            K_mix = a * K1 + (1.0 - a) * K2
             lmm = LMM(y, X=X, K=K_mix)
             try:
                 f = lmm.fit(method=method, recompute=True)
             except np.linalg.LinAlgError:
                 continue
-            fits.append((f.ll, a, f))
-        if not fits:
+            if best is None or f.ll > best[0]:
+                best = (f.ll, a, f)
+        if best is None:
             raise RuntimeError("two-kinship fit failed at all mixtures")
-        fits.sort(key=lambda t: -t[0])
-        best = fits[0]
         # shrink the bracket around the best weight
-        span = (ulim - llim) / (n_mixtures - 1)
-        lr_best = np.log(best[1] / (1 - best[1]))
-        llim, ulim = lr_best - span, lr_best + span
+        span = (upper - lower) / (n_mixtures - 1)
+        lower, upper = max(0.0, best[1] - span), min(1.0, best[1] + span)
     ll, a, fit = best
     h2_split = fit.pseudo_heritability
+    noise = LMM(y, X=X).fit(method=method)
+    if noise.ll >= ll:
+        ll, a, fit, h2_split = noise.ll, None, noise, 0.0
     return {
         "fit": fit,
         "weight": a,
-        "var_share": np.array([a * h2_split, (1.0 - a) * h2_split]),
+        "var_share": (np.zeros(2) if a is None else
+                      np.array([a * h2_split, (1.0 - a) * h2_split])),
         "pseudo_heritability": h2_split,
         "ll": ll,
     }

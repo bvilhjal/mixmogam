@@ -54,6 +54,9 @@ A large spread flags the proportional-denominator approximation in mixmogam's
 two-step methods. The spectral option is an approximation, and its use with mixture or elastic-net
 statistics is heuristic; use the exact path when feasible and validate
 calibration in the intended population (see the [design notes](design.md)).
+For `method="bolt"`, effects and standard errors come from `bolt-inf`,
+even when the mixture supplies the p-values; `extra["effect_method"]`
+records this distinction.
 
 ## Case-control outcomes and sampling weights
 
@@ -73,24 +76,30 @@ result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 Weights must be finite and positive (drop samples with zero weight); they
 are rescaled to mean one. With weights, heritability is fitted by HE
 (`heritability_method="auto"`); REML is unavailable because the weights
-define no likelihood. Binary effects are one-step log odds ratios per
-counted allele, conditional on the polygenic score. Tails above |z| = 2 come
+define no likelihood. Binary `beta` is a one-step log odds approximation per
+counted allele, conditional on the polygenic score, and can be poor for
+large effects or sparse counts. `se` describes the null-score linearization,
+independently of the tail rule; it is not a fitted logistic-model standard
+error. Exports use `beta_one_step` and `se_null_score` to preserve that
+distinction, and `posterior_probabilities()` rejects these estimates.
+Tails above |z| = 2 come
 from a saddlepoint approximation; `spa_threshold=np.inf` turns it off, and
 `spa_two_sided="doubled"` doubles the tail beyond the observed score instead
 of adding both tails at +-|u|, putting half the level in each tail.
 
-Include ancestry principal components among the covariates. The tests take
-each sample's allele frequency from the covariates, so weights or case
-fractions that differ by ancestry stay calibrated; HRATT warns when strong
-structure remains after the covariates. `gwas` raises TypeError for `trait`,
+Include suitable ancestry covariates when weights or case fractions vary
+with ancestry. The saddlepoint tail then uses each sample's predicted
+allele frequency and assumes conditional Hardy-Weinberg equilibrium;
+an intercept-only design uses empirical genotype frequencies. Calibration
+depends on these assumptions. HRATT warns when strong structure remains
+after the covariates. `gwas` raises TypeError for `trait`,
 `sample_weights`, `spa_threshold`, `spa_two_sided` and `loco_folds` with
 other methods.
 
-HRATT's LOCO scores are cross-fitted (`loco_folds=5`): no sample's
-phenotype enters its own score, so effects are not attenuated and rare
-outcomes do not get offsets that separate the cases. `loco_folds=1` fits the
-scores in-sample, as LDAK-KVIK and earlier versions did; its effects are
-attenuated, by about a third in simulations, though its p-values are not.
+HRATT's LOCO predictors are trained on other folds (`loco_folds=5`), while
+variance components and model selection use the whole trait. This reduced
+effect attenuation and separation in the tested scenarios; it does not
+guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
 
 ## Larger HRATT fits
 
@@ -161,8 +170,12 @@ out["selected"]["ebic"], out["selected"]["mbonf"]
 scan_gxe(LMM(y, X=E, K=K).fit(), gt, E)      # interaction given the main effect
 scan_gxe(fit, gt, E, polygenic_gxe=True)     # + polygenic K*(EE') component
 permutation_min_p(fit, gt, n_perm=1000)      # whitened-residual permutations
-fit_two_kinships(y, K_close, K_structure)     # mixture weights + shares
+fit_two_kinships(y, K_close, K_structure)     # weights including 0 and 1
 ```
+
+Two-kinship fits reject covariance components that cannot be distinguished
+after covariate adjustment. `weight=None` and zero shares mean the
+ordinary linear model won with zero genetic variance.
 
 ## Input and inference contracts
 
@@ -187,5 +200,7 @@ fit_two_kinships(y, K_close, K_structure)     # mixture weights + shares
   `result.posterior_probabilities(priors, prior_variance=W)`, where `W` is a
   variance in squared phenotype-units per counted allele. This uses a normal
   approximation from `beta` and `se`, and is not a fine-mapping probability.
+  Binary one-step effects are excluded.
 - CSV preserves variant columns and full float precision, including effect
-  alleles. Fit/calibration metadata in `result.extra` is not serialized.
+  alleles and the binary score-estimate labels above. Other fit/calibration
+  metadata in `result.extra` is not serialized.

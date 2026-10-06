@@ -61,6 +61,27 @@ def test_search_keeps_grid_limits_and_interior_maxima_next_to_them():
     assert local["evaluations"] < 30
 
 
+@pytest.mark.parametrize("optimum,start", [(-8.6, 0.), (8.6, 0.), (-9.99, -10.), (9.99, 10.)])
+def test_local_search_does_not_skip_an_optimum_before_the_boundary(optimum, start):
+    fit = _Profile(lambda x: -(x - optimum) ** 2).fit(start=start)
+    assert fit["log_delta"] == pytest.approx(optimum, abs=1e-5)
+
+
+def test_exact_loco_is_invariant_to_chromosome_renaming():
+    rng = np.random.default_rng(218)
+    n, m = 40, 60
+    base = rng.binomial(2, rng.uniform(.05, .5, 12), size=(n, 12)).astype(np.int8)
+    G = base[:, rng.integers(12, size=m)].copy()
+    replace = rng.random(G.shape) < rng.uniform(.01, .4)
+    G[replace] = rng.binomial(2, .3, size=int(replace.sum()))
+    y = G[:, rng.choice(m, 3, replace=False)] @ rng.normal(size=3) + rng.normal(0, rng.uniform(.01, 1), n)
+    chrom = np.repeat([1, 2, 3], 20)
+    first = gwas(y, Genotypes(G, chromosome=chrom), method="exact", dtype=np.float64)
+    second = gwas(y, Genotypes(G, chromosome=4 - chrom), method="exact", dtype=np.float64)
+    np.testing.assert_allclose(first.p, second.p, rtol=1e-5)
+    np.testing.assert_allclose(first.extra["delta"], second.extra["delta"][::-1], rtol=1e-5)
+
+
 def test_search_flags_profiles_with_several_maxima():
     def bimodal(x):
         return math.exp(-(x + 4) ** 2) + 2 * math.exp(-(x - 3) ** 2)

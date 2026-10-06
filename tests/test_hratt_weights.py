@@ -446,6 +446,16 @@ def test_weighted_hratt_is_invariant_to_weight_scale_and_phenotype_units(weighte
     assert extra["design_effect"] == pytest.approx(y.size / extra["kish_n"])
 
 
+def test_weighted_standard_errors_do_not_depend_on_the_tail_rule(weighted_gwas_problem):
+    _, gt, y, X, w = weighted_gwas_problem
+    normal = twostep.hratt(y, gt, X, sample_weights=w, spa_threshold=np.inf, **OPTIONS)
+    for options in ({}, {"spa_two_sided": "doubled"}):
+        result = twostep.hratt(y, gt, X, sample_weights=w, **OPTIONS, **options)
+        np.testing.assert_array_equal(result.beta, normal.beta)
+        np.testing.assert_array_equal(result.se, normal.se)
+        assert not np.array_equal(result.p, normal.p)
+
+
 @pytest.mark.parametrize("options, message", [
     (dict(sample_weights=np.r_[0.0, np.ones(9)]), "positive"),
     (dict(sample_weights=-np.ones(10)), "positive"),

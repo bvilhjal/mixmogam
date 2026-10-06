@@ -66,13 +66,20 @@ def test_eigenstrat_roundtrip(toy, tmp_path):
             fh.write(f"{s} U case\n")
     with open(f"{prefix}.snp", "w") as fh:
         for j in range(toy.n_variants):
-            fh.write(f"{toy.variant_ids[j]} {toy.chromosome[j]} 0.0 {toy.position[j]} A G\n")
+            fh.write(f"{toy.variant_ids[j]} {toy.chromosome[j]} 0.0 {toy.position[j]} C T\n")
     with open(f"{prefix}.geno", "w") as fh:
         for j in range(toy.n_variants):
             g = np.where(toy.G[:, j] == MISSING, 9, toy.G[:, j])
             fh.write("".join(str(int(v)) for v in g) + "\n")
     back = read_eigenstrat(prefix)
     np.testing.assert_array_equal(back.G, toy.G)
+    np.testing.assert_array_equal(back.allele1, np.repeat("C", toy.n_variants))
+    np.testing.assert_array_equal(back.allele2, np.repeat("T", toy.n_variants))
+    write_plink(back, prefix + "_plink")
+    exported = read_plink(prefix + "_plink")
+    np.testing.assert_array_equal(exported.G, toy.G)
+    np.testing.assert_array_equal(exported.allele1, back.allele1)
+    np.testing.assert_array_equal(exported.allele2, back.allele2)
 
 
 def test_regmap_csv(toy, tmp_path):

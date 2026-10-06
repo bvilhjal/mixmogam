@@ -224,6 +224,9 @@ class GwasResult:
         cross-variant rescaling changed posterior odds. It is no longer
         used; calls must supply ``prior_variance`` and beta/se estimates.
         """
+        if self.extra.get("effect_method") == "one-step-logistic":
+            raise ValueError("one-step logistic score estimates do not provide the fitted normal "
+                             "likelihood required for posterior probabilities")
         if prior_variance is None:
             raise ValueError("prior_variance is required: specify the normal effect-prior variance")
         if use_f is not None:
@@ -273,15 +276,24 @@ class GwasResult:
             ("other_allele", self.other_allele),
         ]:
             if arr is not None:
+                if self.extra.get("effect_method") == "one-step-logistic":
+                    key = _SCORE_COLUMNS.get(key, key)
                 data[key] = arr
         return pd.DataFrame(data)
 
     def write_csv(self, path: str) -> None:
-        """Write variant columns with round-trip precision; ``extra`` is not serialized."""
+        """Write variant columns with round-trip precision.
+
+        Binary score approximations use beta_one_step/se_null_score headers
+        so that their interpretation survives export. Other extra metadata
+        is not serialized.
+        """
         columns = {"chromosome": self.chromosome, "position": self.position, "p": self.p}
         for header, name in _CSV_OPTIONAL.items():
             arr = getattr(self, name)
             if arr is not None:
+                if self.extra.get("effect_method") == "one-step-logistic":
+                    header = _SCORE_COLUMNS.get(header, header)
                 columns[header] = arr
         with open(path, "w", newline="") as fh:
             writer = csv.writer(fh)
@@ -312,6 +324,11 @@ class GwasResult:
                   for header, name in _CSV_OPTIONAL.items()}
         kwargs["f_stat"] = col("f_stat", "f_stats")
         kwargs["af"] = col("af", "mafs")
+        if any(name in names for name in _SCORE_COLUMNS.values()):
+            if "beta" in names or "se" in names:
+                raise ValueError("CSV mixes fitted effects with one-step score estimates")
+            kwargs.update(beta=col("beta_one_step"), se=col("se_null_score"),
+                          extra={"effect_method": "one-step-logistic"})
         return cls(chromosome=chrom,
                    position=col("position", "positions", dtype=np.int64, required=True),
                    p=col("p", "ps", "scores", required=True), **kwargs)
@@ -322,3 +339,5 @@ _CSV_OPTIONAL = {
     "se": "se", "rss": "rss", "af": "af", "var_perc": "var_perc",
     "effect_allele": "effect_allele", "other_allele": "other_allele",
 }
+
+_SCORE_COLUMNS = {"beta": "beta_one_step", "se": "se_null_score"}
