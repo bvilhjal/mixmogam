@@ -1,0 +1,152 @@
+{
+  "logistic-w": {
+    "seconds": 3.0195786239928566,
+    "spa_seconds": 1.9896848750067875,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "logistic-w",
+      "n_cases": 1000,
+      "n_controls": 4000,
+      "prevalence": 0.05,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.0,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 939,
+      "effect_method": "one-step-logistic"
+    }
+  },
+  "hratt-bin": {
+    "seconds": 8.60167433397146,
+    "spa_seconds": 1.8953578329528682,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": 0.0,
+      "h2": 0.11918878959084146,
+      "alpha_method": "he",
+      "structure": {
+        "excess": 0.0006146541661213867,
+        "z": 0.2161594162637817,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.01,
+        0.5
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 4,
+      "loco_converged": true,
+      "trait": "binary",
+      "heritability_method": "reml",
+      "lambda": 1.0,
+      "n_cases": 1000,
+      "n_controls": 4000,
+      "prevalence": 0.2,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.1694917488789089,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 942,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.10803813849550176,
+        0.07661319726568279,
+        0.16683708820584114,
+        0.0,
+        0.24294708796740086,
+        0.16396436044069038,
+        0.11089034750284409,
+        0.13250330669953697,
+        0.0931816001735503,
+        0.1924027132703989
+      ],
+      "offsets_dropped": 1
+    }
+  },
+  "hratt-bin-w": {
+    "seconds": 4.556016707967501,
+    "spa_seconds": 1.8672537920065224,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": 0.0,
+      "h2": 0.0628418957817786,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.0032721956470940228,
+        "z": -0.8494143979329145,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.01,
+        0.1
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 2,
+      "loco_converged": true,
+      "heritability_method": "he",
+      "he_variance": {
+        "raw_vg": 0.06284856100094151,
+        "raw_ve": 0.9372575023041194,
+        "vg": 0.06284856100094151,
+        "ve": 0.9372575023041194,
+        "h2": 0.0628418957817786,
+        "status": "interior",
+        "boundary": "none",
+        "denominator": 5042.432699681532,
+        "trace_k2": 10649.300514767761,
+        "trace_k_over_df": 1.0000310059395854,
+        "projected_genetic_variance_fraction": 0.06284372180456882,
+        "probe_se": 41.37301719392311,
+        "curvature_se_ratio": 121.8773258920591,
+        "n_probes": 32
+      },
+      "vb_residual_variance": 0.9371581042182214,
+      "vb_noise_floor_applied": false,
+      "trait": "binary",
+      "kish_n": 4383.561643835616,
+      "design_effect": 1.140625,
+      "lambda": 1.0,
+      "n_cases": 1000,
+      "n_controls": 4000,
+      "prevalence": 0.05,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.03410493858215652,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 942,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.7438663364763356,
+        0.654691818966148,
+        0.9656440716973365,
+        1.0,
+        1.0,
+        0.8083804408941281,
+        0.6475722701477608,
+        0.7259103101809581,
+        0.4897382863350626,
+        0.9991769746959285
+      ],
+      "offsets_dropped": 0
+    }
+  }
+}

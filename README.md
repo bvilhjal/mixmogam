@@ -9,7 +9,7 @@ SciPy; Numba accelerates optional kernels.
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads through 50,000 samples and 20,000 variants, and historical evidence,
-with a testable research agenda. It predates the current correctness fixes.
+with a testable research agenda. Its LDAK-KVIK benchmarks predate 2.0.0.dev6.
 The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 
@@ -56,10 +56,14 @@ Hardy-Weinberg equilibrium. Ancestry-dependent weights or case fractions
 require suitable ancestry covariates; these assumptions still need checking
 in the intended population. Binary effects are one-step approximations,
 not fitted logistic effects (see the [quickstart](docs/quickstart.md#case-control-outcomes-and-sampling-weights)).
-These paths remain experimental: only two of seven criteria passed the
-[earlier validation](benchmarks/results/20261005-hratt-weights-binary/README.md),
-and the broader [follow-up validation](benchmarks/hratt_followups_plan.md)
-is incomplete.
+These paths remain experimental. The
+[earlier validation](benchmarks/results/20261005-hratt-weights-binary/README.md)
+passed two of seven criteria; the
+[follow-up validation](benchmarks/results/20261006-hratt-followups/README.md)
+passed five. Cross-fitted effects were within 2% of the population slopes
+(in-sample scores: 28-36% low), except weighted effects under selection on
+the outcome, 5.4% low. Weighted fits took 1.55 times as long as HRATT-HE,
+against a target of 1.3.
 
 With the `fast` extra, `n_threads` parallelizes the exact scan's decoding and
 HRATT's genotype preparation and coordinate sweeps. Model sweeps retain their

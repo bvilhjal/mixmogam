@@ -27,7 +27,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from kvik_efficiency import power_state, save_json, snapshot  # noqa: E402
+from hratt_efficiency import power_state, save_json, snapshot  # noqa: E402
 
 CASES = {
     "unstructured_pc": dict(n=5000, m=30000, pops=2, fst=0.02, h2=0.4, pcs=True,
@@ -99,7 +99,7 @@ def main() -> None:
     power = power_state()
     args.out.mkdir(parents=True)
     (args.out / "slq_defaults.py").write_bytes(Path(__file__).read_bytes())
-    (args.out / "kvik_efficiency.py").write_bytes((HERE / "kvik_efficiency.py").read_bytes())
+    (args.out / "hratt_efficiency.py").write_bytes((HERE / "hratt_efficiency.py").read_bytes())
     source = snapshot(Path(mixmogam.__file__).resolve().parents[1], args.out / "source")
     rows, summary = [], {}
     for name in args.cases:

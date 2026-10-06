@@ -31,7 +31,7 @@ from scipy.optimize import brentq
 from scipy.special import expit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from kvik_simulation import (ROOT, THREAD_VARS, clean_json, digest, power_state,  # noqa: E402
+from ldak_kvik_comparison import (ROOT, THREAD_VARS, clean_json, digest, power_state,  # noqa: E402
                              read_table, save_json, write_csv)
 
 N_CHROM = 10  # equal chromosomes; the tenth carries no direct effects
@@ -677,7 +677,7 @@ def archive_sources(out, args):
         origins[package] = {"head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=directory, text=True).strip(),
                             "status": subprocess.check_output(["git", "status", "--porcelain"], cwd=directory, text=True)}
         (src / f"{package}.diff").write_bytes(subprocess.check_output(["git", "diff", "HEAD"], cwd=directory))
-    for driver in (Path(__file__), Path(__file__).with_name("kvik_simulation.py")):
+    for driver in (Path(__file__), Path(__file__).with_name("ldak_kvik_comparison.py")):
         shutil.copy(driver, src / driver.name)
     shutil.copy(args.plan, out / "plan.md")
     banner = subprocess.run([args.ldak], capture_output=True, text=True).stdout

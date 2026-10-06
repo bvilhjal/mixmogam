@@ -28,7 +28,7 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hratt_weights_binary as hb  # noqa: E402
-from kvik_simulation import ROOT, clean_json, digest, power_state, save_json, write_csv  # noqa: E402
+from ldak_kvik_comparison import ROOT, clean_json, digest, power_state, save_json, write_csv  # noqa: E402
 
 ALPHAS = hb.ALPHAS
 # (Fst, architecture, trait, prevalence, scenario, covariates)
@@ -533,7 +533,7 @@ def archive_sources(out, args):
                             "status": subprocess.check_output(["git", "status", "--porcelain"], cwd=directory, text=True)}
         (src / f"{package}.diff").write_bytes(subprocess.check_output(["git", "diff", "HEAD"], cwd=directory))
     for driver in (Path(__file__), Path(__file__).with_name("hratt_weights_binary.py"),
-                   Path(__file__).with_name("kvik_simulation.py")):
+                   Path(__file__).with_name("ldak_kvik_comparison.py")):
         shutil.copy(driver, src / driver.name)
     shutil.copy(args.plan, out / "plan.md")
     save_json(out / "environment.json", {

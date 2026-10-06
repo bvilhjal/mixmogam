@@ -1,0 +1,152 @@
+{
+  "logistic-w": {
+    "seconds": 2.756309666961897,
+    "spa_seconds": 1.810400957998354,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "logistic-w",
+      "n_cases": 234,
+      "n_controls": 4766,
+      "prevalence": 0.050023599287470966,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.0,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 924,
+      "effect_method": "one-step-logistic"
+    }
+  },
+  "hratt-bin": {
+    "seconds": 7.741750666988082,
+    "spa_seconds": 1.721176041988656,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -1.0,
+      "h2": 0.025894655397991507,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.004305454855192958,
+        "z": -1.2683547873929617,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.01,
+        0.1
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 3,
+      "loco_converged": true,
+      "trait": "binary",
+      "heritability_method": "reml",
+      "lambda": 1.0,
+      "n_cases": 234,
+      "n_controls": 4766,
+      "prevalence": 0.0468,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.08728795529662449,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 911,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.9695224405461075,
+        1.0,
+        0.9439620515457162,
+        1.0,
+        0.7900285230705654,
+        1.0,
+        1.0,
+        0.9194012040511316,
+        1.0,
+        1.0
+      ],
+      "offsets_dropped": 0
+    }
+  },
+  "hratt-bin-w": {
+    "seconds": 5.02296320797177,
+    "spa_seconds": 1.7627464170218445,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -1.0,
+      "h2": 0.04878042298076368,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.01694008161444216,
+        "z": -3.541821798835801,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.01,
+        0.3
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 4,
+      "loco_converged": true,
+      "heritability_method": "he",
+      "he_variance": {
+        "raw_vg": 0.04878494393699276,
+        "raw_ve": 0.9513077357888647,
+        "vg": 0.04878494393699276,
+        "ve": 0.9513077357888647,
+        "h2": 0.04878042298076368,
+        "status": "interior",
+        "boundary": "none",
+        "denominator": 4780.453267282991,
+        "trace_k2": 12145.792103890835,
+        "trace_k_over_df": 1.00006786445147,
+        "projected_genetic_variance_fraction": 0.0487835719415117,
+        "probe_se": 50.92756835344465,
+        "curvature_se_ratio": 93.86769134756166,
+        "n_probes": 32
+      },
+      "vb_residual_variance": 0.9512195770192363,
+      "vb_noise_floor_applied": false,
+      "trait": "binary",
+      "kish_n": 3901.046063212633,
+      "design_effect": 1.2817075007523353,
+      "lambda": 1.0,
+      "n_cases": 234,
+      "n_controls": 4766,
+      "prevalence": 0.05002359928747096,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.4121169872894832,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 925,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.465113276724876,
+        0.46300232932206337,
+        0.5313992671683025,
+        0.5606316123281487,
+        0.5006752810155517,
+        0.5028882109129736,
+        0.5337596150836417,
+        0.2707636061765579,
+        0.5231879638632986,
+        0.4963909251907854
+      ],
+      "offsets_dropped": 0
+    }
+  }
+}

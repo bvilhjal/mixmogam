@@ -1,9 +1,9 @@
 # Research report
 
-The PDF and manuscript predate the correctness fixes in
-[2.0.0.dev6](../CHANGELOG.md), including conditional genotype
-tails and BOLT effect estimates. Their measurements describe the recorded
-revisions, not validation of the corrected implementation.
+This revision describes [2.0.0.dev6](../CHANGELOG.md). Its LDAK-KVIK
+comparisons, HE-versus-REML fits and 20,000-variant workloads are reruns with
+commit e4089d8, before 2.0.0.dev6 cross-fitted HRATT's scores; older studies
+keep the versions they ran with.
 
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
@@ -21,7 +21,8 @@ Heritability-weighted Residual Association Two-step Test; runs archived
 before the rename keep its earlier name. Section 2.12 extends HRATT to
 case-control outcomes and sampling weights, with retrospective score tests
 and a genotype saddlepoint approximation; Section 4.11 reports their
-prespecified validation.
+prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
+covariate-specific genotype distributions, and Section 4.12 validates them.
 The benchmark results are reruns of the mixmogam methods with commit e4089d8
 on the archived inputs. Official LDAK-KVIK results are reused from the
 original runs of 3 October, when identical mixmogam code took 38% longer than
@@ -46,6 +47,7 @@ Table 1. Evidence and provenance used in the manuscript.
 | Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults` (rerun `20261005-slq-defaults-e4089d8`), `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
 | Genotype streaming without projection | `20261005-efficiency-paired-hratt`; steps `20261004-genotype-streaming`, `20261004-gram-cache`, `20261004-packed-calls` | dev5 against commit d51b4c3 on every path and HRATT-HE at 10K samples and 10K-80K markers, three repetitions gated on host load; the step archives pair each change with its predecessor |
 | Case-control outcomes and sampling weights | `20261005-hratt-weights-binary` | Prespecified simulation: 30 null and 10 mixed replicates per cell, six selection scenarios, prevalence 1-20%, Fst 0 and 0.05, with official LDAK-KVIK and LDAK's weighted regression |
+| Cross-fitted scores and covariate-specific genotype distributions | `20261006-hratt-followups` | Prespecified validation on the same samples plus Fst 0.05 cells with and without 10 PCs; 660 cases |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -75,7 +77,7 @@ source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
 The 20K archive records its timed code as `2.0.0.dev3` with uncommitted
 optimizations frozen in full; its computational modules match `2.0.0.dev4`.
-This manuscript describes commit `7e3d44c9`, before the `2.0.0.dev6` fixes; the
+This manuscript describes `2.0.0.dev6`; the
 [changelog](../CHANGELOG.md) has the release history.
 
 ## Rebuild the manuscript
@@ -84,11 +86,12 @@ From the repository root, with matplotlib and Tectonic available:
 
 ```sh
 python report/make_figures.py
-python report/make_kvik_figures.py
+python report/make_ldak_kvik_figures.py
 python report/make_efficiency_tables.py
 python report/make_dev5_tables.py
 python report/make_streaming_tables.py
 python report/make_weights_binary_tables.py
+python report/make_followup_tables.py
 cd report
 tectonic mixmogam_report.tex
 ```

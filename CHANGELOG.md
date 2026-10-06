@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- The prespecified validation of the 2.0.0.dev6 follow-ups
+  ([`20261006-hratt-followups`](benchmarks/results/20261006-hratt-followups/README.md),
+  660 cases) passed five of seven criteria.
+  - Cross-fitted effects were within 2% of the population slopes, where
+    in-sample scores were 28-36% low. Weighted effects under selection on
+    the outcome were 5.4% low, and weighted least squares 4.0%.
+  - Calibration held at 1-20% prevalence. Under ancestry-dependent weights
+    with principal components, rates for MAF 1-5% at 1e-3 were 0.85-0.96
+    times nominal, against 4.0-6.5 with pooled allele frequencies.
+  - Cross-fitting took 1.08-1.11 times as long. Weighted fits took 1.55
+    times as long as HRATT-HE, against a target of 1.3.
+- `--loco-folds` in `hratt_thread_scaling.py` and `hratt_efficiency.py`.
+- `--max-load` in `ldak_kvik_comparison.py`, `hratt_efficiency.py`,
+  `hratt_he_comparison.py` and `hratt_thread_scaling.py`, as in
+  `efficiency_paired.py`: each timed fit waits until the one-minute load
+  average is below the limit, and records the load and the wait.
+
+### Changed
+
+- Benchmark drivers are named by what they compare:
+  - `ldak_kvik_comparison.py` (was `kvik_simulation.py`) and
+    `ldak_kvik_reference.py` run official LDAK-KVIK;
+  - `hratt_efficiency.py`, `hratt_he_comparison.py`,
+    `hratt_he_validation.py` and `hratt_thread_scaling.py` time or check
+    HRATT, with LDAK-KVIK optional;
+  - likewise their plans, tests and `report/make_ldak_kvik_figures.py`.
+
+  Archives keep the names they ran with.
+
 ## [2.0.0.dev6] - 2026-10-06
 
 ### Fixed

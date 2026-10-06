@@ -50,7 +50,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from kvik_efficiency import digest, power_state, save_json, snapshot  # noqa: E402
+from hratt_efficiency import digest, power_state, save_json, snapshot  # noqa: E402
 
 PANELS = {
     "exact_n3000": dict(n=3000, m=44000, chromosomes=22, populations=1, fst=0.0,
@@ -335,7 +335,7 @@ def main() -> None:
     (args.out / ".gitignore").write_text("jit-cache/\ndata/*/*.npy\n")
     driver = args.out / "efficiency_paired.py"
     driver.write_bytes(Path(__file__).read_bytes())
-    for helper in ("kvik_efficiency.py",):
+    for helper in ("hratt_efficiency.py",):
         (args.out / helper).write_bytes((HERE / helper).read_bytes())
     sources = {label: snapshot(Path(path), args.out / "sources" / label) for label, path in pairs}
     base_env = {k: v for k, v in os.environ.items() if not k.startswith("NUMBA_CACHE")}

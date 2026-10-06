@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{5 October 2026\\\small Research report for the development version after
-2.0.0.dev5; benchmark reruns use commit e4089d8}
+\date{6 October 2026\\\small Research report for 2.0.0.dev6;
+benchmark reruns use commit e4089d8}
 
 \begin{document}
 \maketitle
@@ -98,7 +98,11 @@ under genotype exchangeability with a genotype saddlepoint tail. In a
 prespecified simulation the weighted test was calibrated under selection on
 the outcome, where the sandwich variance rejected up to 26 times too often,
 but weights that depend on ancestry inflated low-frequency tails, and
-HRATT's effect estimates were attenuated by about a third.
+HRATT's effect estimates were attenuated by about a third. Cross-fitted
+LOCO scores and covariate-specific genotype distributions then removed the
+attenuation and, with principal components among the covariates, the
+ancestry inflation in a second prespecified simulation, at 1.1 times the
+fitting time.
 REML remains the default variance estimator without sampling weights.
 The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
@@ -225,6 +229,10 @@ Case-control and weighted HRATT & Prespecified simulation: 30 null and 10
 mixed replicates per cell, six selection scenarios, prevalence 1--20\%,
 with official LDAK-KVIK & Independent markers and discrete populations;
 two of seven criteria passed. \\
+Cross-fitted scores and covariate-specific genotype distributions &
+Prespecified simulation on the same samples, with $F_{ST}=0.05$ cells with
+and without principal components; 660 cases & Five of seven criteria
+passed; weighted effects 5.4\% low under selection on the outcome. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -828,15 +836,15 @@ probabilities that an in-sample LOCO offset overfits when cases are few:
 with HRATT's offsets and 50 cases among 5,000 it gave $\lgc=0.55$ on a null
 trait, against 1.01--1.04 for Equation~\eqref{eq:retro-variance}.
 
-\subsection{Cross-fitted scores and covariate-specific genotype variances}
+\subsection{Cross-fitted scores and covariate-specific genotype distributions}
 \label{sec:crossfit}
 
 The validation of Section~\ref{sec:weights-binary-results} found three
 faults. HRATT's effects were attenuated, rare binary outcomes broke the
 per-group null fits, and weights that depend on ancestry inflated
-low-frequency tails. HRATT now addresses them as follows. The figures quoted
-below come from prototypes; the prespecified validation of these changes
-(\code{benchmarks/hratt\_followups\_plan.md}) is pending.
+low-frequency tails. HRATT now addresses them as follows.
+Section~\ref{sec:followup-results} reports the prespecified validation of
+these changes; the figures quoted here come from prototypes.
 
 \paragraph{In-sample absorption.}
 A LOCO score fitted on all samples carries part of each sample's own
@@ -868,8 +876,10 @@ HRATT now follows REGENIE's level~0 \citep{mbatchou2021}:
  $g$'s variants. With strong structure, each group's model is refitted
  without its variants instead ($k$ fits per group).
 \end{itemize}
-No sample's phenotype then enters its own score. Each group's score
-enters with its least-squares coefficient, or logistic coefficient for
+Each fold's scores are then trained without that fold's outcomes. The
+variance components and the prior are still chosen on all samples, so the
+procedure as a whole does not exclude a sample's outcome from its own
+score. Each group's score enters with its least-squares coefficient, or logistic coefficient for
 binary traits, kept in $[0,1]$. This out-of-fold calibration slope
 shrinks an over-dispersed score but never undoes the prior's shrinkage.
 Binary scores with a coefficient above one become fixed offsets. Scores
@@ -894,7 +904,7 @@ refitted. HRATT refits each group when the structure test finds strong
 structure. Below the test's threshold of 0.1 in average inflation, dropping
 one of $G$ chromosomes' shares leaves roughly $1/G^2$ of it.
 
-\paragraph{Covariate-specific genotype variances.}
+\paragraph{Covariate-specific genotype distributions.}
 Equation~\eqref{eq:retro-variance} treats the genotypes as exchangeable
 given the covariates. When allele frequencies vary with ancestry and the
 weights or case fractions do too, that fails. Following SPAmix
@@ -912,14 +922,26 @@ With $\pi_{ij}=p_{ij}(1-p_{ij})$,
 which is Equation~\eqref{eq:retro-variance} when the covariates do not
 predict the genotype. Ancestry principal components must therefore be
 among the covariates. HRATT warns when the structure test still finds
-strong structure after the covariates. The saddlepoint keeps the pooled
-genotype distribution's shape, scaled to this variance.
+strong structure after the covariates.
+
+The saddlepoint uses the same model. Each called genotype is an
+independent Binomial$(2,p_{ij})$ draw given the covariates and the observed
+missing calls, which assumes Hardy--Weinberg equilibrium given the
+covariates. An intercept-only design keeps the empirical genotype
+distribution. In 2.0.0.dev6 this replaced the pooled distribution with only
+its variance corrected, which still over-rejected 4.7-fold at $10^{-4}$
+against an exact convolution of ancestry-specific binomials.
 
 \paragraph{Two-sided tails.}
 \code{spa\_two\_sided="doubled"} doubles the saddlepoint tail beyond the
 observed score, LDAK's default, putting $\alpha/2$ in each tail of a skewed
 null. The default still adds both tails at $\pm|u|$, as SPAtest, SAIGE and
 REGENIE do \citep{dey2017,zhou2018,mbatchou2021}.
+
+Since 2.0.0.dev6, weighted and binary standard errors describe the
+null-score linearisation and do not depend on the tail rule. Binary effects
+remain one-step approximations; exports label them \code{beta\_one\_step}
+and \code{se\_null\_score}.
 
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
@@ -2074,8 +2096,8 @@ by mean QTL $\chi^2$ ratios of 1.39 to 2.63. With structure and weights that
 depend on ancestry (S4), exchangeability failed: $\lgc$ was 0.93, and
 variants with minor allele frequency 1--5\% were rejected 5.75 times too often
 at $10^{-3}$ and 17 times at $10^{-4}$, where the sandwich was calibrated.
-Ancestry covariates should remove the between-population term; that is
-untested.
+Ancestry covariates alone did not fix this; with covariate-specific
+genotype distributions they did (Section~\ref{sec:followup-results}).
 
 Binary tests had lopsided tails at 1\% and 5\% prevalence
 (Table~\ref{tab:weights-binary}). The saddlepoint p-value adds both tails at
@@ -2086,14 +2108,15 @@ Without the saddlepoint the heavier tail reached 46 times nominal at
 $10^{-4}$, and the model-based logistic variance gave $\lgc=0.36$ at 1\%
 prevalence. Official LDAK-KVIK was conservative at 1\% prevalence (two-sided
 0.62 and 0.57). Two of 30 replicates at 1\% prevalence stopped with a
-separation error from the per-group null fit with its in-sample offset.
+separation error from the per-group null fit with its in-sample offset;
+with cross-fitted scores none did (Section~\ref{sec:followup-results}).
 
 HRATT's effect estimates were attenuated in every cell: by 32\% without
 selection and by 33--46\% in S1--S3, against $-4$\% to $+0.3$\% for LDAK-KVIK
 and weighted least squares, with correlation 0.997 to the population slopes
 throughout. The in-sample LOCO prediction absorbs part of each QTL's effect.
-p-values are unaffected, but HRATT's effects and standard errors, unweighted
-ones included, need an effect-size calibration such as LDAK-KVIK's.
+p-values are unaffected. Cross-fitted LOCO scores removed the attenuation
+(Section~\ref{sec:followup-results}).
 Excluding the saddlepoint, the weighted paths took 1.32 and 1.28 times as
 long as HRATT-HE, against prespecified limits of 1.3 and 1.6; the saddlepoint
 took a median 1.2--1.7 seconds per fit, about as long as an HRATT-HE fit.
@@ -2137,6 +2160,100 @@ took a median 1.2--1.7 seconds per fit, about as long as an HRATT-HE fit.
 \end{table}
 
 \FloatBarrier
+\subsection{Cross-fitted scores and covariate-specific genotype distributions: prespecified validation}
+\label{sec:followup-results}
+
+The follow-ups of Section~\ref{sec:crossfit} were validated on the samples
+of Section~\ref{sec:weights-binary-results}, regenerated from their seeds
+(archive \code{20261006-}\allowbreak\code{hratt-followups}, protocol frozen
+before the main run). The new cells were mixed traits at $F_{ST}=0.05$ and
+variants of the structured cells with 10 principal components among the
+covariates. All 660 cases completed, and five of seven criteria passed.
+
+\paragraph{Effects.}
+Cross-fitting removed the attenuation (Table~\ref{tab:followup-effects}):
+\begin{itemize}
+ \item Without structure or selection on the outcome (S0--S2), HRATT's
+  effects were within 1\% of the population slopes. Unweighted, it was 8\%
+  low under selection on the outcome, as the design expects.
+ \item At $F_{ST}=0.05$ without principal components they were 2.0\% below the
+  within-population slopes.
+ \item In-sample scores gave $-28$ to $-36$\%.
+ \item Under selection on the outcome (S3), weighted HRATT was 5.4\% low
+  (Monte Carlo SE 2.1), failing that criterion. Weighted least squares was
+  4.0\% low on the same samples, so inverse-probability weighting, not
+  HRATT, accounts for most of the gap.
+ \item Binary one-step effects were within 3\% of the population marginal log
+  odds ratios, with Monte Carlo SEs of 4--9\%; in-sample scores gave
+  $-16$\% and $-18$\%.
+\end{itemize}
+
+Power did not change: mean QTL $\chi^2$ was 0.999--1.009 times that of
+in-sample scores. Weighted HRATT exceeded weighted least squares by 1.20 to
+1.29 times, and binary HRATT exceeded logistic regression by 1.04 times.
+
+\paragraph{Calibration.}
+Without ancestry-dependent weights every test stayed calibrated
+(Table~\ref{tab:followup-calibration}):
+\begin{itemize}
+ \item Quantitative $\lgc$ was 0.993--1.008, with 0.92--1.04 times the nominal
+  rate at $10^{-3}$.
+ \item Binary two-sided rates were 0.94--1.08 at $10^{-3}$ and 0.84--1.14 at
+  $10^{-4}$. At 1\% prevalence no replicate failed (2 of 30 on 5 October).
+ \item The doubled tails put about half of $\alpha/2$ in the upper tail at 1\%
+  prevalence (0.51 at $10^{-3}$), at the edge of the criterion's range.
+ \item On chromosome 10 of the mixed traits $\lgc$ was 0.971--1.024. This
+  includes the refitted scores with $\lambda$ at $F_{ST}=0.05$.
+\end{itemize}
+
+With weights that depend on ancestry (S4) and principal components among
+the covariates, weighted tests rejected low-frequency variants at 0.85
+(quantitative) and 0.96 (binary) times the nominal rate at $10^{-3}$. The
+pooled-frequency model gave 6.54 and 3.96 with the same covariates, and
+the new model without principal components 5.86 and 3.16.
+
+\paragraph{Time.}
+Cross-fitting took 1.11 (quantitative) and 1.08 (binary) times as long as
+in-sample scores on the same cases. Weighted HRATT took 1.55 times as long as
+HRATT-HE, excluding the saddlepoint, failing the limit of 1.3; it was 1.32
+on 5 October, before the covariate-specific frequencies.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Effects at the QTL of mixed traits: relative bias (\%) of the
+ per-allele estimates against the population slopes (within-population at
+ $F_{ST}=0.05$; marginal log odds ratios for binary traits), mean over 10
+ replicates with its Monte Carlo SE, and mean QTL $\chi^2$.}
+ \label{tab:followup-effects}
+ \begin{tabular}{@{}llrr@{}}
+ \toprule
+ Cell & Method & Bias (SE) & QTL $\chi^2$ \\
+ \midrule
+ \tabinput{tables/followup_effects.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Calibration of the follow-up tests: rejection rates of null
+ variants over nominal, pooled over 30 replicates, with $\lgc$ on minor
+ allele frequency $\ge5\%$. ``Doubled tails'' doubles the saddlepoint tail
+ beyond the score; ``pooled frequencies'' gives every sample the pooled
+ allele frequency.}
+ \label{tab:followup-calibration}
+ \begin{tabular}{@{}llrrrr@{}}
+ \toprule
+ & & & \multicolumn{2}{c}{$\alpha=10^{-3}$, MAF} & $10^{-4}$ \\
+ Cell & Method & $\lgc$ & 1--5\% & $\ge5\%$ & all \\
+ \midrule
+ \tabinput{tables/followup_calibration.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+\FloatBarrier
+
 \section{Discussion}
 
 \subsection{The central distinction is between geometry and inference}
@@ -2208,7 +2325,11 @@ simulation of unrelated samples with independent markers
 (Section~\ref{sec:weights-binary-results}): weighted quantitative tests were
 calibrated unless the weights depended on ancestry, binary tails were
 lopsided at low prevalence, and HRATT's effect estimates were attenuated.
-Rarer outcomes, relatedness and real participation weights are untested,
+The follow-ups (Section~\ref{sec:followup-results}) removed the
+attenuation and, with principal components among the covariates, the
+ancestry inflation. Their saddlepoint assumes Hardy--Weinberg equilibrium
+given the covariates, and weighted fits take 1.55 times as long as
+HRATT-HE. Rarer outcomes, relatedness and real participation weights are untested,
 and HRATT's retrospective saddlepoint differs from SAIGE's model-based one
 \citep{zhou2018}.
 
@@ -2458,11 +2579,11 @@ bound nor unchanged decisions on two panels settles this question.
 
 A useful extension would add a carefully specified continuous-dosage
 interface with imputation-quality handling and independent decoding
-fixtures. HRATT needs an effect-size calibration for its LOCO residuals
-(Section~\ref{sec:weights-binary-results}), an ancestry-aware genotype
-variance for weights that depend on ancestry, and external validation of its
-case-control and weighted tests: prevalence below 1\%, related samples, real
-participation weights, and comparison with SAIGE and REGENIE. The other
+fixtures. HRATT's case-control and weighted tests need external
+validation: prevalence below 1\%, related samples, real participation
+weights, and comparison with SAIGE and REGENIE. Their conditional
+Hardy--Weinberg assumption should be checked against empirical
+covariate-specific genotype distributions. The other
 methods remain quantitative-only. Prospective prediction, if developed, should use
 held-out families or populations and report transportability separately
 from association power.
@@ -2480,7 +2601,7 @@ and two-bit routes, without hiding estimator changes or numerical failures.
 
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. This report describes package
-version 2.0.0.dev5; the known-covariance experiment uses baseline commit
+version 2.0.0.dev6; the known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-manuscript-geometry} beneath
@@ -2492,11 +2613,13 @@ for provenance; its results are not incorporated into the revised displays.
 The matched phensim study is archived as \code{20261003-phensim-kvik},
 using mixmogam baseline \code{db232216} and phensim baseline
 \code{4939124e} with the explicitly snapshotted simulator extensions.
-The generating and analysis driver is \code{benchmarks/kvik\_simulation.py};
+The generating and analysis driver is
+\code{benchmarks/}\allowbreak\code{ldak\_kvik\_comparison.py}, archived under
+its earlier name \code{kvik\_simulation.py};
 the frozen plan, full package sources, complete inputs, raw p-values,
 commands, logs, diagnostics and resource measurements accompany its results.
-The separate \code{report/make\_kvik\_figures.py} renders this evidence
-without rerunning any association test.
+The separate \code{report/}\allowbreak\code{make\_ldak\_kvik\_figures.py}
+renders this evidence without rerunning any association test.
 
 The workload extensions are listed in the report evidence map. Large BED
 files remain local, with hashes, phased references and generating sources
@@ -2559,6 +2682,15 @@ The steps between the versions are in
 \code{20261004-}\allowbreak\code{gram-cache} and
 \code{20261004-}\allowbreak\code{packed-calls}. The Lanczos rerun is
 \code{20261005-}\allowbreak\code{slq-defaults-}\allowbreak\code{e4089d8}.
+
+The case-control and weighted validations are archived as
+\code{20261005-}\allowbreak\code{hratt-weights-binary} and
+\code{20261006-}\allowbreak\code{hratt-followups}, from
+\code{benchmarks/}\allowbreak\code{hratt\_weights\_binary.py} and
+\code{benchmarks/}\allowbreak\code{hratt\_followups.py};
+\code{report/}\allowbreak\code{make\_weights\_}\allowbreak\code{binary\_tables.py}
+and \code{report/}\allowbreak\code{make\_followup\_}\allowbreak\code{tables.py}
+render their tables.
 
 \code{report/README.md} gives the reproduction commands, exact archive
 identities, and evidence map. The figure generator reads recorded results and does not silently

@@ -1,0 +1,152 @@
+{
+  "hratt-bin": {
+    "seconds": 8.485538875043858,
+    "spa_seconds": 1.773408874985762,
+    "extra": {
+      "statistic": "chi2",
+      "n": 4894,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -0.75,
+      "h2": 0.10121400592291083,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.0035111631935387244,
+        "z": -1.165342010132508,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.1,
+        0.1
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 3,
+      "loco_converged": true,
+      "trait": "binary",
+      "heritability_method": "reml",
+      "lambda": 1.0,
+      "n_cases": 433,
+      "n_controls": 4461,
+      "prevalence": 0.08847568451164692,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.15652885563610125,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 953,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.9007610649721589,
+        1.0,
+        0.6878179299361651,
+        0.7732783343625871,
+        1.0,
+        1.0,
+        0.9002959201691422,
+        0.9157701671720083,
+        0.6517310068467382,
+        1.0
+      ],
+      "offsets_dropped": 0
+    }
+  },
+  "hratt-bin-w": {
+    "seconds": 5.6700379170360975,
+    "spa_seconds": 1.9593036660226062,
+    "extra": {
+      "statistic": "chi2",
+      "n": 4894,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -1.0,
+      "h2": 0.16416719838590746,
+      "alpha_method": "he",
+      "structure": {
+        "excess": 0.004660287409518293,
+        "z": 1.6402965805239331,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.5,
+        0.1
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 3,
+      "loco_converged": true,
+      "heritability_method": "he",
+      "he_variance": {
+        "raw_vg": 0.16358174971218697,
+        "raw_ve": 0.8328520770237468,
+        "vg": 0.16358174971218697,
+        "ve": 0.8328520770237468,
+        "h2": 0.16416719838590746,
+        "status": "interior",
+        "boundary": "none",
+        "denominator": 3987.8325881687724,
+        "trace_k2": 6162.364924655127,
+        "trace_k_over_df": 0.9965735386000446,
+        "projected_genetic_variance_fraction": 0.16369676730651703,
+        "probe_se": 19.60220021541503,
+        "curvature_se_ratio": 203.43800922065725,
+        "n_probes": 32
+      },
+      "vb_residual_variance": 0.8358328016140926,
+      "vb_noise_floor_applied": false,
+      "trait": "binary",
+      "kish_n": 2179.579373264102,
+      "design_effect": 2.245387371541706,
+      "lambda": 1.0,
+      "n_cases": 433,
+      "n_controls": 4461,
+      "prevalence": 0.05275010317836305,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.3022736829829385,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 937,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.8783097334747064,
+        0.888304961868606,
+        0.5476722229527207,
+        0.7922979638108049,
+        0.6078690224630874,
+        0.68919602933328,
+        0.764159401308358,
+        0.64560938594063,
+        0.7643923536958191,
+        0.8919477566105297
+      ],
+      "offsets_dropped": 0
+    }
+  },
+  "logistic-w": {
+    "seconds": 2.77444608398946,
+    "spa_seconds": 1.9651187499985099,
+    "extra": {
+      "statistic": "chi2",
+      "n": 4894,
+      "n_loco_groups": 10,
+      "method": "logistic-w",
+      "n_cases": 433,
+      "n_controls": 4461,
+      "prevalence": 0.05275010317836305,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.0,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 952,
+      "effect_method": "one-step-logistic"
+    }
+  }
+}

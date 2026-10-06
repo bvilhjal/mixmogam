@@ -1,0 +1,152 @@
+{
+  "logistic": {
+    "seconds": 2.8257363319862634,
+    "spa_seconds": 1.9170258329831995,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "logistic",
+      "n_cases": 50,
+      "n_controls": 4950,
+      "prevalence": 0.01,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.0,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 839,
+      "effect_method": "one-step-logistic"
+    }
+  },
+  "hratt-bin": {
+    "seconds": 8.391160667000804,
+    "spa_seconds": 1.811872374964878,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -0.5,
+      "h2": 0.10945285580815205,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.002492679767089556,
+        "z": -0.45132274426211133,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.1,
+        0.3
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 3,
+      "loco_converged": true,
+      "trait": "binary",
+      "heritability_method": "reml",
+      "lambda": 1.0,
+      "n_cases": 50,
+      "n_controls": 4950,
+      "prevalence": 0.01,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.4689620717734631,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 838,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.2136818120713507,
+        0.03453681465714769,
+        0.00964436863654656,
+        0.09542244228898725,
+        0.22771035814921306,
+        0.2764118183987342,
+        0.41524985534434955,
+        0.0,
+        0.3066550932458156,
+        0.4177652437386329
+      ],
+      "offsets_dropped": 1
+    }
+  },
+  "hratt-bin-w": {
+    "seconds": 4.759931083011907,
+    "spa_seconds": 1.7998282089829445,
+    "extra": {
+      "statistic": "chi2",
+      "n": 5000,
+      "n_loco_groups": 10,
+      "method": "hratt",
+      "denominator": "constant",
+      "alpha": -0.5,
+      "h2": 0.06401254940335217,
+      "alpha_method": "he",
+      "structure": {
+        "excess": -0.002492679767089556,
+        "z": -0.45132274426211133,
+        "strong": false,
+        "n_snps": 512
+      },
+      "cv_best": [
+        0.1,
+        0.3
+      ],
+      "cv_converged": true,
+      "loco_folds": 5,
+      "loco_refit": false,
+      "loco_iterations": 3,
+      "loco_converged": true,
+      "heritability_method": "he",
+      "he_variance": {
+        "raw_vg": 0.06401330317279329,
+        "raw_ve": 0.9359984721657636,
+        "vg": 0.06401330317279329,
+        "ve": 0.9359984721657636,
+        "h2": 0.06401254940335217,
+        "status": "interior",
+        "boundary": "none",
+        "denominator": 7231.262451779089,
+        "trace_k2": 12227.423842423541,
+        "trace_k_over_df": 0.9998160485715775,
+        "projected_genetic_variance_fraction": 0.0640015278342366,
+        "probe_se": 54.89214357419922,
+        "curvature_se_ratio": 131.7358365137334,
+        "n_probes": 32
+      },
+      "vb_residual_variance": 0.9359874505966478,
+      "vb_noise_floor_applied": false,
+      "trait": "binary",
+      "kish_n": 5000.0,
+      "design_effect": 1.0,
+      "lambda": 1.0,
+      "n_cases": 50,
+      "n_controls": 4950,
+      "prevalence": 0.01,
+      "null_converged": true,
+      "mu0_clipped": 0,
+      "offset_sd": 0.28592569776611687,
+      "spa_threshold": 2.0,
+      "spa_two_sided": "distance",
+      "n_spa": 837,
+      "effect_method": "one-step-logistic",
+      "offset_slope": [
+        0.442182239948497,
+        0.1311609278928653,
+        0.13920111193678417,
+        0.23205518648029722,
+        0.4825052884178984,
+        0.4920266274935241,
+        0.7630735917106325,
+        0.0,
+        0.5578279482090085,
+        0.7599188297670008
+      ],
+      "offsets_dropped": 1
+    }
+  }
+}
