@@ -9,7 +9,8 @@ SciPy; Numba accelerates optional kernels.
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads through 50,000 samples and 20,000 variants, and historical evidence,
-with a testable research agenda. Its LDAK-KVIK benchmarks predate 2.0.0.dev6.
+with a testable research agenda. Its LDAK-KVIK benchmarks were rerun with
+2.0.0.dev6, apart from the 20,000-variant workload.
 The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 

@@ -37,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - likewise their plans, tests and `report/make_ldak_kvik_figures.py`.
 
   Archives keep the names they ran with.
+- The report's matched LDAK-KVIK comparisons, HAPNEST workloads and
+  HE-versus-REML fits are reruns with 2.0.0.dev6 (`20261006-*-dev6`), each
+  timed fit gated on the host load. Exact LOCO and BOLT-inf results are
+  unchanged; HRATT's cross-fitted scores changed 0.3-1.8% of its decisions
+  at 1% and its rejection rates by at most 0.2 percentage points. On one
+  host and day, 2.0.0.dev6 took 1.07 (exact LOCO) and 1.03 (HRATT) times as
+  long as commit e4089d8 at n = 800
+  ([`20261006-same-day-e4089d8-dev6`](benchmarks/results/20261006-same-day-e4089d8-dev6/README.md)).
+  The 20,000-variant workload still shows the e4089d8 rerun.
 
 ## [2.0.0.dev6] - 2026-10-06
 

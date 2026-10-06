@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{6 October 2026\\\small Research report for 2.0.0.dev6;
-benchmark reruns use commit e4089d8}
+\date{6 October 2026\\\small Research report for 2.0.0.dev6; benchmark reruns
+use 2.0.0.dev6, at 20,000 markers commit e4089d8}
 
 \begin{document}
 \maketitle
@@ -71,8 +71,8 @@ verifies every exported genotype. At $n=800$ with LD, environmental
 confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
 under the genetic null; adjustment for two genotype PCs reduces this to
 0.97\%. Corresponding rates for mixmogam's Heritability-weighted Residual
-Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.66\% and
-0.94\%.
+Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.64\% and
+0.92\%.
 These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
@@ -206,10 +206,10 @@ implementation & New input handling and fitting changes need fresh
 end-to-end runs. \\
 Matched phensim benchmark & Independent BED decoding and reference-reader
 checks; null calibration, QTL detection and process resource measurements;
-mixmogam methods rerun with commit e4089d8 on the same inputs &
+mixmogam methods rerun with 2.0.0.dev6 on the same inputs &
 Six independent panels per cell; small quantitative-trait simulations,
 controlled LD and three discrete populations; official timings from
-two days earlier. \\
+three days earlier. \\
 Computational extension, 2.0.0.dev3 and e4089d8 reruns & Projected-moment validation;
 paired implementation, thread and storage comparisons; at 50,000 samples and
 20,000 markers, 24 mixmogam fits rerun with commit e4089d8 and 12 official
@@ -1284,26 +1284,29 @@ and outputs. Historical archives retain their original source snapshots;
 we do not attach the current version number to computations performed
 by an earlier implementation.
 
-The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
-(Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
-\ref{sec:he-results} and~\ref{sec:20k-results}) are reruns with commit
-e4089d8 (Section~\ref{sec:streaming-methods}), whose version string still
-reads 2.0.0.dev5. Each repeated the mixmogam methods on the
+The matched phensim, HAPNEST and HE-versus-REML results
+(Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources}
+and~\ref{sec:he-results}) are reruns with 2.0.0.dev6; the 20,000-marker
+results (Section~\ref{sec:20k-results}) are still the reruns with commit
+e4089d8 of 5 October. Each repeated the mixmogam methods on the
 archived inputs, after checking the genotype files against their export
 hashes. The official LDAK-KVIK outputs, logs and process measurements of
 the original runs were reused unchanged. Input identity makes the official
 results reusable; it does not make the timings simultaneous. The reruns
-ran one after another on 5 October 2026, two days after the official runs.
+ran one after another on 6 October 2026, three days after the official
+runs, each timed fit waiting for a one-minute load average below 5.
 Host conditions matter: the original 20,000-marker runs' frozen source,
 labelled 2.0.0.dev3, equals 2.0.0.dev4 (commit 0fa3da8) apart from its version
 string, and that identical code took 33.22 seconds on 3 October and 24.1
-seconds on 4 October for the same fit.
-Exact LOCO, unchanged since 2.0.0.dev5, took 38.1 seconds for one
-4,000-sample case in the dev5 rerun of 4 October, when an unrelated job
-loaded the host, and 26.0 seconds on 5 October. Cross-program time ratios
-therefore include day-to-day and load differences, and
-Section~\ref{sec:20k-results} compares dev5 and e4089d8 on one day. The
-dev5 reruns and the original archives remain as provenance.
+seconds on 4 October for the same fit. On 6 October exact LOCO and
+BOLT-inf, whose results did not change, took 1.07--1.16 times as long as in
+the reruns with commit e4089d8 of 5 October. On one host and day, alternating
+the versions on one 800-sample case, 2.0.0.dev6 took 1.07 (exact LOCO) and
+1.03 (HRATT) times as long as e4089d8 (archive
+\code{20261006-}\allowbreak\code{same-day-}\allowbreak\code{e4089d8-dev6}).
+Cross-program time ratios therefore include day-to-day and load differences,
+and Section~\ref{sec:20k-results} compares dev5 and e4089d8 on one day.
+The earlier reruns and the original archives remain as provenance.
 
 \section{Results}
 
@@ -1385,21 +1388,24 @@ sampling variation of the reported summaries.
 \label{sec:kvik-results}
 
 All 384 method runs returned valid p-values for every retained variant:
-288 mixmogam runs repeated with commit e4089d8 and the 96 original official
+288 mixmogam runs repeated with 2.0.0.dev6 and the 96 original official
 runs. Execution is distinct from convergence: mixmogam HRATT reported
 incomplete cross-validation in six unadjusted confounded mixed-trait runs,
 one of which also had incomplete LOCO fits (two in the original runs).
 These remain in the summaries. In the original archive, an independently
 regenerated structured/PC-adjusted case reproduced the serialized inputs
 and all four methods' p-values exactly using frozen source snapshots.
-Exact LOCO reproduces every original rejection rate; BOLT-inf and HRATT
-change by Monte Carlo amounts, from the new Lanczos probes and calibration
-draws of 2.0.0.dev5. Streaming changed no rejection rate or detection of
-the dev5 reruns and moved $\log_{10}p$ by at most $5\times10^{-6}$.
+Exact LOCO and BOLT-inf reproduce every rejection rate of the earlier
+reruns with commit e4089d8: BOLT-inf's p-values are identical, and exact
+LOCO's moved by at most $1.3\times10^{-6}$ in $\log_{10}p$, from the
+refined REML search of 2.0.0.dev6. HRATT's cross-fitted scores
+(Section~\ref{sec:crossfit}) changed 0.26\% of its decisions at 1\%, its
+rejection rates by at most 0.10 percentage points and its detections by at
+most three of a cell's 60 causal markers.
 
 Figure~\ref{fig:kvik-phensim} separates genetic-null rejection, mixed-trait
 rejection on chromosome 6, and causal-marker detection. In unstructured
-global-null cells, mean rejection at 1\% is approximately 1.01--1.06\%
+global-null cells, mean rejection at 1\% is approximately 1.00--1.06\%
 across methods and LD settings. Under structure and the mixed trait,
 LDAK-KVIK's null-chromosome rejection is 1.87\% without local LD
 and 1.82\% with LD. This assesses the complete procedure, not an isolated
@@ -1408,18 +1414,17 @@ denominator approximation.
 Omitting the environmental mean shift produces the largest disagreement.
 With LD, LDAK-KVIK gives $\lgc=3.455$ and 15.83\% genetic-null
 rejection at 1\%; exact LOCO and mixmogam BOLT-inf give 1.34\% and 1.25\%,
-and mixmogam HRATT gives 0.66\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
+and mixmogam HRATT gives 0.64\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
 rejection is 21.5--25.2\% in four panels and 1.52--1.82\% in two.
 Some inflated runs reach LDAK-KVIK's lower heritability
 boundary after revision of the initial estimate. This motivates a
 diagnostic experiment; it does not identify the cause. The mixmogam deflation
 also fails nominal calibration.
 
-Adding the same two PCs reduces LD global-null rejection to 0.94\%
+Adding the same two PCs reduces LD global-null rejection to 0.92\%
 (mixmogam HRATT) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
-is 1.17\% and 1.05\%. Both detect 50.00\% of causal markers, with the same
-count in each of the six panels; ten causal markers per panel cannot
-resolve a power difference. Detection gains in inflated, unadjusted cells must not
+is 1.17\% and 1.05\%. They detect 29 and 30 of the 60 causal markers; ten
+causal markers per panel cannot resolve a power difference. Detection gains in inflated, unadjusted cells must not
 be interpreted as calibrated power. Explicit mean adjustment materially
 changes the comparison in these panels; neither a genome-wide median
 nor one favourable cell establishes general equivalence.
@@ -1428,7 +1433,7 @@ nor one favourable cell establishes general equivalence.
  \centering
  \includegraphics[width=\textwidth]{figures/kvik_phensim.pdf}
  \caption{Matched phensim comparison at 800 samples and 6,000 markers;
- mixmogam methods are reruns with commit e4089d8 on the original inputs.
+ mixmogam methods are reruns with 2.0.0.dev6 on the original inputs.
  Bars show one Monte Carlo standard error across six independent panels.
  Dashed lines indicate nominal 1\% rejection. The middle row uses only
  the chromosome without generating effects; the last row measures ten
@@ -1616,24 +1621,25 @@ are separate requirements.
 New timings use an Apple M2 Pro with 16 GB RAM, Python 3.14.6,
 NumPy 2.4.6 and Numba 0.66.0, with one thread per method. mixmogam HRATT
 uses its compiled kernels. Across the 96 primary inputs its median time
-is 1.89 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
-199.1 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
-2.0.0.dev2 runs took 2.57 seconds and 319.5 MiB. The approximately
-2.6-fold ratio of medians is workload-specific; startup and loading matter
+is 2.27 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
+260.8 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
+2.0.0.dev2 runs took 2.57 seconds and 319.5 MiB, and the reruns with commit
+e4089d8 1.89 seconds and 199.1 MiB on a faster day. The approximately
+3-fold ratio of medians is workload-specific; startup and loading matter
 at this size, and the two programs were timed on different days. The native Mac LDAK build lacks MKL, so this is not
 a comparison of each program's fastest available hardware build.
 
 Figure~\ref{fig:kvik-scaling} and Table~\ref{tab:kvik-scaling} extend the
 controlled LD workloads to 4,000 samples and 24,000 markers. Dense exact
 scans become substantially more expensive, although at 4,000 samples they
-now take about 26 seconds instead of 91. LDAK-KVIK retains lower observed
+now take about 31 seconds instead of 91. LDAK-KVIK retains lower observed
 time and RSS than mixmogam HRATT. Because n and m both increase, the slopes
 do not identify a sample-size complexity exponent.
 
 \begin{table}[htbp]
  \centering\small
  \caption{Primary end-to-end resources at n=800 and m=6,000. Each row
- covers the same 96 inputs. mixmogam rows are e4089d8 reruns; LDAK-KVIK
+ covers the same 96 inputs. mixmogam rows are 2.0.0.dev6 reruns; LDAK-KVIK
  rows are the original measurements. LDAK-KVIK time sums both stages; its
  RSS is the larger stage peak. Common data preparation is excluded.}
  \label{tab:kvik-resources}
@@ -1653,7 +1659,7 @@ do not identify a sample-size complexity exponent.
  workloads. Points are medians; bars span the observed range across six
  replicates at n=800 and two at n=2,000 or 4,000. Cost axes are logarithmic.
  Sample and marker counts increase together. mixmogam points are
- e4089d8 reruns; LDAK-KVIK points are the original measurements.
+ 2.0.0.dev6 reruns; LDAK-KVIK points are the original measurements.
  These are measurements, not extrapolations or fitted complexity laws.}
  \label{fig:kvik-scaling}
 \end{figure}
@@ -1698,11 +1704,13 @@ genotype and interpreter; they are not measurements of an allocation alone.
 
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
 association comparison to n=50,000, with mixmogam HRATT at its default REML.
-At 50,000 samples the e4089d8 reruns took 38.19 and 40.20 seconds,
-against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs and 24.45
-and 35.42 seconds for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16
-GiB in the original runs to 1.94 and 1.97 GiB. Fitted heritabilities, inflation and
-rejection change only slightly. These are single-panel timing and
+At 50,000 samples the 2.0.0.dev6 reruns took 45.27 and 48.38 seconds,
+against 38.19 and 40.20 with commit e4089d8 on a faster day, 137.59 and
+318.02 seconds in the original 2.0.0.dev2 runs and 24.45 and 35.42 seconds
+for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16 GiB in the original
+runs to 1.86 and 1.83 GiB. Fitted heritabilities are unchanged; with
+cross-fitted scores, inflation moved by at most 0.07 and rejection by at
+most 0.2 percentage points. These are single-panel timing and
 feasibility observations (Table~\ref{tab:evidence}). All four rerun mixmogam HRATT fits at these larger sizes report completed
 cross-validation and LOCO convergence. Both programs return valid p-values
 for all markers.
@@ -1726,7 +1734,7 @@ for all markers.
 \begin{table}[htbp]
  \centering\small
  \caption{HAPNEST-model workloads, m=12,000, one realization per cell.
- mixmogam HRATT (e4089d8 rerun) uses REML; LDAK-KVIK rows are the
+ mixmogam HRATT (2.0.0.dev6 rerun) uses REML; LDAK-KVIK rows are the
  original measurements on the same inputs.
  Time is end-to-end seconds; RSS is peak MiB. Inflation and 1\%
  rejection use the chromosome with no generating genetic effects.
@@ -1758,8 +1766,8 @@ Removing redundant products and allocations helped, but repeated kinship
 products for variance fitting remained a major cost.
 
 In a separate one-thread comparison on the two 50,000-sample,
-12,000-marker panels, rerun with commit e4089d8, choosing HE reduced median
-complete-fit time from 38.17 to 17.56 seconds and from 39.70 to 18.77
+12,000-marker panels, rerun with 2.0.0.dev6, choosing HE reduced median
+complete-fit time from 43.29 to 21.21 seconds and from 48.79 to 24.83
 seconds, respectively. These are within-experiment comparisons; the REML
 times should not be substituted for the baseline of the preceding
 experiment. The original runs on 3 October, with older code, took 76.13
@@ -1767,8 +1775,8 @@ and 26.28 seconds, and 73.57 and 27.20; Section~\ref{sec:dev5-results}
 separates the code effect from the host. HE changed the fitted
 covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087.
 Its time saving is therefore an estimator tradeoff, not a numerically
-equivalent acceleration of REML. REML also needs more memory: 1.94
-against 1.02 GiB peak RSS.
+equivalent acceleration of REML. REML also needs more memory: 1.68 and
+1.54 against 1.08 and 1.02 GiB peak RSS.
 
 The independent known-covariance study supports the narrower claim that
 the projected moment equations target their stated coefficients.
@@ -2660,15 +2668,17 @@ Table~\ref{tab:dev5-paired} from the paired archive and
 Table~\ref{tab:dev5-slq} from the Lanczos rerun, and records hashes in
 \code{dev5\_table\_}\allowbreak\code{manifest.json}.
 
-The benchmark reruns with commit e4089d8 are archived as
-\code{20261005-}\allowbreak\code{phensim-kvik-}\allowbreak\code{e4089d8} (with
-\code{-n2000} and \code{-n4000}), \code{20261005-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{e4089d8-n10000}
-and \code{-n50000}, \code{20261005-}\allowbreak\code{kvik-he-}\allowbreak\code{e4089d8} and
-\code{20261005-}\allowbreak\code{kvik-20k-}\allowbreak\code{e4089d8}, beside the 2.0.0.dev5 reruns
+The benchmark reruns with 2.0.0.dev6 are archived as
+\code{20261006-}\allowbreak\code{phensim-kvik-}\allowbreak\code{dev6} (with
+\code{-n2000} and \code{-n4000}), \code{20261006-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{dev6-n10000}
+and \code{-n50000} and \code{20261006-}\allowbreak\code{kvik-he-}\allowbreak\code{dev6}, beside the
+earlier reruns with commit e4089d8 (\code{20261005-}\allowbreak\code{*-e4089d8},
+including the 20,000-marker workload) and 2.0.0.dev5
 (\code{20261004-}\allowbreak\code{*-dev5}). Each records its frozen source,
 its commands and the hash of every reused file. The same-day checks are
-\code{20261004-}\allowbreak\code{same-day-dev4-dev5} and
-\code{20261005-}\allowbreak\code{same-day-dev5-e4089d8}. The figure and table
+\code{20261004-}\allowbreak\code{same-day-dev4-dev5},
+\code{20261005-}\allowbreak\code{same-day-dev5-e4089d8} and
+\code{20261006-}\allowbreak\code{same-day-}\allowbreak\code{e4089d8-dev6}. The figure and table
 generators read the reruns, take official LDAK-KVIK results from the
 original archives, and verify reused inputs and outputs by hash.
 

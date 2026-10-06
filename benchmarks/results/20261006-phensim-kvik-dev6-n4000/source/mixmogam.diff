@@ -1,0 +1,354 @@
+diff --git a/README.md b/README.md
+index 0dd142ac..a322a45a 100644
+--- a/README.md
++++ b/README.md
+@@ -9,7 +9,7 @@ SciPy; Numba accelerates optional kernels.
+ [changelog](CHANGELOG.md). The [research report](report/README.md)
+ separates correctness checks, known-covariance experiments, matched LDAK-KVIK
+ workloads through 50,000 samples and 20,000 variants, and historical evidence,
+-with a testable research agenda. Its LDAK-KVIK benchmarks predate 2.0.0.dev6.
++with a testable research agenda; its benchmarks were rerun with 2.0.0.dev6.
+ The [3 October review](docs/review-2026-10-03.md)
+ records the 2.0.0.dev1 correctness fixes.
+ 
+diff --git a/benchmarks/README.md b/benchmarks/README.md
+index ccb78294..5f4867e0 100644
+--- a/benchmarks/README.md
++++ b/benchmarks/README.md
+@@ -231,14 +231,17 @@ the local methods on an existing archive's inputs. All other files, including
+ the official LDAK-KVIK outputs, are linked unchanged, but only after the
+ genotype files match their export hashes. `hratt_thread_scaling.py` and
+ `hratt_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
+-omitted. The reruns with commit e4089d8, which the report uses, are:
+-- `20261005-phensim-kvik-e4089d8`, with `-n2000` and `-n4000`;
+-- `20261005-hapnest-kvik-e4089d8-n10000` and `-n50000`;
+-- `20261005-kvik-he-e4089d8`;
+-- `20261005-kvik-20k-e4089d8`.
+-
+-The 2.0.0.dev5 reruns (`20261004-*-dev5`) remain beside them. Same-day
+-checks separate code from host conditions:
++omitted. The reruns with 2.0.0.dev6, which the report uses, are:
++- `20261006-phensim-kvik-dev6`, with `-n2000` and `-n4000`;
++- `20261006-hapnest-kvik-dev6-n10000` and `-n50000`;
++- `20261006-kvik-he-dev6`;
++- `20261006-kvik-20k-dev6`, whose `thread-scaling-insample/` repeats the
++  thread experiment with in-sample scores (`--loco-folds 1`).
++
++Reruns of HRATT on archives from before its rename also hold the original
++run's `kvik.*` outputs, linked unchanged. The earlier reruns with commit
++e4089d8 (`20261005-*-e4089d8`) and 2.0.0.dev5 (`20261004-*-dev5`) remain
++beside them. Same-day checks separate code from host conditions:
+ [`20261004-same-day-dev4-dev5`](results/20261004-same-day-dev4-dev5/README.md) and
+ [`20261005-same-day-dev5-e4089d8`](results/20261005-same-day-dev5-e4089d8/README.md).
+ 
+diff --git a/report/README.md b/report/README.md
+index 850ada9a..017dda94 100644
+--- a/report/README.md
++++ b/report/README.md
+@@ -1,9 +1,8 @@
+ # Research report
+ 
+ This revision describes [2.0.0.dev6](../CHANGELOG.md). Its LDAK-KVIK
+-comparisons, HE-versus-REML fits and 20,000-variant workloads are reruns with
+-commit e4089d8, before 2.0.0.dev6 cross-fitted HRATT's scores; older studies
+-keep the versions they ran with.
++comparisons, HE-versus-REML fits and 20,000-variant workloads were rerun with
++it; older studies keep the versions they ran with.
+ 
+ The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
+ behind mixmogam, its evidence, and six research priorities. The
+@@ -23,8 +22,9 @@ case-control outcomes and sampling weights, with retrospective score tests
+ and a genotype saddlepoint approximation; Section 4.11 reports their
+ prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
+ covariate-specific genotype distributions, and Section 4.12 validates them.
+-The benchmark results are reruns of the mixmogam methods with commit e4089d8
+-on the archived inputs. Official LDAK-KVIK results are reused from the
++The benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
++on the archived inputs, each timed fit waiting for a one-minute load average
++below 5. Official LDAK-KVIK results are reused from the
+ original runs of 3 October, when identical mixmogam code took 38% longer than
+ a day later, so cross-program time ratios span days; same-day checks compare
+ the mixmogam versions directly. Archived sources and measurements are
+@@ -35,13 +35,13 @@ Table 1. Evidence and provenance used in the manuscript.
+ | Evidence | Archive under `benchmarks/results/` | Interpretation |
+ |---|---|---|
+ | Known-covariance denominator experiment | `20261003-manuscript-geometry` | New analytic and simulated conditional calibration; separate calibration/audit variants |
+-| Matched phensim comparison | `20261003-phensim-kvik`; rerun `20261005-phensim-kvik-e4089d8` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
+-| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000`; reruns `20261005-phensim-kvik-e4089d8-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
+-| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261005-hapnest-kvik-e4089d8-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
+-| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261005-kvik-he-e4089d8` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
++| Matched phensim comparison | `20261003-phensim-kvik`; rerun `20261006-phensim-kvik-dev6` | 384 method runs; six independent panels per cell, verified inputs, LD and population/environmental structure |
++| Moderate workload extension | `20261003-phensim-kvik-n2000`, `-n4000`; reruns `20261006-phensim-kvik-dev6-n2000`, `-n4000` | Two timing replicates per cell; sample and marker counts increase together |
++| HAPNEST-model association extension | `20261003-hapnest-kvik-n10000`, `-n50000`; reruns `20261006-hapnest-kvik-dev6-n10000`, `-n50000` | One realization per cell, fixed 12,000 markers; feasibility and resources, not precise calibration |
++| Variance fitting and computational efficiency | `20261003-kvik-efficiency`, `20261003-kvik-he-efficiency`; rerun `20261006-kvik-he-dev6` | Paired implementation comparison and a separate HE/REML comparison; changing the estimator is distinct from optimizing it |
+ | Explicit parallelism and memory | `20261003-kvik-parallel`, `20261003-kvik-cache` | Full 12K fits and numerical audits; optional parallel paths preserve model order but can change rounding |
+-| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261005-kvik-20k-e4089d8` | Verified 50K-by-20K inputs and 36 fits; three timings per setting, two biological realizations; the rerun's int8 versus two-bit storage fits replace the cache fits |
+-| Superseded reruns and same-day checks | `20261004-*-dev5`, `20261004-same-day-dev4-dev5`, `20261005-same-day-dev5-e4089d8` | 2.0.0.dev5 reruns kept as provenance; same-day checks separate code from host conditions |
++| Exact 20K workload | `20261003-hapnest-kvik-n50000-m20000`, `20261003-kvik-20k`; rerun `20261006-kvik-20k-dev6` | Verified 50K-by-20K inputs; three timings per setting, two biological realizations; the rerun adds in-sample-score fits and int8 versus two-bit storage fits |
++| Superseded reruns and same-day checks | `20261004-*-dev5`, `20261005-*-e4089d8`, `20261004-same-day-dev4-dev5`, `20261005-same-day-dev5-e4089d8` | 2.0.0.dev5 and e4089d8 reruns kept as provenance; same-day checks separate code from host conditions |
+ | Simulator resource experiment | `20261003-hapnest-simulator` | Provenance-labelled summaries from phensim; full snapshots in that sibling repository |
+ | Initial software review | `20261003-critical-review` | Numerical and input contracts, installed-artifact checks, bounded allocation measurement |
+ | Work reduction in 2.0.0.dev5 | `20261004-efficiency-paired`, `20261004-slq-defaults` (rerun `20261005-slq-defaults-e4089d8`), `20261004-same-day-dev4-dev5` | Paired dev4/dev5 fits on five workloads, two repetitions on a loaded host; Lanczos steps and probes against dense REML on six panels |
+diff --git a/report/make_efficiency_tables.py b/report/make_efficiency_tables.py
+index 59d2cdba..20d2ef64 100644
+--- a/report/make_efficiency_tables.py
++++ b/report/make_efficiency_tables.py
+@@ -1,7 +1,8 @@
+ #!/usr/bin/env python
+ """Typeset the 20K workload evidence; never run an association fit.
+ 
+-mixmogam fits are reruns with commit e4089d8; official LDAK-KVIK fits are
++mixmogam fits are reruns with 2.0.0.dev6, with cross-fitted LOCO scores and
++again with in-sample scores (``loco_folds=1``); official LDAK-KVIK fits are
+ reused from the 2.0.0.dev3 experiment, whose inputs must be byte-identical.
+ The primary and storage (int8 against two-bit calls) experiments have
+ separate timing baselines. Read their
+@@ -16,11 +17,11 @@ from statistics import median
+ 
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261005-kvik-20k-e4089d8"
++RUN = ROOT / "benchmarks/results/20261006-kvik-20k-dev6"
+ REFERENCE = ROOT / "benchmarks/results/20261003-kvik-20k"
+ OUT = ROOT / "report"
+ LABELS = {1: "Unstructured", 2: "Structure, environment, two PCs"}
+-NAMES = {"mixmogam-he": "mixmogam HE", "ldak-kvik": "LDAK-KVIK"}
++NAMES = {"mixmogam-he": "mixmogam HE", "insample": "mixmogam HE, in-sample", "ldak-kvik": "LDAK-KVIK"}
+ 
+ 
+ def read_csv(path):
+@@ -50,7 +51,9 @@ def main():
+               REFERENCE / "thread-scaling/verification.json",
+               REFERENCE / "thread-scaling/manifest.json",
+               RUN / "storage/measurements.csv", RUN / "storage/status.json",
+-              RUN / "storage/comparisons.json"]
++              RUN / "storage/comparisons.json",
++              RUN / "thread-scaling-insample/measurements.csv",
++              RUN / "thread-scaling-insample/status.json"]
+     local = read_csv(inputs[0])
+     status = json.loads(inputs[1].read_text())
+     manifest = json.loads(inputs[2].read_text())
+@@ -60,6 +63,8 @@ def main():
+     storage_runs = read_csv(inputs[7])
+     storage_status = json.loads(inputs[8].read_text())
+     storage_pairs = json.loads(inputs[9].read_text())
++    insample = [dict(r, method="insample") for r in read_csv(inputs[10])]
++    insample_status = json.loads(inputs[11].read_text())
+     if not status["complete"] or status["failed_method_runs"] or manifest["methods"] != ["mixmogam-he"]:
+         raise ValueError("the primary rerun is incomplete or not mixmogam-only")
+     if not audit["archive_integrity_verified"] or audit["errors"]:
+@@ -68,11 +73,13 @@ def main():
+         raise ValueError("official fits can be reused only on byte-identical inputs")
+     if not storage_status["complete"] or len(storage_pairs) != 6:
+         raise ValueError("the storage experiment is incomplete")
++    if not insample_status["complete"] or insample_status["failed_method_runs"] or len(insample) != 12:
++        raise ValueError("the in-sample control is incomplete")
+     storage_exact = all(item["arrays"][key].get("exact", False)
+                         for item in storage_pairs for key in item["arrays"])
+     primary = local + official
+     expected = {(c, t, m, r) for c in LABELS for t in (1, 4)
+-                for m in NAMES for r in (1, 2, 3)}
++                for m in ("mixmogam-he", "ldak-kvik") for r in (1, 2, 3)}
+     observed = [(int(r["case_index"]), int(r["threads"]), r["method"],
+                  int(r["rep"])) for r in primary]
+     if len(observed) != 24 or set(observed) != expected:
+@@ -93,16 +100,16 @@ def main():
+         storage.append(r"\multicolumn{3}{@{}l}{\emph{" + label + r"}} \\")
+         for method, name in NAMES.items():
+             for threads in (1, 4):
+-                rs = [r for r in primary if int(r["case_index"]) == case
++                rs = [r for r in primary + insample if int(r["case_index"]) == case
+                       and r["method"] == method and int(r["threads"]) == threads]
+-                one = [float(r["wall_seconds"]) for r in primary
++                one = [float(r["wall_seconds"]) for r in primary + insample
+                        if int(r["case_index"]) == case and r["method"] == method
+                        and int(r["threads"]) == 1]
+                 speedup = median(one) / median(float(r["wall_seconds"]) for r in rs)
+                 resources.append(f"{name} & {threads} & {spread(rs, 'wall_seconds')} & "
+                                  f"{speedup:.2f} & {spread(rs, 'peak_rss_bytes', 1024**3, 3)}"
+                                  + r" \\")
+-                if threads == 4:
++                if threads == 4 and method != "insample":
+                     # These are repeated timings of one phenotype, not three
+                     # independent realizations of a calibration experiment.
+                     keys = ["h2", "lambda_gc_null", "null_rejection_0.05",
+@@ -124,18 +131,19 @@ def main():
+     for name, lines in [("kvik_20k_resources.tex", resources),
+                         ("kvik_20k_science.tex", science), ("kvik_20k_storage.tex", storage)]:
+         path = OUT / "tables" / name
+-        path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam e4089d8 reruns,\n"
++        path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam 2.0.0.dev6 reruns,\n"
+                         "% official LDAK-KVIK fits reused from 20261003-kvik-20k.\n"
+                         + "\n".join(lines) + "\n")
+         outputs.append(path)
+     record = {"purpose": "Render measured evidence only; no simulation or fitting",
+-              "timed_versions": {"mixmogam-he": "commit e4089d8 (20261005-kvik-20k-e4089d8)",
++              "timed_versions": {"mixmogam-he": "2.0.0.dev6 (20261006-kvik-20k-dev6), cross-fitted and in-sample scores",
+                                  "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"},
+               "generator_sha256": sha256(Path(__file__)),
+               "inputs": {str(p.relative_to(ROOT)): sha256(p) for p in inputs},
+               "outputs": {str(p.relative_to(ROOT)): sha256(p) for p in outputs},
+               "primary_fits": len(primary), "local_fits_rerun": len(local),
+               "official_fits_reused": len(official), "storage_fits": len(storage_runs),
++              "insample_fits": len(insample),
+               "input_hashes_identical": True,
+               "thread_comparisons": status["within_method_comparisons"],
+               "thread_comparisons_outside_tolerance": status["comparisons_outside_tolerance"],
+diff --git a/report/make_ldak_kvik_figures.py b/report/make_ldak_kvik_figures.py
+index 505379fa..5ecb1a14 100644
+--- a/report/make_ldak_kvik_figures.py
++++ b/report/make_ldak_kvik_figures.py
+@@ -1,11 +1,12 @@
+ #!/usr/bin/env python
+ """Render the phensim/reference comparison, without rerunning scans.
+ 
+-The archives are reruns with commit e4089d8: mixmogam methods ran again on the
+-original inputs, and the official LDAK-KVIK outputs were reused unchanged.
+-Every reused file is checked against the hash recorded at rerun time. Archives
+-before the method's rename store HRATT as "kvik"; ``read_rows`` maps that key,
+-or drops it where a rerun added "hratt".
++The archives are reruns with 2.0.0.dev6, whose HRATT cross-fits its LOCO
++scores: mixmogam methods ran again on the original inputs, and the official
++LDAK-KVIK outputs were reused unchanged. Every reused file is checked against
++the hash recorded at rerun time. Archives before the method's rename store
++HRATT as "kvik"; ``read_rows`` maps that key, or drops it where a rerun added
++"hratt".
+ """
+ import csv
+ import hashlib
+@@ -19,8 +20,8 @@ import numpy as np
+ from scipy import stats
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
+-HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
++RUN = ROOT / "benchmarks/results/20261006-phensim-kvik-dev6"
++HAPNEST = "benchmarks/results/20261006-hapnest-kvik-dev6-n{n}"
+ OUT = ROOT / "report"
+ METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
+ NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam HRATT", "LDAK-KVIK"]
+diff --git a/report/mixmogam_report.tex b/report/mixmogam_report.tex
+index de29ea2f..1ce2e146 100644
+--- a/report/mixmogam_report.tex
++++ b/report/mixmogam_report.tex
+@@ -39,7 +39,7 @@ numerical foundations, calibration diagnostics\\
+ and research directions for mixmogam}
+ \author{mixmogam contributors}
+ \date{6 October 2026\\\small Research report for 2.0.0.dev6;
+-benchmark reruns use commit e4089d8}
++benchmark reruns use 2.0.0.dev6}
+ 
+ \begin{document}
+ \maketitle
+@@ -71,8 +71,8 @@ verifies every exported genotype. At $n=800$ with LD, environmental
+ confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
+ under the genetic null; adjustment for two genotype PCs reduces this to
+ 0.97\%. Corresponding rates for mixmogam's Heritability-weighted Residual
+-Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.66\% and
+-0.94\%.
++Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.64\% and
++0.92\%.
+ These small-panel stress tests do not establish a general ranking.
+ We implement a HAPNEST-model simulator in phensim and measure generation
+ through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
+@@ -206,14 +206,14 @@ implementation & New input handling and fitting changes need fresh
+ end-to-end runs. \\
+ Matched phensim benchmark & Independent BED decoding and reference-reader
+ checks; null calibration, QTL detection and process resource measurements;
+-mixmogam methods rerun with commit e4089d8 on the same inputs &
++mixmogam methods rerun with 2.0.0.dev6 on the same inputs &
+ Six independent panels per cell; small quantitative-trait simulations,
+ controlled LD and three discrete populations; official timings from
+-two days earlier. \\
+-Computational extension, 2.0.0.dev3 and e4089d8 reruns & Projected-moment validation;
++three days earlier. \\
++Computational extension, 2.0.0.dev3 and dev6 reruns & Projected-moment validation;
+ paired implementation, thread and storage comparisons; at 50,000 samples and
+-20,000 markers, 24 mixmogam fits rerun with commit e4089d8 and 12 official
+-fits & Two fixed timing panels; different variance estimators across
++20,000 markers, 24 mixmogam fits rerun with 2.0.0.dev6, 12 more with
++in-sample scores and 12 official fits & Two fixed timing panels; different variance estimators across
+ programs; strict thread-tolerance failures retained; official timings
+ from a day when identical mixmogam code took 38\% longer. \\
+ Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
+@@ -1385,21 +1385,24 @@ sampling variation of the reported summaries.
+ \label{sec:kvik-results}
+ 
+ All 384 method runs returned valid p-values for every retained variant:
+-288 mixmogam runs repeated with commit e4089d8 and the 96 original official
++288 mixmogam runs repeated with 2.0.0.dev6 and the 96 original official
+ runs. Execution is distinct from convergence: mixmogam HRATT reported
+ incomplete cross-validation in six unadjusted confounded mixed-trait runs,
+ one of which also had incomplete LOCO fits (two in the original runs).
+ These remain in the summaries. In the original archive, an independently
+ regenerated structured/PC-adjusted case reproduced the serialized inputs
+ and all four methods' p-values exactly using frozen source snapshots.
+-Exact LOCO reproduces every original rejection rate; BOLT-inf and HRATT
+-change by Monte Carlo amounts, from the new Lanczos probes and calibration
+-draws of 2.0.0.dev5. Streaming changed no rejection rate or detection of
+-the dev5 reruns and moved $\log_{10}p$ by at most $5\times10^{-6}$.
++Exact LOCO and BOLT-inf reproduce every rejection rate of the earlier
++reruns with commit e4089d8: BOLT-inf's p-values are identical, and exact
++LOCO's moved by at most $1.3\times10^{-6}$ in $\log_{10}p$, from the
++refined REML search of 2.0.0.dev6. HRATT's cross-fitted scores
++(Section~\ref{sec:crossfit}) changed 0.26\% of its decisions at 1\%, its
++rejection rates by at most 0.10 percentage points and its detections by at
++most three of a cell's 60 causal markers.
+ 
+ Figure~\ref{fig:kvik-phensim} separates genetic-null rejection, mixed-trait
+ rejection on chromosome 6, and causal-marker detection. In unstructured
+-global-null cells, mean rejection at 1\% is approximately 1.01--1.06\%
++global-null cells, mean rejection at 1\% is approximately 1.00--1.06\%
+ across methods and LD settings. Under structure and the mixed trait,
+ LDAK-KVIK's null-chromosome rejection is 1.87\% without local LD
+ and 1.82\% with LD. This assesses the complete procedure, not an isolated
+@@ -1408,18 +1411,17 @@ denominator approximation.
+ Omitting the environmental mean shift produces the largest disagreement.
+ With LD, LDAK-KVIK gives $\lgc=3.455$ and 15.83\% genetic-null
+ rejection at 1\%; exact LOCO and mixmogam BOLT-inf give 1.34\% and 1.25\%,
+-and mixmogam HRATT gives 0.66\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
++and mixmogam HRATT gives 0.64\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
+ rejection is 21.5--25.2\% in four panels and 1.52--1.82\% in two.
+ Some inflated runs reach LDAK-KVIK's lower heritability
+ boundary after revision of the initial estimate. This motivates a
+ diagnostic experiment; it does not identify the cause. The mixmogam deflation
+ also fails nominal calibration.
+ 
+-Adding the same two PCs reduces LD global-null rejection to 0.94\%
++Adding the same two PCs reduces LD global-null rejection to 0.92\%
+ (mixmogam HRATT) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
+-is 1.17\% and 1.05\%. Both detect 50.00\% of causal markers, with the same
+-count in each of the six panels; ten causal markers per panel cannot
+-resolve a power difference. Detection gains in inflated, unadjusted cells must not
++is 1.17\% and 1.05\%. They detect 29 and 30 of the 60 causal markers; ten
++causal markers per panel cannot resolve a power difference. Detection gains in inflated, unadjusted cells must not
+ be interpreted as calibrated power. Explicit mean adjustment materially
+ changes the comparison in these panels; neither a genome-wide median
+ nor one favourable cell establishes general equivalence.
+@@ -1428,7 +1430,7 @@ nor one favourable cell establishes general equivalence.
+  \centering
+  \includegraphics[width=\textwidth]{figures/kvik_phensim.pdf}
+  \caption{Matched phensim comparison at 800 samples and 6,000 markers;
+- mixmogam methods are reruns with commit e4089d8 on the original inputs.
++ mixmogam methods are reruns with 2.0.0.dev6 on the original inputs.
+  Bars show one Monte Carlo standard error across six independent panels.
+  Dashed lines indicate nominal 1\% rejection. The middle row uses only
+  the chromosome without generating effects; the last row measures ten
+@@ -2660,11 +2662,12 @@ Table~\ref{tab:dev5-paired} from the paired archive and
+ Table~\ref{tab:dev5-slq} from the Lanczos rerun, and records hashes in
+ \code{dev5\_table\_}\allowbreak\code{manifest.json}.
+ 
+-The benchmark reruns with commit e4089d8 are archived as
+-\code{20261005-}\allowbreak\code{phensim-kvik-}\allowbreak\code{e4089d8} (with
+-\code{-n2000} and \code{-n4000}), \code{20261005-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{e4089d8-n10000}
+-and \code{-n50000}, \code{20261005-}\allowbreak\code{kvik-he-}\allowbreak\code{e4089d8} and
+-\code{20261005-}\allowbreak\code{kvik-20k-}\allowbreak\code{e4089d8}, beside the 2.0.0.dev5 reruns
++The benchmark reruns with 2.0.0.dev6 are archived as
++\code{20261006-}\allowbreak\code{phensim-kvik-}\allowbreak\code{dev6} (with
++\code{-n2000} and \code{-n4000}), \code{20261006-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{dev6-n10000}
++and \code{-n50000}, \code{20261006-}\allowbreak\code{kvik-he-}\allowbreak\code{dev6} and
++\code{20261006-}\allowbreak\code{kvik-20k-}\allowbreak\code{dev6}, beside the earlier reruns with
++commit e4089d8 (\code{20261005-}\allowbreak\code{*-e4089d8}) and 2.0.0.dev5
+ (\code{20261004-}\allowbreak\code{*-dev5}). Each records its frozen source,
+ its commands and the hash of every reused file. The same-day checks are
+ \code{20261004-}\allowbreak\code{same-day-dev4-dev5} and

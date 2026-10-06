@@ -1,0 +1,1371 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 5b2f992e..5b0442f7 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
+ 
+ ## [Unreleased]
+ 
++### Added
++
++- The prespecified validation of the 2.0.0.dev6 follow-ups
++  ([`20261006-hratt-followups`](benchmarks/results/20261006-hratt-followups/README.md),
++  660 cases) passed five of seven criteria.
++  - Cross-fitted effects were within 2% of the population slopes, where
++    in-sample scores were 28-36% low. Weighted effects under selection on
++    the outcome were 5.4% low, and weighted least squares 4.0%.
++  - Calibration held at 1-20% prevalence. Under ancestry-dependent weights
++    with principal components, rates for MAF 1-5% at 1e-3 were 0.85-0.96
++    times nominal, against 4.0-6.5 with pooled allele frequencies.
++  - Cross-fitting took 1.08-1.11 times as long. Weighted fits took 1.55
++    times as long as HRATT-HE, against a target of 1.3.
++- `--loco-folds` in `hratt_thread_scaling.py` and `hratt_efficiency.py`.
++
++### Changed
++
++- Benchmark drivers are named by what they compare:
++  - `ldak_kvik_comparison.py` (was `kvik_simulation.py`) and
++    `ldak_kvik_reference.py` run official LDAK-KVIK;
++  - `hratt_efficiency.py`, `hratt_he_comparison.py`,
++    `hratt_he_validation.py` and `hratt_thread_scaling.py` time or check
++    HRATT, with LDAK-KVIK optional;
++  - likewise their plans, tests and `report/make_ldak_kvik_figures.py`.
++
++  Archives keep the names they ran with.
++
+ ## [2.0.0.dev6] - 2026-10-06
+ 
+ ### Fixed
+diff --git a/MANIFEST.in b/MANIFEST.in
+index 57118b5d..e10c89d2 100644
+--- a/MANIFEST.in
++++ b/MANIFEST.in
+@@ -1,4 +1,4 @@
+ include CHANGELOG.md
+-include benchmarks/kvik_simulation.py
++include benchmarks/ldak_kvik_comparison.py
+ recursive-include tests *.py
+ recursive-include docs *.md
+diff --git a/README.md b/README.md
+index 6ea1b51f..2bd5d490 100644
+--- a/README.md
++++ b/README.md
+@@ -56,10 +56,14 @@ Hardy-Weinberg equilibrium. Ancestry-dependent weights or case fractions
+ require suitable ancestry covariates; these assumptions still need checking
+ in the intended population. Binary effects are one-step approximations,
+ not fitted logistic effects (see the [quickstart](docs/quickstart.md#case-control-outcomes-and-sampling-weights)).
+-These paths remain experimental: only two of seven criteria passed the
+-[earlier validation](benchmarks/results/20261005-hratt-weights-binary/README.md),
+-and the broader [follow-up validation](benchmarks/hratt_followups_plan.md)
+-is incomplete.
++These paths remain experimental. The
++[earlier validation](benchmarks/results/20261005-hratt-weights-binary/README.md)
++passed two of seven criteria; the
++[follow-up validation](benchmarks/results/20261006-hratt-followups/README.md)
++passed five. Cross-fitted effects were within 2% of the population slopes
++(in-sample scores: 28-36% low), except weighted effects under selection on
++the outcome, 5.4% low. Weighted fits took 1.55 times as long as HRATT-HE,
++against a target of 1.3.
+ 
+ With the `fast` extra, `n_threads` parallelizes the exact scan's decoding and
+ HRATT's genotype preparation and coordinate sweeps. Model sweeps retain their
+diff --git a/benchmarks/README.md b/benchmarks/README.md
+index 1c758b77..bb718e9f 100644
+--- a/benchmarks/README.md
++++ b/benchmarks/README.md
+@@ -16,11 +16,11 @@ also changed; previous thresholds belong to `scheme="projected"`.
+ The archived sources/results remain intact. See the
+ [critical review](../docs/review-2026-10-03.md).
+ 
+-**Matched simulation comparison.** `kvik_simulation.py` compares exact
++**Matched simulation comparison.** `ldak_kvik_comparison.py` compares exact
+ LOCO, mixmogam BOLT-inf and mixmogam HRATT with the official LDAK-KVIK executable.
+ All data come from phensim, including Balding–Nichols populations with
+ optional AR(1) LD and explicit environmental exposures. The
+-[prespecified protocol](kvik_simulation_plan.md) separates genetic-null
++[prespecified protocol](ldak_kvik_comparison_plan.md) separates genetic-null
+ calibration, null-chromosome rejection and causal-marker power. Each run
+ checks individual BED calls independently and verifies the reference
+ reader's IDs, frequencies and call rates before fitting.
+@@ -28,7 +28,7 @@ reader's IDs, frequencies and call rates before fitting.
+ ```sh
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+ VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1 \
+-python benchmarks/kvik_simulation.py --ldak /path/to/ldak \
++python benchmarks/ldak_kvik_comparison.py --ldak /path/to/ldak \
+   --ldak-source-url PINNED_DOWNLOAD_URL --out /tmp/new-kvik-comparison
+ ```
+ 
+@@ -43,7 +43,7 @@ Runs require macOS or Linux (`os.wait4` supplies per-process resource data);
+ macOS additionally requires AC power with Low Power Mode off. External
+ tool failures remain visible. The excluded pilot is not calibration evidence.
+ 
+-The runtime extension in `kvik_scaling_plan.md` adds n=2,000 and 4,000. A
++The runtime extension in `ldak_kvik_scaling_plan.md` adds n=2,000 and 4,000. A
+ further HAPNEST-model extension uses `--simulator hapnest --bounded-memory`
+ at n=10,000 and 50,000 with 12,000 markers. It compares mixmogam HRATT and
+ official LDAK-KVIK with unchanged fitting defaults, one thread, one realization per
+@@ -53,7 +53,7 @@ The phased reference, genotypes and phenotypes are all generated by phensim.
+ This controlled reference does not claim human demographic realism.
+ 
+ ```sh
+-python benchmarks/kvik_simulation.py --ldak /path/to/ldak \
++python benchmarks/ldak_kvik_comparison.py --ldak /path/to/ldak \
+   --plan ../phensim/benchmarks/hapnest_plan.md --simulator hapnest \
+   --bounded-memory --n 50000 --m 12000 --reps 1 --rhos 0.8 \
+   --cells unstructured confounded-pc --traits mixed \
+@@ -66,7 +66,7 @@ all analysis outputs are retained. The HAPNEST simulator resource study and
+ its full snapshots live in the sibling phensim archive; a provenance-labelled
+ copy of its summary supports the report here.
+ 
+-**HRATT efficiency comparison.** `kvik_efficiency.py` compares two frozen
++**HRATT efficiency comparison.** `hratt_efficiency.py` compares two frozen
+ mixmogam source trees on those same phensim inputs. It alternates execution
+ order across three repetitions, gives each source a fresh JIT cache and a
+ separate warm-up, and measures fresh processes with one thread. Whole-process
+@@ -85,7 +85,7 @@ resource tables remain evidence for its recorded pre-optimization source.
+ mkdir -p /tmp/mixmogam-baseline
+ git archive 2fb76dfea95c02afa7a9484fc1bddd075c1cb60e mixmogam | \
+   tar -x -C /tmp/mixmogam-baseline
+-python benchmarks/kvik_efficiency.py --baseline /tmp/mixmogam-baseline \
++python benchmarks/hratt_efficiency.py --baseline /tmp/mixmogam-baseline \
+   --optimized . --case PATH_TO_EXISTING_PHENSIM_CASE \
+   --reps 3 --out NEW_DIRECTORY
+ ```
+@@ -95,7 +95,7 @@ above at one. Use `--profile` only for diagnosis, separately from formal
+ timing. Storage and statistical fitting defaults are identical across
+ the two workers.
+ 
+-**HE versus REML.** `kvik_he_comparison.py` compares the explicit
++**HE versus REML.** `hratt_he_comparison.py` compares the explicit
+ `heritability_method="he"` and `"reml"` modes with fresh official LDAK-KVIK
+ runs on the retained phensim inputs. It freezes the sources, both drivers,
+ input hashes and executable identity, rotates method order, and records
+@@ -105,17 +105,17 @@ LDAK's default can skip its REML refinement at large sample sizes with low
+ detected structure; this distinction matters in interpreting earlier timings.
+ 
+ ```sh
+-python benchmarks/kvik_he_comparison.py --source . --ldak /path/to/ldak \
++python benchmarks/hratt_he_comparison.py --source . --ldak /path/to/ldak \
+   --case PATH_TO_EXISTING_PHENSIM_CASE --reps 3 --out NEW_DIRECTORY
+ ```
+ 
+-`kvik_he_validation.py` separately checks the projected HE estimator on
++`hratt_he_validation.py` separately checks the projected HE estimator on
+ known conditional covariances generated by phensim. Its `--association-from`
+ option reuses the recorded global-null phenotypes for paired HE/REML GWAS
+ checks. Neither phenotype replication on a few genotype panels nor repeated
+ timing on a fixed dataset establishes general calibration.
+ 
+-**Thread scaling.** `kvik_thread_scaling.py` compares the HE option and the
++**Thread scaling.** `hratt_thread_scaling.py` compares the HE option and the
+ official executable at 1, 2, 4 and 8 requested threads, with three timing
+ repetitions per dataset. It records wall time, CPU time, peak RSS, and
+ within-method changes in saved associations and fit diagnostics. The default
+@@ -133,14 +133,14 @@ before timing. See the [explicit parallel comparison](results/20261003-kvik-para
+ for complete fits, numerical changes and memory measurements.
+ 
+ ```sh
+-python benchmarks/kvik_thread_scaling.py --source . --ldak /path/to/ldak \
++python benchmarks/hratt_thread_scaling.py --source . --ldak /path/to/ldak \
+   --case PATH_TO_UNSTRUCTURED_CASE --case PATH_TO_STRUCTURED_CASE \
+   --parallel-hratt --threads 1 4 8 --blas-threads 1 --numba-threads 8 \
+   --out NEW_DIRECTORY
+ ```
+ 
+ For a paired cache experiment with sources up to 2.0.0.dev5,
+-`kvik_efficiency.py` accepts independent `--baseline-cache-bytes` and
++`hratt_efficiency.py` accepts independent `--baseline-cache-bytes` and
+ `--cache-bytes` budgets (current sources have no cache). Setting the latter to
+ zero measures repeated prepared decoding instead of retaining every float
+ genotype. Keep both sources, estimators and requested worker counts identical
+@@ -149,7 +149,7 @@ The [paired cache experiment](results/20261003-kvik-cache/README.md) records
+ 12 complete fits with identical cached and uncached scientific outputs,
+ alongside the measured runtime and peak-memory cost of each route.
+ 
+-**20,000-variant extension.** The [generation plan](kvik_20k_plan.md) retains
++**20,000-variant extension.** The [generation plan](ldak_kvik_20k_plan.md) retains
+ exactly 20,000 variants after MAF filtering, at 50,000 samples, in both HAPNEST
+ conditions. `--target-m 20000` selects fixed chromosome quotas from 20,400
+ candidates before PCs or traits are generated; `--prepare-only` freezes the
+@@ -213,19 +213,35 @@ python benchmarks/hratt_weights_binary.py --ldak ~/bin/ldak63 --max-load 6 \
+   --out NEW_DIRECTORY
+ ```
+ 
+-**Reruns with new local code.** `kvik_simulation.py --rerun-from` repeats
++**Follow-up validation.** `hratt_followups.py` tests the 2.0.0.dev6
++follow-ups under a [prespecified protocol](hratt_followups_plan.md):
++cross-fitted LOCO scores, covariate-specific genotype distributions, the
++binary null-fit fallbacks and doubled saddlepoint tails. It regenerates the
++5 October panels and samples from their seeds and adds Fst 0.05 cells with
++and without principal components. `--jobs` runs that many panels at once,
++each in its own process. Archive:
++[`20261006-hratt-followups`](results/20261006-hratt-followups/README.md).
++
++```sh
++python benchmarks/hratt_followups.py --jobs 2 --out NEW_DIRECTORY
++```
++
++**Reruns with new local code.** `ldak_kvik_comparison.py --rerun-from` repeats
+ the local methods on an existing archive's inputs. All other files, including
+ the official LDAK-KVIK outputs, are linked unchanged, but only after the
+-genotype files match their export hashes. `kvik_thread_scaling.py` and
+-`kvik_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
+-omitted. The reruns with commit e4089d8, which the report uses, are:
+-- `20261005-phensim-kvik-e4089d8`, with `-n2000` and `-n4000`;
+-- `20261005-hapnest-kvik-e4089d8-n10000` and `-n50000`;
+-- `20261005-kvik-he-e4089d8`;
+-- `20261005-kvik-20k-e4089d8`.
+-
+-The 2.0.0.dev5 reruns (`20261004-*-dev5`) remain beside them. Same-day
+-checks separate code from host conditions:
++genotype files match their export hashes. `hratt_thread_scaling.py` and
++`hratt_he_comparison.py` accept `--methods`, so that `ldak-kvik` can be
++omitted. The reruns with 2.0.0.dev6, which the report uses, are:
++- `20261006-phensim-kvik-dev6`, with `-n2000` and `-n4000`;
++- `20261006-hapnest-kvik-dev6-n10000` and `-n50000`;
++- `20261006-kvik-he-dev6`;
++- `20261006-kvik-20k-dev6`, whose `thread-scaling-insample/` repeats the
++  thread experiment with in-sample scores (`--loco-folds 1`).
++
++Reruns of HRATT on archives from before its rename also hold the original
++run's `kvik.*` outputs, linked unchanged. The earlier reruns with commit
++e4089d8 (`20261005-*-e4089d8`) and 2.0.0.dev5 (`20261004-*-dev5`) remain
++beside them. Same-day checks separate code from host conditions:
+ [`20261004-same-day-dev4-dev5`](results/20261004-same-day-dev4-dev5/README.md) and
+ [`20261005-same-day-dev5-e4089d8`](results/20261005-same-day-dev5-e4089d8/README.md).
+ 
+@@ -234,9 +250,9 @@ come from the original runs, so cross-program time ratios also span the
+ days and host loads of both runs.
+ 
+ ```sh
+-python benchmarks/kvik_simulation.py --rerun-from benchmarks/results/OLD_RUN \
++python benchmarks/ldak_kvik_comparison.py --rerun-from benchmarks/results/OLD_RUN \
+   --methods exact bolt-inf hratt --ldak /path/to/ldak --out NEW_DIRECTORY
+-python benchmarks/kvik_thread_scaling.py --source . --methods mixmogam-he \
++python benchmarks/hratt_thread_scaling.py --source . --methods mixmogam-he \
+   --case CASE --case CASE --threads 1 4 --parallel-hratt --blas-threads 1 \
+   --numba-threads 8 --reps 3 --out NEW_DIRECTORY
+ ```
+diff --git a/benchmarks/efficiency_paired.py b/benchmarks/efficiency_paired.py
+index e22721ff..6362d0ae 100644
+--- a/benchmarks/efficiency_paired.py
++++ b/benchmarks/efficiency_paired.py
+@@ -50,7 +50,7 @@ import numpy as np
+ 
+ HERE = Path(__file__).resolve().parent
+ sys.path.insert(0, str(HERE))
+-from kvik_efficiency import digest, power_state, save_json, snapshot  # noqa: E402
++from hratt_efficiency import digest, power_state, save_json, snapshot  # noqa: E402
+ 
+ PANELS = {
+     "exact_n3000": dict(n=3000, m=44000, chromosomes=22, populations=1, fst=0.0,
+@@ -335,7 +335,7 @@ def main() -> None:
+     (args.out / ".gitignore").write_text("jit-cache/\ndata/*/*.npy\n")
+     driver = args.out / "efficiency_paired.py"
+     driver.write_bytes(Path(__file__).read_bytes())
+-    for helper in ("kvik_efficiency.py",):
++    for helper in ("hratt_efficiency.py",):
+         (args.out / helper).write_bytes((HERE / helper).read_bytes())
+     sources = {label: snapshot(Path(path), args.out / "sources" / label) for label, path in pairs}
+     base_env = {k: v for k, v in os.environ.items() if not k.startswith("NUMBA_CACHE")}
+diff --git a/benchmarks/kvik_efficiency.py b/benchmarks/hratt_efficiency.py
+similarity index 95%
+rename from benchmarks/kvik_efficiency.py
+rename to benchmarks/hratt_efficiency.py
+index 76763000..3a1cbb3d 100644
+--- a/benchmarks/kvik_efficiency.py
++++ b/benchmarks/hratt_efficiency.py
+@@ -11,7 +11,7 @@ through a wrapper around ``VBEngine.fit``; fitting arguments are unchanged.
+ 
+ Example from any directory::
+ 
+-    python kvik_efficiency.py --baseline /path/to/baseline \
++    python hratt_efficiency.py --baseline /path/to/baseline \
+         --optimized /path/to/mixmogam --case /path/to/phensim/case \
+         --out /path/to/new-run --reps 3
+ 
+@@ -187,6 +187,8 @@ def worker(args):
+             fit_options["n_threads"] = args.hratt_threads
+         if args.cache_bytes is not None:
+             fit_options["cache_bytes"] = args.cache_bytes
++        if args.loco_folds is not None:
++            fit_options["loco_folds"] = args.loco_folds
+         from mixmogam import twostep
+         method = "hratt" if hasattr(twostep, "hratt") else "kvik"  # its name up to commit e4089d8
+         result = gwas(y, gt, X=X, method=method, random_state=seed, **fit_options)
+@@ -223,9 +225,20 @@ def worker(args):
+         "numba_pool_ceiling": numba_limit})
+ 
+ 
+-def measured(command, directory, threads, cache, *, blas_threads=None, numba_threads=None):
++def wait_for_quiet(limit):
++    """Seconds spent waiting for the one-minute load average to fall below limit."""
++    started = time.perf_counter()
++    while limit is not None and os.getloadavg()[0] >= limit:
++        time.sleep(10)
++    return time.perf_counter() - started
++
++
++def measured(command, directory, threads, cache, *, blas_threads=None, numba_threads=None,
++             max_load=None):
+     directory.mkdir(parents=True, exist_ok=False)
++    waited = wait_for_quiet(max_load)
+     power = power_state()
++    load = os.getloadavg()
+     limits = thread_environment(threads, blas_threads=blas_threads, numba_threads=numba_threads)
+     env = dict(os.environ, **limits)
+     # Each source uses its own new cache, including transitive helper changes.
+@@ -241,6 +254,7 @@ def measured(command, directory, threads, cache, *, blas_threads=None, numba_thr
+               "peak_rss_bytes": usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024),
+               "user_seconds": usage.ru_utime, "system_seconds": usage.ru_stime,
+               "threads": threads, "power_state": power,
++              "load_average_before": load, "load_wait_seconds": waited,
+               "thread_environment": limits,
+               "measurement": "fresh process; wall time and os.wait4 per-child rusage"}
+     save_json(directory / "measurement.json", result)
+@@ -348,7 +362,13 @@ def main():
+                              "and needs a source after 2.0.0.dev5")
+     parser.add_argument("--baseline-storage", choices=("int8", "packed"), default="int8",
+                         help="Baseline genotype storage")
++    parser.add_argument("--loco-folds", type=int,
++                        help="Worker HRATT LOCO folds (1: in-sample scores); omitted preserves the "
++                             "source default and supports older sources")
+     parser.add_argument("--no-warmup", action="store_true")
++    parser.add_argument("--max-load", type=float,
++                        help="wait before each timed fit until the one-minute load average is "
++                             "below this value; the load and the wait are recorded")
+     parser.add_argument("--rtol", type=float, default=1e-6)
+     parser.add_argument("--atol", type=float, default=1e-8)
+     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
+@@ -379,7 +399,7 @@ def main():
+     initial_power = power_state()
+     sources = {label: snapshot(path, out / "sources" / label)
+                for label, path in (("baseline", args.baseline), ("optimized", args.optimized))}
+-    driver = out / "kvik_efficiency.py"
++    driver = out / "hratt_efficiency.py"
+     shutil.copy2(Path(__file__), driver)
+     cases = [case.resolve() for case in args.case]
+     manifest = {"started_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+@@ -390,7 +410,7 @@ def main():
+                                                           numba_threads=numba_threads),
+                 "cache_bytes": {"baseline": args.baseline_cache_bytes, "optimized": args.cache_bytes},
+                 "storage": {"baseline": args.baseline_storage, "optimized": args.storage},
+-                "profiled": args.profile, "warmup": not args.no_warmup,
++                "profiled": args.profile, "warmup": not args.no_warmup, "max_load": args.max_load,
+                 "heritability_method": args.heritability_method,
+                 "hratt_threads": {"baseline": args.baseline_hratt_threads,
+                                  "optimized": args.hratt_threads},
+@@ -416,7 +436,8 @@ def main():
+         if args.profile and case is not None:
+             command.append("--profile")
+         return measured(command, destination, args.threads, out / "jit-cache" / label,
+-                        blas_threads=args.blas_threads, numba_threads=numba_threads)
++                        blas_threads=args.blas_threads, numba_threads=numba_threads,
++                        max_load=None if case is None else args.max_load)
+ 
+     if not args.no_warmup:
+         for label in sources:
+diff --git a/benchmarks/hratt_followups.py b/benchmarks/hratt_followups.py
+index fc420053..7bebe7fe 100644
+--- a/benchmarks/hratt_followups.py
++++ b/benchmarks/hratt_followups.py
+@@ -28,7 +28,7 @@ from scipy import stats
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+ import hratt_weights_binary as hb  # noqa: E402
+-from kvik_simulation import ROOT, clean_json, digest, power_state, save_json, write_csv  # noqa: E402
++from ldak_kvik_comparison import ROOT, clean_json, digest, power_state, save_json, write_csv  # noqa: E402
+ 
+ ALPHAS = hb.ALPHAS
+ # (Fst, architecture, trait, prevalence, scenario, covariates)
+@@ -533,7 +533,7 @@ def archive_sources(out, args):
+                             "status": subprocess.check_output(["git", "status", "--porcelain"], cwd=directory, text=True)}
+         (src / f"{package}.diff").write_bytes(subprocess.check_output(["git", "diff", "HEAD"], cwd=directory))
+     for driver in (Path(__file__), Path(__file__).with_name("hratt_weights_binary.py"),
+-                   Path(__file__).with_name("kvik_simulation.py")):
++                   Path(__file__).with_name("ldak_kvik_comparison.py")):
+         shutil.copy(driver, src / driver.name)
+     shutil.copy(args.plan, out / "plan.md")
+     save_json(out / "environment.json", {
+diff --git a/benchmarks/kvik_he_comparison.py b/benchmarks/hratt_he_comparison.py
+similarity index 93%
+rename from benchmarks/kvik_he_comparison.py
+rename to benchmarks/hratt_he_comparison.py
+index 6ab024fd..00d3509a 100644
+--- a/benchmarks/kvik_he_comparison.py
++++ b/benchmarks/hratt_he_comparison.py
+@@ -1,5 +1,5 @@
+ #!/usr/bin/env python
+-"""Compare full KVIK fits using HE or REML with official LDAK-KVIK.
++"""Compare full HRATT fits using HE or REML with official LDAK-KVIK.
+ 
+ Each existing phensim case supplies the same PLINK genotypes, phenotype,
+ covariates and seed to all three methods. All settings except the local
+@@ -8,7 +8,7 @@ steps with its defaults; it may revise its initial HE estimate internally.
+ 
+ Example::
+ 
+-    python benchmarks/kvik_he_comparison.py --source /path/to/mixmogam \
++    python benchmarks/hratt_he_comparison.py --source /path/to/mixmogam \
+         --ldak /path/to/ldak --case /path/to/existing/case \
+         --out /path/to/new-run --reps 3
+ 
+@@ -35,7 +35,7 @@ import subprocess
+ import sys
+ import time
+ 
+-from kvik_efficiency import THREAD_VARS, digest, input_manifest, measured, power_state, save_json, snapshot
++from hratt_efficiency import THREAD_VARS, digest, input_manifest, measured, power_state, save_json, snapshot, wait_for_quiet
+ 
+ METHODS = ("mixmogam-he", "mixmogam-reml", "ldak-kvik")
+ 
+@@ -49,9 +49,11 @@ def write_csv(path, rows):
+         writer.writerows(rows)
+ 
+ 
+-def external_step(command, directory, step, threads):
++def external_step(command, directory, step, threads, max_load=None):
+     """Measure the native process directly, without a Python wrapper."""
++    waited = wait_for_quiet(max_load)
+     power = power_state()
++    load = os.getloadavg()
+     env = dict(os.environ, **{key: str(threads) for key in THREAD_VARS})
+     started = time.perf_counter()
+     with open(directory / f"ldak-step{step}.log", "w") as stream:
+@@ -63,6 +65,7 @@ def external_step(command, directory, step, threads):
+               "peak_rss_bytes": usage.ru_maxrss * (1 if sys.platform == "darwin" else 1024),
+               "user_seconds": usage.ru_utime, "system_seconds": usage.ru_stime,
+               "threads": threads, "power_state": power,
++              "load_average_before": load, "load_wait_seconds": waited,
+               "measurement": "native process; wall time and os.wait4 per-child rusage"}
+     save_json(directory / f"ldak-step{step}.command.json", result)
+     if process.returncode or result["peak_rss_bytes"] <= 0:
+@@ -112,7 +115,7 @@ def reference_result(directory, case, variant_ids):
+     return result
+ 
+ 
+-def run_reference(case, directory, executable, threads, variant_ids):
++def run_reference(case, directory, executable, threads, variant_ids, max_load=None):
+     config = json.loads((case / "case.json").read_text())
+     directory.mkdir(parents=True, exist_ok=False)
+     resources = []
+@@ -122,7 +125,7 @@ def run_reference(case, directory, executable, threads, variant_ids):
+                    "--random-seed", str(config["method_seed"])]
+         if config["pcs"]:
+             command += ["--covar", str(case / "covariates.txt")]
+-        resources.append(external_step(command, directory, step, threads))
++        resources.append(external_step(command, directory, step, threads, max_load))
+     reference_result(directory, case, variant_ids)
+     result = {"wall_seconds": sum(item["wall_seconds"] for item in resources),
+               "peak_rss_bytes": max(item["peak_rss_bytes"] for item in resources),
+@@ -225,6 +228,9 @@ def main():
+     parser.add_argument("--methods", nargs="+", choices=METHODS, default=list(METHODS),
+                         help="Omit ldak-kvik to time new local code against archived official runs")
+     parser.add_argument("--no-warmup", action="store_true")
++    parser.add_argument("--max-load", type=float,
++                        help="wait before each timed fit until the one-minute load average is "
++                             "below this value; the load and the wait are recorded")
+     args = parser.parse_args()
+     if args.reps < 1 or args.threads < 1:
+         parser.error("reps and threads must be positive")
+@@ -237,7 +243,7 @@ def main():
+     initial_power = power_state()
+     source = snapshot(args.source.resolve(), out / "source")
+     drivers = {}
+-    for path in (Path(__file__).resolve(), Path(__file__).with_name("kvik_efficiency.py").resolve()):
++    for path in (Path(__file__).resolve(), Path(__file__).with_name("hratt_efficiency.py").resolve()):
+         target = out / path.name
+         shutil.copy2(path, target)
+         drivers[path.name] = digest(target)
+@@ -259,17 +265,18 @@ def main():
+                 "methods": list(methods),
+                 "platform": platform.platform(), "python": sys.executable,
+                 "threads": args.threads, "timing_repetitions": args.reps,
+-                "warmup": not args.no_warmup, "power_state": initial_power,
++                "warmup": not args.no_warmup, "max_load": args.max_load, "power_state": initial_power,
+                 "order": f"cyclic method rotation by (rep + case index) modulo {len(methods)}",
+                 "scope": "full association fits; repeated timing on fixed simulated inputs; no estimator agreement requirement"}
+     save_json(out / "manifest.json", manifest)
+-    worker_driver = out / "kvik_efficiency.py"
++    worker_driver = out / "hratt_efficiency.py"
+ 
+     def local_run(method, directory, case=None):
+         command = [sys.executable, str(worker_driver), "--source", source["snapshot"],
+                    "--result-dir", str(directory), "--heritability-method", method.removeprefix("mixmogam-")]
+         command += ["--warmup"] if case is None else ["--worker", str(case)]
+-        return measured(command, directory, args.threads, out / "jit-cache")
++        return measured(command, directory, args.threads, out / "jit-cache",
++                        max_load=None if case is None else args.max_load)
+ 
+     if not args.no_warmup:
+         for method in (method for method in methods if method != "ldak-kvik"):
+@@ -292,7 +299,8 @@ def main():
+                         **{key: config[key] for key in ("n", "m", "cell", "trait", "rho", "fst")}}
+                 try:
+                     if method == "ldak-kvik":
+-                        measurement = run_reference(case, directory, executable, args.threads, truth["variant_ids"])
++                        measurement = run_reference(case, directory, executable, args.threads, truth["variant_ids"],
++                                                    args.max_load)
+                     else:
+                         measurement = local_run(method, directory, case)
+                     p, null, metrics, strata = scientific_summary(directory, config, truth)
+diff --git a/benchmarks/kvik_he_validation.py b/benchmarks/hratt_he_validation.py
+similarity index 100%
+rename from benchmarks/kvik_he_validation.py
+rename to benchmarks/hratt_he_validation.py
+diff --git a/benchmarks/kvik_thread_scaling.py b/benchmarks/hratt_thread_scaling.py
+similarity index 93%
+rename from benchmarks/kvik_thread_scaling.py
+rename to benchmarks/hratt_thread_scaling.py
+index 3acb35d6..bb90bd49 100644
+--- a/benchmarks/kvik_thread_scaling.py
++++ b/benchmarks/hratt_thread_scaling.py
+@@ -3,7 +3,7 @@
+ 
+ Example::
+ 
+-    python benchmarks/kvik_thread_scaling.py --source /path/to/mixmogam \
++    python benchmarks/hratt_thread_scaling.py --source /path/to/mixmogam \
+         --ldak /path/to/ldak --case /path/to/unstructured/case \
+         --case /path/to/structured/case --out /path/to/new-run
+ 
+@@ -33,8 +33,8 @@ import statistics
+ import sys
+ import time
+ 
+-from kvik_efficiency import THREAD_VARS, compare_results, digest, input_manifest, measured, power_state, save_json, snapshot, thread_environment
+-from kvik_he_comparison import aggregate, compare_scientific, run_reference, scientific_summary, write_csv
++from hratt_efficiency import THREAD_VARS, compare_results, digest, input_manifest, measured, power_state, save_json, snapshot, thread_environment
++from hratt_he_comparison import aggregate, compare_scientific, run_reference, scientific_summary, write_csv
+ 
+ METHODS = ("mixmogam-he", "ldak-kvik")
+ 
+@@ -123,7 +123,13 @@ def main():
+                         help="Local genotype cache budget (sources up to 2.0.0.dev5); omitted preserves the package default")
+     parser.add_argument("--storage", choices=("int8", "packed"), default="int8",
+                         help="Local genotype storage; packed reads two-bit calls (sources after 2.0.0.dev5)")
++    parser.add_argument("--loco-folds", type=int,
++                        help="HRATT LOCO folds for mixmogam runs (1: in-sample scores); omitted "
++                             "preserves the source default")
+     parser.add_argument("--no-warmup", action="store_true")
++    parser.add_argument("--max-load", type=float,
++                        help="wait before each timed fit until the one-minute load average is "
++                             "below this value; the load and the wait are recorded")
+     parser.add_argument("--rtol", type=float, default=1e-6)
+     parser.add_argument("--atol", type=float, default=1e-8)
+     args = parser.parse_args()
+@@ -149,7 +155,7 @@ def main():
+     initial_power = power_state()
+     source = snapshot(args.source.resolve(), out / "source")
+     drivers = {}
+-    for name in (Path(__file__).name, "kvik_he_comparison.py", "kvik_efficiency.py"):
++    for name in (Path(__file__).name, "hratt_he_comparison.py", "hratt_efficiency.py"):
+         path = Path(__file__).with_name(name).resolve()
+         target = out / name
+         shutil.copy2(path, target)
+@@ -181,13 +187,13 @@ def main():
+                 "timing_repetitions": args.reps, "planned_method_runs": len(jobs), "schedule": jobs,
+                 "expected_within_method_comparisons": len(cases) * len(methods)
+                     * (args.reps * (len(levels) - 1) + (args.reps - 1) * len(levels)),
+-                "warmup": not args.no_warmup, "power_state": initial_power,
++                "warmup": not args.no_warmup, "max_load": args.max_load, "power_state": initial_power,
+                 "comparison_tolerances": {"rtol": args.rtol, "atol": args.atol},
+                 "seed_policy": "original per-case method_seed retained across threads and timing repetitions",
+                 "scope": "full association fits; within-method numerical comparisons; fixed simulated datasets",
+                 "cpu_wall_ratio": "(user CPU seconds + system CPU seconds) / elapsed wall seconds; not a thread count"}
+     save_json(out / "manifest.json", manifest)
+-    worker_driver = out / "kvik_efficiency.py"
++    worker_driver = out / "hratt_efficiency.py"
+ 
+     def local_run(directory, threads, case=None):
+         command = [sys.executable, str(worker_driver), "--source", source["snapshot"],
+@@ -199,8 +205,11 @@ def main():
+             command += ["--cache-bytes", str(args.cache_bytes)]
+         if args.storage != "int8":
+             command += ["--storage", args.storage]
++        if args.loco_folds is not None:
++            command += ["--loco-folds", str(args.loco_folds)]
+         return measured(command, directory, threads, out / "jit-cache",
+-                        blas_threads=args.blas_threads, numba_threads=numba_ceiling)
++                        blas_threads=args.blas_threads, numba_threads=numba_ceiling,
++                        max_load=None if case is None else args.max_load)
+ 
+     if not args.no_warmup:
+         warm = local_run(out / "warmup", 1)
+@@ -229,9 +238,10 @@ def main():
+                 "numba_pool_ceiling": (numba_ceiling if numba_ceiling is not None else threads) if method == "mixmogam-he" else None,
+                 "cache_bytes": args.cache_bytes if method == "mixmogam-he" else None,
+                 "storage": args.storage if method == "mixmogam-he" else None,
++                "loco_folds": args.loco_folds if method == "mixmogam-he" else None,
+                 **{key: config[key] for key in ("n", "m", "cell", "trait", "rho", "fst")}}
+         try:
+-            measurement = (run_reference(case, directory, executable, threads, truth["variant_ids"])
++            measurement = (run_reference(case, directory, executable, threads, truth["variant_ids"], args.max_load)
+                            if method == "ldak-kvik" else local_run(directory, threads, case))
+             p, null, metrics, strata = scientific_summary(directory, config, truth)
+         except Exception as exc:
+diff --git a/benchmarks/hratt_weights_binary.py b/benchmarks/hratt_weights_binary.py
+index 3e97c8bf..89ad5657 100644
+--- a/benchmarks/hratt_weights_binary.py
++++ b/benchmarks/hratt_weights_binary.py
+@@ -31,7 +31,7 @@ from scipy.optimize import brentq
+ from scipy.special import expit
+ 
+ sys.path.insert(0, str(Path(__file__).resolve().parent))
+-from kvik_simulation import (ROOT, THREAD_VARS, clean_json, digest, power_state,  # noqa: E402
++from ldak_kvik_comparison import (ROOT, THREAD_VARS, clean_json, digest, power_state,  # noqa: E402
+                              read_table, save_json, write_csv)
+ 
+ N_CHROM = 10  # equal chromosomes; the tenth carries no direct effects
+@@ -677,7 +677,7 @@ def archive_sources(out, args):
+         origins[package] = {"head": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=directory, text=True).strip(),
+                             "status": subprocess.check_output(["git", "status", "--porcelain"], cwd=directory, text=True)}
+         (src / f"{package}.diff").write_bytes(subprocess.check_output(["git", "diff", "HEAD"], cwd=directory))
+-    for driver in (Path(__file__), Path(__file__).with_name("kvik_simulation.py")):
++    for driver in (Path(__file__), Path(__file__).with_name("ldak_kvik_comparison.py")):
+         shutil.copy(driver, src / driver.name)
+     shutil.copy(args.plan, out / "plan.md")
+     banner = subprocess.run([args.ldak], capture_output=True, text=True).stdout
+diff --git a/benchmarks/kvik_20k_plan.md b/benchmarks/ldak_kvik_20k_plan.md
+similarity index 97%
+rename from benchmarks/kvik_20k_plan.md
+rename to benchmarks/ldak_kvik_20k_plan.md
+index 1475c739..e0b6e001 100644
+--- a/benchmarks/kvik_20k_plan.md
++++ b/benchmarks/ldak_kvik_20k_plan.md
+@@ -75,13 +75,13 @@ From the repository root, choose a fresh output directory:
+ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+ VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1 \
+ /Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python \
+-  benchmarks/kvik_simulation.py --simulator hapnest --bounded-memory \
++  benchmarks/ldak_kvik_comparison.py --simulator hapnest --bounded-memory \
+   --n 50000 --m 20400 --target-m 20000 --reps 1 --rhos .8 \
+   --cells unstructured confounded-pc --traits mixed --fst .05 \
+   --seed 20261006 --threads 1 --prepare-only \
+   --ldak /private/tmp/mixmogam-kvik-benchmark/ldak6.3.mac \
+   --ldak-source-url https://raw.githubusercontent.com/dougspeed/LDAK/995e18753a0a9248244478b051edb25664574dd0/ldak6.3.mac \
+-  --plan benchmarks/kvik_20k_plan.md \
++  --plan benchmarks/ldak_kvik_20k_plan.md \
+   --out benchmarks/results/20261003-hapnest-kvik-n50000-m20000
+ ```
+ 
+diff --git a/benchmarks/kvik_simulation.py b/benchmarks/ldak_kvik_comparison.py
+similarity index 97%
+rename from benchmarks/kvik_simulation.py
+rename to benchmarks/ldak_kvik_comparison.py
+index 32dd538c..975fb065 100644
+--- a/benchmarks/kvik_simulation.py
++++ b/benchmarks/ldak_kvik_comparison.py
+@@ -2,11 +2,11 @@
+ """Matched phensim comparison with reference LDAK-KVIK; see the frozen plan.
+ 
+ Example (from the repository root, with phensim installed):
+-    python benchmarks/kvik_simulation.py --ldak /path/to/ldak --out RUN_DIRECTORY
++    python benchmarks/ldak_kvik_comparison.py --ldak /path/to/ldak --out RUN_DIRECTORY
+ 
+ To time new local code on an archive's unchanged inputs, reusing its official
+ LDAK-KVIK outputs:
+-    python benchmarks/kvik_simulation.py --rerun-from OLD_RUN --methods exact \
++    python benchmarks/ldak_kvik_comparison.py --rerun-from OLD_RUN --methods exact \
+         bolt-inf hratt --ldak /path/to/ldak --out NEW_RUN
+ 
+ Every association worker reads the same on-disk PLINK inputs. A failed worker
+@@ -100,9 +100,19 @@ def power_state():
+     return {"battery": batt, "settings": settings}
+ 
+ 
+-def measured(command, work, name, threads):
++def wait_for_quiet(limit):
++    """Seconds spent waiting for the one-minute load average to fall below limit."""
++    started = time.perf_counter()
++    while limit is not None and os.getloadavg()[0] >= limit:
++        time.sleep(10)
++    return time.perf_counter() - started
++
++
++def measured(command, work, name, threads, max_load=None):
+     """Isolated process wall time and OS peak RSS, including CLI startup/I/O."""
++    waited = wait_for_quiet(max_load)
+     power_state()
++    load = os.getloadavg()
+     env = dict(os.environ, **{key: str(threads) for key in THREAD_VARS})
+     t = time.perf_counter()
+     with open(work / f"{name}.log", "w") as log:
+@@ -117,6 +127,7 @@ def measured(command, work, name, threads):
+     result = {"command": command, "cwd": str(work), "exit_code": proc.returncode,
+               "wall_seconds": wall, "peak_rss_bytes": rss, "threads": threads,
+               "user_seconds": usage.ru_utime, "system_seconds": usage.ru_stime,
++              "load_average_before": load, "load_wait_seconds": waited,
+               "resource_measurement": "os.wait4 per-child kernel rusage"}
+     save_json(work / f"{name}.command.json", result)
+     if proc.returncode or rss <= 0:
+@@ -421,7 +432,8 @@ def run_method(case, method, args):
+                        "--random-seed", str(config["method_seed"])]
+             if config["pcs"]:
+                 command += ["--covar", "covariates.txt"]
+-            resources.append(measured(command, case, f"ldak-step{step}", args.threads))
++            resources.append(measured(command, case, f"ldak-step{step}", args.threads,
++                                      getattr(args, "max_load", None)))
+         p = parse_reference(case / "reference.step2.assoc", ids)
+         np.savez_compressed(case / f"{method}.npz", p=p, variant_ids=ids)
+         # Retain every external output, compressing the verbose text artifacts.
+@@ -432,7 +444,8 @@ def run_method(case, method, args):
+     else:
+         resources.append(measured([sys.executable, str(Path(__file__).resolve()),
+                                    "--worker", str(case), "--method", method,
+-                                   "--seed", str(config["method_seed"])], case, method, args.threads))
++                                   "--seed", str(config["method_seed"])], case, method, args.threads,
++                                  getattr(args, "max_load", None)))
+         result = np.load(case / f"{method}.npz")
+         np.testing.assert_array_equal(result["variant_ids"], ids)
+         p = result["p"]
+@@ -603,7 +616,7 @@ def main():
+     ap = argparse.ArgumentParser(description=__doc__)
+     ap.add_argument("--ldak", default=str(Path.home()/"bin"/"ldak"))
+     ap.add_argument("--ldak-source-url", default="unspecified; identify by executable hash")
+-    ap.add_argument("--plan", default=str(Path(__file__).with_name("kvik_simulation_plan.md")))
++    ap.add_argument("--plan", default=str(Path(__file__).with_name("ldak_kvik_comparison_plan.md")))
+     ap.add_argument("--out", type=Path)
+     ap.add_argument("--n", type=int, default=800)
+     ap.add_argument("--m", type=int, default=6000)
+@@ -628,6 +641,9 @@ def main():
+     ap.add_argument("--prepare", type=Path)
+     ap.add_argument("--rerun-from", type=Path,
+                     help="Existing archive: rerun --methods on its inputs, reusing all other outputs")
++    ap.add_argument("--max-load", type=float,
++                    help="wait before each timed run until the one-minute load average is below "
++                         "this value; the load and the wait are recorded")
+     args = ap.parse_args()
+     if args.rerun_from:
+         return rerun(args)
+diff --git a/benchmarks/kvik_simulation_plan.md b/benchmarks/ldak_kvik_comparison_plan.md
+similarity index 100%
+rename from benchmarks/kvik_simulation_plan.md
+rename to benchmarks/ldak_kvik_comparison_plan.md
+diff --git a/benchmarks/kvik_reference.py b/benchmarks/ldak_kvik_reference.py
+similarity index 98%
+rename from benchmarks/kvik_reference.py
+rename to benchmarks/ldak_kvik_reference.py
+index 49c32272..3809d34c 100644
+--- a/benchmarks/kvik_reference.py
++++ b/benchmarks/ldak_kvik_reference.py
+@@ -14,7 +14,7 @@ so allele frequencies -- and with them the LDAK-Thin weights -- are
+ those of the lines.
+ 
+ Usage:
+-    python benchmarks/kvik_reference.py [--ldak ~/bin/ldak] [--reps 6]
++    python benchmarks/ldak_kvik_reference.py [--ldak ~/bin/ldak] [--reps 6]
+ """
+ 
+ from __future__ import annotations
+@@ -116,7 +116,7 @@ def main():
+             rows.append(row)
+         print(f"rep {rep} done", flush=True)
+     keys = list(rows[0])
+-    with open(out / "kvik_reference.csv", "w", newline="") as fh:
++    with open(out / "ldak_kvik_reference.csv", "w", newline="") as fh:
+         w = csv.DictWriter(fh, fieldnames=keys)
+         w.writeheader()
+         w.writerows(rows)
+diff --git a/benchmarks/kvik_scaling_plan.md b/benchmarks/ldak_kvik_scaling_plan.md
+similarity index 89%
+rename from benchmarks/kvik_scaling_plan.md
+rename to benchmarks/ldak_kvik_scaling_plan.md
+index d25d91dd..68fc0016 100644
+--- a/benchmarks/kvik_scaling_plan.md
++++ b/benchmarks/ldak_kvik_scaling_plan.md
+@@ -14,7 +14,7 @@ Table 1. Additional workloads, fixed before executing them.
+ Use the mixed quantitative trait only (base h2=0.5; ten QTL and background
+ on chromosomes 1–5; chromosome 6 has no generating effects). Use the same
+ phensim generators, export validation, four methods, default fitting settings,
+-one thread and process resource measurement as in `kvik_simulation_plan.md`.
++one thread and process resource measurement as in `ldak_kvik_comparison_plan.md`.
+ The master seed is 20261004. Reference times sum both stages; memory is the
+ larger stage peak. All jobs run sequentially on AC power. Do not run tests or
+ document rendering concurrently with these timings. Common preparation remains
+@@ -31,8 +31,8 @@ or equate apparent detection gains with calibrated power.
+ Commands, with the same pinned executable and download URL as the primary run:
+ 
+ ```sh
+-python benchmarks/kvik_simulation.py --ldak /path/to/ldak \
+-  --plan benchmarks/kvik_scaling_plan.md --n 2000 --m 12000 --reps 2 \
++python benchmarks/ldak_kvik_comparison.py --ldak /path/to/ldak \
++  --plan benchmarks/ldak_kvik_scaling_plan.md --n 2000 --m 12000 --reps 2 \
+   --rhos 0.8 --cells unstructured confounded-pc --traits mixed \
+   --seed 20261004 --out NEW_DIRECTORY
+ ```
+diff --git a/benchmarks/slq_defaults.py b/benchmarks/slq_defaults.py
+index 46ff6262..e6aad36f 100644
+--- a/benchmarks/slq_defaults.py
++++ b/benchmarks/slq_defaults.py
+@@ -27,7 +27,7 @@ import numpy as np
+ 
+ HERE = Path(__file__).resolve().parent
+ sys.path.insert(0, str(HERE))
+-from kvik_efficiency import power_state, save_json, snapshot  # noqa: E402
++from hratt_efficiency import power_state, save_json, snapshot  # noqa: E402
+ 
+ CASES = {
+     "unstructured_pc": dict(n=5000, m=30000, pops=2, fst=0.02, h2=0.4, pcs=True,
+@@ -99,7 +99,7 @@ def main() -> None:
+     power = power_state()
+     args.out.mkdir(parents=True)
+     (args.out / "slq_defaults.py").write_bytes(Path(__file__).read_bytes())
+-    (args.out / "kvik_efficiency.py").write_bytes((HERE / "kvik_efficiency.py").read_bytes())
++    (args.out / "hratt_efficiency.py").write_bytes((HERE / "hratt_efficiency.py").read_bytes())
+     source = snapshot(Path(mixmogam.__file__).resolve().parents[1], args.out / "source")
+     rows, summary = [], {}
+     for name in args.cases:
+diff --git a/report/README.md b/report/README.md
+index 0b755322..267d86c5 100644
+--- a/report/README.md
++++ b/report/README.md
+@@ -84,7 +84,7 @@ From the repository root, with matplotlib and Tectonic available:
+ 
+ ```sh
+ python report/make_figures.py
+-python report/make_kvik_figures.py
++python report/make_ldak_kvik_figures.py
+ python report/make_efficiency_tables.py
+ python report/make_dev5_tables.py
+ python report/make_streaming_tables.py
+diff --git a/report/make_kvik_figures.py b/report/make_ldak_kvik_figures.py
+similarity index 89%
+rename from report/make_kvik_figures.py
+rename to report/make_ldak_kvik_figures.py
+index 529d64de..5ecb1a14 100644
+--- a/report/make_kvik_figures.py
++++ b/report/make_ldak_kvik_figures.py
+@@ -1,9 +1,12 @@
+ #!/usr/bin/env python
+ """Render the phensim/reference comparison, without rerunning scans.
+ 
+-The archives are reruns with commit e4089d8: mixmogam methods ran again on the
+-original inputs, and the official LDAK-KVIK outputs were reused unchanged.
+-Every reused file is checked against the hash recorded at rerun time.
++The archives are reruns with 2.0.0.dev6, whose HRATT cross-fits its LOCO
++scores: mixmogam methods ran again on the original inputs, and the official
++LDAK-KVIK outputs were reused unchanged. Every reused file is checked against
++the hash recorded at rerun time. Archives before the method's rename store
++HRATT as "kvik"; ``read_rows`` maps that key, or drops it where a rerun added
++"hratt".
+ """
+ import csv
+ import hashlib
+@@ -17,11 +20,10 @@ import numpy as np
+ from scipy import stats
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
+-HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
++RUN = ROOT / "benchmarks/results/20261006-phensim-kvik-dev6"
++HAPNEST = "benchmarks/results/20261006-hapnest-kvik-dev6-n{n}"
+ OUT = ROOT / "report"
+-# Archive keys: runs before the rename stored HRATT under its earlier name.
+-METHODS = ["exact", "bolt-inf", "kvik", "ldak-kvik"]
++METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
+ NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam HRATT", "LDAK-KVIK"]
+ COLORS = ["#0072B2", "#009E73", "#CC79A7", "#D55E00"]
+ CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
+@@ -32,6 +34,22 @@ def sha256(path):
+     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
+ 
+ 
++def read_rows(path):
++    """CSV rows, with HRATT's earlier archive key ("kvik") mapped to "hratt".
++
++    A rerun of "hratt" on a pre-rename archive also holds the original run's
++    "kvik" outputs, linked unchanged; those rows are dropped.
++    """
++    with open(path) as fh:
++        rows = list(csv.DictReader(fh))
++    if any(r.get("method") == "hratt" for r in rows):
++        return [r for r in rows if r.get("method") != "kvik"]
++    for r in rows:
++        if r.get("method") == "kvik":
++            r["method"] = "hratt"
++    return rows
++
++
+ def verify_rerun(run):
+     """Reused inputs and official outputs still match their rerun-time hashes."""
+     record = json.loads((run / "rerun.json").read_text())
+@@ -45,8 +63,7 @@ def verify_rerun(run):
+ 
+ def main():
+     rerun = verify_rerun(RUN)
+-    with open(RUN / "aggregate.csv") as fh:
+-        rows = [r for r in csv.DictReader(fh) if r["stratum"] == "all"]
++    rows = [r for r in read_rows(RUN / "aggregate.csv") if r["stratum"] == "all"]
+     index = {(r["cell"], r["trait"], float(r["rho"]), r["method"]): r for r in rows}
+     if len(index) != 64 or any(int(r["n_replicates"]) != 6 for r in rows):
+         raise ValueError("the planned 64 cells with six replicates each are required")
+@@ -102,8 +119,7 @@ def main():
+     table = OUT / "tables/kvik_phensim.tex"
+     table.write_text("\n".join(lines)+"\n")
+     # Pool method resource descriptions across the same 96 case/replicate inputs.
+-    with open(RUN / "replicates.csv") as fh:
+-        raw = [r for r in csv.DictReader(fh) if r["stratum"] == "all"]
++    raw = [r for r in read_rows(RUN / "replicates.csv") if r["stratum"] == "all"]
+     resource = []
+     for method, name in zip(METHODS, NAMES):
+         rs = [r for r in raw if r["method"] == method]
+@@ -156,10 +172,9 @@ def scaling():
+     for archive in archives:
+         if json.loads((archive/"completion.json").read_text())["failed_method_runs"]:
+             raise ValueError(f"failed performance runs in {archive}")
+-        with open(archive/"replicates.csv") as fh:
+-            raw.extend(r for r in csv.DictReader(fh) if r["stratum"] == "all"
+-                       and r["trait"] == "mixed" and float(r["rho"]) == .8
+-                       and r["cell"] in ["unstructured", "confounded-pc"])
++        raw.extend(r for r in read_rows(archive/"replicates.csv") if r["stratum"] == "all"
++                   and r["trait"] == "mixed" and float(r["rho"]) == .8
++                   and r["cell"] in ["unstructured", "confounded-pc"])
+     ns = [800, 2000, 4000]
+     sizes = ["800 / 6,000", "2,000 / 12,000", "4,000 / 24,000"]
+     fig, axes = plt.subplots(2, 2, figsize=(10, 7), sharex=True, sharey="row")
+@@ -241,10 +256,9 @@ def hapnest():
+         reruns.append(verify_rerun(run))
+         if json.loads((run/"completion.json").read_text())["failed_method_runs"]:
+             raise ValueError("report failed large-sample methods explicitly")
+-        with open(run/"replicates.csv") as fh:
+-            rows = [r for r in csv.DictReader(fh) if r["stratum"] == "all"]
++        rows = [r for r in read_rows(run/"replicates.csv") if r["stratum"] == "all"]
+         for cell, label in [("unstructured", "Unstructured"), ("confounded-pc", "Structure + PCs")]:
+-            for method, name in [("kvik", "mixmogam"), ("ldak-kvik", "LDAK")]:
++            for method, name in [("hratt", "mixmogam"), ("ldak-kvik", "LDAK")]:
+                 r, = [r for r in rows if r["cell"] == cell and r["method"] == method]
+                 lines.append(f"{n:,} & {label} & {name} & {float(r['wall_seconds']):.2f} & "
+                     f"{float(r['peak_rss_bytes'])/2**20:.0f} & {float(r['lambda_gc']):.3f} & "
+diff --git a/report/mixmogam_report.tex b/report/mixmogam_report.tex
+index 8a43094c..b1b02a1c 100644
+--- a/report/mixmogam_report.tex
++++ b/report/mixmogam_report.tex
+@@ -71,8 +71,8 @@ verifies every exported genotype. At $n=800$ with LD, environmental
+ confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
+ under the genetic null; adjustment for two genotype PCs reduces this to
+ 0.97\%. Corresponding rates for mixmogam's Heritability-weighted Residual
+-Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.66\% and
+-0.94\%.
++Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.64\% and
++0.92\%.
+ These small-panel stress tests do not establish a general ranking.
+ We implement a HAPNEST-model simulator in phensim and measure generation
+ through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
+@@ -98,7 +98,11 @@ under genotype exchangeability with a genotype saddlepoint tail. In a
+ prespecified simulation the weighted test was calibrated under selection on
+ the outcome, where the sandwich variance rejected up to 26 times too often,
+ but weights that depend on ancestry inflated low-frequency tails, and
+-HRATT's effect estimates were attenuated by about a third.
++HRATT's effect estimates were attenuated by about a third. Cross-fitted
++LOCO scores and covariate-specific genotype distributions then removed the
++attenuation and, with principal components among the covariates, the
++ancestry inflation in a second prespecified simulation, at 1.1 times the
++fitting time.
+ REML remains the default variance estimator without sampling weights.
+ The research agenda emphasizes
+ independent calibration audits, reference-panel fidelity, error-controlled
+@@ -828,15 +832,15 @@ probabilities that an in-sample LOCO offset overfits when cases are few:
+ with HRATT's offsets and 50 cases among 5,000 it gave $\lgc=0.55$ on a null
+ trait, against 1.01--1.04 for Equation~\eqref{eq:retro-variance}.
+ 
+-\subsection{Cross-fitted scores and covariate-specific genotype variances}
++\subsection{Cross-fitted scores and covariate-specific genotype distributions}
+ \label{sec:crossfit}
+ 
+ The validation of Section~\ref{sec:weights-binary-results} found three
+ faults. HRATT's effects were attenuated, rare binary outcomes broke the
+ per-group null fits, and weights that depend on ancestry inflated
+-low-frequency tails. HRATT now addresses them as follows. The figures quoted
+-below come from prototypes; the prespecified validation of these changes
+-(\code{benchmarks/hratt\_followups\_plan.md}) is pending.
++low-frequency tails. HRATT now addresses them as follows.
++Section~\ref{sec:followup-results} reports the prespecified validation of
++these changes; the figures quoted here come from prototypes.
+ 
+ \paragraph{In-sample absorption.}
+ A LOCO score fitted on all samples carries part of each sample's own
+@@ -868,8 +872,10 @@ HRATT now follows REGENIE's level~0 \citep{mbatchou2021}:
+  $g$'s variants. With strong structure, each group's model is refitted
+  without its variants instead ($k$ fits per group).
+ \end{itemize}
+-No sample's phenotype then enters its own score. Each group's score
+-enters with its least-squares coefficient, or logistic coefficient for
++Each fold's scores are then trained without that fold's outcomes. The
++variance components and the prior are still chosen on all samples, so the
++procedure as a whole does not exclude a sample's outcome from its own
++score. Each group's score enters with its least-squares coefficient, or logistic coefficient for
+ binary traits, kept in $[0,1]$. This out-of-fold calibration slope
+ shrinks an over-dispersed score but never undoes the prior's shrinkage.
+ Binary scores with a coefficient above one become fixed offsets. Scores
+@@ -894,7 +900,7 @@ refitted. HRATT refits each group when the structure test finds strong
+ structure. Below the test's threshold of 0.1 in average inflation, dropping
+ one of $G$ chromosomes' shares leaves roughly $1/G^2$ of it.
+ 
+-\paragraph{Covariate-specific genotype variances.}
++\paragraph{Covariate-specific genotype distributions.}
+ Equation~\eqref{eq:retro-variance} treats the genotypes as exchangeable
+ given the covariates. When allele frequencies vary with ancestry and the
+ weights or case fractions do too, that fails. Following SPAmix
+@@ -912,8 +918,15 @@ With $\pi_{ij}=p_{ij}(1-p_{ij})$,
+ which is Equation~\eqref{eq:retro-variance} when the covariates do not
+ predict the genotype. Ancestry principal components must therefore be
+ among the covariates. HRATT warns when the structure test still finds
+-strong structure after the covariates. The saddlepoint keeps the pooled
+-genotype distribution's shape, scaled to this variance.
++strong structure after the covariates.
++
++The saddlepoint uses the same model. Each called genotype is an
++independent Binomial$(2,p_{ij})$ draw given the covariates and the observed
++missing calls, which assumes Hardy--Weinberg equilibrium given the
++covariates. An intercept-only design keeps the empirical genotype
++distribution. In 2.0.0.dev6 this replaced the pooled distribution with only
++its variance corrected, which still over-rejected 4.7-fold at $10^{-4}$
++against an exact convolution of ancestry-specific binomials.
+ 
+ \paragraph{Two-sided tails.}
+ \code{spa\_two\_sided="doubled"} doubles the saddlepoint tail beyond the
+@@ -921,6 +934,11 @@ observed score, LDAK's default, putting $\alpha/2$ in each tail of a skewed
+ null. The default still adds both tails at $\pm|u|$, as SPAtest, SAIGE and
+ REGENIE do \citep{dey2017,zhou2018,mbatchou2021}.
+ 
++Since 2.0.0.dev6, weighted and binary standard errors describe the
++null-score linearisation and do not depend on the tail rule. Binary effects
++remain one-step approximations; exports label them \code{beta\_one\_step}
++and \code{se\_null\_score}.
++
+ \section{Evaluation design and provenance}
+ \label{sec:evaluation}
+ 
+@@ -1363,21 +1381,23 @@ sampling variation of the reported summaries.
+ \label{sec:kvik-results}
+ 
+ All 384 method runs returned valid p-values for every retained variant:
+-288 mixmogam runs repeated with commit e4089d8 and the 96 original official
++288 mixmogam runs repeated with 2.0.0.dev6 and the 96 original official
+ runs. Execution is distinct from convergence: mixmogam HRATT reported
+ incomplete cross-validation in six unadjusted confounded mixed-trait runs,
+ one of which also had incomplete LOCO fits (two in the original runs).
+ These remain in the summaries. In the original archive, an independently
+ regenerated structured/PC-adjusted case reproduced the serialized inputs
+ and all four methods' p-values exactly using frozen source snapshots.
+-Exact LOCO reproduces every original rejection rate; BOLT-inf and HRATT
+-change by Monte Carlo amounts, from the new Lanczos probes and calibration
+-draws of 2.0.0.dev5. Streaming changed no rejection rate or detection of
+-the dev5 reruns and moved $\log_{10}p$ by at most $5\times10^{-6}$.
++Exact LOCO and BOLT-inf reproduce every rejection rate of the earlier
++reruns with commit e4089d8: BOLT-inf's p-values are identical, and exact
++LOCO's moved by at most $1.3\times10^{-6}$ in $\log_{10}p$, from the
++refined REML search of 2.0.0.dev6. HRATT's cross-fitted scores
++(Section~\ref{sec:crossfit}) changed 0.26\% of its decisions at 1\% and
++its rejection rates by at most 0.10 percentage points.
+ 
+ Figure~\ref{fig:kvik-phensim} separates genetic-null rejection, mixed-trait
+ rejection on chromosome 6, and causal-marker detection. In unstructured
+-global-null cells, mean rejection at 1\% is approximately 1.01--1.06\%
++global-null cells, mean rejection at 1\% is approximately 1.00--1.06\%
+ across methods and LD settings. Under structure and the mixed trait,
+ LDAK-KVIK's null-chromosome rejection is 1.87\% without local LD
+ and 1.82\% with LD. This assesses the complete procedure, not an isolated
+@@ -1386,18 +1406,17 @@ denominator approximation.
+ Omitting the environmental mean shift produces the largest disagreement.
+ With LD, LDAK-KVIK gives $\lgc=3.455$ and 15.83\% genetic-null
+ rejection at 1\%; exact LOCO and mixmogam BOLT-inf give 1.34\% and 1.25\%,
+-and mixmogam HRATT gives 0.66\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
++and mixmogam HRATT gives 0.64\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
+ rejection is 21.5--25.2\% in four panels and 1.52--1.82\% in two.
+ Some inflated runs reach LDAK-KVIK's lower heritability
+ boundary after revision of the initial estimate. This motivates a
+ diagnostic experiment; it does not identify the cause. The mixmogam deflation
+ also fails nominal calibration.
+ 
+-Adding the same two PCs reduces LD global-null rejection to 0.94\%
++Adding the same two PCs reduces LD global-null rejection to 0.92\%
+ (mixmogam HRATT) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
+-is 1.17\% and 1.05\%. Both detect 50.00\% of causal markers, with the same
+-count in each of the six panels; ten causal markers per panel cannot
+-resolve a power difference. Detection gains in inflated, unadjusted cells must not
++is 1.17\% and 1.05\%. They detect 29 and 30 of the 60 causal markers; ten
++causal markers per panel cannot resolve a power difference. Detection gains in inflated, unadjusted cells must not
+ be interpreted as calibrated power. Explicit mean adjustment materially
+ changes the comparison in these panels; neither a genome-wide median
+ nor one favourable cell establishes general equivalence.
+@@ -1406,7 +1425,7 @@ nor one favourable cell establishes general equivalence.
+  \centering
+  \includegraphics[width=\textwidth]{figures/kvik_phensim.pdf}
+  \caption{Matched phensim comparison at 800 samples and 6,000 markers;
+- mixmogam methods are reruns with commit e4089d8 on the original inputs.
++ mixmogam methods are reruns with 2.0.0.dev6 on the original inputs.
+  Bars show one Monte Carlo standard error across six independent panels.
+  Dashed lines indicate nominal 1\% rejection. The middle row uses only
+  the chromosome without generating effects; the last row measures ten
+@@ -2074,8 +2093,8 @@ by mean QTL $\chi^2$ ratios of 1.39 to 2.63. With structure and weights that
+ depend on ancestry (S4), exchangeability failed: $\lgc$ was 0.93, and
+ variants with minor allele frequency 1--5\% were rejected 5.75 times too often
+ at $10^{-3}$ and 17 times at $10^{-4}$, where the sandwich was calibrated.
+-Ancestry covariates should remove the between-population term; that is
+-untested.
++Ancestry covariates alone did not fix this; with covariate-specific
++genotype distributions they did (Section~\ref{sec:followup-results}).
+ 
+ Binary tests had lopsided tails at 1\% and 5\% prevalence
+ (Table~\ref{tab:weights-binary}). The saddlepoint p-value adds both tails at
+@@ -2086,14 +2105,15 @@ Without the saddlepoint the heavier tail reached 46 times nominal at
+ $10^{-4}$, and the model-based logistic variance gave $\lgc=0.36$ at 1\%
+ prevalence. Official LDAK-KVIK was conservative at 1\% prevalence (two-sided
+ 0.62 and 0.57). Two of 30 replicates at 1\% prevalence stopped with a
+-separation error from the per-group null fit with its in-sample offset.
++separation error from the per-group null fit with its in-sample offset;
++with cross-fitted scores none did (Section~\ref{sec:followup-results}).
+ 
+ HRATT's effect estimates were attenuated in every cell: by 32\% without
+ selection and by 33--46\% in S1--S3, against $-4$\% to $+0.3$\% for LDAK-KVIK
+ and weighted least squares, with correlation 0.997 to the population slopes
+ throughout. The in-sample LOCO prediction absorbs part of each QTL's effect.
+-p-values are unaffected, but HRATT's effects and standard errors, unweighted
+-ones included, need an effect-size calibration such as LDAK-KVIK's.
++p-values are unaffected. Cross-fitted LOCO scores removed the attenuation
++(Section~\ref{sec:followup-results}).
+ Excluding the saddlepoint, the weighted paths took 1.32 and 1.28 times as
+ long as HRATT-HE, against prespecified limits of 1.3 and 1.6; the saddlepoint
+ took a median 1.2--1.7 seconds per fit, about as long as an HRATT-HE fit.
+@@ -2137,6 +2157,100 @@ took a median 1.2--1.7 seconds per fit, about as long as an HRATT-HE fit.
+ \end{table}
+ 
+ \FloatBarrier
++\subsection{Cross-fitted scores and covariate-specific genotype distributions: prespecified validation}
++\label{sec:followup-results}
++
++The follow-ups of Section~\ref{sec:crossfit} were validated on the samples
++of Section~\ref{sec:weights-binary-results}, regenerated from their seeds
++(archive \code{20261006-}\allowbreak\code{hratt-followups}, protocol frozen
++before the main run). The new cells were mixed traits at $F_{ST}=0.05$ and
++variants of the structured cells with 10 principal components among the
++covariates. All 660 cases completed, and five of seven criteria passed.
++
++\paragraph{Effects.}
++Cross-fitting removed the attenuation (Table~\ref{tab:followup-effects}):
++\begin{itemize}
++ \item Without structure or selection on the outcome (S0--S2), HRATT's
++  effects were within 1\% of the population slopes. Unweighted, it was 8\%
++  low under selection on the outcome, as the design expects.
++ \item At $F_{ST}=0.05$ without principal components they were 2.0\% below the
++  within-population slopes.
++ \item In-sample scores gave $-28$ to $-36$\%.
++ \item Under selection on the outcome (S3), weighted HRATT was 5.4\% low
++  (Monte Carlo SE 2.1), failing that criterion. Weighted least squares was
++  4.0\% low on the same samples, so inverse-probability weighting, not
++  HRATT, accounts for most of the gap.
++ \item Binary one-step effects were within 3\% of the population marginal log
++  odds ratios, with Monte Carlo SEs of 4--9\%; in-sample scores gave
++  $-16$\% and $-18$\%.
++\end{itemize}
++
++Power did not change: mean QTL $\chi^2$ was 0.999--1.009 times that of
++in-sample scores. Weighted HRATT exceeded weighted least squares by 1.20 to
++1.29 times, and binary HRATT exceeded logistic regression by 1.04 times.
++
++\paragraph{Calibration.}
++Without ancestry-dependent weights every test stayed calibrated
++(Table~\ref{tab:followup-calibration}):
++\begin{itemize}
++ \item Quantitative $\lgc$ was 0.993--1.008, with 0.92--1.04 times the nominal
++  rate at $10^{-3}$.
++ \item Binary two-sided rates were 0.94--1.08 at $10^{-3}$ and 0.84--1.14 at
++  $10^{-4}$. At 1\% prevalence no replicate failed (2 of 30 on 5 October).
++ \item The doubled tails put about half of $\alpha/2$ in the upper tail at 1\%
++  prevalence (0.51 at $10^{-3}$), at the edge of the criterion's range.
++ \item On chromosome 10 of the mixed traits $\lgc$ was 0.971--1.024. This
++  includes the refitted scores with $\lambda$ at $F_{ST}=0.05$.
++\end{itemize}
++
++With weights that depend on ancestry (S4) and principal components among
++the covariates, weighted tests rejected low-frequency variants at 0.85
++(quantitative) and 0.96 (binary) times the nominal rate at $10^{-3}$. The
++pooled-frequency model gave 6.54 and 3.96 with the same covariates, and
++the new model without principal components 5.86 and 3.16.
++
++\paragraph{Time.}
++Cross-fitting took 1.11 (quantitative) and 1.08 (binary) times as long as
++in-sample scores on the same cases. Weighted HRATT took 1.55 times as long as
++HRATT-HE, excluding the saddlepoint, failing the limit of 1.3; it was 1.32
++on 5 October, before the covariate-specific frequencies.
++
++\begin{table}[htbp]
++ \centering\small
++ \caption{Effects at the QTL of mixed traits: relative bias (\%) of the
++ per-allele estimates against the population slopes (within-population at
++ $F_{ST}=0.05$; marginal log odds ratios for binary traits), mean over 10
++ replicates with its Monte Carlo SE, and mean QTL $\chi^2$.}
++ \label{tab:followup-effects}
++ \begin{tabular}{@{}llrr@{}}
++ \toprule
++ Cell & Method & Bias (SE) & QTL $\chi^2$ \\
++ \midrule
++ \tabinput{tables/followup_effects.tex}
++ \bottomrule
++ \end{tabular}
++\end{table}
++
++\begin{table}[htbp]
++ \centering\small
++ \caption{Calibration of the follow-up tests: rejection rates of null
++ variants over nominal, pooled over 30 replicates, with $\lgc$ on minor
++ allele frequency $\ge5\%$. ``Doubled tails'' doubles the saddlepoint tail
++ beyond the score; ``pooled frequencies'' gives every sample the pooled
++ allele frequency.}
++ \label{tab:followup-calibration}
++ \begin{tabular}{@{}llrrrr@{}}
++ \toprule
++ & & & \multicolumn{2}{c}{$\alpha=10^{-3}$, MAF} & $10^{-4}$ \\
++ Cell & Method & $\lgc$ & 1--5\% & $\ge5\%$ & all \\
++ \midrule
++ \tabinput{tables/followup_calibration.tex}
++ \bottomrule
++ \end{tabular}
++\end{table}
++
++\FloatBarrier
++
+ \section{Discussion}
+ 
+ \subsection{The central distinction is between geometry and inference}
+@@ -2208,7 +2322,11 @@ simulation of unrelated samples with independent markers
+ (Section~\ref{sec:weights-binary-results}): weighted quantitative tests were
+ calibrated unless the weights depended on ancestry, binary tails were
+ lopsided at low prevalence, and HRATT's effect estimates were attenuated.
+-Rarer outcomes, relatedness and real participation weights are untested,
++The follow-ups (Section~\ref{sec:followup-results}) removed the
++attenuation and, with principal components among the covariates, the
++ancestry inflation. Their saddlepoint assumes Hardy--Weinberg equilibrium
++given the covariates, and weighted fits take 1.55 times as long as
++HRATT-HE. Rarer outcomes, relatedness and real participation weights are untested,
+ and HRATT's retrospective saddlepoint differs from SAIGE's model-based one
+ \citep{zhou2018}.
+ 
+@@ -2458,11 +2576,11 @@ bound nor unchanged decisions on two panels settles this question.
+ 
+ A useful extension would add a carefully specified continuous-dosage
+ interface with imputation-quality handling and independent decoding
+-fixtures. HRATT needs an effect-size calibration for its LOCO residuals
+-(Section~\ref{sec:weights-binary-results}), an ancestry-aware genotype
+-variance for weights that depend on ancestry, and external validation of its
+-case-control and weighted tests: prevalence below 1\%, related samples, real
+-participation weights, and comparison with SAIGE and REGENIE. The other
++fixtures. HRATT's case-control and weighted tests need external
++validation: prevalence below 1\%, related samples, real participation
++weights, and comparison with SAIGE and REGENIE. Their conditional
++Hardy--Weinberg assumption should be checked against empirical
++covariate-specific genotype distributions. The other
+ methods remain quantitative-only. Prospective prediction, if developed, should use
+ held-out families or populations and report transportability separately
+ from association power.
+@@ -2480,7 +2598,7 @@ and two-bit routes, without hiding estimator changes or numerical failures.
+ 
+ The repository is available at
+ \url{https://github.com/bvilhjal/mixmogam}. This report describes package
+-version 2.0.0.dev5; the known-covariance experiment uses baseline commit
++version 2.0.0.dev6; the known-covariance experiment uses baseline commit
+ \code{729c8532}. Its self-contained driver is
+ \code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
+ and manifest in \code{20261003-manuscript-geometry} beneath
+@@ -2492,11 +2610,13 @@ for provenance; its results are not incorporated into the revised displays.
+ The matched phensim study is archived as \code{20261003-phensim-kvik},
+ using mixmogam baseline \code{db232216} and phensim baseline
+ \code{4939124e} with the explicitly snapshotted simulator extensions.
+-The generating and analysis driver is \code{benchmarks/kvik\_simulation.py};
++The generating and analysis driver is
++\code{benchmarks/}\allowbreak\code{ldak\_kvik\_comparison.py}, archived under
++its earlier name \code{kvik\_simulation.py};
+ the frozen plan, full package sources, complete inputs, raw p-values,
+ commands, logs, diagnostics and resource measurements accompany its results.
+-The separate \code{report/make\_kvik\_figures.py} renders this evidence
+-without rerunning any association test.
++The separate \code{report/}\allowbreak\code{make\_ldak\_kvik\_figures.py}
++renders this evidence without rerunning any association test.
+ 
+ The workload extensions are listed in the report evidence map. Large BED
+ files remain local, with hashes, phased references and generating sources
+@@ -2537,11 +2657,12 @@ Table~\ref{tab:dev5-paired} from the paired archive and
+ Table~\ref{tab:dev5-slq} from the Lanczos rerun, and records hashes in
+ \code{dev5\_table\_}\allowbreak\code{manifest.json}.
+ 
+-The benchmark reruns with commit e4089d8 are archived as
+-\code{20261005-}\allowbreak\code{phensim-kvik-}\allowbreak\code{e4089d8} (with
+-\code{-n2000} and \code{-n4000}), \code{20261005-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{e4089d8-n10000}
+-and \code{-n50000}, \code{20261005-}\allowbreak\code{kvik-he-}\allowbreak\code{e4089d8} and
+-\code{20261005-}\allowbreak\code{kvik-20k-}\allowbreak\code{e4089d8}, beside the 2.0.0.dev5 reruns
++The benchmark reruns with 2.0.0.dev6 are archived as
++\code{20261006-}\allowbreak\code{phensim-kvik-}\allowbreak\code{dev6} (with
++\code{-n2000} and \code{-n4000}), \code{20261006-}\allowbreak\code{hapnest-kvik-}\allowbreak\code{dev6-n10000}
++and \code{-n50000}, \code{20261006-}\allowbreak\code{kvik-he-}\allowbreak\code{dev6} and
++\code{20261006-}\allowbreak\code{kvik-20k-}\allowbreak\code{dev6}, beside the earlier reruns with
++commit e4089d8 (\code{20261005-}\allowbreak\code{*-e4089d8}) and 2.0.0.dev5
+ (\code{20261004-}\allowbreak\code{*-dev5}). Each records its frozen source,
+ its commands and the hash of every reused file. The same-day checks are
+ \code{20261004-}\allowbreak\code{same-day-dev4-dev5} and
+@@ -2560,6 +2681,14 @@ The steps between the versions are in
+ \code{20261004-}\allowbreak\code{packed-calls}. The Lanczos rerun is
+ \code{20261005-}\allowbreak\code{slq-defaults-}\allowbreak\code{e4089d8}.
+ 
++The case-control and weighted validations are archived as
++\code{20261005-}\allowbreak\code{hratt-weights-binary} and
++\code{20261006-}\allowbreak\code{hratt-followups}, from
++\code{benchmarks/}\allowbreak\code{hratt\_weights\_binary.py} and
++\code{benchmarks/}\allowbreak\code{hratt\_followups.py};
++\code{report/}\allowbreak\code{make\_weights\_binary\_tables.py} and
++\code{report/}\allowbreak\code{make\_followup\_tables.py} render their tables.
++
+ \code{report/README.md} gives the reproduction commands, exact archive
+ identities, and evidence map. The figure generator reads recorded results and does not silently
+ rerun old analyses. The figure and report manifests identify source
+diff --git a/tests/test_kvik_simulation.py b/tests/test_ldak_kvik_comparison.py
+similarity index 88%
+rename from tests/test_kvik_simulation.py
+rename to tests/test_ldak_kvik_comparison.py
+index 34e9edd5..c0245e07 100644
+--- a/tests/test_kvik_simulation.py
++++ b/tests/test_ldak_kvik_comparison.py
+@@ -7,8 +7,8 @@ import numpy as np
+ import pytest
+ from scipy import stats
+ 
+-PATH = Path(__file__).resolve().parents[1] / "benchmarks" / "kvik_simulation.py"
+-SPEC = importlib.util.spec_from_file_location("kvik_simulation", PATH)
++PATH = Path(__file__).resolve().parents[1] / "benchmarks" / "ldak_kvik_comparison.py"
++SPEC = importlib.util.spec_from_file_location("ldak_kvik_comparison", PATH)
+ bench = importlib.util.module_from_spec(SPEC)
+ SPEC.loader.exec_module(bench)
+ 
+@@ -107,3 +107,14 @@ def test_rerun_reuses_inputs_and_other_outputs_but_not_rerun_methods(tmp_path):
+     (panel / "geno.bed").write_bytes(b"changed")
+     with pytest.raises(ValueError, match="export record"):
+         bench.prepare_rerun(old, tmp_path / "again", ["exact"])
++
++
++def test_load_gate_waits_until_the_load_falls(monkeypatch):
++    loads = iter([9.0, 6.0, 3.0])
++    monkeypatch.setattr(bench.os, "getloadavg", lambda: (next(loads), 0.0, 0.0))
++    monkeypatch.setattr(bench.time, "sleep", lambda seconds: None)
++    bench.wait_for_quiet(None)
++    assert next(loads) == 9.0       # no limit: the load is not read
++    bench.wait_for_quiet(5)
++    with pytest.raises(StopIteration):
++        next(loads)                 # read until it fell below the limit
+diff --git a/tests/test_kvik_preparation.py b/tests/test_ldak_kvik_preparation.py
+similarity index 98%
+rename from tests/test_kvik_preparation.py
+rename to tests/test_ldak_kvik_preparation.py
+index 56571d32..ac01b550 100644
+--- a/tests/test_kvik_preparation.py
++++ b/tests/test_ldak_kvik_preparation.py
+@@ -8,7 +8,7 @@ from types import SimpleNamespace
+ import numpy as np
+ import pytest
+ 
+-PATH = Path(__file__).resolve().parents[1] / "benchmarks" / "kvik_simulation.py"
++PATH = Path(__file__).resolve().parents[1] / "benchmarks" / "ldak_kvik_comparison.py"
+ SPEC = importlib.util.spec_from_file_location("kvik_preparation", PATH)
+ bench = importlib.util.module_from_spec(SPEC)
+ SPEC.loader.exec_module(bench)

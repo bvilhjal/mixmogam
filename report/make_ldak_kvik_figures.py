@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 """Render the phensim/reference comparison, without rerunning scans.
 
-The archives are reruns with commit e4089d8: mixmogam methods ran again on the
-original inputs, and the official LDAK-KVIK outputs were reused unchanged.
-Every reused file is checked against the hash recorded at rerun time. Archives
-before the method's rename store HRATT as "kvik"; ``read_rows`` maps that key,
-or drops it where a rerun added "hratt".
+The archives are reruns with 2.0.0.dev6, whose HRATT cross-fits its LOCO
+scores: mixmogam methods ran again on the original inputs, and the official
+LDAK-KVIK outputs were reused unchanged. Every reused file is checked against
+the hash recorded at rerun time. Archives before the method's rename store
+HRATT as "kvik"; ``read_rows`` maps that key, or drops it where a rerun added
+"hratt".
 """
 import csv
 import hashlib
@@ -19,8 +20,8 @@ import numpy as np
 from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
-RUN = ROOT / "benchmarks/results/20261005-phensim-kvik-e4089d8"
-HAPNEST = "benchmarks/results/20261005-hapnest-kvik-e4089d8-n{n}"
+RUN = ROOT / "benchmarks/results/20261006-phensim-kvik-dev6"
+HAPNEST = "benchmarks/results/20261006-hapnest-kvik-dev6-n{n}"
 OUT = ROOT / "report"
 METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
 NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam HRATT", "LDAK-KVIK"]
