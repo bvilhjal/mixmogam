@@ -1288,12 +1288,13 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     (strong structure), k x groups fits, each group's without its variants.
     A genome-wide fit spreads the ancestry signal over every chromosome, so
     under strong structure dropping one group's share leaves ancestry in the
-    residual (null lambda_GC 2.4-5.8 at Fst 0.15 without principal
-    components, against 0.89-1.09 refitted). Each group's residual is then the projected phenotype less
-    its score times the score's least-squares coefficient kept in [0, 1]
-    (``offset_slope``: its out-of-fold calibration slope, which shrinks an
-    over-dispersed score but never inflates the prior's shrinkage). Without
-    polygenic variance (all ``h2j`` zero) there are no scores.
+    residual (null lambda_GC 1.5-4.4 at Fst 0.15 without principal
+    components, against 0.9-1.1 refitted). Each group's residual is then
+    the projected phenotype less its score times the score's least-squares
+    coefficient kept in [0, 1] (``offset_slope``: its out-of-fold
+    calibration slope, which shrinks an over-dispersed score but never
+    undoes the prior's shrinkage). Without polygenic variance (all ``h2j``
+    zero) there are no scores.
     """
     n, G = st.lg.n, st.lg.n_groups
 

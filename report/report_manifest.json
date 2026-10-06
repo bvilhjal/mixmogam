@@ -1,28 +1,30 @@
 {
-  "revision": "2026-10-05-hratt-binary-weights",
-  "recorded_at_utc": "2026-10-06T05:32:19.420622+00:00",
+  "revision": "2026-10-06-hratt-followup-methods",
+  "recorded_at_utc": "2026-10-06T08:55:35.396867+00:00",
   "package_version": "2.0.0.dev5",
-  "parent_commit": "21f9a85b131df818f4a7b421b8a0e7753dfe976c",
-  "revision_state": "Delivered by the Git commit containing this manifest, after 21f9a85. Adds case-control outcomes and sampling weights to HRATT (retrospective score tests with a genotype saddlepoint approximation), Sections 2.12 and 4.11, two tables and the prespecified validation archive; earlier tables and figures are unchanged.",
+  "parent_commit": "d5e595d5f54a08b8a001ed38299138ce99fac9d0",
+  "revision_state": "Delivered by the Git commit containing this manifest, after d5e595d. Adds Section 2.13 (cross-fitted LOCO scores, covariate-specific genotype variances, doubled saddlepoint tails) and two references; its figures come from prototypes, and the follow-ups' prespecified validation is pending. Earlier tables and figures are unchanged.",
   "pdf": {
     "path": "report/mixmogam_report.pdf",
-    "sha256": "bf49aba6722fa3767f240cea950ae4bef49cce87266dc5d5accd8dc0c9f427ae",
-    "pages": 43
+    "sha256": "dfd5ac179b0dc90b04945a37dc81348f0a2d976c3af542e1e7875a0698bdf41b",
+    "pages": 46
   },
   "counts": {
     "figures": 5,
     "tables": 18,
-    "numbered_equations": 22,
-    "verified_bibliography_entries": 30,
+    "numbered_equations": 23,
+    "verified_bibliography_entries": 32,
     "research_priorities": 6
   },
   "input_sha256": {
-    "CHANGELOG.md": "681759d2011a3e4bace9785c1995afd5692b594ae2a74c2be8e398fe91e96609",
+    "CHANGELOG.md": "a77e1f82f279a345a183763d1ddda74de55ebe17c8035aceba2b359bda4f5b51",
     "MANIFEST.in": "d3f8f2366549d52b194ff34adec21a3d3a6f85801d45d317b83b186a0d8eb08c",
-    "README.md": "d55b9965fe5b02739250965a05fb57008643890f385ba3ec13ded8fad5ebcd1f",
+    "README.md": "41ebacabb92348565cbdf6ac1d80f48e89bb7ec8e2fd3a6e41f2f05af5f9583c",
     "benchmarks/README.md": "636eb142507b23274781b5ad37bd77d4f3dbeeab0631e5661af6a0017ec6dba0",
     "benchmarks/denominator_geometry.py": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
     "benchmarks/efficiency_paired.py": "af041304bb3b4bd827769648c493879e21664a2a1d1b7c5df9538bcc9261bd34",
+    "benchmarks/hratt_followups.py": "fedf837d19631feafe8dcd4370236edfaeda8ff18cee060728519066381fe21b",
+    "benchmarks/hratt_followups_plan.md": "4dcf43742cf8f421856e21e985ee1362be2c5e2a52b3611b335af298ee814e3e",
     "benchmarks/hratt_weights_binary.py": "8a07a80e16e48ba12e3b2857f82fbfba1d72ccdad27e4e8b0ddb6094c0a8348f",
     "benchmarks/hratt_weights_binary_plan.md": "e7cb6672cc942f2d4059ed704df638d91ae3c8a0b320e7e955d028c74970682d",
     "benchmarks/kvik_20k_plan.md": "e53a93e0c8b1550810643142190be93dfbb0f5adf318f2d1179a49d35a38ba58",
@@ -398,8 +400,8 @@
     "benchmarks/results/20261005-slq-defaults-e4089d8/slq_defaults.py": "57d4b8a40784fa1e43981f3747252caa37bc22dc18455d762b529988ee93e360",
     "benchmarks/results/20261005-slq-defaults-e4089d8/summary.json": "3eda8b19c7ab650c833500d1c398cb27f4d74a39d63368dd71757c08ed1d2350",
     "benchmarks/slq_defaults.py": "57d4b8a40784fa1e43981f3747252caa37bc22dc18455d762b529988ee93e360",
-    "docs/design.md": "8eb9e480f387b290aa4b4e498eae5d51e1d3d1661d18e11cb5de40260cedded7",
-    "docs/quickstart.md": "705c8c7306351f48a2275d67750be5195a4232c113453566f7c6913a76706503",
+    "docs/design.md": "74e6bf6dcdfa4bcaa140de87a016704bac9cceb89bf044868cbe231cc901dd25",
+    "docs/quickstart.md": "c62fffb3fc943a2c99065955c3e98e4c05dbcb1a58f595d46a6b03ee44fd2d89",
     "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
     "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
     "report/README.md": "d0be123a5fadc250f78fd812d0fc36ec4ec603a0961ce8d7c8df23d54f4ed828",
@@ -422,8 +424,8 @@
     "report/make_kvik_figures.py": "96b1e706bf1344ab16b4e7a61d1810894d17ab96ed540db21816e1f89b501646",
     "report/make_streaming_tables.py": "6d89096fe0705c13adada736cf7a1645ebc52e2d5a7146e764915b37c92175b9",
     "report/make_weights_binary_tables.py": "41e7c6ef11cc82f32e011260f2ca3a2950dbe686e25ebda973767defd5eec86b",
-    "report/mixmogam_report.tex": "9f7989f2cefc878e70f638f443e8ed9b25418913742020b4005a2b9cf41edeea",
-    "report/references.json": "8a466aad0fc463ce6c86b29c532746016f2e032c78422375daa09e9e6aa240cf",
+    "report/mixmogam_report.tex": "e292f26322ec31e67b79c6daf96e5318a5870226a53aa28403ae908bd20555f7",
+    "report/references.json": "a29b4c3444fa549f0db30c0f93a5c4b730948f1fb69af9906edff1a6edb74dc4",
     "report/streaming_table_manifest.json": "3218d2e84ecb872187a4a2dc16ba01c0b6043ea8afd5ea97c380e09f4bda4907",
     "report/tables/calibration.tex": "c6a0896f7ce1675cc2b41b446b328676e7c233b6a806bf7f2f4916a481e7e9ea",
     "report/tables/dev5_paired.tex": "a18d2c9545fbf2a3cd9cf6d8a0d65f0346a4b19e18805baf0c6afaafc625a5cb",
@@ -450,7 +452,7 @@
   },
   "package_source_sha256": {
     "mixmogam/__init__.py": "e988d36f6718c4d4c1f9447f571520226698628aa153c813a551c9f90456ab27",
-    "mixmogam/_binary.py": "cd4b8fe88743d4902efc18576c86f19d691a56960422724cb6ce8651e5a0b128",
+    "mixmogam/_binary.py": "fb55851f6655fa45bf92e1991ec6c78a89c77b6031e1e515ecded5552982b9b7",
     "mixmogam/_cg.py": "5f0535fa63b8065eb2396cbd3d05c9697154a700cf249507ca021d8c25293620",
     "mixmogam/_chol.py": "fb579f02f4cd1f99862fd3c0f7c22969f1576f4e48500d12dcc1fefc7580d0c9",
     "mixmogam/_fast.py": "f33c24e3bd9aa57ae971f5a65fc3b986736589e4c99d5e2a846217e98e3af994",
@@ -458,10 +460,10 @@
     "mixmogam/_loco.py": "4da8b85262148586b0476834f478faaa80ab3f672a48826cc3a9592570a7225a",
     "mixmogam/_packed.py": "4303d0b34294ce00afeb668b6eb77bca4d70032c0230ecdfa3ca946f9a476c15",
     "mixmogam/_slq.py": "f47b1241986055d5b9c8d8e9d6a38eecb5c76ef37c21482b946e335c1266802a",
-    "mixmogam/_spa.py": "1370e2e44c8d36d76bb5cf819ff2ee251de466dbc9bf6563d858c30264e88dcd",
+    "mixmogam/_spa.py": "6b98a2255b4f8fb00b51dae85a0f413effc589d5680e2ec9ae00184668a7236e",
     "mixmogam/_standardize.py": "b98476ce224c0bafae73b267da7b9ff532f48229083e485e3204b71d06348a2e",
     "mixmogam/_vb.py": "7b82ae9283a846c0e32b26dfb9bb4c59d842fae2bba96273b0be3e14212fdf30",
-    "mixmogam/association.py": "c5769c3cabf15cb95b10dee072fa86b29d70d7b822cc74aa87200eb48209b45d",
+    "mixmogam/association.py": "1759a9c54b9eb7ab9a4b377b23625e81734a47e779de9a2f4447c98c75c48fbe",
     "mixmogam/genotypes.py": "b2bdaf0b1df4d6a300ef06572e8501f75c444a31d72a69ac76ad7dd21f531837",
     "mixmogam/io/__init__.py": "a92f0cdc6c50c62de5d0e8a55352433b146c8c18e60534ad06c8ceae48f1030b",
     "mixmogam/io/eigenstrat.py": "e84bf1f46d110dcedc4d8ea8cba87b2c1e3e6f2a121b3e0202142c852dedda3b",
@@ -478,7 +480,7 @@
     "mixmogam/scan.py": "8d8b09f541e48dafc7b08d8f2b70777c137fcb00f0bece806647b9fe6f298507",
     "mixmogam/simulate.py": "619b53ee78c289e80c94749daa735c3e276a2c12f4274111364b6fcd7603c4b6",
     "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
-    "mixmogam/twostep.py": "d58de63d47d973df468ba1620bbd78b54202f57b6f74287a92dbeb44e88456a5"
+    "mixmogam/twostep.py": "c38724b7b17730aab43d15297d0a72963216d53b3b6b3b26eea0051e5110c9bf"
   },
   "benchmark_code_identity": {
     "renamed_from_e4089d8": [
@@ -596,86 +598,67 @@
     "reproduction_note": "Large genotypes and external binaries are excluded. Frozen sources, references, seeds,retained-marker indices and phenotype metadata permit regeneration. Archived commands contain original absolute paths and finalizers may compare live-source hashes; reruns need rebased paths and the frozen code/version."
   },
   "historical_delivery": {
-    "commit": "21f9a85",
+    "commit": "5ca2fa06",
     "manifest_path": "report/report_manifest.json",
-    "manifest_sha256": "fb3d9eb1e93be965e28734d5c90da55c18bfd78a81df3e62e8a69f14ec8d7349",
+    "manifest_sha256": "dee6e738fe1ca5e17d59b15fad6af1a0ef3c8612618b46991dcef2ffe703e10a",
     "package_version": "2.0.0.dev5",
-    "pdf_sha256": "58f0d48452edf67a5889b26445f0d1e97dc15c3d2135e3f2a6197767a4d3988a",
-    "scope": "2026-10-05-hratt-expansion",
+    "pdf_sha256": "bf49aba6722fa3767f240cea950ae4bef49cce87266dc5d5accd8dc0c9f427ae",
+    "scope": "2026-10-05-hratt-binary-weights",
     "previous": {
-      "commit": "d51b4c3",
+      "commit": "21f9a85",
       "manifest_path": "report/report_manifest.json",
-      "manifest_sha256": "030d377ccca664b1a878a9fd962587f944570b4a7b9589fdbeec9b53b092f5fc",
+      "manifest_sha256": "fb3d9eb1e93be965e28734d5c90da55c18bfd78a81df3e62e8a69f14ec8d7349",
       "package_version": "2.0.0.dev5",
-      "pdf_sha256": "da48b00c90bc610497749e23729b1cb25524ecd78605bdb010462a8f51a6c2ca",
-      "scope": "2026-10-05-hratt-and-current-paired-evidence",
+      "pdf_sha256": "58f0d48452edf67a5889b26445f0d1e97dc15c3d2135e3f2a6197767a4d3988a",
+      "scope": "2026-10-05-hratt-expansion",
       "previous": {
-        "commit": "b7c30b7",
+        "commit": "d51b4c3",
         "manifest_path": "report/report_manifest.json",
-        "manifest_sha256": "2a235467574dd9fcede0d7fa93f86fb6423f89e321213ff81c985a7bd4c8ea9b",
+        "manifest_sha256": "030d377ccca664b1a878a9fd962587f944570b4a7b9589fdbeec9b53b092f5fc",
         "package_version": "2.0.0.dev5",
-        "pdf_sha256": "da7c69a851c59759f32bf88866afaee7744bdc8c018e56e351d08d4e5f8e3854",
-        "scope": "2026-10-05-benchmark-reruns-e4089d8",
+        "pdf_sha256": "da48b00c90bc610497749e23729b1cb25524ecd78605bdb010462a8f51a6c2ca",
+        "scope": "2026-10-05-hratt-and-current-paired-evidence",
         "previous": {
-          "commit": "82e9226",
+          "commit": "b7c30b7",
           "manifest_path": "report/report_manifest.json",
-          "manifest_sha256": "fe48088f807f5390234491a02bf34d3343aad294f118447ebf90d929b45ad10d",
+          "manifest_sha256": "2a235467574dd9fcede0d7fa93f86fb6423f89e321213ff81c985a7bd4c8ea9b",
           "package_version": "2.0.0.dev5",
-          "pdf_sha256": "25510c485851df6650701496ae8ebdbac1d16d25391e8c999b745158b73e7d76",
-          "scope": "2026-10-04-genotype-streaming",
+          "pdf_sha256": "da7c69a851c59759f32bf88866afaee7744bdc8c018e56e351d08d4e5f8e3854",
+          "scope": "2026-10-05-benchmark-reruns-e4089d8",
           "previous": {
-            "commit": "4db5034",
+            "commit": "82e9226",
             "manifest_path": "report/report_manifest.json",
-            "manifest_sha256": "d1588a38c2f4a8aa00fa9f07ff76913efb7248e3ee0b2a5a0e0be6e54865c9c9",
+            "manifest_sha256": "fe48088f807f5390234491a02bf34d3343aad294f118447ebf90d929b45ad10d",
             "package_version": "2.0.0.dev5",
-            "pdf_sha256": "b67fda6c339abcb660b24b9354ee0263055ac7fb6eebea76cb9f3d40755a6412",
-            "scope": "2026-10-04-benchmark-reruns-2.0.0.dev5",
+            "pdf_sha256": "25510c485851df6650701496ae8ebdbac1d16d25391e8c999b745158b73e7d76",
+            "scope": "2026-10-04-genotype-streaming",
             "previous": {
-              "commit": "5353a23",
+              "commit": "4db5034",
               "manifest_path": "report/report_manifest.json",
-              "manifest_sha256": "6ac628b6d97a25a32b63cb6f3fb72f63ae8e289264c793f11fd406d2ea17973a",
+              "manifest_sha256": "d1588a38c2f4a8aa00fa9f07ff76913efb7248e3ee0b2a5a0e0be6e54865c9c9",
               "package_version": "2.0.0.dev5",
-              "pdf_sha256": "49cabe80aa2f7a433d8e6972ba16c6ff29a1085f5e8e70609e827d8a154cddf8",
-              "scope": "2.0.0.dev5 release: Section 2.10 methods, paired dev4/dev5 evidence and release checks.",
-              "unchanged_figures_and_bibliography": [
-                "report/figures/calibration.pdf",
-                "report/figures/geometry.pdf",
-                "report/figures/s2_loading.pdf",
-                "report/references.json"
-              ],
+              "pdf_sha256": "b67fda6c339abcb660b24b9354ee0263055ac7fb6eebea76cb9f3d40755a6412",
+              "scope": "2026-10-04-benchmark-reruns-2.0.0.dev5",
               "previous": {
-                "commit": "0fa3da82ac0e5a6d33c47d1307a9e3e117ecfbc2",
+                "commit": "5353a23",
                 "manifest_path": "report/report_manifest.json",
-                "manifest_sha256": "c8ca661611ea3cebf158fc2e5acc04a0ea595c1a4c8d1b9c5006f4193054e25e",
-                "package_version": "2.0.0.dev4",
-                "pdf_sha256": "1d97bebdbeb6e02c5869f44b10308ed98f189d59b878bcbf0174747b5aa6924c",
-                "scope": "Optimized KVIK, explicit HE, the 20K thread and cache experiments and their release checks. Test and source claims of that delivery apply to its tree, not this release.",
+                "manifest_sha256": "6ac628b6d97a25a32b63cb6f3fb72f63ae8e289264c793f11fd406d2ea17973a",
+                "package_version": "2.0.0.dev5",
+                "pdf_sha256": "49cabe80aa2f7a433d8e6972ba16c6ff29a1085f5e8e70609e827d8a154cddf8",
+                "scope": "2.0.0.dev5 release: Section 2.10 methods, paired dev4/dev5 evidence and release checks.",
                 "unchanged_figures_and_bibliography": [
                   "report/figures/calibration.pdf",
                   "report/figures/geometry.pdf",
-                  "report/figures/kvik_phensim.pdf",
-                  "report/figures/kvik_phensim.png",
-                  "report/figures/kvik_scaling.pdf",
-                  "report/figures/kvik_scaling.png",
                   "report/figures/s2_loading.pdf",
                   "report/references.json"
                 ],
                 "previous": {
-                  "commit": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+                  "commit": "0fa3da82ac0e5a6d33c47d1307a9e3e117ecfbc2",
                   "manifest_path": "report/report_manifest.json",
-                  "manifest_sha256": "6246b11ff99606950850098c08d901eeb482711404a3ed14c4f35714d7e44463",
-                  "package_version": "2.0.0.dev3",
-                  "pdf_sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",
-                  "scope": "Initial correctness review, known-covariance experiment, matched n=800 study and preoptimization 12K association/simulator extension. Earlier source-comparison and test claims apply to that delivered tree, not this release.",
-                  "association_archives": [
-                    "benchmarks/results/20261003-phensim-kvik",
-                    "benchmarks/results/20261003-phensim-kvik-n2000",
-                    "benchmarks/results/20261003-phensim-kvik-n4000",
-                    "benchmarks/results/20261003-hapnest-kvik-n10000",
-                    "benchmarks/results/20261003-hapnest-kvik-n50000"
-                  ],
-                  "phensim_version": "1.0.0.dev2",
-                  "phensim_publication_commit": "f1937dbd9921546cb05fc7119ebeb9f719f7e694",
+                  "manifest_sha256": "c8ca661611ea3cebf158fc2e5acc04a0ea595c1a4c8d1b9c5006f4193054e25e",
+                  "package_version": "2.0.0.dev4",
+                  "pdf_sha256": "1d97bebdbeb6e02c5869f44b10308ed98f189d59b878bcbf0174747b5aa6924c",
+                  "scope": "Optimized KVIK, explicit HE, the 20K thread and cache experiments and their release checks. Test and source claims of that delivery apply to its tree, not this release.",
                   "unchanged_figures_and_bibliography": [
                     "report/figures/calibration.pdf",
                     "report/figures/geometry.pdf",
@@ -685,7 +668,34 @@
                     "report/figures/kvik_scaling.png",
                     "report/figures/s2_loading.pdf",
                     "report/references.json"
-                  ]
+                  ],
+                  "previous": {
+                    "commit": "2fb76dfea95c02afa7a9484fc1bddd075c1cb60e",
+                    "manifest_path": "report/report_manifest.json",
+                    "manifest_sha256": "6246b11ff99606950850098c08d901eeb482711404a3ed14c4f35714d7e44463",
+                    "package_version": "2.0.0.dev3",
+                    "pdf_sha256": "f13eb36f44f0b3afcc39c99ed0389eb47df1021e9338d6cfb0557cc7faff9b14",
+                    "scope": "Initial correctness review, known-covariance experiment, matched n=800 study and preoptimization 12K association/simulator extension. Earlier source-comparison and test claims apply to that delivered tree, not this release.",
+                    "association_archives": [
+                      "benchmarks/results/20261003-phensim-kvik",
+                      "benchmarks/results/20261003-phensim-kvik-n2000",
+                      "benchmarks/results/20261003-phensim-kvik-n4000",
+                      "benchmarks/results/20261003-hapnest-kvik-n10000",
+                      "benchmarks/results/20261003-hapnest-kvik-n50000"
+                    ],
+                    "phensim_version": "1.0.0.dev2",
+                    "phensim_publication_commit": "f1937dbd9921546cb05fc7119ebeb9f719f7e694",
+                    "unchanged_figures_and_bibliography": [
+                      "report/figures/calibration.pdf",
+                      "report/figures/geometry.pdf",
+                      "report/figures/kvik_phensim.pdf",
+                      "report/figures/kvik_phensim.png",
+                      "report/figures/kvik_scaling.pdf",
+                      "report/figures/kvik_scaling.png",
+                      "report/figures/s2_loading.pdf",
+                      "report/references.json"
+                    ]
+                  }
                 }
               }
             }
@@ -771,5 +781,11 @@
       "P6": true,
       "P7": false
     }
+  },
+  "followup_evidence": {
+    "plan": "benchmarks/hratt_followups_plan.md",
+    "runner": "benchmarks/hratt_followups.py",
+    "archive": null,
+    "status": "validation pending"
   }
 }

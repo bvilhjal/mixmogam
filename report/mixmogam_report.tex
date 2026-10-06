@@ -828,6 +828,99 @@ probabilities that an in-sample LOCO offset overfits when cases are few:
 with HRATT's offsets and 50 cases among 5,000 it gave $\lgc=0.55$ on a null
 trait, against 1.01--1.04 for Equation~\eqref{eq:retro-variance}.
 
+\subsection{Cross-fitted scores and covariate-specific genotype variances}
+\label{sec:crossfit}
+
+The validation of Section~\ref{sec:weights-binary-results} found three
+faults. HRATT's effects were attenuated, rare binary outcomes broke the
+per-group null fits, and weights that depend on ancestry inflated
+low-frequency tails. HRATT now addresses them as follows. The figures quoted
+below come from prototypes; the prespecified validation of these changes
+(\code{benchmarks/hratt\_followups\_plan.md}) is pending.
+
+\paragraph{In-sample absorption.}
+A LOCO score fitted on all samples carries part of each sample's own
+phenotype. For a linear smoother $S_g$ of the other chromosomes, the
+residual $\mathbf r_g=(\I-S_g)\y$ of a variant with effect $\beta_j$ on
+chromosome group $g$ has
+\[
+ \E(\z_j^\top\mathbf r_g)=\z_j^\top(\I-S_g)\z_j\,\beta_j
+ \approx(1-\tr S_g/n)\,\z_j^\top\z_j\,\beta_j ,
+\]
+so the slope $\z_j^\top\mathbf r_g/\z_j^\top\z_j$ is attenuated by about
+$\tr S_g/n$ (the bias GRAMMAR-Gamma corrects; \citealp{svishcheva2012}).
+The residual variance shrinks with it, so p-values are unaffected. For a
+binary trait the working response of a case is about $1/\mu_0$, and the
+same absorption gives the cases offsets of tens of logit units at 1\%
+prevalence: on one null replicate cases averaged $+43$ against $-0.4$ for
+controls. Heritability on the Pearson scale was overestimated there
+(REML median 0.10 on null traits at 1\% prevalence, up to 1.0), which
+made it worse.
+
+\paragraph{Cross-fitted scores.}
+HRATT now follows REGENIE's level~0 \citep{mbatchou2021}:
+\begin{itemize}
+ \item The samples are split into $k$ folds (\code{loco\_folds}, default
+ 5), by case status for binary traits.
+ \item The selected elastic-net model is fitted genome-wide on all but one
+ fold, $k$ fits in one sweep.
+ \item A sample's score for group $g$ is its own fold's fit without group
+ $g$'s variants. With strong structure, each group's model is refitted
+ without its variants instead ($k$ fits per group).
+\end{itemize}
+No sample's phenotype then enters its own score. Each group's score
+enters with its least-squares coefficient, or logistic coefficient for
+binary traits, kept in $[0,1]$. This out-of-fold calibration slope
+shrinks an over-dispersed score but never undoes the prior's shrinkage.
+Binary scores with a coefficient above one become fixed offsets. Scores
+that anti-predict, or whose null fit diverges, are dropped for their
+group. Without polygenic variance there are no scores.
+
+LDAK-KVIK instead keeps in-sample scores and calibrates effects by the
+slope of effects estimated without the score on effects estimated against
+the residual. That reference is confounded under structure: at
+$F_{ST}=0.05$ it gave 1.24 for minor allele frequency 1--5\% and 1.37
+above, and calibrated QTL effects came out 15\% large. It also cannot
+repair binary offsets.
+
+Without structure, dropping a group's share of a genome-wide fit matched
+per-group refits in prototypes: null $\lgc$ was 0.975--1.023 against
+0.975--1.018, with the same QTL effects and power. It costs $k$ fits instead
+of $k$ per group. Under structure it fails. A genome-wide fit spreads the
+ancestry signal over every chromosome, so dropping one chromosome's share
+leaves ancestry in its residual. At $F_{ST}=0.15$ without principal
+components, the null chromosome's $\lgc$ was 1.5--4.4, against 0.9--1.1
+refitted. HRATT refits each group when the structure test finds strong
+structure. Below the test's threshold of 0.1 in average inflation, dropping
+one of $G$ chromosomes' shares leaves roughly $1/G^2$ of it.
+
+\paragraph{Covariate-specific genotype variances.}
+Equation~\eqref{eq:retro-variance} treats the genotypes as exchangeable
+given the covariates. When allele frequencies vary with ancestry and the
+weights or case fractions do too, that fails. Following SPAmix
+\citep{ma2025}, sample $i$'s allele frequency $p_{ij}$ is half the
+genotype count fitted on the covariates. Its deviations from the mean are
+shrunk by $(F-1)/F$, with $F$ the regression's $F$ statistic, so that
+covariates unrelated to the genotype leave the pooled frequency.
+With $\pi_{ij}=p_{ij}(1-p_{ij})$,
+\begin{equation}
+ \Var(U_j\mid\mathbf a_g)\approx\zeta_j\,\|\mathbf a_g\|^2\rho_j,
+ \qquad
+ \rho_j=\frac{\sum_i a_{gi}^2\pi_{ij}/\sum_ia_{gi}^2}{n^{-1}\sum_i\pi_{ij}} ,
+ \label{eq:retro-variance-rho}
+\end{equation}
+which is Equation~\eqref{eq:retro-variance} when the covariates do not
+predict the genotype. Ancestry principal components must therefore be
+among the covariates. HRATT warns when the structure test still finds
+strong structure after the covariates. The saddlepoint keeps the pooled
+genotype distribution's shape, scaled to this variance.
+
+\paragraph{Two-sided tails.}
+\code{spa\_two\_sided="doubled"} doubles the saddlepoint tail beyond the
+observed score, LDAK's default, putting $\alpha/2$ in each tail of a skewed
+null. The default still adds both tails at $\pm|u|$, as SPAtest, SAIGE and
+REGENIE do \citep{dey2017,zhou2018,mbatchou2021}.
+
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
 
@@ -2639,6 +2732,12 @@ variational inference approach for increased mixed-model association
 power. \emph{Nat Genet} 57(2):461--468.
 \href{https://doi.org/10.1038/s41588-024-02044-7}{doi:10.1038/s41588-024-02044-7}
 
+\bibitem[Ma et~al.(2025)]{ma2025}
+Ma Y, Xu H, Li Y, et~al. (2025). SPAmix: a scalable, accurate, and
+universal analysis framework for large-scale genetic association studies in
+admixed populations. \emph{Genome Biol} 26(1):356.
+\href{https://doi.org/10.1186/s13059-025-03827-9}{doi:10.1186/s13059-025-03827-9}
+
 \bibitem[Mbatchou et~al.(2021)]{mbatchou2021}
 Mbatchou J, Barnard L, Backman J, et~al. (2021). Computationally
 efficient whole-genome regression for quantitative and binary traits.
@@ -2679,6 +2778,12 @@ Sul JH, Martin LS, Eskin E (2018). Population structure in genetic
 studies: confounding factors and mixed models. \emph{PLoS Genet}
 14(12):e1007309.
 \href{https://doi.org/10.1371/journal.pgen.1007309}{doi:10.1371/journal.pgen.1007309}
+
+\bibitem[Svishcheva et~al.(2012)]{svishcheva2012}
+Svishcheva GR, Axenovich TI, Belonogova NM, van Duijn CM, Aulchenko YS
+(2012). Rapid variance components-based method for whole-genome association
+analysis. \emph{Nat Genet} 44(10):1166--1170.
+\href{https://doi.org/10.1038/ng.2410}{doi:10.1038/ng.2410}
 
 \bibitem[Vilhj\'almsson and Nordborg(2013)]{vilhjalmsson2013}
 Vilhj\'almsson BJ, Nordborg M (2013). The nature of confounding in
