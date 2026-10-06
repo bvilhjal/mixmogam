@@ -38,15 +38,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   prevalence with near-nominal two-sided rates; 2 of 30 replicates at 1%
   prevalence stopped with a separation error.
 
-### Known issues
-
-- HRATT's effect estimates and standard errors are attenuated by its
-  in-sample LOCO prediction: by 32% without selection in the validation,
-  where LDAK-KVIK and weighted least squares were unbiased. p-values are
-  unaffected. This predates the extension; an effect-size calibration like
-  LDAK-KVIK's is needed.
+- `spa_two_sided="doubled"` doubles the saddlepoint tail beyond the
+  observed score, LDAK's default, putting half the level in each tail of a
+  skewed null. The default, `"distance"`, adds both tails at +-|u|, as
+  SPAtest, SAIGE and REGENIE do. `gwas` rejects `loco_folds` and
+  `spa_two_sided` for methods other than HRATT.
 
 ### Changed
+
+- HRATT's LOCO scores are cross-fitted (`loco_folds=5`, new): no sample's
+  phenotype enters its own score.
+  - Five genome-wide variational fits run, each on four fifths of the
+    samples (folds stratified by case status for binary traits).
+  - A sample's score for chromosome group g is its own fold's fit without
+    group g's variants, as in REGENIE's level 0.
+  - Under strong structure each group is refitted instead. Splitting a
+    genome-wide fit leaves ancestry in the residual: at Fst 0.15 without
+    principal components, the null chromosome's lambda_GC was 1.5-4.4 split
+    and 0.9-1.1 refitted.
+  - Each group's score enters with its out-of-fold calibration slope, kept
+    in [0, 1] (`extra["offset_slope"]`).
+  - In-sample scores absorbed part of every effect: in simulations, HRATT's
+    effects were 0.59-0.69 of the truth and are now 0.95-1.0, at equal
+    power.
+  - At 1% prevalence, in-sample scores gave cases offsets of tens of logit
+    units (+43 against -0.4 for controls on a null trait). This is what
+    stopped 2 of 30 replicates of the 5 October validation; that case now
+    runs with lambda_GC 1.04.
+  - `loco_folds=1` restores in-sample scores, bit for bit for unweighted
+    traits.
+  - In a one-replicate pilot at 5,000 samples, 20,000 markers and ten
+    groups, the cross-fitted fits took a median 1.11 times as long. The
+    prespecified validation (`benchmarks/hratt_followups_plan.md`) is
+    running; its archive will follow.
+- The retrospective tests of weighted and binary HRATT take each sample's
+  allele frequency from the covariates, as SPAmix does.
+  - Deviations from the mean are shrunk by the fit's F statistic, so
+    covariates unrelated to genotype leave the old variance.
+  - The score variance becomes zvar |a|^2 rho_j.
+  - With ancestry principal components among the covariates, weights that
+    depend on ancestry no longer inflate low-frequency tails: 1.2-1.4-fold
+    at 1e-3 for MAF 1-5% in a prototype of the S4 scenario. The pooled
+    variance gave 6.7-7.2-fold even with the PCs.
+  - HRATT warns when strong structure remains after the covariates in
+    weighted or binary analyses.
+- Binary null fits take the cross-fitted score as a covariate, its
+  coefficient kept in [0, 1]:
+  - a fixed offset above one;
+  - dropped if it anti-predicts or its fit diverges (`offsets_dropped`),
+    instead of stopping the analysis.
+
 
 - `heritability_method` defaults to `"auto"` (was `"reml"`): REML without
   sampling weights, HE with them.

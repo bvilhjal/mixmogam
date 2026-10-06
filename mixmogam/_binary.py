@@ -91,13 +91,48 @@ def loco_offsets(prediction, s, sy) -> np.ndarray:
     return pred * sy if s is None else pred * (sy / np.asarray(s, dtype=np.float64))[:, None]
 
 
-def group_null_fits(y, X, offsets, weights=None) -> list:
+def group_null_fits(y, X, offsets, weights=None, free_offset: bool = False) -> list:
     """Null logistic fits (``mu``, ``converged``) with each LOCO group's
-    offset, sampling-weighted when there are weights."""
+    offset, sampling-weighted when there are weights.
+
+    With ``free_offset`` (cross-fitted scores) the score's coefficient
+    (``slope``) is kept in [0, 1]: fitted, with the score as a covariate
+    (``X`` of the fit is the design with that column), when the estimate is
+    positive and at most one; a fixed offset when it is above one or the fit
+    diverges (the score separates the outcome); and the group is fitted
+    without the score (``dropped``) when the estimate is not positive (the
+    score anti-predicts: noise), the score lies in the span of the
+    covariates, or the fixed-offset fit diverges as well. In-sample offsets
+    have a fixed coefficient of one.
+    """
     fits = []
     for g in range(offsets.shape[1]):
-        fit = null_logistic(y, X, weights=weights, offset=offsets[:, g])
-        fits.append({"mu": fit["mu"], "converged": fit["converged"]})
+        o = offsets[:, g]
+        if not free_offset:
+            fit = null_logistic(y, X, weights=weights, offset=o)
+            fits.append({"mu": fit["mu"], "converged": fit["converged"]})
+            continue
+        resid = o - X @ linalg.lstsq(X, o, lapack_driver="gelsy")[0]
+        fit, design, slope = None, X, 0.0
+        if float(resid @ resid) > 1e-20 * max(float(o @ o), np.finfo(float).tiny):
+            Xo = np.column_stack([X, o])
+            try:
+                fit = null_logistic(y, Xo, weights=weights)
+            except ValueError:
+                fit = None
+            if fit is not None and 0.0 < fit["gamma"][-1] <= 1.0:
+                design, slope = Xo, float(fit["gamma"][-1])
+            elif fit is None or fit["gamma"][-1] > 1.0:  # at most the score itself
+                try:
+                    fit, slope = null_logistic(y, X, weights=weights, offset=o), 1.0
+                except ValueError:
+                    fit = None
+            else:
+                fit = None
+        if fit is None:
+            fit, slope = null_logistic(y, X, weights=weights), 0.0
+        fits.append({"mu": fit["mu"], "converged": fit["converged"], "slope": slope,
+                     "dropped": slope == 0.0, "X": design})
     return fits
 
 
@@ -110,9 +145,11 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
     (y - mu), since the null fit's residual is orthogonal to X), the
     information J = g~' W g~, and ``zvar``, the unweighted genotype
     variance after covariates, (sum z^2 - |Q_X' z|^2) / (n - q), of the
-    retrospective test (``Q``: an orthonormal basis of ``X``, computed if not
-    given); ``A`` holds the residuals w (y - mu), one column per group. One
-    pass over the genotype slices; rows are decoded
+    retrospective test with its covariate-specific factor ``rho``
+    (:func:`mixmogam.twostep._ancestry_ratio`; ``Q``: an orthonormal basis
+    of ``X``, computed if not given); ``A`` holds the residuals
+    w (y - mu), one column per group. One pass over the genotype slices;
+    rows are decoded
     row-scaled (z~ = s z), so sample-side vectors are divided by s and
     squared-tile weights by s^2.
     """
@@ -126,24 +163,30 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
     groups = []
     for fit in fits:
         mu = fit["mu"]
+        Xg = fit.get("X", X)  # the group's design (with a fitted score column)
         resid = w * (y - mu)
         W = w * mu * (1.0 - mu)
-        side = np.column_stack([resid * inv_s, (X * W[:, None]) * inv_s[:, None], basis])
+        side = np.column_stack([resid * inv_s, (Xg * W[:, None]) * inv_s[:, None], basis])
         sq = np.column_stack([W, np.ones(n)]) * inv_v[:, None]
-        groups.append({"side": side, "sq": sq, "M": linalg.inv((X * W[:, None]).T @ X),
-                       "Xr": X.T @ resid})
+        groups.append({"side": side, "sq": sq, "M": linalg.inv((Xg * W[:, None]).T @ Xg),
+                       "Xr": Xg.T @ resid, "q": Xg.shape[1]})
+    from mixmogam.twostep import _ancestry_ratio
+
+    A = np.column_stack([w * (y - fit["mu"]) for fit in fits])
+    A2 = A * A
     m = lg.m
-    U, J, zvar = np.zeros(m), np.zeros(m), np.zeros(m)
+    U, J, zvar, rho = np.zeros(m), np.zeros(m), np.zeros(m), np.zeros(m)
     tile = max(1, (16 * 1024**2) // max(8 * n, 1))
     for idx, g, Z in lg.raw_slices(tile):
         G_ = groups[g]
+        qg = G_["q"]
         Z64 = Z.astype(np.float64, copy=False)
         P = Z64 @ G_["side"]  # z'r, H = X'Wz, Q_X'z (per row)
         S = (Z64 * Z64) @ G_["sq"]  # sum W z^2, sum z^2
-        zr, H, cu = P[:, 0], P[:, 1:1 + q], P[:, 1 + q:]
+        zr, H, cu = P[:, 0], P[:, 1:1 + qg], P[:, 1 + qg:]
         MH = H @ G_["M"]  # rows: (M H_j)'
         U[idx] = zr - MH @ G_["Xr"]
         J[idx] = S[:, 0] - np.einsum("ij,ij->i", MH, H)
         zvar[idx] = (S[:, 1] - np.einsum("ij,ij->i", cu, cu)) / (n - q)
-    A = np.column_stack([w * (y - fit["mu"]) for fit in fits])
-    return {"U": U, "J": J, "zvar": zvar, "A": A}
+        rho[idx] = _ancestry_ratio(cu, S[:, 1], Q, lg.mean[idx], lg.sd[idx], A2[:, g])
+    return {"U": U, "J": J, "zvar": zvar, "rho": rho, "A": A}

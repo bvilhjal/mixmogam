@@ -96,6 +96,40 @@ def test_lattice_tails_match_the_exact_distribution(a, maf, spa_bound, normal_fl
     assert normal.max() > normal_floor
 
 
+@pytest.mark.parametrize("a, maf", [(case_control(2000, 100), 0.02), (heavy_tailed(), 0.02)],
+                         ids=["cases-5pct", "heavy-tailed"])
+def test_doubled_tails_are_twice_the_exact_one_sided_tail(a, maf):
+    freqs = hwe(maf)
+    low, dist = lattice(a, freqs)
+    upper, lower = np.cumsum(dist[::-1])[::-1], np.cumsum(dist)
+    mean = (CALLS @ freqs) * a.sum()
+    errors = {"up": [], "down": []}
+    for k in range(dist.size):
+        x = low + k - 0.5 - mean  # continuity-corrected point below lattice value low + k
+        for side, exact, point in (("up", upper[k], x), ("down", lower[k - 1] if k else 0.0, x)):
+            if not 1e-7 <= exact <= 1e-2 or (side == "up") != (point > 0):
+                continue
+            doubled = spa_pvalue(np.array([point]), a, CALLS[None, :], freqs[None, :],
+                                 two_sided="doubled")[0][0]
+            errors[side].append(abs(np.log10(doubled / 2 / exact)))
+    assert len(errors["up"]) >= 10
+    assert max(max(e) for e in errors.values() if e) < 0.1
+
+
+def test_doubled_tails_equal_distance_tails_for_a_symmetric_score():
+    rng = np.random.default_rng(39)
+    half = rng.normal(size=100)
+    a = np.r_[half, -half]
+    values = np.array([[-1.0, 0.0, 1.0, 0.0]])
+    freqs = np.array([[0.25, 0.5, 0.25, 0.0]])
+    u = np.array([2.5, -3.5]) * np.sqrt(0.5 * np.sum(a * a))
+    distance = spa_pvalue(u, a, np.tile(values, (2, 1)), np.tile(freqs, (2, 1)))
+    doubled = spa_pvalue(u, a, np.tile(values, (2, 1)), np.tile(freqs, (2, 1)), two_sided="doubled")
+    np.testing.assert_allclose(doubled[0], distance[0], rtol=1e-9)
+    with pytest.raises(ValueError, match="two_sided"):
+        spa_pvalue(u, a, values, freqs, two_sided="equal")
+
+
 def test_two_sided_tails_match_enumeration_with_real_coefficients_and_no_calls():
     rng = np.random.default_rng(38)
     n = 10

@@ -20,6 +20,7 @@ from mixmogam._spa import spa_pvalue
 from mixmogam._vb import VBEngine
 from mixmogam.genotypes import Genotypes
 from mixmogam.simulate import simulate_genotypes, simulate_traits
+from tests._retrospective import dense_rho
 
 
 def _gt(G, n_chrom, packed=False):
@@ -51,15 +52,17 @@ def dense_z(G):
     return ((g - g.mean(axis=0)) / g.std(axis=0)).T
 
 
-def dense_scores(z, y, X, mu, w):
-    """Logistic score quantities of rows ``z`` against the fit ``mu``."""
+def dense_scores(z, y, X, mu, w, X_var=None):
+    """Logistic score quantities of rows ``z`` against the fit ``mu``; the
+    genotype variance is adjusted for ``X_var`` (default ``X``)."""
     W = w * mu * (1 - mu)
     M = np.linalg.inv((X * W[:, None]).T @ X)
     adjusted = z - ((z * W) @ X) @ M @ X.T
     sq = adjusted * adjusted
-    resid = z - (z @ X) @ np.linalg.solve(X.T @ X, X.T)  # unweighted
+    X_var = X if X_var is None else X_var
+    resid = z - (z @ X_var) @ np.linalg.solve(X_var.T @ X_var, X_var.T)  # unweighted
     return {"U": adjusted @ (w * (y - mu)), "J": sq @ W,
-            "zvar": np.sum(resid * resid, axis=1) / (X.shape[0] - X.shape[1])}, adjusted
+            "zvar": np.sum(resid * resid, axis=1) / (X_var.shape[0] - X_var.shape[1])}, adjusted
 
 
 def genotype_support(z):
@@ -136,19 +139,34 @@ def test_genotype_spa_uses_each_variants_dense_support(binary_problem, weighted)
         assert log_p[k] == pytest.approx(ref[1][0], rel=1e-5)
 
 
-def dense_scan(G, y, Xd, w, offsets, groups):
+def dense_scan(G, y, Xd, w, offsets, groups, free=False):
     """Logistic score tests in allele units with each group's offset, the
     reference of binary HRATT's step 2: the score of a = w (y - mu) against
     the unweighted genotype variance after covariates times |a|^2, and the
-    genotype saddlepoint above |z| = 2."""
+    genotype saddlepoint above |z| = 2. With ``free`` the offset is a
+    covariate whose coefficient is kept in [0, 1] (cross-fitted scores); the
+    slopes are returned as well."""
     g = G.T.astype(np.float64)
     p, beta, chi2 = np.empty(g.shape[1]), np.empty(g.shape[1]), np.empty(g.shape[1])
+    slopes = []
     for group in range(offsets.shape[1]):
         sel = np.flatnonzero(groups == group)
-        fit = null_logistic(y, Xd, weights=w, offset=offsets[:, group])
-        ref, _ = dense_scores(g[:, sel].T, y, Xd, fit["mu"], w)
+        Xg = Xd
+        if free:  # coefficient in (0, 1]; a fixed offset above one, dropped below zero
+            fit = null_logistic(y, np.column_stack([Xd, offsets[:, group]]), weights=w)
+            slope = fit["gamma"][-1]
+            if 0 < slope <= 1:
+                Xg = np.column_stack([Xd, offsets[:, group]])
+            elif slope > 1:
+                fit, slope = null_logistic(y, Xd, weights=w, offset=offsets[:, group]), 1.0
+            else:
+                fit, slope = null_logistic(y, Xd, weights=w), 0.0
+            slopes.append(slope)
+        else:
+            fit = null_logistic(y, Xd, weights=w, offset=offsets[:, group])
+        ref, _ = dense_scores(g[:, sel].T, y, Xg, fit["mu"], w, X_var=Xd)
         a = w * (y - fit["mu"])
-        V = ref["zvar"] * (a @ a)
+        V = ref["zvar"] * (a @ a) * dense_rho(g[:, sel], Xd, a)
         stat = ref["U"] ** 2 / V
         pg = stats.chi2.sf(stat, 1)
         for k in np.flatnonzero(stat > 4.0):
@@ -157,7 +175,7 @@ def dense_scan(G, y, Xd, w, offsets, groups):
             pg[k] = spa_pvalue(ref["U"][k : k + 1], a, values, freqs,
                                var_ratio=(a @ a) * var / V[k])[0][0]
         p[sel], beta[sel], chi2[sel] = pg, ref["U"] / ref["J"], stat
-    return p, beta, chi2
+    return (p, beta, chi2, np.array(slopes)) if free else (p, beta, chi2)
 
 
 @pytest.mark.parametrize("weighted", [False, True])
@@ -173,7 +191,9 @@ def test_step_two_without_polygenic_offsets_is_the_dense_logistic_scan(binary_pr
     assert res.extra["n_spa"] == np.count_nonzero(chi2 > 4.0) > 0
 
 
-def test_weighted_binary_gwas_matches_a_dense_scan_with_its_offsets(binary_problem, monkeypatch):
+@pytest.mark.parametrize("loco_folds", [5, 1])
+def test_weighted_binary_gwas_matches_a_dense_scan_with_its_offsets(binary_problem, monkeypatch,
+                                                                    loco_folds):
     G, gt, y, X, w, _ = binary_problem
     captured = {}
     original = _binary.loco_offsets
@@ -183,15 +203,23 @@ def test_weighted_binary_gwas_matches_a_dense_scan_with_its_offsets(binary_probl
         return captured["offsets"]
 
     monkeypatch.setattr(_binary, "loco_offsets", record)
-    res = gwas(y, gt, X, method="hratt", trait="binary", sample_weights=w, **BINARY)
+    res = gwas(y, gt, X, method="hratt", trait="binary", sample_weights=w, loco_folds=loco_folds,
+               **BINARY)
     assert res.extra["lambda"] == 1.0 and res.extra["h2"] > 0
     assert np.ptp(captured["offsets"]) > 0
     Xd = np.column_stack([np.ones(y.size), X])
     groups = np.repeat(np.arange(5), gt.n_variants // 5)
-    p, beta, _ = dense_scan(G, y, Xd, w / w.mean(), captured["offsets"], groups)
+    dense = dense_scan(G, y, Xd, w / w.mean(), captured["offsets"], groups, free=loco_folds > 1)
+    p, beta = dense[0], dense[1]
     np.testing.assert_allclose(res.p, p, rtol=1e-4)
     np.testing.assert_allclose(res.beta, beta, rtol=1e-4, atol=1e-7)
     extra = res.extra
+    assert extra["loco_folds"] == loco_folds
+    if loco_folds > 1:  # cross-fitted scores enter with fitted coefficients
+        np.testing.assert_allclose(extra["offset_slope"], dense[3], rtol=1e-6, atol=1e-9)
+        assert extra["offsets_dropped"] == np.count_nonzero(dense[3] == 0)
+    else:
+        assert "offset_slope" not in extra
     assert extra["trait"] == "binary"
     assert extra["heritability_method"] == "he" and extra["null_converged"]
     assert extra["n_cases"] == y.sum() and extra["n_controls"] == y.size - y.sum()
@@ -204,8 +232,8 @@ def test_spa_replaces_exactly_the_normal_tails_above_the_threshold(binary_proble
     calls = []
     original = twostep._genotype_spa
 
-    def record(st, A, idx, U, V, lam, n_threads):
-        out = original(st, A, idx, U, V, lam, n_threads)
+    def record(st, A, idx, U, V, lam, n_threads, two_sided="distance"):
+        out = original(st, A, idx, U, V, lam, n_threads, two_sided)
         calls.append((idx.copy(), U.copy(), V.copy(), out[0].copy()))
         return out
 
@@ -224,6 +252,20 @@ def test_spa_replaces_exactly_the_normal_tails_above_the_threshold(binary_proble
     # The reported statistic is the chi2 quantile of the SPA p-value.
     np.testing.assert_allclose(stats.chi2.sf(spa.f_stat[idx], 1), spa.p[idx], rtol=1e-8)
     assert spa.extra["n_spa"] == idx.size > 0
+
+
+def test_doubled_two_sided_tails_change_only_saddlepoint_variants(binary_problem):
+    _, gt, y, X, _, _ = binary_problem
+    distance = twostep.hratt(y, gt, X, trait="binary", **BINARY)
+    doubled = twostep.hratt(y, gt, X, trait="binary", spa_two_sided="doubled", **BINARY)
+    assert distance.extra["spa_two_sided"] == "distance" and doubled.extra["spa_two_sided"] == "doubled"
+    np.testing.assert_array_equal(doubled.beta, distance.beta)
+    normal = twostep.hratt(y, gt, X, trait="binary", spa_threshold=np.inf, **BINARY)
+    bulk = normal.f_stat <= 4.0  # below |z| = 2 the normal tail stays
+    np.testing.assert_array_equal(doubled.p[bulk], distance.p[bulk])
+    assert np.any(doubled.p[~bulk] != distance.p[~bulk])
+    with pytest.raises(ValueError, match="spa_two_sided"):
+        twostep.hratt(y, gt, X, trait="binary", spa_two_sided="equal", **BINARY)
 
 
 def test_label_flip_negates_effects_and_keeps_p_values(binary_problem):

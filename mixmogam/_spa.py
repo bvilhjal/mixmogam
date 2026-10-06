@@ -126,16 +126,22 @@ def _rstar(a, v, p, x):
     return w + math.log(t * math.sqrt(k2) / w) / w
 
 
-def _rows(a, values, freqs, x, out_up, out_lo):
+def _rows(a, values, freqs, x, out_up, out_lo, both):
     for r in range(values.shape[0]):
-        out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
-        out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+        if both:
+            out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
+            out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+        else:
+            out_up[r] = _rstar(a, values[r], freqs[r], x[r])
 
 
-def _rows_parallel(a, values, freqs, x, out_up, out_lo):
+def _rows_parallel(a, values, freqs, x, out_up, out_lo, both):
     for r in prange(values.shape[0]):
-        out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
-        out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+        if both:
+            out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
+            out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+        else:
+            out_up[r] = _rstar(a, values[r], freqs[r], x[r])
 
 
 if HAS_NUMBA:
@@ -146,7 +152,8 @@ if HAS_NUMBA:
     _rows_parallel = njit(parallel=True, cache=True)(_rows_parallel)
 
 
-def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, n_threads: int = 1) -> tuple[np.ndarray, np.ndarray]:
+def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance",
+               n_threads: int = 1) -> tuple[np.ndarray, np.ndarray]:
     """Two-sided saddlepoint p-values (and their logs) of scores ``u``.
 
     ``a`` (n,) holds the coefficients shared by the scores and ``u`` (k,)
@@ -156,8 +163,13 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, n_threads: int = 1) -> tup
     mean. The scores are multiplied by sqrt(``var_ratio``) (scalar or
     (k,)) before the tails are evaluated: a variance correction (lambda, or
     the CGF variance over the test's) applied to the statistic, as SAIGE
-    applies its variance ratio.
+    applies its variance ratio. ``two_sided="distance"`` adds the tails
+    beyond +-|u|, as SPAtest, SAIGE and REGENIE do; ``"doubled"`` doubles
+    the tail beyond u (at most one), LDAK's default, which puts half the
+    level in each tail of a skewed null.
     """
+    if two_sided not in ("distance", "doubled"):
+        raise ValueError("two_sided must be 'distance' or 'doubled'")
     a = np.ascontiguousarray(a, dtype=np.float64)
     values = np.atleast_2d(np.asarray(values, dtype=np.float64))
     freqs = np.ascontiguousarray(np.atleast_2d(freqs), dtype=np.float64)
@@ -172,6 +184,10 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, n_threads: int = 1) -> tup
     x = np.ascontiguousarray(np.broadcast_to(np.asarray(u, dtype=np.float64), (k,)) * np.sqrt(
         np.broadcast_to(np.asarray(var_ratio, dtype=np.float64), (k,))))
     up, lo = np.empty(k), np.empty(k)
-    (_rows_parallel if n_threads > 1 else _rows)(a, values, freqs, x, up, lo)
-    log_p = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
+    both = two_sided == "distance"
+    (_rows_parallel if n_threads > 1 else _rows)(a, values, freqs, x, up, lo, both)
+    if both:
+        log_p = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
+    else:  # r* carries the sign of u: the tail beyond u is Phi(-|r*|)
+        log_p = np.minimum(np.log(2.0) + log_ndtr(-np.abs(up)), 0.0)
     return np.exp(log_p), log_p

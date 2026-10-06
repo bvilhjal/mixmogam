@@ -36,7 +36,7 @@ Table 1. Association paths and calibration.
 | `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | plug-in F test |
 | `bolt-inf` | V_{-g}^{-1} y by batched CG | one constant from 30 exact prospective statistics |
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
-| `hratt` | y minus the elastic-net LOCO score (binary: the logistic score with it as offset) | lambda = 1, or LDAK-KVIK's rule under strong structure |
+| `hratt` | y minus the cross-fitted elastic-net LOCO score times its fitted coefficient (binary: the logistic score with it as a covariate) | lambda = 1, or LDAK-KVIK's rule under strong structure |
 
 `auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT, the
 Heritability-weighted Residual Association Two-step Test, is mixmogam's
@@ -109,8 +109,8 @@ proximal-contamination deflation.
   `n_calibration` with GRAMMAR chi2 < 5 are kept afterwards (rejection
   sampling), with a short second solve if too few qualify.
 - **Variational Bayes** (`_vb`): iterated conditional
-  posterior means, for every cross-validation fold x hyperparameter or
-  every LOCO group at once. Within a 128-SNP block, residual products
+  posterior means, for every cross-validation fold x hyperparameter, every
+  cross-fitting fold or every LOCO group at once. Within a 128-SNP block, residual products
   come from one GEMM and are corrected through the block's Gram matrix
   as earlier SNPs move. Gram matrices are shared across fits and only
   requested fold matrices are prepared. They are computed in float64 and
@@ -139,6 +139,57 @@ unconstrained estimates, boundary status and trace-probe precision;
 unidentified or numerically invalid fits raise. The existing variational
 noise floor of 0.001 on the unit-variance phenotype scale is reported for
 HE fits. Probe precision is not sampling uncertainty in heritability.
+
+### Cross-fitted LOCO scores
+
+HRATT's LOCO scores are cross-fitted (`loco_folds=5`). The samples are split
+into five folds, by case status for binary traits. The chosen elastic-net
+model is fitted genome-wide on all but one fold, five fits in one sweep, and
+a sample's score for group g is its own fold's fit without group g's
+variants, as in REGENIE's level 0. With strong structure each group's model
+is refitted without its variants instead (five fits per group,
+`extra["loco_refit"]`).
+
+Each group's score then enters with its own least-squares coefficient, or
+logistic coefficient for binary traits, kept in [0, 1]. This out-of-fold
+calibration slope shrinks an over-dispersed score but never undoes the
+prior's shrinkage; with h2 near zero, an unrestricted slope reached 1,000.
+Binary scores whose coefficient exceeds one are fixed offsets. Scores that
+anti-predict, or whose null fit diverges, are dropped for their group.
+
+An in-sample fit (`loco_folds=1`, LDAK-KVIK's design and the earlier
+default) puts part of each sample's own phenotype into its score: a
+fraction near df/n of the smoother.
+- It thereby absorbs that fraction of every association. Effects were a
+  third small in simulations; p-values were unaffected because the residual
+  variance shrinks with them.
+- For a rare binary outcome a case's working response is about 1/mu0, so
+  the same absorption gives cases offsets of tens of logit units. At 1%
+  prevalence, cases averaged +43 against -0.4 for controls on a null trait,
+  nearly separating them.
+- Heritability on the Pearson scale was overestimated there (REML median
+  0.10 on null traits, up to 1.0), which made it worse.
+
+Out-of-fold scores carry no sample's own phenotype, so effects are not
+attenuated and a null trait's offsets are noise around zero.
+
+LDAK-KVIK instead calibrates effects by the slope of effects without the
+score on effects against the residual. Under structure that reference is
+confounded: at Fst 0.05 the slope was 1.24 for MAF 1-5% and 1.37 above, and
+calibrated QTL effects came out 15% large. The slope also cannot repair
+binary offsets.
+
+Dropping a group's share of a genome-wide fit costs five fits rather than
+five per group. Without structure it matched per-group refits: null
+lambda_GC was 0.975-1.023 against 0.975-1.018, with the same QTL effects and
+power. Under structure it fails. A genome-wide fit spreads the ancestry
+signal over every chromosome, so dropping one chromosome's share leaves
+ancestry in its residual. At Fst 0.15 without principal components, the
+null chromosome's lambda_GC was 1.5-4.4 split, against 0.9-1.1 refitted.
+HRATT therefore refits each group when the structure test finds strong
+structure, which happens without ancestry covariates. The test's threshold
+caps the average inflation that unmodelled structure could cause at 0.1,
+and dropping one of G chromosomes' shares leaves roughly 1/G^2 of that.
 
 Where mixmogam departs from the reference implementations, the
 docstrings of `mixmogam.twostep` say so. The departures: REML instead
@@ -171,10 +222,14 @@ projected HE above. The structure test uses the Kish size of v.
 Step 2 tests a variant's score z'a, with a = s r~ for quantitative traits
 (the weighted LOCO residual) and a = w (y - mu) for binary ones (mu: the
 null logistic fit with the LOCO score as offset, refitted per group),
-against its variance when genotypes are exchangeable given the covariates,
-zvar |a|^2 (zvar: unweighted genotype variance after covariates). Without
-weights and for quantitative traits this is the unweighted statistic, kept
-with normal tails. In weighted and binary analyses, above |z| = 2 a
+against its variance when genotypes are drawn given the covariates,
+zvar |a|^2 rho_j. Here zvar is the unweighted genotype variance after
+covariates, and rho_j the ratio of the a^2-weighted to the plain mean of the
+samples' binomial genotype variances p_ij (1 - p_ij). Each p_ij is half the
+genotype count fitted on the covariates, as in SPAmix (Ma et al. 2025), its
+deviations from the mean shrunk by (F - 1) / F. Covariates unrelated to the
+genotype give rho_j = 1. Without weights and for quantitative traits this is
+the unweighted statistic, kept with normal tails. In weighted and binary analyses, above |z| = 2 a
 saddlepoint approximation gives the tail: genotypes drawn independently from
 the variant's empirical distribution with a fixed (the retrospective
 counterpart of SPACox's empirical CGF, which draws the residuals). Two departures from common practice
@@ -189,19 +244,27 @@ Quantitative effects are weighted least-squares slopes, binary ones
 one-step log odds ratios U / J. lambda keeps its rule and multiplies the
 statistic. `denominator="spectral"` is unavailable with weights or binary
 traits, and `alpha_method="reml"` with weights. The validation follows
-`benchmarks/hratt_weights_binary_plan.md`; its
-[results](../benchmarks/results/20261005-hratt-weights-binary/README.md) show
-two limits: exchangeability fails when the weights depend on ancestry
-(low-frequency tails 5.75-fold at 1e-3 at Fst 0.05; ancestry covariates
-should restore it, untested), and the in-sample LOCO prediction absorbs part
-of every effect, so HRATT's effects are attenuated (32% in the simulation)
-while its p-values are not.
+`benchmarks/hratt_weights_binary_plan.md`. Its
+[results](../benchmarks/results/20261005-hratt-weights-binary/README.md)
+showed two limits, which the follow-ups address.
+- The pooled genotype variance failed when the weights depended on ancestry:
+  low-frequency tails were 5.75-fold at 1e-3 at Fst 0.05. Ancestry
+  covariates alone did not restore it (6.7-7.2-fold in a prototype); with
+  rho_j and principal components it was 1.2-1.4-fold.
+- In-sample LOCO scores attenuated every effect, by 32% in the simulation,
+  while p-values were unaffected. Cross-fitting removes this (above).
+
+The follow-ups' validation follows `benchmarks/hratt_followups_plan.md`.
+`spa_two_sided="doubled"` doubles the tail beyond the score (LDAK's default)
+instead of adding both tails at +-|u| (SPAtest, SAIGE, REGENIE). That puts
+alpha/2 in each tail of a skewed null, which the per-tail criterion of the
+first validation required.
 
 ### Optional HRATT parallelism and memory budgets
 
 `n_threads=1` remains the default. Above one, the `fast` extra parallelizes
 genotype preparation over variants and coordinate updates over independent
-candidate models or LOCO columns. Each model retains its sequential SNP
+candidate models, cross-fitting folds or LOCO columns. Each model retains its sequential SNP
 order. For large fits (at least 50,000 samples and six model columns), a
 bounded BLAS workspace and a pool of at most four workers distribute suitable
 residual matrix products over sample rows. Smaller products retain the

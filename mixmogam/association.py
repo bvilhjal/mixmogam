@@ -189,7 +189,8 @@ def gwas(
         raise ValueError("block must be a positive integer")
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
-    hratt_only = sorted({"trait", "sample_weights", "spa_threshold"} & set(kwargs))
+    hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds"}
+                        & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "
                         f"(binary outcomes and sampling weights), not of method={method!r}")

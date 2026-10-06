@@ -21,10 +21,11 @@ and in the calibration:
 - HRATT, the Heritability-weighted Residual Association Two-step Test:
   this package's method inspired by LDAK-KVIK (Hof & Speed 2025, Nat
   Genet) and following its design: w = y minus an elastic-net
-  LOCO polygenic score under the LDAK-Thin heritability model; lambda = 1
-  unless a test of inter-chromosome correlation finds strong structure, in
-  which case lambda is matched to the GRAMMAR-Gamma-calibrated ridge
-  statistic on weakly associated SNPs.
+  LOCO polygenic score under the LDAK-Thin heritability model, cross-fitted
+  as in REGENIE so that no sample's phenotype enters its own score;
+  lambda = 1 unless a test of inter-chromosome correlation finds strong
+  structure, in which case lambda is matched to the GRAMMAR-Gamma-calibrated
+  ridge statistic on weakly associated SNPs.
 
 The single calibration constant rests on the assumption that the
 prospective denominator z_j' V^{-1} z_j is proportional to z_j' z_j across
@@ -34,8 +35,9 @@ calibration SNPs (``calibration_cv``): with strong structure it is large,
 and a single constant cannot calibrate every SNP.
 
 HRATT also tests case-control outcomes and sampling-weighted samples: the
-score z_j'a of a weighted residual a against its variance under genotype
-exchangeability, zvar_j |a|^2, with saddlepoint tails (see :func:`hratt`).
+score z_j'a of a weighted residual a against its variance when genotypes
+are drawn given the covariates, zvar_j |a|^2 rho_j, with saddlepoint tails
+(see :func:`hratt`).
 
 Deviations from the reference implementations are documented on each
 function. Variance components default to this package's stochastic Lanczos
@@ -246,6 +248,40 @@ def _loco_solve(st: _Setup, delta: float, rhs: np.ndarray, col_group: np.ndarray
     return solution, info
 
 
+def _ancestry_ratio(cu: np.ndarray, zz: np.ndarray, Q: np.ndarray, mean: np.ndarray,
+                    sd: np.ndarray, a2: np.ndarray) -> np.ndarray:
+    """Covariate-specific genotype variance of retrospective scores, as a
+    ratio to the pooled one (rows: variants).
+
+    Sample i's allele frequency p_ij is half of variant j's genotype count
+    fitted on the covariates, the fit's deviations from the mean shrunk by
+    (F - 1) / F (zero if F < 1) with F its regression F statistic, so that
+    covariates unrelated to the genotype leave the pooled frequency; it is
+    kept in [1/(2n), 1 - 1/(2n)]. ``cu`` = z_j'Q are the standardized
+    genotypes' projections on the orthonormal design basis ``Q`` (the
+    intercept first), ``zz`` their sums of squares, and ``mean`` and ``sd``
+    undo the standardization. pi_ij = p_ij (1 - p_ij) is sample i's binomial
+    genotype variance up to a constant, as in SPAmix (Ma et al. 2025).
+    Returns rho_j = (sum_i a_i^2 pi_ij / sum_i a_i^2) / mean_i pi_ij, the
+    factor by which the variance of sum_i a_i z_ij departs from
+    zvar_j |a|^2 when allele frequencies follow the covariates (ancestry
+    principal components among them) and ``a2`` (a_i^2) varies with
+    ancestry.
+    """
+    n, q = Q.shape
+    if q < 2:
+        return np.ones(cu.shape[0])
+    fit2 = np.einsum("ij,ij->i", cu, cu)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        F = fit2 * (n - q) / ((q - 1) * np.maximum(zz - fit2, 0.0))
+        shrink = np.where(np.isfinite(F), np.clip(1.0 - 1.0 / F, 0.0, 1.0), 1.0)
+    shrink[~(fit2 > 0)] = 0.0
+    p = (cu @ Q.T) * (0.5 * sd * shrink)[:, None] + (0.5 * mean)[:, None]
+    np.clip(p, 0.5 / n, 1.0 - 0.5 / n, out=p)
+    p *= 1.0 - p
+    return (p @ a2) / (float(np.sum(a2)) * np.mean(p, axis=1))
+
+
 def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict:
     """Uncalibrated retrospective chi2 of every variant against its group's
     column of W: n_eff (z'w)^2 / (z'z |w|^2).
@@ -255,9 +291,10 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
     the covariates), the score z_j'a_g has variance zvar_j |a_g|^2 when the
     genotypes are exchangeable given the covariates, whatever the weights;
     zvar_j = (sum z^2 - |Q_X' z|^2) / n_eff is the unweighted genotype
-    variance after covariates. ``chi2_retro`` = (z_j'a_g)^2 / ``V`` with
-    ``V`` = zvar_j |a_g|^2, and ``A`` holds the a_g. Without row scaling
-    this equals chi2 up to rounding.
+    variance after covariates. When allele frequencies vary with the
+    covariates the variance is zvar_j |a_g|^2 rho_j instead
+    (:func:`_ancestry_ratio`). ``chi2_retro`` = (z_j'a_g)^2 / ``V`` with
+    ``V`` = zvar_j |a_g|^2 rho_j, and ``A`` holds the a_g.
     """
     m = st.lg.m
     num = np.zeros(m)
@@ -266,8 +303,9 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
     Wp = st.lg.project(W)  # Z_j w = z_j (I - QQ') w
     if retrospective:
         A = Wp if st.s is None else Wp * st.s[:, None]
+        A2 = A * A
         inv_s = None if st.s is None else 1.0 / st.s
-        zvar = np.zeros(m)
+        zvar, rho = np.zeros(m), np.zeros(m)
     # Widen at most 16 MiB of variant rows, retaining each full sample
     # reduction. The minimum one-row tile and native BLAS scratch are separate.
     tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
@@ -277,23 +315,25 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
         if retrospective:
             z = Z64 if inv_s is None else Z64 * inv_s
             cu = z @ st.Q_raw
-            zvar[idx] = (np.einsum("ij,ij->i", z, z) - np.einsum("ij,ij->i", cu, cu)) / st.n_eff
+            zsq = np.einsum("ij,ij->i", z, z)
+            zvar[idx] = (zsq - np.einsum("ij,ij->i", cu, cu)) / st.n_eff
+            rho[idx] = _ancestry_ratio(cu, zsq, st.Q_raw, st.lg.mean[idx], st.lg.sd[idx], A2[:, g])
     wg = wn[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2 = st.n_eff * num * num / (zz * wg)
     chi2[~(zz > 0)] = np.nan
     out = {"chi2": chi2, "num": num, "zz": zz, "wnorm2": wg}
     if retrospective:
-        V = zvar * np.einsum("ij,ij->j", A, A)[st.lg.groups]
+        V = zvar * np.einsum("ij,ij->j", A, A)[st.lg.groups] * rho
         with np.errstate(divide="ignore", invalid="ignore"):
             chi2_retro = num * num / V
         chi2_retro[~((zz > 0) & (V > 0))] = np.nan
-        out.update({"V": V, "chi2_retro": chi2_retro, "A": A})
+        out.update({"V": V, "chi2_retro": chi2_retro, "A": A, "rho": rho})
     return out
 
 
 def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: np.ndarray,
-                  lam: float, n_threads: int) -> tuple:
+                  lam: float, n_threads: int, two_sided: str = "distance") -> tuple:
     """Retrospective saddlepoint p-values (and logs) of scores
     ``U`` = z_j'a_g for variants ``idx``.
 
@@ -302,7 +342,7 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
     own sample distribution of standardized values (at most four: three
     calls and the no-call value). Scores are first scaled by
     sqrt(lam K''(0) / V), so that the bulk agrees with the calibrated
-    normal statistic.
+    normal statistic; ``two_sided`` as in :func:`mixmogam._spa.spa_pvalue`.
     """
     from mixmogam._spa import spa_pvalue
 
@@ -326,17 +366,18 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
             with np.errstate(divide="ignore", invalid="ignore"):
                 ratio = lam * a2 * var / V[rows]
             p[rows], log_p[rows] = spa_pvalue(U[rows], a, values, freqs, var_ratio=ratio,
-                                              n_threads=n_threads)
+                                              two_sided=two_sided, n_threads=n_threads)
     return p, log_p
 
 
 def _genotype_tails(st: _Setup, A: np.ndarray, U: np.ndarray, V: np.ndarray,
-                    chi2_normal: np.ndarray, lam: float, threshold: float, n_threads: int) -> tuple:
+                    chi2_normal: np.ndarray, lam: float, threshold: float, n_threads: int,
+                    two_sided: str = "distance") -> tuple:
     """:func:`_saddlepoint_tails` with the genotype saddlepoint of scores
     ``U`` against the coefficients ``A`` (one column per group)."""
 
     def spa(idx):
-        return _genotype_spa(st, A, idx, U[idx], V[idx], lam, n_threads)
+        return _genotype_spa(st, A, idx, U[idx], V[idx], lam, n_threads, two_sided)
 
     return _saddlepoint_tails(chi2_normal, threshold, spa)
 
@@ -921,10 +962,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
           alpha_method: str = "he", he_probes: int = 32,
           heritability_method: str = "auto",
-          grid=HRATT_GRID, cv_fraction: float = 0.1, n_calibration: int = 30,
-          denominator: str = "constant", n_spectral="auto",
+          grid=HRATT_GRID, cv_fraction: float = 0.1, loco_folds: int = 5,
+          n_calibration: int = 30, denominator: str = "constant", n_spectral="auto",
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-          cg_tol: float = 1e-6, spa_threshold: float = 2.0, random_state: int = 0,
+          cg_tol: float = 1e-6, spa_threshold: float = 2.0, spa_two_sided: str = "distance",
+          random_state: int = 0,
           block: int = 4096, n_threads: int = 1) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
@@ -942,15 +984,27 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     h2_j = w_j h2 / W with w_j = [f_j (1 - f_j)]^(1 + alpha) (no LD
     thinning: every SNP keeps weight w_j); (1d) the elastic-net prior
     p Laplace + (1 - p) N(0, F h2_j / (1 - p)) with (p, F) chosen on a
-    ``cv_fraction`` hold-out over ``grid``; (1e) LOCO scores by variational
-    Bayes; (2) U_j = (z'(y - P_c))^2 / (z'z s^2) scaled by lambda. lambda = 1
+    ``cv_fraction`` hold-out over ``grid``; (1e) cross-fitted LOCO scores by
+    variational Bayes: ``loco_folds`` (k, default 5) genome-wide fits, each
+    on all but one fold of the samples, and a sample's score for group c is
+    its fold's fit without group c's variants (REGENIE's level-0 design), so
+    no sample's phenotype enters its own score; with strong structure each
+    group's model is refitted without its variants instead (k x groups fits,
+    ``extra["loco_refit"]``), since dropping one chromosome's share of a
+    genome-wide fit leaves ancestry in the residual; (2) U_j = (z'(y - b_c
+    P_c))^2 / (z'z s^2) scaled by lambda, with b_c the score's
+    least-squares coefficient kept in [0, 1] (its out-of-fold calibration
+    slope: an over-dispersed score is shrunk, none inflated). lambda = 1
     without strong structure; otherwise lambda = lambda' sum T / sum U over
     SNPs with lambda U < 6 and lambda' T < 6, where T are the ridge-score
     statistics and lambda' their GRAMMAR-Gamma calibration (the BOLT-LMM-inf
     constant). The phenotype is analysed on the unit-variance scale; effect
-    sizes are returned in phenotype units. They are attenuated, by about a
-    third in simulations, because the in-sample LOCO prediction absorbs part
-    of each effect; the p-values are not.
+    sizes are returned in phenotype units. In-sample LOCO fits
+    (``loco_folds=1``: LDAK-KVIK's design and this package's earlier
+    default) absorb part of each effect into the score, which attenuates
+    effect estimates (by about a third in simulations) though not p-values,
+    and for rare binary outcomes gives offsets that nearly separate the
+    cases.
 
     ``heritability_method="he"`` reuses the selected alpha's existing HE
     products to fit the covariance ``vg K + ve (I - QQ')``, with nonnegative
@@ -987,11 +1041,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     likelihood under sampling weights). Each variant is tested by the score
     of its weighted least-squares slope against the LOCO residual, z'a with
     a = w r (the weighted residual), and the variance that score has when
-    genotypes are exchangeable given the covariates, zvar |a|^2 (zvar: the
-    unweighted genotype variance after covariates); this is the
-    unweighted statistic's own form, which it equals at unit weights.
-    Above |z| = ``spa_threshold`` the saddlepoint approximation of the
-    genotype distribution gives the tail. lambda multiplies the statistic.
+    genotypes are drawn given the covariates: zvar |a|^2 rho_j, with zvar
+    the unweighted genotype variance after covariates and rho_j the factor
+    from allele frequencies that vary with the covariates (as in SPAmix;
+    :func:`_ancestry_ratio`; one when the covariates do not predict the
+    genotype). Weights that vary with ancestry therefore need ancestry
+    principal components among the covariates; HRATT warns when strong
+    structure remains after them. At unit weights and rho_j = 1 this is the
+    unweighted statistic. Above |z| = ``spa_threshold`` the saddlepoint
+    approximation of the genotype distribution gives the tail, both tails
+    beyond +-|u| (``spa_two_sided="distance"``, as in SAIGE and REGENIE) or
+    twice the tail beyond u (``"doubled"``, LDAK's default: half the level
+    in each tail of a skewed null). lambda multiplies the statistic.
     Effects are weighted least-squares slopes. The Huber-White sandwich is
     not used: with heavy-tailed weighted residuals a few samples carry each
     score, and it is anti-conservative for low-frequency variants (design
@@ -1003,15 +1064,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     (times any sampling weights): one IRLS step, as LDAK-KVIK's binary step 1
     is "based on weighted linear regression". Step 2 refits the null
     logistic model per LOCO group with the logit-scale LOCO polygenic score
-    as offset and tests the logistic score z'a, a = w (y - mu) (w = 1
-    without weights), retrospectively as above: against zvar |a|^2, with
-    the genotype saddlepoint approximation above |z| = ``spa_threshold``
-    (default 2; ``np.inf`` disables it). This variance does not trust the
-    fitted probabilities, which an in-sample LOCO offset overfits when
-    cases are few, as the model-based variance sum mu (1 - mu) g~^2 does
-    (design notes). Effects are
-    one-step log odds ratios per counted allele. ``denominator="spectral"``
-    is unavailable with weights or binary traits.
+    as a covariate, its coefficient kept in [0, 1] as above
+    (``extra["offset_slope"]``; scores that anti-predict, or whose fit
+    fails, are dropped and counted in ``offsets_dropped``; in-sample scores
+    are fixed offsets) and tests the logistic score
+    z'a, a = w (y - mu) (w = 1 without weights), retrospectively as above,
+    with the genotype saddlepoint approximation above |z| =
+    ``spa_threshold`` (default 2; ``np.inf`` disables it). This variance
+    does not trust the fitted probabilities, as the model-based variance
+    sum mu (1 - mu) g~^2 does (design notes). Effects are one-step log odds
+    ratios per counted allele, conditional on the score.
+    ``denominator="spectral"`` is unavailable with weights or binary traits.
     """
     if trait not in ("quantitative", "binary"):
         raise ValueError("trait must be 'quantitative' or 'binary'")
@@ -1030,11 +1093,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("heritability_method='he' requires alpha_method='he'")
     if not (isinstance(spa_threshold, (int, float, np.floating)) and spa_threshold >= 0):
         raise ValueError("spa_threshold must be a nonnegative number (np.inf disables SPA)")
+    if spa_two_sided not in ("distance", "doubled"):
+        raise ValueError("spa_two_sided must be 'distance' or 'doubled'")
     if denominator not in ("constant", "spectral"):
         raise ValueError(f"unknown denominator {denominator!r}")
     if alpha_method not in ("he", "reml"):
         raise ValueError(f"unknown alpha_method {alpha_method!r}; use 'he' or 'reml'")
+    if not isinstance(loco_folds, (int, np.integer)) or isinstance(loco_folds, bool) or loco_folds < 1:
+        raise ValueError("loco_folds must be a positive integer (1: in-sample LOCO fits)")
     n_threads = _validate_n_threads(n_threads)
+    if loco_folds > gt.n_samples:
+        raise ValueError("loco_folds exceeds the number of samples")
     if weighted:
         sample_weights = _normalize_weights(sample_weights, gt.n_samples)
     rng = np.random.default_rng(random_state)
@@ -1049,6 +1118,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ys = st.y_p / sy
 
     struct = structure_test(st, structure_snps, rng)
+    if struct["strong"] and (weighted or trait == "binary"):
+        warnings.warn("strong population structure remains after the covariates; the tests of "
+                      "weighted and binary traits model allele frequencies by the covariates, "
+                      "so include ancestry principal components among them",
+                      RuntimeWarning, stacklevel=2)
     design = st.w if (st.w is not None and st.v is not None) else None
     vc = _hratt_variance(st, struct, alphas, alpha_method, heritability_method, he_probes, rng,
                          random_state, design_weights=design)
@@ -1058,8 +1132,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
 
     binary = trait == "binary"
     held = _holdout(n, cv_fraction, rng, strata=st.y_raw if binary else None)
+    folds = None
+    if loco_folds > 1:
+        folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
     scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                               keep_prediction=binary)
+                               keep_prediction=binary, folds=folds, refit=struct["strong"])
     if st.v is not None:  # the held-out error per unit of working weight
         scores["mse"] = scores["mse"] * held.size / float(np.sum(st.v[held]))
     if binary and not (struct["strong"] and h2 > 0):
@@ -1074,8 +1151,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "structure": struct,
              "cv_grid": list(grid), "cv_mse": scores["mse"], "cv_best": grid[scores["best"]],
              "cv_converged": scores["cv_converged"],
+             "loco_folds": int(loco_folds), "loco_refit": bool(folds is not None and struct["strong"]),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
+    if "offset_slope" in scores and not binary:
+        extra["offset_slope"] = scores["offset_slope"]
     if heritability_method == "he":
         extra.update({"heritability_method": "he", "he_variance": vc["he"]["variance_fit"],
                       "vb_residual_variance": s2e,
@@ -1097,15 +1177,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     extra["lambda"] = lam
     if binary:
         return _hratt_binary_step2(st, gt, scores.pop("prediction"), sy, lam, spa_threshold,
-                                   n_threads, extra)
+                                   n_threads, extra, crossfit=folds is not None,
+                                   two_sided=spa_two_sided)
     p = None
     if weighted:
         # lambda, a structure correction of the model-based statistic,
         # multiplies the retrospective one; saddlepoint tails above the
         # threshold.
         p, chi2, n_spa = _genotype_tails(st, rsU["A"], rsU["num"], rsU["V"],
-                                         lam * rsU["chi2_retro"], lam, spa_threshold, n_threads)
-        extra.update({"spa_threshold": float(spa_threshold), "n_spa": n_spa})
+                                         lam * rsU["chi2_retro"], lam, spa_threshold, n_threads,
+                                         spa_two_sided)
+        extra.update({"spa_threshold": float(spa_threshold), "spa_two_sided": spa_two_sided,
+                      "n_spa": n_spa})
     else:
         chi2 = lam * U
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1170,9 +1253,25 @@ def _holdout(n: int, fraction: float, rng, strata=None) -> np.ndarray:
     return np.sort(np.concatenate(held))
 
 
+def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
+    """(1e) Fold labels 0..k-1 of the cross-fitted LOCO fits: a random split
+    into near-equal folds, made within each stratum (one label per sample)
+    when ``strata`` is given, so that rare cases spread over the folds.
+    Strata are taken smallest first (then by first member), not by label, so
+    that swapping case and control labels leaves the folds unchanged."""
+    folds = np.empty(n, dtype=np.int64)
+    members = [np.arange(n)] if strata is None else [np.flatnonzero(strata == v) for v in np.unique(strata)]
+    members.sort(key=lambda idx: (idx.size, idx[0]))
+    start = 0
+    for idx in members:
+        folds[rng.permutation(idx)] = (start + np.arange(idx.size)) % k
+        start = (start + idx.size) % k
+    return folds
+
+
 def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, grid, held,
                       n_threads: int, vb_max_iter: int, vb_tol: float,
-                      keep_prediction: bool = False) -> dict:
+                      keep_prediction: bool = False, folds=None, refit: bool = False) -> dict:
     """(1d)-(1e) Hold-out choice of the elastic-net prior, then the LOCO fits.
 
     Returns the LOCO residuals (``resid``), the chosen grid index ``best``
@@ -1180,6 +1279,21 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     ``keep_prediction`` also the LOCO predictions. The cross-validation
     effects are released before the LOCO fit, and the LOCO effects and the
     engine's Gram cache before returning.
+
+    With ``folds`` (labels 0..k-1, :func:`_crossfit_folds`) the LOCO scores
+    are cross-fitted, so that no sample's phenotype enters its own score: as
+    in REGENIE's level 0, k genome-wide fits, fold f's on the other folds,
+    group g's score of a sample in fold f being fold f's prediction without
+    group g's own variants (:func:`_out_of_fold_loco`); or, with ``refit``
+    (strong structure), k x groups fits, each group's without its variants.
+    A genome-wide fit spreads the ancestry signal over every chromosome, so
+    under strong structure dropping one group's share leaves ancestry in the
+    residual (null lambda_GC 2.4-5.8 at Fst 0.15 without principal
+    components, against 0.89-1.09 refitted). Each group's residual is then the projected phenotype less
+    its score times the score's least-squares coefficient kept in [0, 1]
+    (``offset_slope``: its out-of-fold calibration slope, which shrinks an
+    over-dispersed score but never inflates the prior's shrinkage). Without
+    polygenic variance (all ``h2j`` zero) there are no scores.
     """
     n, G = st.lg.n, st.lg.n_groups
 
@@ -1188,9 +1302,9 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
         v = F / (1.0 - p) if p < 1 else 0.0
         return (p, lam, v)
 
-    folds = np.ones(n, dtype=np.int64)
-    folds[held] = 0  # fold 0 is held out; fold 1 is never held out
-    eng = VBEngine(st.lg, folds=folds, n_threads=n_threads)
+    cv_folds = np.ones(n, dtype=np.int64)
+    cv_folds[held] = 0  # fold 0 is held out; fold 1 is never held out
+    eng = VBEngine(st.lg, folds=cv_folds, n_threads=n_threads)
     Pn = len(grid)
     prior = np.array([prior_row(*g_) for g_ in grid])
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
@@ -1202,16 +1316,79 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     del cv  # the (m, grid) effects and (n, grid) arrays are not needed again
 
     # (1e) LOCO elastic-net scores
-    loco = eng.fit(np.repeat(ys[:, None], G, axis=1), np.full(G, -1), np.arange(G),
-                   PRIOR_ENET, np.tile(prior_row(*grid[best]), (G, 1)), np.full(G, s2e),
-                   snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
+    if folds is None:
+        loco = eng.fit(np.repeat(ys[:, None], G, axis=1), np.full(G, -1), np.arange(G),
+                       PRIOR_ENET, np.tile(prior_row(*grid[best]), (G, 1)), np.full(G, s2e),
+                       snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
+        resid, prediction, slope = loco["resid"], loco["prediction"], None
+    elif not np.any(h2j > 0):  # no polygenic variance, no scores
+        eng, loco = None, {"iterations": 0, "converged": True}
+        prediction, slope = np.zeros((n, G)), np.zeros(G)
+        resid = np.repeat(ys[:, None], G, axis=1)
+    else:
+        del eng  # the cross-fit has its own folds and Gram cache
+        k = int(folds.max()) + 1
+        eng = VBEngine(st.lg, folds=folds, n_threads=n_threads)
+        col_fold = np.repeat(np.arange(k), G) if refit else np.arange(k)
+        col_group = np.tile(np.arange(G), k) if refit else np.full(k, -1)
+        P = col_fold.size
+        loco = eng.fit(np.repeat(ys[:, None], P, axis=1), col_fold, col_group,
+                       PRIOR_ENET, np.tile(prior_row(*grid[best]), (P, 1)), np.full(P, s2e),
+                       snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
+        if refit:
+            prediction = np.empty((n, G))
+            for c in range(P):
+                rows = folds == col_fold[c]
+                prediction[rows, col_group[c]] = loco["prediction"][rows, c]
+        else:
+            prediction = _out_of_fold_loco(st.lg, loco["beta"], folds)
+        Pp = st.lg.project(prediction)  # ys is projected already
+        norm2 = np.einsum("ij,ij->j", Pp, Pp)
+        slope = np.zeros(G)
+        np.divide(Pp.T @ ys, norm2, out=slope, where=norm2 > 0)
+        # Shrink an over-dispersed score, never inflate one: a slope above
+        # one would undo the prior's shrinkage, and one below zero is noise.
+        np.clip(slope, 0.0, 1.0, out=slope)
+        resid = ys[:, None] - Pp * slope
     # Only the LOCO residuals (and predictions) are used; the engine's Gram
     # cache and the (m, groups) effects go before the calibration solves.
-    out = {"resid": loco["resid"], "best": best, "mse": mse, "cv_converged": cv_converged,
+    out = {"resid": resid, "best": best, "mse": mse, "cv_converged": cv_converged,
            "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}
+    if slope is not None:
+        out["offset_slope"] = slope
     if keep_prediction:
-        out["prediction"] = loco["prediction"]
+        out["prediction"] = prediction
     del loco, eng
+    return out
+
+
+def _out_of_fold_loco(lg: LocoGenotypes, beta: np.ndarray, folds: np.ndarray) -> np.ndarray:
+    """(1e) Out-of-fold LOCO scores (n, groups) from k genome-wide fits.
+
+    ``beta`` (m, k) holds fold f's effects in column f. A sample in fold f
+    gets, for group g, fold f's fitted value Z'beta_f without group g's
+    variants: its total less the group's own share, with the covariate
+    projection Q (c'beta) split the same way. One pass over the genotypes.
+    """
+    n, G, k = lg.n, lg.n_groups, beta.shape[1]
+    q = lg.Q.shape[1]
+    own = np.zeros((n, G))  # each sample's group shares of z'beta under its fold's fit
+    coef = np.zeros((k, q, G))  # c'beta per fold and group
+    pick = np.arange(n)
+    for idx, g, Z in lg.raw_slices():
+        bb = beta[idx]
+        rows = max(1, (16 * 1024**2) // (8 * idx.size))
+        for start in range(0, n, rows):
+            stop = min(start + rows, n)
+            part = Z[:, start:stop].T.astype(np.float64) @ bb
+            own[start:stop, g] += part[pick[: stop - start], folds[start:stop]]
+        if q:
+            coef[:, :, g] += (lg._projection[idx].T @ bb).T
+    out = own.sum(axis=1, keepdims=True) - own
+    if q:
+        for f in range(k):
+            rows = folds == f
+            out[rows] -= lg.Q[rows] @ (coef[f].sum(axis=1, keepdims=True) - coef[f])
     return out
 
 
@@ -1264,37 +1441,46 @@ def _hratt_lambda(st: _Setup, ys: np.ndarray, U: np.ndarray, h2: float, residual
 
 
 def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_threads,
-                        extra) -> GwasResult:
+                        extra, crossfit: bool = False, two_sided: str = "distance") -> GwasResult:
     """Logistic score tests of a binary trait with the LOCO polygenic scores
     as offsets (step 2 of binary HRATT).
 
     Per LOCO group the null logistic model is refitted with the group's
-    offset (sampling-weighted when there are weights). The score
-    z_j'a_g of the residual a_g = w (y - mu_g) is tested against its
-    variance when genotypes are exchangeable given the covariates,
-    zvar_j |a_g|^2, as in the weighted quantitative test; lambda multiplies
-    the statistic, and above |z| = ``spa_threshold`` the genotype
-    saddlepoint approximation replaces the normal tail. Unlike the
-    model-based variance sum mu (1 - mu) g~^2, this does not assume the
-    fitted probabilities: an in-sample LOCO offset that absorbs part of a
-    rare outcome shrinks score and variance together (a pilot with 50 cases
-    in 5,000 gave lambda_GC 0.55 with the model-based variance, 1.04 with
-    this one). Effects are one-step log odds ratios U / J per counted allele.
+    score (sampling-weighted when there are weights): as a covariate with a
+    fitted coefficient when the scores are cross-fitted (``crossfit``), as
+    a fixed offset otherwise. The score z_j'a_g of the residual a_g = w (y -
+    mu_g) is tested against its variance when genotypes are drawn given the
+    covariates, zvar_j |a_g|^2 rho_j, as in the weighted quantitative test;
+    lambda multiplies the statistic, and above |z| = ``spa_threshold`` the
+    genotype saddlepoint approximation (``two_sided`` tails) replaces the
+    normal tail. Unlike the model-based variance sum mu (1 - mu) g~^2, this
+    does not assume the fitted probabilities: an in-sample LOCO offset that
+    absorbs part of a rare outcome shrinks score and variance together (a
+    pilot with 50 cases in 5,000 gave lambda_GC 0.55 with the model-based
+    variance, 1.04 with this one). Effects are one-step log odds ratios
+    U / J per counted allele.
     """
     from mixmogam._binary import group_null_fits, loco_offsets, score_pass
 
     offsets = loco_offsets(prediction, st.s, sy)
     del prediction
     y = st.y_raw
-    fits = group_null_fits(y, st.X_raw, offsets, weights=st.w)
+    try:
+        fits = group_null_fits(y, st.X_raw, offsets, weights=st.w, free_offset=crossfit)
+    except ValueError as exc:
+        if crossfit:
+            raise
+        raise ValueError(f"{exc}; with in-sample LOCO scores (loco_folds=1) the offset can nearly "
+                         "separate rare cases; use loco_folds >= 2") from None
     sp = score_pass(st.lg, y, st.X_raw, fits, weights=st.w, s=st.s, Q=st.Q_raw)
     U, J, A = sp["U"], sp["J"], sp["A"]
     w = np.ones(y.size) if st.w is None else st.w
-    V = sp["zvar"] * np.einsum("ij,ij->j", A, A)[st.lg.groups]
+    V = sp["zvar"] * np.einsum("ij,ij->j", A, A)[st.lg.groups] * sp["rho"]
     valid = (J > 0) & (V > 0) & (st.lg.zz > 0)
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2_normal = np.where(valid, lam * U * U / V, np.nan)
-    p, chi2, n_spa = _genotype_tails(st, A, U, V, chi2_normal, lam, spa_threshold, n_threads)
+    p, chi2, n_spa = _genotype_tails(st, A, U, V, chi2_normal, lam, spa_threshold, n_threads,
+                                     two_sided)
     with np.errstate(divide="ignore", invalid="ignore"):
         beta_z = np.where(valid, U / J, np.nan)
         se_z = np.abs(beta_z) / np.sqrt(chi2)
@@ -1304,6 +1490,10 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
                   "prevalence": float(np.sum(w * y) / np.sum(w)),
                   "null_converged": bool(all(f["converged"] for f in fits)),
                   "mu0_clipped": st.mu0_clipped, "offset_sd": float(off.std()),
-                  "spa_threshold": float(spa_threshold), "n_spa": n_spa})
+                  "spa_threshold": float(spa_threshold), "spa_two_sided": two_sided,
+                  "n_spa": n_spa})
+    if crossfit:
+        extra.update({"offset_slope": np.array([f["slope"] for f in fits]),
+                      "offsets_dropped": int(sum(f["dropped"] for f in fits))})
     return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
 

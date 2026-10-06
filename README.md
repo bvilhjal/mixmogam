@@ -19,14 +19,17 @@ Table 1. Association methods implemented by the current package.
 | `"exact"` | EMMAX with an exact REML refit per LOCO group, by Cholesky factorizations |
 | `"bolt-inf"` | BOLT-LMM-inf-style CG solves and retrospective calibration |
 | `"bolt"` | Two-Gaussian mixture, variational fitting and cross-validation |
-| `"hratt"` | HRATT: elastic-net LOCO scores and structure-dependent calibration; quantitative or case-control, optionally sampling-weighted |
+| `"hratt"` | HRATT: cross-fitted elastic-net LOCO scores and structure-dependent calibration; quantitative or case-control, optionally sampling-weighted |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
 
 HRATT, the Heritability-weighted Residual Association Two-step Test, is
 inspired by LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) and follows
 its two-step design: an elastic-net LOCO prediction under LDAK's heritability
 model, then retrospective score tests with a structure-dependent calibration.
-It is not LDAK-KVIK. The two-step paths are research implementations with
+It is not LDAK-KVIK. Its LOCO scores are cross-fitted, as in REGENIE: no
+sample's phenotype enters its own score, so effect estimates are not
+attenuated (`loco_folds=1` restores LDAK-KVIK's in-sample scores, whose
+effects are about a third too small). The two-step paths are research implementations with
 documented departures from the original programs, including their
 variance-component estimators.
 `denominator="spectral"` is a mixmogam extension for the two-step methods.
@@ -51,10 +54,16 @@ Huber-White sandwich and the model-based logistic variance were rejected
 after pilots ([design notes](docs/design.md#case-control-outcomes-and-sampling-weights)).
 In a [prespecified simulation](benchmarks/results/20261005-hratt-weights-binary/README.md)
 the weighted quantitative test was calibrated, including under selection on
-the outcome, but two of seven criteria passed: weights that depend on
-ancestry inflated low-frequency tails (include ancestry covariates), binary
-tails were lopsided at 1-5% prevalence with near-nominal two-sided rates,
-and 2 of 30 replicates at 1% prevalence stopped with a separation error.
+the outcome, but two of seven criteria passed. The follow-ups address the
+failures:
+- cross-fitted LOCO scores, so effects are not attenuated and rare outcomes
+  do not get offsets that separate the cases;
+- allele frequencies taken from the covariates, so weights that depend on
+  ancestry need ancestry principal components among the covariates;
+- `spa_two_sided="doubled"` for per-tail calibration.
+
+Their [prespecified validation](benchmarks/hratt_followups_plan.md) is in
+progress.
 
 With the `fast` extra, `n_threads` parallelizes the exact scan's decoding and
 HRATT's genotype preparation and coordinate sweeps. Model sweeps retain their
@@ -116,8 +125,9 @@ sample order.
   such confounding.
 - Only HRATT models case-control outcomes and sampling weights; the other
   methods assume a Gaussian trait without weights.
-- HRATT's effect estimates (`beta`, `se`) are attenuated by its in-sample
-  LOCO prediction, by about a third in simulations; its p-values are not.
+- HRATT's weighted and binary tests take allele frequencies from the
+  covariates: when weights or case fractions vary with ancestry, include
+  ancestry principal components.
 - A genome-wide lambda near one can hide miscalibration within SNP groups.
   The corrected-input benchmarks retain stratified diagnostics; larger
   independent simulation studies and validation of the corrected permutation

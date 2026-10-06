@@ -22,6 +22,7 @@ from mixmogam._he import fit_he_moments, fit_projected_he
 from mixmogam._loco import LocoGenotypes
 from mixmogam.genotypes import Genotypes
 from mixmogam.simulate import simulate_genotypes, simulate_traits
+from tests._retrospective import dense_rho
 
 
 def _gt(G, n_chrom, packed=False):
@@ -327,7 +328,9 @@ def test_retrospective_score_variance_matches_dense():
     resid = z - Xd @ np.linalg.lstsq(Xd, z, rcond=None)[0]  # unweighted
     zvar = np.sum(resid * resid, axis=0) / (n - Xd.shape[1])
     U = np.einsum("ij,ij->j", z, a[:, st.lg.groups])
-    V = zvar * np.sum(a * a, axis=0)[st.lg.groups]
+    rho = np.array([dense_rho(g[:, j:j + 1], Xd, a[:, st.lg.groups[j]])[0] for j in range(m)])
+    assert np.abs(rho - 1).max() < 0.2  # covariates unrelated to the genotypes
+    V = zvar * np.sum(a * a, axis=0)[st.lg.groups] * rho
     scale = np.sqrt(np.median(V))
     np.testing.assert_allclose(rs["num"], U, rtol=1e-4, atol=1e-4 * scale)
     np.testing.assert_allclose(rs["V"], V, rtol=1e-5)
@@ -336,7 +339,38 @@ def test_retrospective_score_variance_matches_dense():
     plain = twostep._setup(y, gt, X, 25, 64)
     rp = twostep._retro_stats(plain, np.repeat(plain.y_p[:, None], plain.lg.n_groups, axis=1),
                               retrospective=True)
-    np.testing.assert_allclose(rp["chi2_retro"], rp["chi2"], rtol=1e-5)
+    np.testing.assert_allclose(rp["chi2_retro"] * rp["rho"], rp["chi2"], rtol=1e-5)
+
+
+def test_ancestry_dependent_weights_use_covariate_specific_genotype_variances():
+    # Three populations (Fst 0.1), weights by population and the population
+    # labels as covariates: the pooled genotype variance misstates the
+    # variance of scores whose weights follow ancestry (deflated median,
+    # inflated tails); allele frequencies fitted on the covariates do not.
+    rng = np.random.default_rng(4441)
+    n, m, fst = 6000, 3000, 0.1
+    labels = rng.integers(0, 3, n)
+    base = rng.uniform(0.01, 0.1, m)
+    shape = (1 - fst) / fst
+    freqs = np.clip(rng.beta(base[:, None] * shape, (1 - base[:, None]) * shape, size=(m, 3)),
+                    0.002, 0.998)
+    G = rng.binomial(2, freqs[:, labels]).astype(np.int8)
+    gt = _gt(G, 3)
+    X = np.column_stack([labels == 1, labels == 2]).astype(float)
+    st = twostep._setup(rng.normal(size=n), gt, X, 25, 256, sample_weights=np.exp(0.9 * labels))
+    rs = twostep._retro_stats(st, np.repeat(st.y_p[:, None], st.lg.n_groups, axis=1),
+                              retrospective=True)
+    check = np.arange(0, m, 97)
+    Xd = np.column_stack([np.ones(n), X])
+    expected = [dense_rho(G[j][:, None].astype(np.float64), Xd, rs["A"][:, st.lg.groups[j]])[0]
+                for j in check]
+    np.testing.assert_allclose(rs["rho"][check], expected, rtol=1e-6)  # float32 genotypes
+    aware, pooled = rs["chi2_retro"], rs["chi2_retro"] * rs["rho"]
+    q2, q3 = stats.chi2.isf([1e-2, 1e-3], 1)
+    assert 0.85 < np.median(aware) / 0.4549 < 1.15
+    assert 0.5 < np.mean(aware > q2) / 1e-2 < 1.6 and np.mean(aware > q3) / 1e-3 < 2.5
+    assert np.median(pooled) / 0.4549 < 0.85
+    assert np.mean(pooled > q2) / 1e-2 > 1.5 and np.mean(pooled > q3) / 1e-3 > 3.0
 
 
 def test_outcome_dependent_weights_keep_low_frequency_tails_calibrated():
@@ -379,8 +413,11 @@ OPTIONS = dict(alphas=(-1.0, -0.25), he_probes=16, grid=[(0.0, 1.0), (0.1, 0.5)]
                vb_max_iter=200, random_state=3)
 
 
-def test_unit_weights_reproduce_the_unweighted_he_step_one(weighted_gwas_problem):
+def test_unit_weights_reproduce_the_unweighted_he_step_one(weighted_gwas_problem, monkeypatch):
     _, gt, y, X, _ = weighted_gwas_problem
+    # Up to the covariate-specific variance factor (random covariates here,
+    # near one; tested against its oracle elsewhere).
+    monkeypatch.setattr(twostep, "_ancestry_ratio", lambda cu, *args: np.ones(cu.shape[0]))
     plain = twostep.hratt(y, gt, X, heritability_method="he", **OPTIONS)
     unit = twostep.hratt(y, gt, X, sample_weights=np.ones(y.size), **OPTIONS)
     for key in ("h2", "alpha", "cv_mse", "cv_best", "loco_iterations", "lambda"):

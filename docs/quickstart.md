@@ -67,18 +67,30 @@ result = gwas(y01, gt, X=X, method="hratt", trait="binary", sample_weights=w)
 result.extra["n_spa"]          # variants whose tail came from the saddlepoint
 result.extra["design_effect"]  # with weights: n / Kish effective sample size
 result.extra["prevalence"]     # binary: (weighted) case fraction
+result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 ```
 
 Weights must be finite and positive (drop samples with zero weight); they
 are rescaled to mean one. With weights, heritability is fitted by HE
 (`heritability_method="auto"`); REML is unavailable because the weights
 define no likelihood. Binary effects are one-step log odds ratios per
-counted allele. Tails above |z| = 2 come from a saddlepoint approximation;
-`spa_threshold=np.inf` turns it off. When the weights depend on ancestry,
-include ancestry covariates (PCs): the test assumes genotypes exchangeable
-given the covariates. HRATT's `beta` and `se` are attenuated (about a third
-in simulations); use its p-values. `gwas` raises TypeError for `trait`,
-`sample_weights` and `spa_threshold` with other methods.
+counted allele, conditional on the polygenic score. Tails above |z| = 2 come
+from a saddlepoint approximation; `spa_threshold=np.inf` turns it off, and
+`spa_two_sided="doubled"` doubles the tail beyond the observed score instead
+of adding both tails at +-|u|, putting half the level in each tail.
+
+Include ancestry principal components among the covariates. The tests take
+each sample's allele frequency from the covariates, so weights or case
+fractions that differ by ancestry stay calibrated; HRATT warns when strong
+structure remains after the covariates. `gwas` raises TypeError for `trait`,
+`sample_weights`, `spa_threshold`, `spa_two_sided` and `loco_folds` with
+other methods.
+
+HRATT's LOCO scores are cross-fitted (`loco_folds=5`): no sample's
+phenotype enters its own score, so effects are not attenuated and rare
+outcomes do not get offsets that separate the cases. `loco_folds=1` fits the
+scores in-sample, as LDAK-KVIK and earlier versions did; its effects are
+attenuated, by about a third in simulations, though its p-values are not.
 
 ## Larger HRATT fits
 
