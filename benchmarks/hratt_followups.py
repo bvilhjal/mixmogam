@@ -177,7 +177,12 @@ def worker(case, methods):
     seed = config["method_seed"]
     clock = {"spa": 0.0, "ablation": 0.0, "paused": False}
     kept = {}
-    spa, tails, ratio = twostep._genotype_spa, twostep._genotype_tails, twostep._ancestry_ratio
+    spa, tails, probabilities = twostep._genotype_spa, twostep._genotype_tails, twostep._allele_probabilities
+
+    def pooled(cu, zz, Q, mean, sd):
+        # Every sample at the pooled allele frequency: rho_j = 1 and pooled
+        # (Hardy-Weinberg) saddlepoint tails, the 5 October model.
+        return np.repeat((0.5 * mean)[:, None], Q.shape[0], axis=1)
 
     def timed_spa(*a, **k):
         t = time.perf_counter()
@@ -205,7 +210,7 @@ def worker(case, methods):
     for method in methods:
         clock.update(spa=0.0, ablation=0.0)
         kept.clear()
-        twostep._ancestry_ratio = (lambda cu, *rest: np.ones(cu.shape[0])) if method.endswith("-pooled") else ratio
+        twostep._allele_probabilities = pooled if method.endswith("-pooled") else probabilities
         t = time.perf_counter()
         try:
             if method in ("logistic", "logistic-w"):
@@ -238,7 +243,7 @@ def worker(case, methods):
                           "extra": {k: v for k, v in res.extra.items()
                                     if k not in ("alpha_scores", "cv_grid", "cv_mse",
                                                  "calibration_ratios", "loco_groups")}}
-    twostep._ancestry_ratio = ratio
+    twostep._allele_probabilities = probabilities
     save_json(case / "local.diagnostics.json", record)
 
 

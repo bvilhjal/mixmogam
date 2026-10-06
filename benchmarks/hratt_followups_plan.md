@@ -16,9 +16,11 @@ The four follow-ups of `results/20261005-hratt-weights-binary`:
      is shrunk; none is inflated beyond the prior's shrinkage.
    - This targets the attenuated effects (P5) and the separation failures at
      1% prevalence.
-2. **Covariate-specific genotype variance** in the retrospective tests,
-   zvar |a|^2 rho_j. Allele frequencies are fitted on the covariates, as in
-   SPAmix; this targets ancestry-dependent weights (P4).
+2. **Covariate-specific genotype distributions** in the retrospective
+   tests. Allele frequencies are fitted on the covariates, as in SPAmix.
+   They set the variance, zvar |a|^2 rho_j, and since 2.0.0.dev6 the
+   saddlepoint tails (sample-specific Binomial(2, p_ij), conditional
+   Hardy-Weinberg). This targets ancestry-dependent weights (P4).
    - Under strong structure each group's model is refitted without its
      variants (5 x groups fits). Dropping one chromosome's share of a
      genome-wide fit leaves ancestry in the residual: in pilots at Fst 0.15
@@ -78,8 +80,8 @@ The four follow-ups of `results/20261005-hratt-weights-binary`:
   - `logistic` or `logistic-w`: the same test without polygenic scores.
 - **Ablations of weighted and binary HRATT:**
   - `p_doubled`: doubled saddlepoint tails.
-  - `p_pooled`: the pooled genotype variance (rho_j = 1). In S4 cells only,
-    this comes from a separate run.
+  - `p_pooled`: every sample at the pooled allele frequency (rho_j = 1,
+    pooled tails). In S4 cells only, this comes from a separate run.
 
 Each case's local methods run in one fresh process, one thread, in rotating
 order, so F6's time ratios are paired within a process. Three panels run at
