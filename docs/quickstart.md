@@ -55,6 +55,31 @@ two-step methods. The spectral option is an approximation, and its use with mixt
 statistics is heuristic; use the exact path when feasible and validate
 calibration in the intended population (see the [design notes](design.md)).
 
+## Case-control outcomes and sampling weights
+
+HRATT analyses 0/1 outcomes and sampling-weighted samples, alone or together:
+
+```python
+result = gwas(y01, gt, X=X, method="hratt", trait="binary")      # cases 1, controls 0
+result = gwas(y, gt, X=X, method="hratt", sample_weights=w)       # e.g. 1 / P(participation)
+result = gwas(y01, gt, X=X, method="hratt", trait="binary", sample_weights=w)
+
+result.extra["n_spa"]          # variants whose tail came from the saddlepoint
+result.extra["design_effect"]  # with weights: n / Kish effective sample size
+result.extra["prevalence"]     # binary: (weighted) case fraction
+```
+
+Weights must be finite and positive (drop samples with zero weight); they
+are rescaled to mean one. With weights, heritability is fitted by HE
+(`heritability_method="auto"`); REML is unavailable because the weights
+define no likelihood. Binary effects are one-step log odds ratios per
+counted allele. Tails above |z| = 2 come from a saddlepoint approximation;
+`spa_threshold=np.inf` turns it off. When the weights depend on ancestry,
+include ancestry covariates (PCs): the test assumes genotypes exchangeable
+given the covariates. HRATT's `beta` and `se` are attenuated (about a third
+in simulations); use its p-values. `gwas` raises TypeError for `trait`,
+`sample_weights` and `spa_threshold` with other methods.
+
 ## Larger HRATT fits
 
 Install the `fast` extra for Numba, then set thread limits **before starting
@@ -78,28 +103,28 @@ print(result.extra["cv_converged"], result.extra["loco_converged"])
 
 Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
 PCs for population/environmental confounding; the intercept is added internally.
-REML and one thread remain the defaults. Selecting `heritability_method="he"`
-changes the variance estimator to projected single-component randomized HE;
-it is distinct from official LDAK's partitioned HE workflow. The default
-`alpha_method="he"` is required for this option. Inspect HE boundary and
+REML (HE with sampling weights) and one thread remain the defaults. Selecting
+`heritability_method="he"` changes the variance estimator to projected
+single-component randomized HE, distinct from official LDAK's partitioned HE
+workflow; it requires the default `alpha_method="he"`. Inspect HE boundary and
 precision diagnostics and CV/LOCO convergence before interpreting a fit.
 Trace-probe uncertainty is not a heritability confidence interval.
 
 `n_threads=4` parallelizes preparation and independent model updates while
-preserving SNP order within each model. It may change floating-point rounding.
+preserving SNP order within each model. Preparation gives the same values at
+every thread count; parallel residual products may change floating-point
+rounding.
 Detected BLAS pools are limited internally for the parallel matrix products;
 Apple Accelerate needs the `VECLIB_MAXIMUM_THREADS` setting above. The requested
 count cannot exceed Numba's configured limit. Initial Numba compilation adds
 latency to the first use of a kernel.
 
 Genotypes are decoded on every pass; no float copy is kept. For large
-panels, store the calls two bits each: `read_plink(prefix, packed=True)`
-holds the bed's codes in memory (a quarter of the int8 bytes) and
-`read_plink(prefix, mmap=True)` maps them from the file; `Genotypes(G,
-packed=True)` packs an array. Results are identical to int8 storage.
-Residuals and other workspaces remain resident: this is not a fully
-out-of-core fit. Preserve `result.extra` separately if needed; CSV does not
-include it.
+panels, store the calls two bits each: `Genotypes.load_plink(prefix,
+packed=True)` holds the bed's codes in memory (a quarter of the int8 bytes),
+`mmap=True` maps them from the file, and `Genotypes(G, packed=True)` packs an
+array. Results are identical to int8 storage. Residuals and other workspaces
+remain resident: this is not a fully out-of-core fit.
 
 ## The mixed model by hand
 
@@ -139,14 +164,10 @@ fit_two_kinships(y, K_close, K_structure)     # mixture weights + shares
   interpreting diploid MAC or allele frequency. `allele_freqs()` returns the
   counted-allele frequency; `allele_freqs(minor=True)` returns MAF.
 - `gwas(..., dtype=...)` controls exact-scan arithmetic only. Two-step methods
-  use float32 genotype storage. Unknown exact-method options now raise an
-  error rather than silently disappearing.
-- Since 2.0.0.dev5, a given `random_state` draws different Lanczos probes
-  (48 instead of 12) and calibration SNPs, so two-step REML fits and
-  calibrations move within Monte Carlo error. `mlmm` scans in float32 by default
-  (`dtype=np.float64` restores the previous arithmetic) and rotates the SNPs
-  once when they fit its `cache_bytes` (4e9 by default; `4 * n * m` bytes in
-  float32).
+  store int8 or two-bit calls and decode them to float32. Unknown exact-method
+  options raise an error rather than silently disappearing.
+- Migration notes per release, such as changed random draws, are in the
+  [changelog](../CHANGELOG.md).
 - `permutation_min_p(..., scheme="whitened")` permutes coordinates in the
   residual subspace. The older projected-residual approximation is available
   as `scheme="projected"`; old thresholds do not certify the corrected scheme.

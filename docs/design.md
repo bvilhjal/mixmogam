@@ -1,15 +1,10 @@
 # mixmogam engine design
 
 These notes describe the current implementation and label historical evidence
-separately. The [2026-10-03 review](review-2026-10-03.md) identifies input-encoding,
-MAC, prediction, and permutation corrections. The original external LDAK
-comparison remains withdrawn. The verified [20K workload comparison](../benchmarks/results/20261003-kvik-20k/README.md),
-[rerun with commit e4089d8](../benchmarks/results/20261005-kvik-20k-e4089d8/README.md),
-uses new phensim inputs and frozen sources; the [research report](../report/README.md)
-sets out the statistical evidence and research agenda.
-
-Numerical design and historical derivations with pseudocode: [methods.pdf](methods.pdf). The PDF predates the review; current API contracts are in the docstrings
-and quickstart.
+separately; current API contracts are in the docstrings and the quickstart.
+The [research report](../report/README.md) sets out the statistical evidence
+and research agenda, and the [2026-10-03 review](review-2026-10-03.md) the
+input-encoding, MAC, prediction, and permutation corrections.
 
 ## Model
 
@@ -41,7 +36,7 @@ Table 1. Association paths and calibration.
 | `exact` | V_{-g}^{-1/2}-whitened phenotype, REML refit per group | plug-in F test |
 | `bolt-inf` | V_{-g}^{-1} y by batched CG | one constant from 30 exact prospective statistics |
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
-| `hratt` | y minus the elastic-net LOCO score | lambda = 1, or LDAK-KVIK's rule under strong structure |
+| `hratt` | y minus the elastic-net LOCO score (binary: the logistic score with it as offset) | lambda = 1, or LDAK-KVIK's rule under strong structure |
 
 `auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT, the
 Heritability-weighted Residual Association Two-step Test, is mixmogam's
@@ -97,7 +92,8 @@ proximal-contamination deflation.
 ## Two-step engine (K-free)
 
 - **Streaming LOCO operator** (`_loco.LocoGenotypes`): standardized,
-  covariate-projected SNP blocks that never straddle a group. One pass
+  covariate-projected SNP blocks, computed on demand from the stored calls,
+  that never straddle a group. One pass
   applies every K_{-g} to its own column, so the BOLT-style G LOCO solves,
   the 30 calibration solves and the LOCO eigenbases share GEMMs.
   Called-genotype means and standard deviations are prepared once; the
@@ -127,7 +123,7 @@ proximal-contamination deflation.
   on the operator: 24 Lanczos steps and 48 Rademacher probes. A pass over
   the genotypes costs about the same for 1 to 64 columns; 24 steps matched
   96 to five digits in every tested spectrum, while 12 probes left h2 with
-  an SD of 0.11 over probe seeds at n = 500 under strong structure (0.02
+  an SD of 0.12 over probe seeds at n = 500 under strong structure (0.02
   with 48). The phenotype rule and trace probes share batched Lanczos
   products. The two-step caller requests variance components alone, avoiding
   unused fixed-effect solves and scan preparation; public `LMM.fit()` still
@@ -154,6 +150,53 @@ before BOLT-LMM uses the mixture (BOLT's threshold is unpublished);
 median matching instead of the LDSC intercept when LD scores do not
 vary (coefficient of variation < 0.2).
 
+### Case-control outcomes and sampling weights
+
+HRATT fits sampling weights w (scaled to mean one) and binary outcomes in one
+**row-scaled working model**. With working weights v and s = sqrt(v), it
+fits y~ = s y, X~ = s X and genotypes z~ = s z, so every solver keeps its
+`vg K + ve I` form; v = w for quantitative traits, and v = w mu0 (1 - mu0)
+for binary ones, whose working response (y - mu0) / (mu0 (1 - mu0)) uses
+the covariate-only (weighted) logistic fit: one IRLS step, as LDAK-KVIK's
+binary step 1 is a weighted linear regression. Constant v leaves step 1
+unscaled; unit sampling weights still select HE and the tests below.
+Preparation stores the scaled coefficients Q~'z~ and norms; decoding
+multiplies rows by s.
+
+With weights, `heritability_method="auto"` uses HE. Its least-squares fit of
+yy' on `vg K + ve S D S` (D the weights) weights each diagonal moment by
+1/D, so that every moment is design-consistent; with unit weights it is the
+projected HE above. The structure test uses the Kish size of v.
+
+Step 2 tests a variant's score z'a, with a = s r~ for quantitative traits
+(the weighted LOCO residual) and a = w (y - mu) for binary ones (mu: the
+null logistic fit with the LOCO score as offset, refitted per group),
+against its variance when genotypes are exchangeable given the covariates,
+zvar |a|^2 (zvar: unweighted genotype variance after covariates). Without
+weights and for quantitative traits this is the unweighted statistic, kept
+with normal tails. In weighted and binary analyses, above |z| = 2 a
+saddlepoint approximation gives the tail: genotypes drawn independently from
+the variant's empirical distribution with a fixed (the retrospective
+counterpart of SPACox's empirical CGF, which draws the residuals). Two departures from common practice
+follow from pilots: the Huber-White sandwich sum a^2 Z^2 of weighted GWAS
+replaces each genotype's variance by its own square and was inflated
+17-fold at 1e-3 for MAF 1-5% under selection on the outcome, because a few
+samples carry the score; and the model-based logistic variance
+sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample LOCO
+offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets and
+50 cases in 5,000).
+Quantitative effects are weighted least-squares slopes, binary ones
+one-step log odds ratios U / J. lambda keeps its rule and multiplies the
+statistic. `denominator="spectral"` is unavailable with weights or binary
+traits, and `alpha_method="reml"` with weights. The validation follows
+`benchmarks/hratt_weights_binary_plan.md`; its
+[results](../benchmarks/results/20261005-hratt-weights-binary/README.md) show
+two limits: exchangeability fails when the weights depend on ancestry
+(low-frequency tails 5.75-fold at 1e-3 at Fst 0.05; ancestry covariates
+should restore it, untested), and the in-sample LOCO prediction absorbs part
+of every effect, so HRATT's effects are attenuated (32% in the simulation)
+while its p-values are not.
+
 ### Optional HRATT parallelism and memory budgets
 
 `n_threads=1` remains the default. Above one, the `fast` extra parallelizes
@@ -163,9 +206,8 @@ order. For large fits (at least 50,000 samples and six model columns), a
 bounded BLAS workspace and a pool of at most four workers distribute suitable
 residual matrix products over sample rows. Smaller products retain the
 ordinary matrix-product path. Temporary Numba and detected BLAS limits are
-restored on exit. Apple Accelerate needs `VECLIB_MAXIMUM_THREADS=1` before
-Python starts; it is not detected by threadpoolctl. See the
-[quickstart](quickstart.md#larger-hratt-fits) for a complete configuration.
+restored on exit; see the [quickstart](quickstart.md#larger-hratt-fits) for
+a complete configuration, including Apple Accelerate.
 
 Prepared genotypes are never stored projected. Preparation keeps, per
 variant, the three standardized call values, the covariate coefficients
@@ -187,8 +229,8 @@ int8 and 0.7 ns from sample-major int8 arrays. One-pass consumers decode 16 MiB 
 (at least 256 variants, at most 512 MiB) into reused buffers. BOLT-LMM's
 in-sample LD scores stream each chromosome through a sliding position
 window, holding the widest window rather than the genotype matrix. The
-int8 input, Gram matrices, residuals and workspaces are separate
-allocations.
+stored calls (int8 or two-bit), Gram matrices, residuals and workspaces are
+separate allocations.
 PLINK input decoding and genotype validation also use bounded tiles. None of
 these changes makes the full analysis out of core.
 
@@ -236,7 +278,7 @@ These are historical mixmogam results, not official-program comparisons:
 
 Table 2. Historical null calibration by dataset.
 
-| data | exact LOCO | `bolt-inf` | + spectral | `hratt` | + spectral |
+| data | exact LOCO | `bolt-inf` | + spectral | KVIK-style (now `hratt`) | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
@@ -288,48 +330,12 @@ statistics.
 
 ## Measured resources and numerical agreement
 
-The [20K benchmark](../benchmarks/results/20261003-kvik-20k/README.md), rerun
-with commit e4089d8 ([archive](../benchmarks/results/20261005-kvik-20k-e4089d8/README.md)),
-uses two fixed phensim HAPNEST panels, each with 50,000 samples and exactly 20,000
-retained variants across six LOCO groups. One panel is unstructured; the
-other has population structure, environmental confounding and two PC
-covariates. Three fresh-process repetitions per setting measure time, not
-biological replication. Official timing sums its two native steps; local
-timing includes imports, input reading, fitting and result writing. Common
-preparation and initial Numba compilation are excluded.
-
-Table 4. Median full-fit time and four-thread peak RSS: mixmogam e4089d8
-reruns (5 October) and the original official runs (3 October).
-
-| Panel | Method | 1 thread (s) | 4 threads (s) | 4-thread RSS (GiB) |
-|---|---|---:|---:|---:|
-| Unstructured | mixmogam HE | 32.69 | 20.36 | 1.426 |
-| Unstructured | Official LDAK-KVIK | 33.49 | 25.45 | 0.652 |
-| Structure/confounding + PCs | mixmogam HE | 29.24 | 19.01 | 1.442 |
-| Structure/confounding + PCs | Official LDAK-KVIK | 39.63 | 30.09 | 0.653 |
-
-Two-bit calls (`read_plink(prefix, packed=True)`) halve mixmogam's four-thread
-peak to 0.73 GiB, with exactly equal saved association arrays, VB coefficients
-and fit diagnostics in all six pairs. The original runs, with the float
-genotype cache, peaked at 4.2-4.4 GiB; the cache is gone.
-
-All local CV and LOCO fits converged. Same-setting repetitions are exact,
-but all six local one-versus-four-thread comparisons exceed the original
-array tolerance (`rtol=1e-6`, `atol=1e-8`); those failures remain archived.
-Selected priors, iteration counts and convergence agree. Maximum absolute
-changes are 2.0e-5 in p and 1.3e-7 in association beta, on the PC-adjusted
-panel; with the cache they were 1.4e-6 and 9.8e-9. No variant decision
-changes at p < 0.05, 0.01, 0.001, 0.05/20,000 or 5e-8. This is
-numerical evidence for these panels, not proof of equivalence across inputs
-or statistical identity with official LDAK.
-
-AC and Low Power Mode guards passed, but system-wide swap counters increased
-during the observation interval on the 16-GB Apple M2 Pro. They cannot
-attribute paging to a program or individual fit. The archive retains full
-ranges and raw observations; these are workstation workload measurements,
-not clean hardware-scaling estimates. The official Mac binary links
-Accelerate without observed OpenMP linkage, so this does not compare against
-the Linux OpenMP/MKL build. An idle host with more RAM, a pinned Linux build,
-and independently replicated calibration/power experiments are the next
-useful checks. Earlier internal scan timings and the withdrawn external
-comparison remain historical evidence in the research report.
+On two fixed 50,000 × 20,000 phensim HAPNEST panels, four-thread HRATT-HE took
+19.0-20.4 s at 1.4 GiB peak RSS, or 0.73 GiB with two-bit calls and identical
+results; official LDAK-KVIK took 25.5-30.1 s at 0.65 GiB on 3 October, when
+the host was slower. One- and four-thread results differ by rounding beyond
+the original array tolerance but agree in every significance decision.
+Methods, ranges and caveats (swapping in the original cached runs, the
+Accelerate-linked official binary) are in the
+[archive](../benchmarks/results/20261005-kvik-20k-e4089d8/README.md) and
+report Section 4.8.

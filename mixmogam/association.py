@@ -176,7 +176,9 @@ def gwas(
         groups of balanced size (BOLT-LMM's genome segments)
     kwargs : passed to the two-step method (see :mod:`mixmogam.twostep`);
         ``"exact"`` accepts only ``n_threads`` (default 1), which decodes
-        genotype blocks in parallel (Numba) with unchanged values
+        genotype blocks in parallel (Numba) with unchanged values. Binary
+        (case-control) outcomes, ``trait="binary"``, and sampling weights,
+        ``sample_weights=w``, are HRATT options (``method="hratt"``).
     """
     y = np.asarray(y, dtype=np.float64).ravel()
     if y.size != gt.n_samples or y.size == 0:
@@ -187,6 +189,10 @@ def gwas(
         raise ValueError("block must be a positive integer")
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
+    hratt_only = sorted({"trait", "sample_weights", "spa_threshold"} & set(kwargs))
+    if hratt_only and method != "hratt":
+        raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "
+                        f"(binary outcomes and sampling weights), not of method={method!r}")
     if method == "auto":
         method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
     if method == "exact":
@@ -202,7 +208,7 @@ def gwas(
             raise ValueError("dtype must be float32 or float64")
         return _gwas_exact(y, gt, X, loco, max_loco_groups, block, dtype, n_threads=int(n_threads))
     if dtype is not None:
-        raise TypeError("dtype is an exact-scan option; two-step methods use float32 storage")
+        raise TypeError("dtype is an exact-scan option; two-step methods decode their stored calls to float32")
     if not loco:
         raise ValueError(f"method {method!r} is LOCO by construction")
     from mixmogam import twostep

@@ -128,9 +128,6 @@ class Genotypes:
     # Summary statistics
     # ------------------------------------------------------------------
 
-    def _called(self, block: slice) -> np.ndarray:
-        return self.G[:, block] != MISSING
-
     def allele_freqs(self, minor: bool = False) -> np.ndarray:
         """Counted-allele frequency (PLINK A1); ``minor=True`` returns MAF.
 

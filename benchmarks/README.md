@@ -17,7 +17,7 @@ The archived sources/results remain intact. See the
 [critical review](../docs/review-2026-10-03.md).
 
 **Matched simulation comparison.** `kvik_simulation.py` compares exact
-LOCO, mixmogam BOLT-inf and mixmogam KVIK with the official LDAK-KVIK executable.
+LOCO, mixmogam BOLT-inf and mixmogam HRATT with the official LDAK-KVIK executable.
 All data come from phensim, including Balding–Nichols populations with
 optional AR(1) LD and explicit environmental exposures. The
 [prespecified protocol](kvik_simulation_plan.md) separates genetic-null
@@ -57,7 +57,7 @@ python benchmarks/kvik_simulation.py --ldak /path/to/ldak \
   --plan ../phensim/benchmarks/hapnest_plan.md --simulator hapnest \
   --bounded-memory --n 50000 --m 12000 --reps 1 --rhos 0.8 \
   --cells unstructured confounded-pc --traits mixed \
-  --methods kvik ldak-kvik --seed 20261006 --out NEW_DIRECTORY
+  --methods hratt ldak-kvik --seed 20261006 --out NEW_DIRECTORY
 ```
 
 Set all five thread variables as above. Large BED inputs stay on disk but are
@@ -66,7 +66,7 @@ all analysis outputs are retained. The HAPNEST simulator resource study and
 its full snapshots live in the sibling phensim archive; a provenance-labelled
 copy of its summary supports the report here.
 
-**KVIK efficiency comparison.** `kvik_efficiency.py` compares two frozen
+**HRATT efficiency comparison.** `kvik_efficiency.py` compares two frozen
 mixmogam source trees on those same phensim inputs. It alternates execution
 order across three repetitions, gives each source a fresh JIT cache and a
 separate warm-up, and measures fresh processes with one thread. Whole-process
@@ -92,7 +92,7 @@ python benchmarks/kvik_efficiency.py --baseline /tmp/mixmogam-baseline \
 
 Repeat `--case` for additional workloads. Keep the five thread variables
 above at one. Use `--profile` only for diagnosis, separately from formal
-timing. Cache sizes and statistical fitting defaults are identical across
+timing. Storage and statistical fitting defaults are identical across
 the two workers.
 
 **HE versus REML.** `kvik_he_comparison.py` compares the explicit
@@ -139,8 +139,9 @@ python benchmarks/kvik_thread_scaling.py --source . --ldak /path/to/ldak \
   --out NEW_DIRECTORY
 ```
 
-For a paired cache experiment, `kvik_efficiency.py` accepts independent
-`--baseline-cache-bytes` and `--cache-bytes` budgets. Setting the latter to
+For a paired cache experiment with sources up to 2.0.0.dev5,
+`kvik_efficiency.py` accepts independent `--baseline-cache-bytes` and
+`--cache-bytes` budgets (current sources have no cache). Setting the latter to
 zero measures repeated prepared decoding instead of retaining every float
 genotype. Keep both sources, estimators and requested worker counts identical
 when isolating that memory tradeoff.
@@ -195,6 +196,23 @@ python benchmarks/efficiency_paired.py --source dev5=/tmp/mixmogam-dev5 \
 OPENBLAS_NUM_THREADS=1 python benchmarks/slq_defaults.py --out NEW_DIRECTORY
 ```
 
+**Sampling weights and case-control outcomes.** `hratt_weights_binary.py`
+validates weighted and binary HRATT under a
+[prespecified protocol](hratt_weights_binary_plan.md): fresh Balding-Nichols
+populations of 40,000, samples of 5,000 drawn by six selection scenarios with
+inverse-probability weights, null and mixed traits, prevalences of 1-20%, and
+official LDAK-KVIK (`--binary YES`) and LDAK's weighted linear regression as
+references. Local methods share one fresh process per case, timed per call;
+each case is reduced to its pre-registered summaries, keeping per-variant
+results for replicate 1, and its genotype files are deleted with their hashes
+kept. Archive:
+[`20261005-hratt-weights-binary`](results/20261005-hratt-weights-binary/README.md).
+
+```sh
+python benchmarks/hratt_weights_binary.py --ldak ~/bin/ldak63 --max-load 6 \
+  --out NEW_DIRECTORY
+```
+
 **Reruns with new local code.** `kvik_simulation.py --rerun-from` repeats
 the local methods on an existing archive's inputs. All other files, including
 the official LDAK-KVIK outputs, are linked unchanged, but only after the
@@ -243,7 +261,7 @@ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
   leading eigenvector of the tested SNPs' GRM, and their S2 results are
   superseded.
 - `structure_calibration.py`: per-SNP calibration of the two-step
-  statistics (BOLT-LMM-inf, BOLT-LMM, LDAK-KVIK, each with and without
+  statistics (BOLT-LMM-inf, BOLT-LMM, HRATT, each with and without
   the structure-aware denominator) against exact LOCO EMMAX on SNPs that
   are null by construction, binned by loading on the top kinship
   eigenvectors. Simulated genotypes with and without structure, and the

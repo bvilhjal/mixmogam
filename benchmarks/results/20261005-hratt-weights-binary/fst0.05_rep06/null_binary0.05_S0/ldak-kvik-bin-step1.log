@@ -1,0 +1,88 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 7 pairs of arguments:
+--kvik-step1 kvik
+--bfile geno
+--pheno phenotype.txt
+--covar covariates.txt
+--max-threads 1
+--binary YES
+--random-seed 20267455
+
+Note that "--kvik-step1 kvik" is equivalent to using "--elastic kvik.step1" with "--LOCO YES"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Constructing LOCO elastic net PRS
+
+Will analyze using a quasi-logistic model (use "--binary NO" to switch to a linear model)
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+LDAK will only save selected files (to save all files, use "--verbose YES")
+
+The random number generator seed is set to 20267455
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 5000 samples from geno.fam
+
+Checking responses for 5000 samples from phenotype.txt
+
+Reading details for 20000 predictors from geno.bim
+
+Data contain 5000 samples and 20000 predictors (will be using 5000 and 20000)
+
+Reading phenotypes for 5000 samples from phenotype.txt
+Response 1 in phenotype.txt is binary, with 244 cases and 4756 controls
+
+Reading 1 covariates for 5000 samples from covariates.txt
+
+When performing cross-validation, will use 4500 training samples and 500 test samples
+
+Warning, the number of comparison predictors has been reduced to 20000 (the total number of predictors)
+
+Testing for structure using 512 pedigree predictors
+
+Will decide there is high structure if the estimated maximum average inflation is above 0.1000, and the corresponding p-value is below 1.0000e-03 (change these values using "--MAI-threshold" and "--MAI-significance")
+
+Average cross-chromosome squared correlation is 1.4445e-03 (chi-squared test statistic 2281387.3957; p-value 0.0000e+00); estimated maximum average inflation of test statistics is 6.2223
+
+This is relatively high structure, so will use a pedigree-based PRS and the GRAMMAR-GAMMA Scaling Factor
+
+Note that the number of pedigree predictors has been increased to 1024
+
+Calculating statistics for 5120 randomly-picked predictors (in order to find 1024 with relatively high variance)
+
+The off-diagonal kinships have mean -0.0002 and SE 0.0588; will record sample pairs with estimated kinship above 0.2414
+
+Finding relatives for Chunk 1 of 20
+Warning, there are no significantly-related pairs, the pedigree-based PRS will be set to zero
+
+Determining best power using Randomized Haseman-Elston Regression with 10 random vectors
+
+Will divide the predictors into 20 partitions (change this using "--num-divides")
+Will exclude chunks containing a predictor with estimated variance explained greater than 0.0200 (change this using "--max-cor")
+
+Calculating traces for Chunk 1 of 79
+
+Best power is 0.0000
+
+LOCO results saved in kvik.step1.loco.prs and kvik.step1.loco.details
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Mon Oct  5 22:00:02 2026 and ended at Mon Oct  5 22:00:02 2026
+The elapsed time was 0.00 hours
+Given the command used one thread, this means the CPU time was also 0.00 hours
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

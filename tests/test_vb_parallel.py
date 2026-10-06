@@ -395,16 +395,12 @@ def test_missing_threadpoolctl_retains_serial_gemms(phensim_problem, monkeypatch
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("parent_size", [67, 173])
-def test_uncached_parallel_decode_retains_parent_boundaries(phensim_problem, monkeypatch, dtype, parent_size):
+def test_parallel_decode_retains_parent_boundaries(phensim_problem, monkeypatch, dtype, parent_size):
     _require_threads(2)
     gt, groups, Q, folds, Y = phensim_problem
-    cached = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2)
-    uncached = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2)
-    reference = _vb.VBEngine(cached, folds=folds, n_threads=2)
-    actual = _vb.VBEngine(uncached, folds=folds, n_threads=2)
-    # Streamed subblocks share one buffer: copy what outlives an iteration.
-    expected_blocks = [(i, g, b.copy()) for i, g, b in reference._subblocks()]
-    original = uncached._decode
+    lg = LocoGenotypes(gt, groups, Q, block=parent_size, dtype=dtype, n_threads=2)
+    engine = _vb.VBEngine(lg, folds=folds, n_threads=2)
+    original = lg._decode
     decoded = []
 
     def track_decode(idx, **kwargs):
@@ -413,14 +409,18 @@ def test_uncached_parallel_decode_retains_parent_boundaries(phensim_problem, mon
         return original(idx, **kwargs)
 
     with monkeypatch.context() as context:
-        context.setattr(uncached, "_decode", track_decode)
-        actual_blocks = [(i, g, b.copy()) for i, g, b in actual._subblocks()]
-    assert len(actual_blocks) == len(expected_blocks) == len(decoded)
-    for (idx, group, block), (want_idx, want_group, want_block), observed in zip(actual_blocks, expected_blocks, decoded):
-        assert group == want_group
-        np.testing.assert_array_equal(idx, want_idx)
-        np.testing.assert_array_equal(observed, want_idx)
-        np.testing.assert_array_equal(block, want_block)
-    col_fold, col_group = np.array([2, 0, -1, 2]), np.array([-1, 1, 2, 0])
-    _assert_fit_equal(_fit_engine(actual, Y, col_fold, col_group, _vb.PRIOR_ENET),
-                      _fit_engine(reference, Y, col_fold, col_group, _vb.PRIOR_ENET))
+        context.setattr(lg, "_decode", track_decode)
+        # Streamed subblocks share one buffer: copy what outlives an iteration.
+        blocks = [(i, g, b.copy()) for i, g, b in engine._subblocks()]
+    assert len(blocks) == len(decoded)
+    np.testing.assert_array_equal(np.sort(np.concatenate([i for i, _, _ in blocks])), np.arange(lg.m))
+    calls = np.asarray(gt.G, dtype=np.float64)
+    for (idx, group, block), observed in zip(blocks, decoded):
+        np.testing.assert_array_equal(observed, idx)
+        # Each subblock lies inside one parent block of its own group.
+        assert any(g == group and np.isin(idx, parent).all() for parent, g in lg._blocks)
+        # Unprojected standardized calls; no-calls decode to zero.
+        g = calls[:, idx]
+        sd = np.where(lg.sd[idx] > 0, lg.sd[idx], 1.0)
+        expected = np.where(g != -1, (g - lg.mean[idx]) / sd, 0.0).T
+        np.testing.assert_allclose(block, expected, rtol=0, atol=8 * np.finfo(dtype).eps * np.abs(expected).max())

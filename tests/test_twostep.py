@@ -266,9 +266,12 @@ def test_cv_and_loco_fit_state_is_released_after_use(small, monkeypatch, method)
         engines.append(weakref.ref(self))
         return out
 
+    checked = []
+
     def retro(*args, **kwargs):
         if len(effects) == 2:
             assert all(ref() is None for ref in effects + engines)
+            checked.append(True)
         return original_retro(*args, **kwargs)
 
     monkeypatch.setattr(VBEngine, "fit", fit)
@@ -276,7 +279,7 @@ def test_cv_and_loco_fit_state_is_released_after_use(small, monkeypatch, method)
     # A negative CV margin keeps BOLT-LMM on its mixture (LOCO) path.
     options = {"heritability_method": "he"} if method == "hratt" else {"min_cv_gain": -1.0}
     gwas(y, gt, method=method, **options)
-    assert len(effects) == 2
+    assert len(effects) == 2 and checked
 
 
 @pytest.mark.slow

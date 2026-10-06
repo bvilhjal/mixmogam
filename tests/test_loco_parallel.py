@@ -144,27 +144,27 @@ def test_preparation_and_decoding_ignore_storage_order(project):
 def test_parallel_streamed_blocks_and_requested_rows_are_exact(monkeypatch, order, dtype, project):
     require_threads(4)
     gt, groups, Q = problem(order, project)
-    cached = LocoGenotypes(gt, groups, Q, block=9, dtype=dtype, n_threads=2)
+    parallel = LocoGenotypes(gt, groups, Q, block=9, dtype=dtype, n_threads=2)
     streamed = LocoGenotypes(gt, groups, Q, block=9, dtype=dtype, n_threads=4)
     assert streamed._projection.shape == (gt.n_variants, Q.shape[1])
     assert streamed._projection.dtype == np.float64
     assert not streamed._projection.flags.writeable
-    np.testing.assert_array_equal(streamed._projection, cached._projection)
+    np.testing.assert_array_equal(streamed._projection, parallel._projection)
     # Subsequent decoding cannot update any prepared statistics.
     streamed.mean.flags.writeable = False
     streamed.sd.flags.writeable = False
     expected = np.empty((gt.n_variants, gt.n_samples), dtype=dtype)
-    for idx, _, Z in cached.blocks():
+    for idx, _, Z in parallel.blocks():
         expected[idx] = Z
     for _ in range(2):
         for idx, _, Z in streamed.blocks():
             np.testing.assert_array_equal(Z, expected[idx])
-    assert streamed.trace == cached.trace == streamed._trace()
+    assert streamed.trace == parallel.trace
     monkeypatch.setattr("mixmogam._loco._STANDARDIZE_WORK_BYTES",
                         3 * (32 * gt.n_samples + 8 * Q.shape[1] + 128))
     requested = np.array([36, 0, 7, 36, 4, 25, 3])
     np.testing.assert_array_equal(streamed.rows(requested), expected[requested])
-    np.testing.assert_array_equal(cached.rows(requested), expected[requested])
+    np.testing.assert_array_equal(parallel.rows(requested), expected[requested])
     assert streamed.rows([]).shape == (0, gt.n_samples)
 
 

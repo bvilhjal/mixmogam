@@ -33,7 +33,7 @@ def read_phenotypes(path: str, delimiter: Optional[str] = None) -> Phenotypes:
 
     lower = [h.lower() for h in header]
     if "value" in lower and "phenotype_id" in lower:
-        return _parse_long(header, lower, rows, delimiter)
+        return _parse_long(lower, rows)
     return _parse_wide(header, rows)
 
 
@@ -44,7 +44,7 @@ def _num(v: str) -> float:
     return float(v)
 
 
-def _parse_long(header, lower, rows, delimiter) -> Phenotypes:
+def _parse_long(lower, rows) -> Phenotypes:
     i_pid = lower.index("phenotype_id")
     i_eid = next(
         i for i, h in enumerate(lower) if h in ("ecotype_id", "sample_id", "accession")

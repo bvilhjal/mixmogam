@@ -162,18 +162,3 @@ def _to_int8(col) -> np.ndarray:
     return out
 
 
-def _iupac_pairs() -> dict:
-    base = {
-        "A": ("A", "A"), "G": ("G", "G"), "C": ("C", "C"), "T": ("T", "T"),
-        "R": ("A", "G"), "Y": ("C", "T"), "S": ("G", "C"), "W": ("A", "T"),
-        "K": ("G", "T"), "M": ("A", "C"), "B": ("C", "G", "T")[:2],
-        "D": ("A", "G", "T")[:2], "H": ("A", "C", "T")[:2],
-        "V": ("A", "C", "G")[:2],
-    }
-    out = dict(base)
-    # diploid explicit pairs like "A/G"
-    letters = "ACGT"
-    for a in letters:
-        for b in letters:
-            out[f"{a}/{b}"] = (a, b)
-    return out

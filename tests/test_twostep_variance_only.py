@@ -38,20 +38,15 @@ def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, packed, weighted):
     dense_K = (Z.astype(np.float64).T * dense_weights) @ Z.astype(np.float64) / divisor
     # The dense matrix uses float32 storage rows; the trace exact norms.
     assert expected_trace == pytest.approx(np.trace(dense_K), rel=1e-6)
-    original_blocks = st.lg.blocks
-    original_products = st.lg._products
+    # Every genotype pass of the operator decodes through raw_slices.
+    original_slices = st.lg.raw_slices
     passes = []
 
-    def observed_blocks(reuse=False):
+    def observed_slices(*args, **kwargs):
         passes.append(True)
-        yield from original_blocks(reuse=reuse)
+        yield from original_slices(*args, **kwargs)
 
-    def observed_products(*args):
-        passes.append(True)
-        return original_products(*args)
-
-    monkeypatch.setattr(st.lg, "blocks", observed_blocks)
-    monkeypatch.setattr(st.lg, "_products", observed_products)
+    monkeypatch.setattr(st.lg, "raw_slices", observed_slices)
     op = _KOp(st.lg, weights)
     assert not passes  # Construction does not scan the weighted genotypes.
     P = rng.normal(size=(st.lg.n, 2))
@@ -62,10 +57,10 @@ def test_operator_trace_is_lazy_exact_and_cached(monkeypatch, packed, weighted):
     assert op.trace == expected_trace
     assert len(passes) == 1  # Prepared norms: the trace needs no genotype pass.
 
-    def forbid_pass(reuse=False):
+    def forbid_pass(*args, **kwargs):
         raise AssertionError("a cached trace must not scan genotypes again")
 
-    monkeypatch.setattr(st.lg, "blocks", forbid_pass)
+    monkeypatch.setattr(st.lg, "raw_slices", forbid_pass)
     assert op.trace == expected_trace
 
 

@@ -1,0 +1,25 @@
+/Users/au507860/REPOS/mixmogam/benchmarks/hratt_weights_binary.py:715: RuntimeWarning: 7 working probabilities of the null logistic fit were clipped to [0.0001, 0.9999] for step 1
+  worker(args.worker.resolve(), args.methods)
+/Users/au507860/REPOS/mixmogam/mixmogam/association.py:219: RuntimeWarning: 7 working probabilities of the null logistic fit were clipped to [0.0001, 0.9999] for step 1
+  return fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
+Traceback (most recent call last):
+  File "/Users/au507860/REPOS/mixmogam/benchmarks/hratt_weights_binary.py", line 762, in <module>
+    raise SystemExit(main())
+                     ~~~~^^
+  File "/Users/au507860/REPOS/mixmogam/benchmarks/hratt_weights_binary.py", line 715, in main
+    worker(args.worker.resolve(), args.methods)
+    ~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/au507860/REPOS/mixmogam/benchmarks/hratt_weights_binary.py", line 266, in worker
+    res = gwas(y, gt, X=X, method="hratt", **options)
+  File "/Users/au507860/REPOS/mixmogam/mixmogam/association.py", line 219, in gwas
+    return fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
+  File "/Users/au507860/REPOS/mixmogam/mixmogam/twostep.py", line 1089, in hratt
+    return _hratt_binary_step2(st, gt, scores.pop("prediction"), sy, lam, spa_threshold,
+                               n_threads, extra)
+  File "/Users/au507860/REPOS/mixmogam/mixmogam/twostep.py", line 1283, in _hratt_binary_step2
+    fits = group_null_fits(y, st.X_raw, offsets, weights=st.w)
+  File "/Users/au507860/REPOS/mixmogam/mixmogam/_binary.py", line 99, in group_null_fits
+    fit = null_logistic(y, X, weights=weights, offset=offsets[:, g])
+  File "/Users/au507860/REPOS/mixmogam/mixmogam/_binary.py", line 76, in null_logistic
+    raise ValueError("the binary outcome is (quasi-)separated by the covariates; the logistic fit diverges")
+ValueError: the binary outcome is (quasi-)separated by the covariates; the logistic fit diverges

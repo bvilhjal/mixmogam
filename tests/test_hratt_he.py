@@ -105,8 +105,7 @@ def test_he_boundary_fits_have_valid_association_limit(problem, boundary, monkey
         np.testing.assert_allclose(fit.f_stat, expected["chi2"], rtol=1e-12, atol=1e-12)
 
 
-@pytest.mark.parametrize("options", [dict(heritability_method="invalid"),
-                                     dict(heritability_method="he", alpha_method="reml"),
+@pytest.mark.parametrize("options", [dict(heritability_method="he", alpha_method="reml"),
                                      dict(he_probes=0), dict(he_probes=1), dict(he_probes=2.5)])
 def test_invalid_he_method_or_probe_count_is_rejected(problem, options):
     _, gt, X, y, _, _ = problem

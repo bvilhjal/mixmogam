@@ -1,0 +1,69 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 5 pairs of arguments:
+--kvik-step2 kvik
+--bfile geno
+--pheno phenotype.txt
+--covar covariates.txt
+--max-threads 1
+
+Note that "--kvik-step2 kvik" is equivalent to using either "--linear kvik.step2" or "--logistic kvik.step2" with "--PRS kvik.step1"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Performing quasi-logistic regression including LOCO PRS as an offset for one phenotype
+
+Will only adjust the most significant predictors for covariates (use "--adjust-predictors YES" to adjust all predictors, or use "--adjust-predictors NO" to not adjust predictors)
+
+Will use a saddlepoint approximation for predictors with (non SPA) p-value below 5.00e-02 (use "--spa-threshold" to change the threshold, or use "--spa-test NO" to turn off the SPA)
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 4000 samples from geno.fam
+
+Checking responses for 4000 samples from phenotype.txt
+
+Reading details for 20000 predictors from geno.bim
+
+Data contain 4000 samples and 20000 predictors (will be using 4000 and 20000)
+
+Reading phenotypes for 4000 samples from phenotype.txt
+Response 1 in phenotype.txt is binary, with 2000 cases and 2000 controls
+
+Reading 1 covariates for 4000 samples from covariates.txt
+
+Reading LOCO PRS for 4000 samples from kvik.step1.loco.prs
+Computing empirical CGF (256 knots between -68.607185 and 68.607185, and 41 bins between -2 and 2)
+
+Performing quasi-logistic regression for Chunk 1 of 20 (Chromosome 1)
+Recomputing empirical CGF
+Recomputing empirical CGF
+Recomputing empirical CGF
+Recomputing empirical CGF
+Performing quasi-logistic regression for Chunk 11 of 20 (Chromosome 6)
+Recomputing empirical CGF
+Recomputing empirical CGF
+Recomputing empirical CGF
+Recomputing empirical CGF
+Recomputing empirical CGF
+
+Main results saved in kvik.step2.assoc, with a summary version in kvik.step2.summaries and p-values in kvik.step2.pvalues
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Tue Oct  6 01:06:41 2026 and ended at Tue Oct  6 01:06:47 2026
+The elapsed time was 0.00 hours
+Given the command used one thread, this means the CPU time was also 0.00 hours
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

@@ -7,7 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HRATT for case-control outcomes and sampling weights:
+  `gwas(..., method="hratt", trait="binary")` and `sample_weights=w`
+  (e.g. inverse probabilities of participation), alone or together. Step 1
+  fits a row-scaled weighted model (the logistic working response for binary
+  traits); with weights, heritability comes from HE with design-consistent
+  moments. Step 2 tests each score against its variance under genotype
+  exchangeability, with a saddlepoint approximation of the genotype
+  distribution above |z| = 2 (`spa_threshold`); binary scores are those of
+  the logistic model with the LOCO score as offset, and effects one-step log
+  odds ratios. The Huber-White sandwich and the model-based logistic
+  variance are not used: in pilots the sandwich score test was inflated
+  17-fold at 1e-3 for MAF 1-5% under outcome-dependent selection, against
+  0.75-fold for the retrospective test, and with HRATT's offsets the
+  model-based logistic variance gave lambda_GC 0.55 with 50 cases in 5,000,
+  against 1.01-1.04. New extras of weighted or binary fits: `trait`,
+  `heritability_method`, `spa_threshold`, `n_spa`; with weights
+  `kish_n` and `design_effect`; for binary traits `n_cases`, `n_controls`,
+  `prevalence`, `offset_sd`, `null_converged`, `mu0_clipped`. `gwas` rejects
+  `trait`, `sample_weights` and `spa_threshold` for other methods.
+  Unweighted quantitative HRATT is unchanged, bit for bit. Validation
+  ([`20261005-hratt-weights-binary`](benchmarks/results/20261005-hratt-weights-binary/README.md),
+  prespecified, 30 null and 10 mixed replicates per cell): two of seven
+  criteria passed. Weighted quantitative tests were calibrated, including
+  under selection on the outcome (the sandwich: 12-fold at 1e-3); with
+  weights that depend on ancestry they were anti-conservative for MAF 1-5%
+  (5.75-fold at 1e-3); binary per-tail rates were lopsided at 1-5%
+  prevalence with near-nominal two-sided rates; 2 of 30 replicates at 1%
+  prevalence stopped with a separation error.
+
+### Known issues
+
+- HRATT's effect estimates and standard errors are attenuated by its
+  in-sample LOCO prediction: by 32% without selection in the validation,
+  where LDAK-KVIK and weighted least squares were unbiased. p-values are
+  unaffected. This predates the extension; an effect-size calibration like
+  LDAK-KVIK's is needed.
+
 ### Changed
+
+- `heritability_method` defaults to `"auto"` (was `"reml"`): REML without
+  sampling weights, HE with them.
 
 - The KVIK-style method is now HRATT, the Heritability-weighted Residual
   Association Two-step Test: `gwas(..., method="hratt")`,
@@ -23,13 +65,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - `cache_bytes` from `bolt_inf`, `bolt`, `hratt` and `LocoGenotypes`: the
   float copy of the standardized genotypes is gone, and every pass decodes
-  them. The cache only helped data small enough to fit its 4e9-byte budget.
-  In paired fits at 10,000 samples
-  ([`20261004-packed-calls`](benchmarks/results/20261004-packed-calls/README.md))
-  HRATT-HE and BOLT-LMM took 1.2 to 1.3 times as long as with the cache (as
-  long as 2.0.0.dev5 took with it), while HRATT-HE's peak RSS grew by 1.16
-  bytes per genotype instead of 5.14, and by 0.42 with two-bit calls: 0.61
-  instead of 4.10 GiB at 80,000 markers.
+  them. The cache only helped data small enough to fit its 4e9-byte budget
+  (paired fits: [`20261004-packed-calls`](benchmarks/results/20261004-packed-calls/README.md);
+  final comparison under Benchmarks).
 
 ### Memory
 
@@ -49,9 +87,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   residual unprojected and correct each 128-variant block's products by
   k x q terms; Gram matrices, the HE diagonal and LD scores add rank-q
   corrections to products of unprojected rows. No pass projects variants.
-- One compiled kernel prepares the variants for every thread count and
-  storage order, over 64-variant tiles, with identical values; the
-  one-thread default no longer uses NumPy. Decoding follows the storage
+- With the `fast` extra, one compiled kernel prepares the variants for every
+  thread count and storage order, over 64-variant tiles, with identical
+  values, including the one-thread default. Decoding follows the storage
   order: one M2 Pro thread decodes about 0.26 ns per genotype from
   variant-major (PLINK) storage and 0.7 ns from sample-major arrays, against
   0.6 and 3.7 ns in 2.0.0.dev5.
@@ -81,23 +119,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Paired fits of 2.0.0.dev5 against 12aa504
   ([`20261004-genotype-streaming`](benchmarks/results/20261004-genotype-streaming/README.md),
-  idle host, two fresh-process repetitions): without the float cache,
-  HRATT-HE at 10,000 samples ran as fast as dev5 with it (15.5 against 15.6 s
-  at 80,000 markers) while peak RSS grew by 1.25 instead of 5.24 bytes per
-  genotype; BOLT-LMM without the cache peaked at 1.16 instead of 2.50 GiB.
-  Associations agree to 6e-5 in log10 p. Report Sections 2.11 and 4.10
-  describe the method and results; `efficiency_paired.py` gained the
-  BOLT-LMM, uncached and marker-scaling workloads.
+  idle host, two fresh-process repetitions; final numbers below). Report
+  Sections 2.11 and 4.10 describe the method and results;
+  `efficiency_paired.py` gained the BOLT-LMM, uncached and marker-scaling
+  workloads.
 - Rerun the mixmogam methods of the matched phensim (n = 800, 2,000 and
   4,000), HAPNEST (10K and 50K), HE-versus-REML and 20,000-marker benchmarks
   with 2.0.0.dev5, on their archived inputs. Official LDAK-KVIK outputs are
   reused after the inputs are verified by hash. `kvik_simulation.py
   --rerun-from` and a `--methods` option in `kvik_thread_scaling.py` and
-  `kvik_he_comparison.py` support this. The report's tables, figures and
-  text now use the reruns.
+  `kvik_he_comparison.py` support this.
 - A same-day 2.0.0.dev4/dev5 check at 50,000 samples found no memory change
   and REML fits 1.57 times faster. The HE path was unchanged. Identical
-  dev4 code ran 27% faster than on the day of the original runs, so most of
+  dev4 code took 27% less time than on the day of the original runs, so most of
   the differences from those archives in time and peak RSS reflect host
   conditions.
 - Rerun the same benchmarks with commit e4089d8 (`20261005-*-e4089d8`); the
@@ -106,8 +140,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   two-bit calls (official LDAK-KVIK: 0.65). A same-day check against dev5
   ([`20261005-same-day-dev5-e4089d8`](benchmarks/results/20261005-same-day-dev5-e4089d8/README.md))
   found four-thread HE 17% faster and one-thread REML 1.2 times slower
-  without the cache. Rejection rates, power and QTL detection are unchanged,
-  and log10 p moved by at most 1.8e-4. One- versus four-thread differences
+  without the cache. Across the reruns, rejection rates, power and QTL
+  detection are unchanged, and log10 p moved by at most 1.8e-4 (same-day
+  check: 1.8e-5). One- versus four-thread differences
   on the PC-adjusted 20K panel grew tenfold (up to 2.0e-5 in p), with
   unchanged decisions. The 20K cache experiment is now an int8 against
   two-bit storage experiment: `kvik_efficiency.py` and
@@ -117,8 +152,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   genotype cache, two-bit calls) instead of failing or running a fit twice,
   calls older sources by the method's earlier name, rotates the source order
   over repetitions, and with `--max-load` starts each measurement only below
-  a given load average; it records the load and the wait. dev5 against the
-  current source, three gated repetitions
+  a given load average; it records the load and the wait. dev5 against
+  commit d51b4c3, three gated repetitions
   ([`20261005-efficiency-paired-hratt`](benchmarks/results/20261005-efficiency-paired-hratt/README.md)):
   the two-step paths need 2.4 to 2.8 times less memory with int8 calls and
   3.1 to 4.2 times less with two-bit calls; HRATT-HE runs 4% (one thread)

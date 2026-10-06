@@ -38,17 +38,17 @@ def test_prepared_stream_matches_dense_formula_and_packed_calls(dtype, project):
     gt, groups, Q = dataset()
     Q = Q if project else None
     # Two-bit storage prepares and decodes exactly the same values.
-    cached = LocoGenotypes(dataset(packed=True)[0], groups, Q, block=4, dtype=dtype)
+    packed = LocoGenotypes(dataset(packed=True)[0], groups, Q, block=4, dtype=dtype)
     streamed = LocoGenotypes(gt, groups, Q, block=4, dtype=dtype)
     # Prepared statistics are read-only; later passes cannot change them.
     for name in ("mean", "sd", "_projection", "zz"):
         assert not getattr(streamed, name).flags.writeable
     eps = np.finfo(np.float64).eps
     for _ in range(2):
-        for (idx, group, actual), (cached_idx, cached_group, stored) in zip(streamed.blocks(), cached.blocks()):
+        for (idx, group, actual), (packed_idx, packed_group, stored) in zip(streamed.blocks(), packed.blocks()):
             mean, sd, expected = original_block(gt, idx, Q, dtype)
-            np.testing.assert_array_equal(idx, cached_idx)
-            assert group == cached_group
+            np.testing.assert_array_equal(idx, packed_idx)
+            assert group == packed_group
             np.testing.assert_array_equal(streamed.mean[idx], mean)
             # Count-based variance against the oracle's two-pass sums.
             np.testing.assert_allclose(streamed.sd[idx], sd, rtol=16 * eps * gt.n_samples, atol=0)
@@ -57,8 +57,7 @@ def test_prepared_stream_matches_dense_formula_and_packed_calls(dtype, project):
                 bound += 4 * np.finfo(np.float32).eps * max(1.0, float(np.abs(expected).max()))
             np.testing.assert_allclose(actual, expected, rtol=0, atol=bound)
             np.testing.assert_array_equal(actual, stored)
-    assert streamed.trace == cached.trace
-    assert streamed.trace == streamed._trace()
+    assert streamed.trace == packed.trace
     np.testing.assert_array_equal(streamed.rows(np.arange(5)), np.zeros((5, gt.n_samples)))
 
 

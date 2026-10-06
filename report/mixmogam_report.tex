@@ -38,7 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{5 October 2026\\\small Research report for version 2.0.0.dev5 and commit e4089d8}
+\date{5 October 2026\\\small Research report for the development version after
+2.0.0.dev5; benchmark reruns use commit e4089d8}
 
 \begin{document}
 \maketitle
@@ -79,8 +80,8 @@ moment-based variance fitting with four workers gives mixmogam median
 complete-fit times of 20.36 and 19.01 seconds on two fixed panels, with
 1.4~GiB peak resident memory, or 0.73~GiB with calls stored two bits
 each. Official LDAK-KVIK took 25.45 and 30.09 seconds and 0.65~GiB on
-3 October, when identical mixmogam code ran 27\% slower than a day later,
-so these cross-day ratios mostly reflect host conditions.
+3 October, when identical mixmogam code took 38\% longer than a day later;
+these cross-day ratios mostly reflect host conditions.
 Thread changes exceed a prespecified strict numerical tolerance,
 although the tested significance decisions are unchanged. These
 workstation timings establish a workload-specific tradeoff rather than
@@ -89,10 +90,17 @@ Version 2.0.0.dev5 computes the same estimators with less work: in paired
 runs, an exact LOCO scan of 3,000 samples took 13.3 instead of 79.6
 seconds, and fewer Lanczos steps with more trace probes reduced Monte
 Carlo error. A later revision streams genotypes instead of caching them:
-with two-bit calls, HRATT's peak memory grows by 0.36 instead of 4.06
-bytes per genotype, and fits take 0.86 to 1.23 times as long as dev5's
-cached fits.
-REML remains the default variance estimator. The research agenda emphasizes
+fits take 0.86 to 1.23 times as long as dev5's cached fits (0.89 to 1.17
+with two-bit calls), and with two-bit calls HRATT's peak memory grows by
+0.36 instead of 4.06 bytes per genotype. HRATT also tests case-control
+outcomes and sampling-weighted samples, against each score's variance
+under genotype exchangeability with a genotype saddlepoint tail. In a
+prespecified simulation the weighted test was calibrated under selection on
+the outcome, where the sandwich variance rejected up to 26 times too often,
+but weights that depend on ancestry inflated low-frequency tails, and
+HRATT's effect estimates were attenuated by about a third.
+REML remains the default variance estimator without sampling weights.
+The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
 approximations and measured failure limits.
 \end{abstract}
@@ -158,7 +166,8 @@ We provide the mathematical contracts
 needed to interpret its outputs, a new known-covariance experiment with
 a disjoint set of audit variants, matched phensim simulations with and
 without population structure and LD, and a critical reading of archived
-simulations. We then formulate research questions that can distinguish
+simulations. Section~\ref{sec:weights-binary} extends HRATT to case-control
+outcomes and sampling weights. We then formulate research questions that can distinguish
 a useful general method from an approximation that works only in a
 favourable example.
 
@@ -202,16 +211,20 @@ paired implementation, thread and storage comparisons; at 50,000 samples and
 20,000 markers, 24 mixmogam fits rerun with commit e4089d8 and 12 official
 fits & Two fixed timing panels; different variance estimators across
 programs; strict thread-tolerance failures retained; official timings
-from a day when identical mixmogam code ran 27\% slower. \\
+from a day when identical mixmogam code took 38\% longer. \\
 Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
 2.0.0.dev4 on five workloads, with result agreement; a same-day check at
 50,000 samples; Lanczos steps and probes against dense REML on six panels &
 Two repetitions on a loaded host; simulated panels; two-step results move
 by Monte Carlo amounts. \\
 Genotype streaming, commits 12aa504 to e4089d8 & Paired fits of 2.0.0.dev5
-against the current source on every path, three repetitions gated on host
+against commit d51b4c3 on every path, three repetitions gated on host
 load, with result agreement; archives of each step; a same-day check at
 50,000 samples & Simulated panels; one host. \\
+Case-control and weighted HRATT & Prespecified simulation: 30 null and 10
+mixed replicates per cell, six selection scenarios, prevalence 1--20\%,
+with official LDAK-KVIK & Independent markers and discrete populations;
+two of seven criteria passed. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
 and superiority claims from that archive remain withdrawn. \\
@@ -224,7 +237,8 @@ and superiority claims from that archive remain withdrawn. \\
 
 \subsection{Data, estimand, and relationship matrix}
 
-Let $\y\in\mathbb{R}^n$ be a quantitative phenotype, $\X$ a full-rank
+Let $\y\in\mathbb{R}^n$ be a quantitative phenotype (binary outcomes and
+sampling weights enter HRATT through Section~\ref{sec:weights-binary}), $\X$ a full-rank
 $n\times p$ covariate matrix including an intercept, and $\z_j$ a
 centered candidate genotype. The coefficient of interest, $\alpha_j$,
 is the fixed effect in a specified marginal mixed model after integrating
@@ -324,9 +338,11 @@ matrix products are efficient. HRATT already computes randomized
 Haseman--Elston (HE) quantities to choose the frequency-weight exponent
 $a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}.
 The optional \code{heritability\_method="he"} reuses these products to
-estimate the genetic and residual covariance coefficients. The default
-remains REML; avoiding its iterative solves and stochastic likelihood
-calculations changes the estimator, not just its implementation.
+estimate the genetic and residual covariance coefficients. The default,
+\code{heritability\_method="auto"}, keeps REML without sampling weights and
+uses HE with them (Section~\ref{sec:weights-binary}); avoiding REML's
+iterative solves and stochastic likelihood calculations changes the
+estimator, not just its implementation.
 
 Let $Q$ span the covariates orthonormally, $S=\I-QQ^\top$, $d=n-p$,
 and $K=S\K_wS$. After residualizing and scaling the phenotype, write
@@ -541,10 +557,9 @@ The review also removed an unnecessary LOCO-group axis from temporary
 products; Section~\ref{sec:computation} reports the measured allocation
 change with its scope.
 
-Several adjacent routines need equally explicit contracts. The genetic
-BLUP is $\widehat{\mathbf u}=\K\Hm^{-1}
-(\y-\X\widehat{\boldsymbol\beta})$; the genetic scale cancels and must
-not be multiplied in a second time. Default permutation inference
+Several adjacent routines need equally explicit contracts. In the genetic
+BLUP (Equation~\eqref{eq:blup}) the genetic scale cancels and must not be
+multiplied in a second time. Default permutation inference
 operates on orthogonal residual coordinates rather than permuting the
 correlated entries of a projected residual vector, following the
 underlying distinction developed by \citet{abney2015}. Exact exchangeability
@@ -575,20 +590,14 @@ target); prediction, HE diagonal terms and retrospective statistics use
 16 MiB targets. These are explicit temporary-workspace budgets, not process RSS
 limits. Genotype validation and PLINK reading also use bounded chunks;
 reading no longer retains an entire packed BED beside its decoded copy.
-Calls are stored as an int8 matrix or, two bits each, in PLINK's
-variant-major layout, in memory or memory-mapped
-(Section~\ref{sec:streaming-methods}).
 
-With Numba, one compiled kernel prepares the markers for every thread
-count (Section~\ref{sec:streaming-methods}); \code{n\_threads>1}
-distributes its 64-marker tiles across workers. Sample reductions remain
-serial within a marker, with no fast-math reassociation, so the prepared
-values do not depend on the thread count. Retaining $Mp$ float64
-projection coefficients permits every later pass to decode directly from
-the stored calls (Sections~\ref{sec:dev5-methods}
-and~\ref{sec:streaming-methods}). Passes decode bounded slices,
-128 markers per variational subblock and 16 MiB elsewhere. This bounds
-the decoding workspace, not total memory.
+With Numba, \code{n\_threads>1} distributes the preparation's 64-marker
+tiles across workers; each marker's samples are still summed in order, so
+the prepared values do not depend on the thread count
+(Section~\ref{sec:streaming-methods}). Retaining $Mp$ float64 projection
+coefficients permits every later pass to decode directly from the stored
+calls in bounded slices, which bound the decoding workspace, not total
+memory.
 
 Coordinate sweeps parallelize independent candidate models and LOCO
 fits while preserving the Gauss--Seidel marker order within each model.
@@ -598,15 +607,9 @@ entry retains its complete marker reduction; there is no shared writable
 sum across workers. Detected BLAS pools are temporarily limited to one,
 and thread settings and workers are restored on exit. Apple Accelerate
 requires an external thread limit because it is not detected by
-\code{threadpoolctl}. Parallel preparation and BLAS reductions can still
-change floating-point rounding; a scientifically unchanged algorithm is
-not a promise of bitwise equality.
-
-Through 2.0.0.dev5 a standardized-genotype cache, with a default budget
-of $4\times10^9$ bytes, held four bytes per genotype; a float32 cache at
-$n=50{,}000$, $M=20{,}000$ lay exactly on its inclusion boundary. The
-streaming revision removed it (Section~\ref{sec:streaming-methods}):
-every pass now decodes the calls.
+\code{threadpoolctl}. Parallel residual products and BLAS reductions can
+still change floating-point rounding; a scientifically unchanged algorithm
+is not a promise of bitwise equality.
 
 \subsection{Version 2.0.0.dev5: the same estimators with less work}
 \label{sec:dev5-methods}
@@ -684,32 +687,12 @@ subset of the qualifying markers, but a given seed selects different
 markers than before.
 
 \paragraph{Streamed genotypes.}
-With the float cache disabled, every pass rebuilds standardized, projected
-blocks from int8 calls; the subsequent revision drops this per-marker
-projection (Section~\ref{sec:streaming-methods}). A hard call takes only three values. Preparation
-therefore stores per-variant tables $t_j(c)=(c-\mu_j)/s_j$ for
-$c\in\{0,1,2\}$, computed in float64 by the preparation's own operations,
-and decoding becomes a lookup; missing calls decode to zero. To reproduce
-cached blocks exactly, the covariate correction is replayed from the
-prepared coefficients in the arithmetic of the route that prepared them.
-That is a float64 matrix product for the serial route and a per-cell sum
-for the parallel route, followed by one rounding to storage precision.
-Kinship products avoid per-variant projection altogether. Let
-$\mathbf Z_b$ hold the standardized, unprojected columns of block $b$, so
-that the stored block is $\mathbf S\mathbf Z_b$. For an $n\times c$
-operand $\mathbf B$,
-\begin{equation}
- \K\mathbf B=\frac1M\sum_b\mathbf S\mathbf Z_b\mathbf Z_b^\top\mathbf S\mathbf B
- =\frac1M\,\mathbf S\Bigl(\sum_b\mathbf Z_b\mathbf Z_b^\top\Bigr)(\mathbf S\mathbf B),
- \label{eq:rhs-projection}
-\end{equation}
-so the operand and the result are each projected once. These products
-agree with the cached route to rounding, not bitwise. Decoded slices of
-at most 64 MiB, and the 128-marker variational subblocks, reuse their
-buffers: a fresh allocation per block faulted in every page and doubled
-the decoding time. With Numba, dense relationship matrices also
-standardize each genotype block in one compiled pass, optionally parallel
-across variants, instead of with float64 array temporaries.
+With the float cache disabled, dev5 rebuilt standardized, projected blocks
+from int8 calls through per-variant value tables, replaying the covariate
+correction so that they matched the cached blocks bit for bit;
+Section~\ref{sec:streaming-methods} describes the revision that dropped
+this per-marker projection and the cache. With Numba, dense relationship
+matrices also standardize each genotype block in one compiled pass.
 
 \subsection{Genotype streaming without per-marker projection}
 \label{sec:streaming-methods}
@@ -721,11 +704,17 @@ covariate basis, preparation stores the three standardized call values,
 the coefficients $\mathbf c_j=\mathbf Q^\top\mathbf z_j$ and the squared
 norm $\|\mathbf S\mathbf z_j\|^2=\|\mathbf z_j\|^2-\|\mathbf c_j\|^2$. One
 compiled kernel computes them in float64 over tiles of 64 markers,
-reading one sample at a time and summing each marker's samples in order,
-so every thread count and storage order prepares identical values. No
-projected block is formed. Later passes decode unprojected values by
-table lookup and remove the covariates where that is cheapest. Operator
-products follow Equation~\eqref{eq:rhs-projection}. The variational sweep
+reading one sample at a time and summing each marker's samples in order.
+No projected block is formed. Later passes decode unprojected values by
+table lookup (missing calls decode to zero) and remove the covariates where
+that is cheapest. With $\mathbf Z_b$ the standardized, unprojected columns
+of block $b$, an $n\times c$ operand $\mathbf B$ and the result are each
+projected once:
+\begin{equation}
+ \K\mathbf B=\frac1M\,\mathbf S\Bigl(\sum_b\mathbf Z_b\mathbf Z_b^\top\Bigr)(\mathbf S\mathbf B).
+ \label{eq:rhs-projection}
+\end{equation}
+The variational sweep
 corrects each 128-marker subblock's products,
 $\mathbf Z_b^\top\mathbf S\mathbf r=\mathbf Z_b^\top\mathbf r-\mathbf C_b^\top(\mathbf Q^\top\mathbf r)$
 with $\mathbf C_b=\mathbf Q^\top\mathbf Z_b$, and its residual updates
@@ -749,11 +738,95 @@ two-bit calls, 0.26 ns from marker-major int8 calls and 0.7 ns from
 sample-major arrays.
 One-pass consumers decode 16 MiB slices, which at 10,000 samples stay in
 cache between decoding and their two products; a floor of 256 markers per
-slice amortizes the per-slice $n\times c$ accumulation at larger $n$.
+slice, up to 512 MiB, amortizes the per-slice $n\times c$ accumulation at
+larger $n$. Slices and the 128-marker variational subblocks reuse their
+buffers: a fresh allocation per block faulted in every page and doubled
+the decoding time.
 BOLT-LMM's in-sample LD scores previously held every projected genotype,
 four bytes each, whatever the cache budget. They now stream each
 chromosome through a sliding position window and hold only its widest
 window.
+
+\subsection{Case-control outcomes and sampling weights}
+\label{sec:weights-binary}
+
+HRATT also analyses binary outcomes (\code{trait="binary"}) and samples
+with sampling weights (\code{sample\_weights}), such as inverse
+probabilities of participation \citep{schoeler2023}, alone or together.
+Its score tests carry a calibration factor $c$: one, unless LDAK-KVIK's
+test of inter-chromosome correlation finds strong structure, when $c$
+matches the statistics to GRAMMAR-Gamma-calibrated ridge statistics on
+weakly associated markers \citep{hof2025}.
+
+Let $\omega$ be the sampling weights scaled to mean one and $\nu$ the
+working weights: $\nu=\omega$ for a quantitative trait and
+$\nu=\omega\,\mu_0(1-\mu_0)$ for a binary one, where $\mu_0$ is the
+covariate-only (weighted) logistic fit. The working response $\y^*$ is
+$\y$, or $(y_i-\mu_{0i})/\{\mu_{0i}(1-\mu_{0i})\}$ for a binary trait.
+With $s=\sqrt\nu$, step~1 fits $\tilde\y=s\circ\y^*$ on $\tilde\X=s\circ\X$
+and genotypes $\tilde\z_j=s\circ\z_j$: weighted least squares that keeps
+every solver's form. For a binary trait this is one iteratively reweighted
+least-squares step, as LDAK-KVIK's binary step~1 is a weighted linear
+regression \citep{hof2025}. Constant $\nu$ leaves step~1 unscaled.
+
+Without sampling weights REML fits the working model, so a binary trait's
+$h^2$ is on its scale. REML has no likelihood under sampling weights, so
+weighted fits use HE, and requesting REML for the heritability or the
+frequency-weight exponent is an error. With $\tilde S$ the projector off
+$\tilde\X$ and $D_\omega=\diag(\omega)$, the noise covariance of the scaled
+model is $\tilde SD_\omega\tilde S$; the least-squares fit of
+$\tilde\y_s\tilde\y_s^\top$ on $v_gK+v_e\tilde SD_\omega\tilde S$ weights
+each diagonal entry by $1/\omega_i$, so that every moment is
+design-consistent. With unit weights its normal equations are
+Equation~\eqref{eq:he-moments}. The structure test uses the Kish size of
+$\nu$ in place of $n$.
+
+Step~2 tests the score $U_j=\z_j^\top\mathbf a_g$ of variant $j$ on
+chromosome group $g$, where $\mathbf a_g=s\circ\tilde{\mathbf r}_g$ for a
+quantitative trait, $\tilde{\mathbf r}_g$ being the scaled LOCO residual
+projected off $\tilde\X$, and $\mathbf a_g=\omega\circ(\y-\boldsymbol\mu_g)$
+for a binary one, $\boldsymbol\mu_g$ being the weighted null logistic fit
+with the logit-scale LOCO score as offset. Both are orthogonal to the
+unscaled covariates. When genotypes are exchangeable given the
+covariates, whatever the weights,
+\begin{equation}
+ \Var(U_j\mid\mathbf a_g)\approx\zeta_j\,\|\mathbf a_g\|^2,
+ \qquad \zeta_j=\frac{\z_j^\top\z_j-\|Q_X^\top\z_j\|^2}{n-p},
+ \label{eq:retro-variance}
+\end{equation}
+where $\zeta_j$, with $Q_X$ an orthonormal basis of the unscaled
+covariates, estimates the genotype variance given the covariates. For an
+unweighted quantitative trait, $U_j^2/\{\zeta_j\|\mathbf a_g\|^2\}$ is the
+unweighted statistic, and that analysis is unchanged, with normal tails.
+In weighted and binary analyses a saddlepoint approximation replaces the
+normal tail above $|z|=2$ (\code{spa\_threshold}). It treats the genotypes
+as independent draws from the variant's empirical distribution of values
+(at most four, counting the no-call value), with $\mathbf a_g$ fixed: the
+retrospective counterpart of SPACox's empirical-CGF approximation, which
+randomizes the residuals instead \citep{bi2020}. Its shape comes from the
+marginal genotype distribution, not adjusted for covariates, and its scale
+from Equation~\eqref{eq:retro-variance}. The factor $c$ is computed on the
+working model's linear statistic and multiplies the retrospective one, a
+heuristic transfer. Quantitative effects are weighted least-squares
+slopes; binary ones are one-step log odds ratios $U_j/J_j$, with $J_j$ the
+logistic information of the covariate-adjusted genotype. Separation by
+the covariates is an error, while per-group null fits that do not converge
+are reported rather than rejected. The spectral denominator is unavailable
+with weights or binary traits, and the other association methods reject
+these options. Unit sampling weights still select HE and these tests.
+
+Two common alternatives failed in pilots and are not used. The
+Huber--White sandwich $\sum_i a_{gi}^2x_{ij}^2$, with $x_{ij}$ the
+weighted covariate-adjusted genotype, replaces each genotype's variance by
+its own square. Under selection on the outcome a few samples carry each
+score: its test was inflated 17-fold at $\alpha=10^{-3}$ for minor allele
+frequency 1--5\%, where Equation~\eqref{eq:retro-variance} with the
+saddlepoint gave 0.75-fold. The model-based logistic variance
+$\sum_i\mu_i(1-\mu_i)\tilde g_{ij}^2$ of logistic score tests with
+saddlepoint tails \citep{dey2017,zhou2018,hof2025} trusts fitted
+probabilities that an in-sample LOCO offset overfits when cases are few:
+with HRATT's offsets and 50 cases among 5,000 it gave $\lgc=0.55$ on a null
+trait, against 1.01--1.04 for Equation~\eqref{eq:retro-variance}.
 
 \section{Evaluation design and provenance}
 \label{sec:evaluation}
@@ -865,13 +938,10 @@ mixmogam HRATT and official LDAK-KVIK use their default fitting and
 calibration settings with explicit seeds and one thread. These are
 comparisons of supplied procedures, whose priors and tuning searches
 differ; matching inputs does not make their statistical models identical.
-Here ``mixmogam HRATT'' denotes this package's Heritability-weighted
-Residual Association Two-step Test, inspired by LDAK-KVIK \citep{hof2025}
-and following its design, while
-``LDAK-KVIK'' denotes the official standalone executable. The distinction
-includes statistical choices, such as variance-component estimation, as well
-as implementation language. Versions up to commit e4089d8 called the method
-KVIK, and archived runs keep that name.
+``LDAK-KVIK'' denotes the official standalone executable and ``mixmogam
+HRATT'' this package's method; they differ in statistical choices, such as
+variance-component estimation, as well as implementation language. Versions
+up to commit e4089d8 called the method KVIK, and archived runs keep that name.
 The official documentation states that LDAK-KVIK has primarily been
 tested above 50,000 samples, while also supporting smaller datasets with
 potentially less benefit from LOCO prediction.\footnote{LDAK-KVIK
@@ -1006,8 +1076,7 @@ The prespecified primary design contains 24 complete fits: two methods,
 two requested thread counts (one and four), three timing repetitions and
 two fixed panels. A separate 12-fit experiment with four mixmogam
 workers, prespecified to compare cache budgets of $4\times10^9$ and zero
-bytes, now compares calls stored as int8 and two bits each, since no
-cache remains. Every local fit
+bytes, now compares calls stored as int8 and two bits each. Every local fit
 explicitly selects HE; the model grid and convergence settings are held
 fixed. Method-first order and thread positions are balanced; storage
 order is balanced across the six pairs. Each fit starts in a fresh
@@ -1051,9 +1120,8 @@ $10^4$, and minor allele frequency above 1\%
 \citep{kelleher2016,baumdicker2022}. Scenario S2 contains two demes
 separated 400 generations earlier, 400 diploids per deme, and 100
 independently simulated blocks of 200 markers. Its environmental
-exposure is the standardized deme indicator. It is generated from
-population membership rather than constructed as a PC of the tested
-genotypes; it is nevertheless strongly correlated with genotype.
+exposure is the standardized deme indicator, which is strongly correlated
+with genotype.
 The raw trait and standardized exposure are each multiplied by
 $\sqrt{1/2}$, added, and then standardized together. The original genetic
 variance target of 0.25 becomes 0.125 before final standardization; the
@@ -1073,6 +1141,7 @@ polygenic background and large QTLs. Each scenario has only three
 independent simulation seeds.
 
 \subsection{Summaries, exclusions, and reproducibility}
+\label{sec:summaries}
 
 Genomic inflation is summarized as the median chi-square statistic
 divided by the median of $\chi^2_1$, approximately 0.455. This statistic
@@ -1110,8 +1179,10 @@ hashes. The official LDAK-KVIK outputs, logs and process measurements of
 the original runs were reused unchanged. Input identity makes the official
 results reusable; it does not make the timings simultaneous. The reruns
 ran one after another on 5 October 2026, two days after the official runs.
-Host conditions matter: identical 2.0.0.dev4 code took 33.22 seconds on
-3 October and 24.1 seconds on 4 October for the same 20,000-marker fit.
+Host conditions matter: the original 20,000-marker runs' frozen source,
+labelled 2.0.0.dev3, equals 2.0.0.dev4 (commit 0fa3da8) apart from its version
+string, and that identical code took 33.22 seconds on 3 October and 24.1
+seconds on 4 October for the same fit.
 Exact LOCO, unchanged since 2.0.0.dev5, took 38.1 seconds for one
 4,000-sample case in the dev5 rerun of 4 October, when an unrelated job
 loaded the host, and 26.0 seconds on 5 October. Cross-program time ratios
@@ -1513,18 +1584,11 @@ genotype and interpreter; they are not measurements of an allocation alone.
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
 association comparison to n=50,000, with mixmogam HRATT at its default REML.
 At 50,000 samples the e4089d8 reruns took 38.19 and 40.20 seconds,
-against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs, 31.55
-and 38.53 seconds with dev5's genotype cache, and 24.45 and 35.42 seconds
-for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16 GiB in the
-original runs, and 4.07 and 3.44 GiB with the cache, to 1.94 and
-1.97 GiB. Fitted heritabilities, inflation and
+against 137.59 and 318.02 seconds in the original 2.0.0.dev2 runs and 24.45
+and 35.42 seconds for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16
+GiB in the original runs to 1.94 and 1.97 GiB. Fitted heritabilities, inflation and
 rejection change only slightly. These are single-panel timing and
-feasibility observations. Their null-chromosome summaries are useful
-diagnostics, but neither nominal-looking rejection nor greater detection
-would establish calibration or superiority. Independent reference panels,
-more phenotype replicates, realistic marker density and stronger donor-
-sharing audits remain necessary.
-All four rerun mixmogam HRATT fits at these larger sizes report completed
+feasibility observations (Table~\ref{tab:evidence}). All four rerun mixmogam HRATT fits at these larger sizes report completed
 cross-validation and LOCO convergence. Both programs return valid p-values
 for all markers.
 
@@ -1566,8 +1630,9 @@ for all markers.
 \subsection{Estimator choice and implementation improvements have different effects}
 \label{sec:he-results}
 
-The implementation-only comparison held REML, model selection and
-convergence settings fixed. At 50,000 samples and 12,000 markers,
+The implementation-only comparison, between two 2.0.0.dev3 sources on
+3 October (archive \code{20261003-kvik-efficiency}), held REML, model
+selection and convergence settings fixed. At 50,000 samples and 12,000 markers,
 three paired repetitions reduced median complete-fit time from 105.21
 to 90.33 seconds without structure, and from 106.29 to 90.31 seconds
 with structure, environment and PCs: reductions of 14.1\% and 15.0\%.
@@ -1583,15 +1648,12 @@ complete-fit time from 38.17 to 17.56 seconds and from 39.70 to 18.77
 seconds, respectively. These are within-experiment comparisons; the REML
 times should not be substituted for the baseline of the preceding
 experiment. The original runs on 3 October, with older code, took 76.13
-and 26.28 seconds, and 73.57 and 27.20. On 4 October, 2.0.0.dev4 took
-49.8 seconds for the first REML fit against 31.5 for 2.0.0.dev5, which
-isolates that code effect; without dev5's genotype cache, REML takes 1.20
-times as long on one day (Section~\ref{sec:20k-results}). HE changed the fitted
+and 26.28 seconds, and 73.57 and 27.20; Section~\ref{sec:dev5-results}
+separates the code effect from the host. HE changed the fitted
 covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087.
 Its time saving is therefore an estimator tradeoff, not a numerically
 equivalent acceleration of REML. REML also needs more memory: 1.94
-against 1.02 GiB peak RSS without the cache, and 4.09 against 3.22 GiB
-with dev5's.
+against 1.02 GiB peak RSS.
 
 The independent known-covariance study supports the narrower claim that
 the projected moment equations target their stated coefficients.
@@ -1619,13 +1681,10 @@ run's at their displayed precision; streaming moved $h^2$ by less than
 $10^{-6}$ and $\log_{10}p$ by at most $1.8\times10^{-4}$. Four
 requested workers reduce mixmogam's median wall time by factors 1.61 and
 1.54 on the unstructured and PC-adjusted confounded panels, to 20.36 and
-19.01 seconds (Table~\ref{tab:20k-resources}); with dev5's genotype cache
-the factors were 1.25 and 1.21, and the times 24.29 and 22.28 seconds.
-The official executable took 25.45 and 30.09 seconds on
-3 October. These times cannot be compared directly. On 4 October,
-identical 2.0.0.dev4 code took 24.1 seconds for the first panel's
-four-worker fit, against 33.22 seconds on 3 October, when system-wide
-swapping was recorded. A same-day check on 5 October ran the first
+19.01 seconds (Table~\ref{tab:20k-resources}). The official executable
+took 25.45 and 30.09 seconds on 3 October, when the host was slower
+(Section~\ref{sec:summaries}), so these times cannot be compared directly.
+A same-day check on 5 October ran the first
 panel's four-worker fit with both versions: 24.6 seconds and 4.4--5.1~GiB
 peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
 12,000-marker panel, one-thread REML took 31.8 and 38.2 seconds; exact
@@ -1788,9 +1847,9 @@ $p\approx4\times10^{-31}$. These are Monte Carlo changes, not errors of
 either version. Uncached HRATT-HE draws neither probes nor calibration
 markers here, and its p-values were identical. Its peak RSS fell from
 1.14 to 0.93 GiB at similar speed. A same-day check at 50,000 samples
-gives the same picture. With 12,000 markers, REML fits took 31.5 seconds
+gives the same picture. With 12,000 markers, REML fits took 31.7 seconds
 with 2.0.0.dev5 against 49.8 with 2.0.0.dev4. Cached four-worker HE fits
-with 20,000 markers took 24.0 seconds in both versions. Peak RSS was
+with 20,000 markers took 24.0 and 24.2 seconds. Peak RSS was
 5.1 GiB for HE in both versions, and 4.1 against 4.2 GiB for REML.
 
 Table~\ref{tab:dev5-slq} supports the new Lanczos defaults. Each panel
@@ -1831,11 +1890,11 @@ $h^2$.
 \subsection{Genotype streaming: paired fits and memory growth}
 \label{sec:streaming-results}
 
-Table~\ref{tab:streaming-paired} compares frozen 2.0.0.dev5 with the current
-source, commit e4089d8 with HRATT renamed (Section~\ref{sec:streaming-methods}),
+Table~\ref{tab:streaming-paired} compares frozen 2.0.0.dev5 with commit
+d51b4c3, which is e4089d8 with HRATT renamed (Section~\ref{sec:streaming-methods}),
 on every association path. Each source runs with its defaults: dev5 caches
 standardized genotypes wherever they fit its $4\times10^9$-byte budget, as on
-every panel here, and the current source decodes int8 or two-bit calls on
+every panel here, and d51b4c3 decodes int8 or two-bit calls on
 every pass. Each fit ran three times per source in fresh processes, the source
 order rotating, and every measurement waited until the host's one-minute load
 average was below 5.
@@ -1851,7 +1910,7 @@ exactly, and the two-step paths moved by at most $4.2\times10^{-5}$ in
 $\log_{10}p$. Table~\ref{tab:streaming-scaling} varies the number of markers
 for HRATT-HE at 10{,}000 samples. Peak RSS grows by 0.36 bytes per genotype
 with two-bit calls and 1.14 with int8 calls, against 4.06 with dev5's cache and
-1.26 without it. The current source runs slightly faster than dev5 with its
+1.26 without it. d51b4c3 runs slightly faster than dev5 with its
 cache, 16.3 against 17.9 seconds at 80{,}000 markers, and needs 40\% less time
 than dev5 without it.
 
@@ -1865,9 +1924,9 @@ Grams had exceeded the budget) and \code{20261004-}\allowbreak\code{packed-calls
 
 \begin{table}[htbp]
  \centering\small
- \caption{Paired fits of frozen 2.0.0.dev5 and the current source on simulated
+ \caption{Paired fits of frozen 2.0.0.dev5 and commit d51b4c3 on simulated
  panels (samples/markers), each with its defaults: dev5 with its float
- genotype cache, the current source with int8 calls or, on the two-step
+ genotype cache, d51b4c3 with int8 calls or, on the two-step
  paths, two-bit calls. Fit seconds and whole-process peak RSS (GiB) are
  medians over three fresh-process repetitions per source, each started below
  a one-minute load average of 5; repetitions were within 8\% of their median,
@@ -1899,6 +1958,89 @@ Grams had exceeded the budget) and \code{20261004-}\allowbreak\code{packed-calls
  \tabinput{tables/streaming_scaling.tex}
  \bottomrule
  \end{tabularx}
+\end{table}
+
+\subsection{Case-control outcomes and sampling weights: prespecified validation}
+\label{sec:weights-binary-results}
+
+A prespecified simulation (archive \code{20261005-}\allowbreak\code{hratt-weights-binary},
+protocol frozen before the main run) drew fresh Balding--Nichols populations
+of 40,000, samples of 5,000 under six selection scenarios with
+inverse-probability weights, 20,000 independent markers with half at base
+minor allele frequency 1--5\%, null and mixed traits, and binary traits at
+1, 5 and 20\% prevalence: 30 replicates per null cell and 10 per mixed cell.
+Two of its seven criteria passed.
+
+Weighted quantitative tests were calibrated without structure
+(Table~\ref{tab:weights-quantitative}): $\lgc$ 0.995--1.003 and 0.94--0.99
+times the nominal rate at $\alpha=10^{-3}$, including selection on the
+outcome (S3), where the Huber--White sandwich and LDAK's weighted regression
+rejected 12 and 10 times too often for minor allele frequency 1--5\%.
+Weighted HRATT gained power over the same test without a polygenic offset,
+by mean QTL $\chi^2$ ratios of 1.39 to 2.63. With structure and weights that
+depend on ancestry (S4), exchangeability failed: $\lgc$ was 0.93, and
+variants with minor allele frequency 1--5\% were rejected 5.75 times too often
+at $10^{-3}$ and 17 times at $10^{-4}$, where the sandwich was calibrated.
+Ancestry covariates should remove the between-population term; that is
+untested.
+
+Binary tests had lopsided tails at 1\% and 5\% prevalence
+(Table~\ref{tab:weights-binary}). The saddlepoint p-value adds both tails at
+$\pm|u|$, as SAIGE's does, so a skewed null does not put $\alpha/2$ in each
+tail, which the per-tail criterion required. Two-sided rates were 0.94--1.03
+times nominal at $10^{-3}$ and 0.85--1.22 at $10^{-4}$ in every cell but S4.
+Without the saddlepoint the heavier tail reached 46 times nominal at
+$10^{-4}$, and the model-based logistic variance gave $\lgc=0.36$ at 1\%
+prevalence. Official LDAK-KVIK was conservative at 1\% prevalence (two-sided
+0.62 and 0.57). Two of 30 replicates at 1\% prevalence stopped with a
+separation error from the per-group null fit with its in-sample offset.
+
+HRATT's effect estimates were attenuated in every cell: by 32\% without
+selection and by 33--46\% in S1--S3, against $-4$\% to $+0.3$\% for LDAK-KVIK
+and weighted least squares, with correlation 0.997 to the population slopes
+throughout. The in-sample LOCO prediction absorbs part of each QTL's effect.
+p-values are unaffected, but HRATT's effects and standard errors, unweighted
+ones included, need an effect-size calibration such as LDAK-KVIK's.
+Excluding the saddlepoint, the weighted paths took 1.32 and 1.28 times as
+long as HRATT-HE, against prespecified limits of 1.3 and 1.6; the saddlepoint
+took a median 1.2--1.7 seconds per fit, about as long as an HRATT-HE fit.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Weighted quantitative tests: rejection rates of null variants over
+ nominal, pooled over 30 replicates, with $\lgc$ on minor allele frequency
+ $\ge5\%$. HRATT is the retrospective test with saddlepoint tails; ``normal
+ tails'' and ``sandwich (HC0)'' replace its tails or its variance on the same
+ residuals. LDAK-KVIK is unweighted (S0); ``LDAK sandwich'' is LDAK's weighted
+ linear regression.}
+ \label{tab:weights-quantitative}
+ \begin{tabular}{@{}llrrrr@{}}
+ \toprule
+ & & & \multicolumn{2}{c}{$\alpha=10^{-3}$, MAF} & $10^{-4}$ \\
+ Scenario & Method & $\lgc$ & 1--5\% & $\ge5\%$ & all \\
+ \midrule
+ \tabinput{tables/weights_binary_quantitative.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Binary tests: rejection rates of null variants with minor allele
+ frequency $\ge1\%$ in each tail, over $\alpha/2$, by the sign of the effect,
+ pooled over 30 replicates; $\lgc$ on minor allele frequency $\ge5\%$.
+ Cells give prevalence and scenario. ``Model-based variance'' replaces the
+ retrospective variance by $\sum_i\mu_i(1-\mu_i)\tilde g_{ij}^2$ with normal
+ tails; LDAK-KVIK is unweighted.}
+ \label{tab:weights-binary}
+ \begin{tabular}{@{}llrrrrr@{}}
+ \toprule
+ & & & \multicolumn{2}{c}{$\alpha=10^{-3}$} & \multicolumn{2}{c}{$\alpha=10^{-4}$} \\
+ Cell & Method & $\lgc$ & Upper & Lower & Upper & Lower \\
+ \midrule
+ \tabinput{tables/weights_binary_binary.tex}
+ \bottomrule
+ \end{tabular}
 \end{table}
 
 \FloatBarrier
@@ -1955,14 +2097,6 @@ but answers a different question from a separately generated exposure.
 Future studies should include both with clearly stated causal and
 statistical interpretations.
 
-Similarly, a locus label is a scientific choice. A block without a large
-QTL can tag a QTL across its boundary or contain its own small generating
-effects. Counting all such discoveries as false positives confounds
-localization, power to detect diffuse signal, and test calibration.
-The report therefore keeps strict-null experiments separate from
-QTL-free-block diagnostics. Real-data significance counts cannot resolve
-this ambiguity without additional validation.
-
 \subsection{Limitations and intended use}
 
 The current contribution is strongest as a transparent research
@@ -1974,10 +2108,16 @@ cell at $n=800$, uses controlled AR(1) rather than demographic LD, and
 assumes common genetic effects across three discrete populations.
 It does not establish equivalence of the mixmogam and official LDAK-KVIK models.
 There is no new validation in human multi-ancestry cohorts, no demonstrated
-biobank-scale resource profile, and no validation for imputed dosages
-or strongly imbalanced binary traits. The latter require attention to
-the likelihood and tail approximation, as illustrated by SAIGE's
-logistic mixed-model and saddlepoint approach \citep{zhou2018}.
+biobank-scale resource profile, and no validation for imputed dosages.
+Case-control outcomes and sampling weights are supported only by HRATT
+(Section~\ref{sec:weights-binary}) and were tested in one prespecified
+simulation of unrelated samples with independent markers
+(Section~\ref{sec:weights-binary-results}): weighted quantitative tests were
+calibrated unless the weights depended on ancestry, binary tails were
+lopsided at low prevalence, and HRATT's effect estimates were attenuated.
+Rarer outcomes, relatedness and real participation weights are untested,
+and HRATT's retrospective saddlepoint differs from SAIGE's model-based one
+\citep{zhou2018}.
 
 The package exposes useful building blocks, but its multiple modes
 should not be presented as interchangeable. Dense plug-in tests,
@@ -1994,12 +2134,11 @@ variance estimator, and changing storage are three distinct interventions.
 The first can preserve a numerical result, the second can change the
 fitted model, and the third exchanges time for memory. Their evidence
 should not be collapsed into one speedup from an early implementation
-to the fastest observed run. Host conditions alone changed the time of
-identical code by a quarter between two days, so speed claims need a
-same-day control. At 20,000 markers, memory pressure and floating-point
-sensitivity are still observable limitations. Keeping
-REML and one thread as defaults makes the new choices explicit while
-broader estimator and platform validation proceeds.
+to the fastest observed run. At 20,000 markers, floating-point
+sensitivity to the thread count remains observable; the memory pressure
+of the original cached runs is gone with streaming. Keeping REML (without
+sampling weights) and one thread as defaults makes the new choices explicit
+while broader estimator and platform validation proceeds.
 
 \section{Future research: hypotheses and decisive experiments}
 \label{sec:future}
@@ -2226,9 +2365,12 @@ bound nor unchanged decisions on two panels settles this question.
 
 A useful extension would add a carefully specified continuous-dosage
 interface with imputation-quality handling and independent decoding
-fixtures. Binary traits require a separate modelling and calibration
-programme; simply passing zeros and ones to a Gaussian scan is not the
-proposed extension. Prospective prediction, if developed, should use
+fixtures. HRATT needs an effect-size calibration for its LOCO residuals
+(Section~\ref{sec:weights-binary-results}), an ancestry-aware genotype
+variance for weights that depend on ancestry, and external validation of its
+case-control and weighted tests: prevalence below 1\%, related samples, real
+participation weights, and comparison with SAIGE and REGENIE. The other
+methods remain quantitative-only. Prospective prediction, if developed, should use
 held-out families or populations and report transportability separately
 from association power.
 
@@ -2425,11 +2567,23 @@ interpreting $F_{ST}$: the impact of rare variants. \emph{Genome Res}
 23(9):1514--1521.
 \href{https://doi.org/10.1101/gr.154831.113}{doi:10.1101/gr.154831.113}
 
+\bibitem[Bi et~al.(2020)]{bi2020}
+Bi W, Fritsche LG, Mukherjee B, Kim S, Lee S (2020). A fast and accurate
+method for genome-wide time-to-event data analysis and its application to
+UK Biobank. \emph{Am J Hum Genet} 107(2):222--233.
+\href{https://doi.org/10.1016/j.ajhg.2020.06.003}{doi:10.1016/j.ajhg.2020.06.003}
+
 \bibitem[Bulik-Sullivan et~al.(2015)]{bulikSullivan2015}
 Bulik-Sullivan BK, Loh P-R, Finucane HK, et~al. (2015). LD Score
 regression distinguishes confounding from polygenicity in genome-wide
 association studies. \emph{Nat Genet} 47(3):291--295.
 \href{https://doi.org/10.1038/ng.3211}{doi:10.1038/ng.3211}
+
+\bibitem[Dey et~al.(2017)]{dey2017}
+Dey R, Schmidt EM, Abecasis GR, Lee S (2017). A fast and accurate
+algorithm to test for binary phenotypes and its application to PheWAS.
+\emph{Am J Hum Genet} 101(1):37--49.
+\href{https://doi.org/10.1016/j.ajhg.2017.05.014}{doi:10.1016/j.ajhg.2017.05.014}
 
 \bibitem[Hof and Speed(2025)]{hof2025}
 Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model
@@ -2508,6 +2662,12 @@ Priv\'e F (2022). Optimal linkage disequilibrium splitting.
 \emph{Bioinformatics} 38(1):255--256.
 \href{https://doi.org/10.1093/bioinformatics/btab519}{doi:10.1093/bioinformatics/btab519}
 
+\bibitem[Schoeler et~al.(2023)]{schoeler2023}
+Schoeler T, Speed D, Porcu E, Pirastu N, Pingault J-B, Kutalik Z (2023).
+Participation bias in the UK Biobank distorts genetic associations and
+downstream analyses. \emph{Nat Hum Behav} 7(7):1216--1227.
+\href{https://doi.org/10.1038/s41562-023-01579-9}{doi:10.1038/s41562-023-01579-9}
+
 \bibitem[Segura et~al.(2012)]{segura2012}
 Segura V, Vilhj\'almsson BJ, Platt A, et~al. (2012). An efficient
 multi-locus mixed-model approach for genome-wide association studies in
@@ -2532,11 +2692,10 @@ comparison with P-values. \emph{Genet Epidemiol} 33(1):79--86.
 \href{https://doi.org/10.1002/gepi.20359}{doi:10.1002/gepi.20359}
 
 \bibitem[Wharrie et~al.(2023)]{wharrie2023}
-Wharrie, S., Yang, Z., Raj, V., et~al. (2023).
-HAPNEST: efficient, large-scale generation and evaluation of synthetic
-datasets for genotypes and phenotypes.
-\emph{Bioinformatics}, 39(9), btad535.
-\href{https://doi.org/10.1093/bioinformatics/btad535}{doi:10.1093/bioinformatics/btad535}.
+Wharrie S, Yang Z, Raj V, et~al. (2023). HAPNEST: efficient, large-scale
+generation and evaluation of synthetic datasets for genotypes and
+phenotypes. \emph{Bioinformatics} 39(9):btad535.
+\href{https://doi.org/10.1093/bioinformatics/btad535}{doi:10.1093/bioinformatics/btad535}
 
 \bibitem[Yang et~al.(2010)]{yang2010}
 Yang J, Benyamin B, McEvoy BP, et~al. (2010). Common SNPs explain a

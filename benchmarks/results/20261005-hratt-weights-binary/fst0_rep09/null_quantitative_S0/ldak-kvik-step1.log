@@ -1,0 +1,109 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 6 pairs of arguments:
+--kvik-step1 kvik
+--bfile geno
+--pheno phenotype.txt
+--covar covariates.txt
+--max-threads 1
+--random-seed 20270405
+
+Note that "--kvik-step1 kvik" is equivalent to using "--elastic kvik.step1" with "--LOCO YES"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Constructing LOCO elastic net PRS
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+LDAK will only save selected files (to save all files, use "--verbose YES")
+
+The random number generator seed is set to 20270405
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 5000 samples from geno.fam
+
+Checking responses for 5000 samples from phenotype.txt
+
+Reading details for 20000 predictors from geno.bim
+
+Data contain 5000 samples and 20000 predictors (will be using 5000 and 20000)
+
+Reading phenotypes for 5000 samples from phenotype.txt
+
+Reading 1 covariates for 5000 samples from covariates.txt
+
+When performing cross-validation, will use 4500 training samples and 500 test samples
+
+Warning, the number of comparison predictors has been reduced to 20000 (the total number of predictors)
+
+Testing for structure using 512 pedigree predictors
+
+Will decide there is high structure if the estimated maximum average inflation is above 0.1000, and the corresponding p-value is below 1.0000e-03 (change these values using "--MAI-threshold" and "--MAI-significance")
+
+Average cross-chromosome squared correlation is 1.9969e-04 (chi-squared test statistic 0.1756; p-value 6.7522e-01); estimated maximum average inflation of test statistics is -0.0017
+
+This is relatively low structure, so will set the scaling factor to one
+
+Estimating per-predictor heritabilities using Randomized Haseman-Elston Regression with 10 random vectors
+
+Will divide the predictors into 20 partitions (change this using "--num-divides")
+Will exclude chunks containing a predictor with estimated variance explained greater than 0.0200 (change this using "--max-cor")
+
+Calculating traces for Chunk 1 of 79
+
+Best power is -0.2500 and estimated heritability is 0.0181 (SD 0.0331)
+
+Time check: have so far spent 0.00 hours
+
+Constructing 10 PRS using training samples
+Will also make 33 MCMC REML models (using all samples)
+
+Scan 1: estimating training effect sizes for Chunk 1 of 79
+Average number of iterations per chunk: 2.00
+
+Scan 2: estimating training effect sizes for Chunk 1 of 79
+Average number of iterations per chunk: 2.00
+
+The revised estimate of heritability is 0.0328
+
+Measuring accuracy of each model
+Model 1: heritability 0.0328, p 0.0000, f2 1.0000, mean squared error 1.0000
+Model 2: heritability 0.0328, p 0.5000, f2 0.5000, mean squared error 1.0008
+Model 3: heritability 0.0328, p 0.5000, f2 0.3000, mean squared error 1.0011
+Model 4: heritability 0.0328, p 0.5000, f2 0.1000, mean squared error 1.0012
+Model 5: heritability 0.0328, p 0.1000, f2 0.5000, mean squared error 0.9997
+Model 6: heritability 0.0328, p 0.1000, f2 0.3000, mean squared error 1.0003
+Model 7: heritability 0.0328, p 0.1000, f2 0.1000, mean squared error 1.0003
+Model 8: heritability 0.0328, p 0.0100, f2 0.5000, mean squared error 1.0006
+Model 9: heritability 0.0328, p 0.0100, f2 0.3000, mean squared error 1.0011
+Model 10: heritability 0.0328, p 0.0100, f2 0.1000, mean squared error 1.0017
+
+Warning, the MSE for Phenotype 1 is only 0.9997, so will exclude the polygenic contribution
+
+Time check: have so far spent 0.00 hours
+
+Constructing final PRS (heritability 0.0328, p 0.1000, f2 0.5000) using all samples
+Will also make 10 LOCO PRS
+
+Best-fitting model saved in kvik.step1.effects
+
+LOCO results saved in kvik.step1.loco.prs and kvik.step1.loco.details
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Mon Oct  5 22:51:26 2026 and ended at Mon Oct  5 22:51:28 2026
+The elapsed time was 0.00 hours
+Given the command used one thread, this means the CPU time was also 0.00 hours
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

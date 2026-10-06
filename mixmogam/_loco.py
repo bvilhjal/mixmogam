@@ -95,6 +95,12 @@ class LocoGenotypes:
     groups : (m,) LOCO group index per variant (see :func:`loco_groups`)
     Q : (n, q) orthonormal covariate basis (None: centering only)
     block : SNPs per group-pure block
+    row_scale : (n,) positive sample scale s, or None
+        Present the genotypes of a row-scaled (weighted) model: decoded rows
+        are s * z, and ``Q`` must then be an orthonormal basis of the scaled
+        covariates diag(s) X, so the coefficients c = Q'(s z) and the norms
+        ``zz`` = sum_i s_i^2 z_i^2 - |c|^2 are those of the scaled values.
+        Means, SDs and the lookup table stay those of the unweighted calls.
     n_threads : positive integer, default 1
         Above one, prepare and decode independent variants with Numba
         workers. Preparation sums each variant's samples in order in every
@@ -104,7 +110,8 @@ class LocoGenotypes:
     """
 
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
-                 block: int = 4096, dtype=np.float32, n_threads: int = 1):
+                 block: int = 4096, dtype=np.float32, n_threads: int = 1,
+                 row_scale: Optional[np.ndarray] = None):
         if (isinstance(n_threads, (int, np.integer))
                 and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
             self.n_threads = 1
@@ -130,6 +137,19 @@ class LocoGenotypes:
         self.Q = np.ascontiguousarray(self.Q)
         self.Q.flags.writeable = False
         self.dtype = np.dtype(dtype)
+        self.row_scale = None
+        if row_scale is not None:
+            scale = np.array(row_scale, dtype=np.float64, copy=True)
+            if (scale.shape != (self.n,) or not np.isfinite(scale).all()
+                    or np.any(scale <= 0)):
+                raise ValueError("row_scale must hold one finite positive value per sample")
+            if not self.Q.shape[1]:
+                raise ValueError("row_scale requires a covariate basis (at least the scaled intercept)")
+            scale.flags.writeable = False
+            self.row_scale = scale
+            self._scale_store = scale.astype(self.dtype)  # applied to decoded rows
+            self._Q_prepare = np.ascontiguousarray(self.Q * scale[:, None])  # Q'(s z) = (sQ)' z
+            self._sq_weights = scale * scale
         # Compiled kernels read int8 arrays (memory-mapped or not) and
         # two-bit calls; other storage decodes through NumPy.
         self._compiled = HAS_NUMBA and isinstance(gt.G, (np.ndarray, PackedCalls))
@@ -179,12 +199,16 @@ class LocoGenotypes:
         variant sequentially, so every thread count prepares the same values.
         """
         self._check_source()
+        scaled = self.row_scale is not None
         if self._compiled:
             from mixmogam._standardize import prepare_moments
+            Q = self._Q_prepare if scaled else self.Q
+            sq = self._sq_weights if scaled else None
             for start in range(0, idx.size, 1024):
                 take = idx[start : start + 1024]
                 (self.mean[take], self.sd[take], self._projection[take],
-                 self.zz[take]) = prepare_moments(self.gt.G, take, self.Q, self.n_threads)
+                 self.zz[take]) = prepare_moments(self.gt.G, take, Q, self.n_threads,
+                                                  sq_weights=sq)
             return
         tile = self._tile_size()
         for start in range(0, idx.size, tile):
@@ -200,6 +224,8 @@ class LocoGenotypes:
             del ok
             g /= np.where(sd > 0, sd, 1.0)
             Z = g.T
+            if scaled:
+                Z *= self.row_scale
             coefficients = Z @ self.Q
             if self.Q.shape[1]:
                 Z -= coefficients @ self.Q.T
@@ -207,8 +233,10 @@ class LocoGenotypes:
             self._projection[take] = coefficients
             self.zz[take] = np.einsum("ij,ij->i", Z, Z)
 
-    def _decode(self, idx: np.ndarray, out: Optional[np.ndarray] = None) -> np.ndarray:
-        """Unprojected standardized rows (k, n) of ``idx``, by table lookup."""
+    def _decode(self, idx: np.ndarray, out: Optional[np.ndarray] = None,
+                scaled: bool = True) -> np.ndarray:
+        """Unprojected standardized rows (k, n) of ``idx``, by table lookup
+        (times the row scale, when there is one, unless ``scaled=False``)."""
         from mixmogam._standardize import decode_table
 
         self._check_source()
@@ -217,6 +245,8 @@ class LocoGenotypes:
         if idx.size:
             decode_table(self.gt.G, idx, self._lut[idx], out, self.n_threads,
                          compiled=self._compiled)
+            if scaled and self.row_scale is not None:
+                out *= self._scale_store
         return out
 
     def _slice_rows(self) -> int:
@@ -266,19 +296,16 @@ class LocoGenotypes:
             out[start : start + take.size] = z[start : start + take.size] - corr
         return out
 
-    def blocks(self, reuse: bool = False):
+    def blocks(self):
         """Yield ``(variant_indices, group, Z_block)`` with projected Z (k, n)
         in the storage precision, one whole block at a time.
 
         For consumers that need projected rows themselves; the engines use
-        :meth:`raw_slices` with sample-side projection instead. ``reuse=True``
-        shares one output buffer, valid until the next iteration.
+        :meth:`raw_slices` with sample-side projection instead.
         """
         self._check_source()
-        largest = max((idx.size for idx, _ in self._blocks), default=1)
-        buffer = np.empty((largest, self.n), dtype=self.dtype) if reuse else None
         for idx, g in self._blocks:
-            out = buffer[: idx.size] if reuse else np.empty((idx.size, self.n), dtype=self.dtype)
+            out = np.empty((idx.size, self.n), dtype=self.dtype)
             yield idx, g, self._project_into(idx, self._decode(idx, out=out), out)
 
     def rows(self, variant_idx: np.ndarray) -> np.ndarray:
@@ -299,10 +326,6 @@ class LocoGenotypes:
             z = self._decode(take)
             out[start : start + take.size] = self._project_into(take, z, z)
         return out
-
-    def _trace(self) -> float:
-        """trace(Z'Z) / M: the mean diagonal of the kinship times n."""
-        return self.trace
 
     # ------------------------------------------------------------------
     def _products(self, P: np.ndarray, col_group: Optional[np.ndarray],

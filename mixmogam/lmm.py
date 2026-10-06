@@ -404,52 +404,6 @@ class LMM:
     # Likelihood machinery (EMMA exact + stochastic Lanczos quadrature)
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _reml_ll(delta: float, lam: np.ndarray, sq_etas: np.ndarray) -> float:
-        p = lam.size
-        v = lam + delta
-        return float(
-            0.5
-            * (
-                p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(np.sum(sq_etas / v)))
-                - np.sum(np.log(v))
-            )
-        )
-
-    @staticmethod
-    def _reml_dll(delta: float, lam: np.ndarray, sq_etas: np.ndarray) -> float:
-        p = lam.size
-        v = lam + delta
-        v1 = sq_etas / v
-        # true derivative (v1's _redll_ carried a deliberate factor 2,
-        # harmless for root finding; normalized here)
-        return float(0.5 * (p * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / v)))
-
-    @staticmethod
-    def _ml_ll(
-        delta: float, lam: np.ndarray, xi: np.ndarray, sq_etas: np.ndarray
-    ) -> float:
-        n = xi.size
-        v = lam + delta
-        return float(
-            0.5
-            * (
-                n * (np.log(n / (2.0 * np.pi)) - 1.0 - np.log(np.sum(sq_etas / v)))
-                - np.sum(np.log(xi + delta))
-            )
-        )
-
-    @staticmethod
-    def _ml_dll(
-        delta: float, lam: np.ndarray, xi: np.ndarray, sq_etas: np.ndarray
-    ) -> float:
-        n = xi.size
-        v = lam + delta
-        v1 = sq_etas / v
-        return float(
-            0.5 * (n * np.sum(v1 / v) / np.sum(v1) - np.sum(1.0 / (xi + delta)))
-        )
-
     def _reml_op(self):
         """matvec of S K S with S = I - Q Q', Q the covariate basis."""
         Q = self.resid_projector
