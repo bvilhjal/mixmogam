@@ -104,7 +104,9 @@ def ibs_kinship(
     """Identity-by-state similarity: mean fraction of shared genotypes.
 
     Diploid-aware via one-hot GEMMs per block (0/1/2 matched pairs count
-    once; missing calls are skipped in the denominator per pair).
+    once; missing calls are skipped in the denominator per pair). After
+    ``scale_k`` (``scale=True``) the matrix is generally not positive
+    semidefinite, so it cannot serve as a mixed-model covariance.
     """
     gt = _as_genotypes(G)
     n = gt.n_samples
@@ -202,10 +204,11 @@ def windowed_kinships(
 ):
     """Local (window) and global (rest) kinship pairs along the genome.
 
-    Yields ``(window_index, K_local, K_global)``; both accumulate the same
-    globally standardized columns, so ``K_local + K_global`` reconstructs
-    the full GRM up to rescaling. Fixes v1's broken local-vs-global scan
-    kinships.
+    Yields ``(window_index, K_local, K_global)``. Both standardize each
+    variant as the full GRM does, so before ``scale_k`` (``scale=False``),
+    ``span * K_local + (m - span) * K_global = m * K_full`` with ``span``
+    variants in the window; the unweighted sum does not reconstruct it.
+    Fixes v1's broken local-vs-global scan kinships.
     """
     gt = _as_genotypes(G)
     m = gt.n_variants

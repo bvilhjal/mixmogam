@@ -95,6 +95,9 @@ class LocoGenotypes:
     groups : (m,) LOCO group index per variant (see :func:`loco_groups`)
     Q : (n, q) orthonormal covariate basis (None: centering only)
     block : SNPs per group-pure block
+    dtype : precision of decoded rows, of the products computed from them
+        and of stored Gram matrices (default float32); moments, covariate
+        coefficients and norms stay float64
     row_scale : (n,) positive sample scale s, or None
         Present the genotypes of a row-scaled (weighted) model: decoded rows
         are s * z, and ``Q`` must then be an orthonormal basis of the scaled
@@ -153,9 +156,6 @@ class LocoGenotypes:
         # Compiled kernels read int8 arrays (memory-mapped or not) and
         # two-bit calls; other storage decodes through NumPy.
         self._compiled = HAS_NUMBA and isinstance(gt.G, (np.ndarray, PackedCalls))
-        # The basis in the storage precision, for the q-rank corrections that
-        # accompany storage-precision GEMMs.
-        self._Qs = np.ascontiguousarray(self.Q, dtype=self.dtype)
         self._Qt = None  # Q' for compiled row projection, made on first use
         self.block = int(block)
         # blocks: (variant indices, group); each block is group-pure

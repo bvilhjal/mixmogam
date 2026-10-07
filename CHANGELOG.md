@@ -26,7 +26,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `efficiency_paired.py`: each timed fit waits until the one-minute load
   average is below the limit, and records the load and the wait.
 
+### Removed
+
+- The adaptive-rank arguments of `randomized_eigh_op` (`variance`, `total`,
+  `rank_cap`, `initial_k`); no caller used them and `k` is now always the
+  returned width.
+- The ignored `max_points` argument of `plot_manhattan`.
+- The unused inverse functions in the phenotype transformation table.
+
 ### Changed
+
+- The parallel-fit tests use a small NumPy panel instead of `phensim`, so
+  CI runs them rather than skipping 23 of them.
+- Corrected the whitening docstring (the dropped spectrum is scaled at its
+  mean), the six-column threshold in `docs/design.md`, the cross-fitting
+  test introduction and the `hratt_efficiency.py` comparison note.
 
 - Benchmark drivers are named by what they compare:
   - `ldak_kvik_comparison.py` (was `kvik_simulation.py`) and
@@ -68,6 +82,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rounding, as in-sample results already did (up to 1.3e-7 in effects and
   1.3e-5 in p), with identical decisions at 0.05, 0.01, 0.001, Bonferroni
   and 5e-8.
+- `HRATT_ALPHAS` is in `twostep.__all__`, as `HRATT_GRID` is.
+- Docstrings corrected: the stochastic trace estimator estimates tr f(A),
+  not tr f(A) / n; complete orthogonal HE probes need squared norm df to
+  give tr(K²) exactly; exact LMM scans take one GEMM per SNP block; window
+  kinships reconstruct the full GRM only weighted by their variant counts;
+  `simulate_traits`'s `u` is the total genetic value; two-kinship fits need
+  positive semidefinite kinships, which a scaled IBS matrix generally is
+  not. Public methods without docstrings now have them.
+
+### Fixed
+
+- `Phenotypes.transform(..., revert=True)` after two transformations
+  restored the values before the last one and labelled them untransformed.
+  Transformations, including `box_cox`, now keep the untransformed values,
+  which a revert restores.
+- Saddlepoint tails of weighted and binary HRATT ran on every Numba worker
+  whatever `n_threads`; they now use at most `n_threads`, with unchanged
+  values.
 
 ## [2.0.0.dev6] - 2026-10-06
 

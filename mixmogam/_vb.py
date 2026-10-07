@@ -444,8 +444,12 @@ class VBEngine:
         ``Y`` (n, P) targets; ``col_fold`` (P,) held-out fold (-1: none);
         ``col_group`` (P,) LOCO group whose SNPs are excluded (-1: none);
         ``prior`` (P, 3) per-column prior parameters (see module doc);
-        ``s2e`` (P,) residual variances. Convergence: the largest relative
-        change in fitted values over a full sweep falls below ``tol``.
+        ``s2e`` (P,) residual variances; ``snp_scale`` (m,) per-SNP prior
+        variance scales (default ones; zero fixes an effect at zero);
+        ``max_iter`` sweeps at most. Convergence: in every column, the
+        squared changes in fitted values summed over a sweep's block
+        updates, relative to the squared norm of the column's (masked)
+        targets, fall below ``tol``.
         """
         Y = np.asarray(Y, dtype=np.float64)
         n, P = Y.shape

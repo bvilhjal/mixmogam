@@ -165,6 +165,8 @@ class Genotypes:
         return isinstance(self.G, PackedCalls)
 
     def variant_mask(self, variant_indices: np.ndarray) -> "Genotypes":
+        """New genotypes holding only the selected variants (indices or a
+        boolean mask), with their metadata; packed calls stay packed."""
         idx = np.asarray(variant_indices)
         return Genotypes(
             self.G.take_variants(idx) if self.packed else self.G[:, idx],
@@ -205,6 +207,8 @@ class Genotypes:
         return self.variant_mask(np.nonzero(keep)[0])
 
     def filter_samples(self, sample_indices) -> "Genotypes":
+        """New genotypes holding only the selected samples (indices or a
+        boolean mask), in that order; packed calls stay packed."""
         idx = np.asarray(sample_indices)
         return Genotypes(
             self.G.take_samples(idx) if self.packed else self.G[idx, :],

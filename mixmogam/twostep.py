@@ -64,7 +64,8 @@ from mixmogam.ldscore import ld_scores, ldsc_intercept
 from mixmogam.lmm import LMM, _design_matrix
 from mixmogam.results import GwasResult
 
-__all__ = ["bolt_inf", "bolt", "hratt", "structure_test", "BOLT_GRID", "HRATT_GRID"]
+__all__ = ["bolt_inf", "bolt", "hratt", "structure_test", "BOLT_GRID", "HRATT_GRID",
+           "HRATT_ALPHAS"]
 
 # BOLT-LMM: f2 = spike share of the prior variance, p = slab probability
 BOLT_GRID = [(f2, p) for f2 in (0.5, 0.3, 0.1) for p in (0.5, 0.2, 0.1, 0.05, 0.02, 0.01)]

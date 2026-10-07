@@ -63,7 +63,6 @@ def plot_manhattan(
     ax=None,
     bonferroni: bool = True,
     highlight: Optional[Sequence] = None,
-    max_points: int = 500_000,
     title: Optional[str] = None,
     savepath: Optional[str] = None,
 ):

@@ -75,8 +75,9 @@ proximal-contamination deflation.
   all SNPs plus one pass over group g. Each group's REML fit uses Cholesky
   factorizations of K_{-g} + delta I instead of an eigendecomposition: a
   21-point grid over log delta for the first group, a local search from
-  the previous group's optimum afterwards (about 12 factorizations, delta
-  to 1e-6 as with EMMA's root finder), a full grid for every group if the
+  the previous group's optimum afterwards (about 12 factorizations, log
+  delta to an absolute 1e-6, where EMMA's root finder resolves delta to an
+  absolute 1e-6), a full grid for every group if the
   first profile has several maxima. SNPs are whitened by triangular
   solves; the EMMAX statistics do not depend on the square root used.
   LAPACK's symmetric eigensolvers ran on about 1.2 cores of an M2 Pro,
@@ -282,7 +283,7 @@ first validation required.
 `n_threads=1` remains the default. Above one, the `fast` extra parallelizes
 genotype preparation over variants and coordinate updates over independent
 candidate models, cross-fitting folds or LOCO columns. Each model retains its sequential SNP
-order. For large fits (at least 50,000 samples and six model columns), a
+order. For large fits (at least 50,000 samples), a
 bounded BLAS workspace and a pool of at most four workers distribute suitable
 residual matrix products over sample rows. Smaller products retain the
 ordinary matrix-product path. Temporary Numba and detected BLAS limits are

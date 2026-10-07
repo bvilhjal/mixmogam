@@ -4,8 +4,9 @@ Variance components are fitted with the EMMA algorithm (Kang et al., Genetics,
 2008): an exact grid search over the log ratio of residual to genetic variance
 followed by bracketed root refinement, in REML or ML flavor. Association
 scans use the EMMAX formulation (Kang et al., Nat Genet, 2010) evaluated in
-batched BLAS-3 blocks: each SNP block costs two GEMMs and a rank-q
-residualization, never a per-SNP least-squares solve.
+batched BLAS-3 blocks: each SNP block costs one GEMM (whitening in eigen
+coordinates; two with a truncated spectrum) and a rank-q residualization,
+never a per-SNP least-squares solve.
 
 This module is the exact (eigendecomposition) engine. With a truncated
 spectrum (``n_eig < n``) the V^{-1/2} transform uses a randomized top-k
@@ -66,12 +67,15 @@ class LMFit:
         return self.model
 
     def scan(self, snps, **kwargs) -> dict:
+        """:meth:`LMM.scan` against this null fit (which must be current)."""
         return self._current_model().scan(snps, **kwargs)
 
     def blup(self) -> np.ndarray:
+        """:meth:`LMM.blup` at this fit (which must be current)."""
         return self._current_model().blup()
 
     def predict(self, X=None) -> np.ndarray:
+        """:meth:`LMM.predict` at this fit (which must be current)."""
         return self._current_model().predict(X)
 
 
@@ -291,8 +295,7 @@ class LMM:
                 # Marchenko-Pastur bulk that does not decay, so a
                 # captured-mass criterion would grow toward full rank;
                 # the cap with the reported tail-mass audit is the right
-                # contract. (The solver supports adaptive width for
-                # genuinely decaying spectra.)
+                # contract.
                 values, vectors = randomized_eigh_op(
                     self._kdot, self.n, self.n_eig,
                     random_state=self.random_state,
@@ -369,8 +372,9 @@ class LMM:
         it, so the symmetric root U W, which takes a second GEMM, is used
         only with ``sample_space=True`` (e.g. to permute sample entries).
         Truncated spectrum (always sample space): delta^-1/2 A + U_k
-        (diag((lam_k + delta)^-1/2 - delta^-1/2)) U_k' A, exact when the
-        dropped eigenvalues are zero.
+        (diag((lam_k + delta)^-1/2 - delta^-1/2)) U_k' A, with delta replaced
+        by delta + lam_bar (the mean dropped eigenvalue) in the bulk term:
+        exact when the dropped eigenvalues are all equal.
         """
         key = np.dtype(dtype)
         if self.K is None and self._kop is None:

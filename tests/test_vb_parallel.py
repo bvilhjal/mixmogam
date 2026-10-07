@@ -64,17 +64,23 @@ def test_parallel_sweep_is_exact_with_skips_zero_scales_and_warm_effects(n_threa
 
 @pytest.fixture
 def phensim_problem():
-    phensim = pytest.importorskip("phensim", reason="private simulator is optional")
-    G, labels = phensim.simulate_population_structure(
-        81, 397, n_pops=3, fst=0.06, model="balding-nichols", seed=741,
-        block_sizes=[100, 100, 100, 97], rho=0.4)
-    Y = np.column_stack([phensim.simulate_trait(
-        G, h2=0.3, architecture="qtl", n_causal=20, seed=750 + c)["liability"]
-        for c in range(4)])
-    Q = np.linalg.qr(np.column_stack([np.ones(G.shape[0]), labels == 1, labels == 2]))[0]
+    """Small structured panel: three populations, four traits, plain NumPy."""
+    rng = np.random.default_rng(741)
+    n, m = 81, 397
+    labels = np.arange(n) % 3
+    base = rng.uniform(0.1, 0.5, m)
+    freq = np.clip(base + rng.normal(0, 0.06, (3, m)), 0.02, 0.98)
+    G = rng.binomial(2, freq[labels]).astype(np.int8)
+    Z = (G - G.mean(0)) / np.maximum(G.std(0), 1e-8)
+    Y = np.empty((n, 4))
+    for c in range(4):
+        causal = rng.choice(m, 20, replace=False)
+        g = Z[:, causal] @ rng.standard_normal(20)
+        Y[:, c] = 0.3 ** 0.5 * g / g.std() + 0.7 ** 0.5 * rng.standard_normal(n)
+    Q = np.linalg.qr(np.column_stack([np.ones(n), labels == 1, labels == 2]))[0]
     Y -= Q @ (Q.T @ Y)
     # Missing and constant markers exercise the same imputation/projection in
-    # both paths; the complete data above generated every phenotype in phensim.
+    # both paths; the complete data above generated every phenotype.
     G = G.copy()
     G[::7, ::13] = -1
     G[:, 7] = 0

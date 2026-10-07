@@ -18,14 +18,14 @@ def _arcsin_sqrt(x):
     return np.arcsin(np.sqrt(np.clip(x, 0, 1)))
 
 
-_TRANSFORMS: Dict[str, tuple[Callable, Callable]] = {
-    "identity": (lambda x: x, lambda x: x),
-    "log": (np.log, np.exp),
-    "sqrt": (np.sqrt, np.square),
-    "sqr": (np.square, np.sqrt),
-    "exp": (np.exp, np.log),
-    "anscombe": (_anscombe, lambda x: np.square(x / 2.0) - 3.0 / 8.0),
-    "arcsin_sqrt": (_arcsin_sqrt, lambda x: np.square(np.sin(x))),
+_TRANSFORMS: Dict[str, Callable] = {
+    "identity": lambda x: x,
+    "log": np.log,
+    "sqrt": np.sqrt,
+    "sqr": np.square,
+    "exp": np.exp,
+    "anscombe": _anscombe,
+    "arcsin_sqrt": _arcsin_sqrt,
 }
 
 
@@ -48,6 +48,7 @@ class Phenotypes:
     # ------------------------------------------------------------------
 
     def add(self, pid: str, values) -> None:
+        """Add or replace trait ``pid``: one value per sample, NaN if missing."""
         values = np.asarray(values, dtype=np.float64).ravel()
         if values.size != self.sample_ids.size:
             raise ValueError(
@@ -64,6 +65,7 @@ class Phenotypes:
         return len(self.data)
 
     def pids(self):
+        """Trait names, in the order they were added."""
         return list(self.data.keys())
 
     # ------------------------------------------------------------------
@@ -71,9 +73,11 @@ class Phenotypes:
     # ------------------------------------------------------------------
 
     def values(self, pid: str) -> np.ndarray:
+        """Current values of trait ``pid``, after any transformation."""
         return self.data[pid]["values"]
 
     def transformation(self, pid: str) -> str:
+        """The last transformation applied to ``pid`` ("identity" if none)."""
         return self.data[pid]["transformation"]
 
     def complete(self, pid: str):
@@ -98,10 +102,15 @@ class Phenotypes:
     # ------------------------------------------------------------------
 
     def transform(self, pid: str, name: str, revert: bool = False) -> None:
+        """Apply transformation ``name`` to the non-missing values of ``pid``.
+
+        Transformations stack. ``revert=True`` instead restores the
+        untransformed values (``name`` must still be a listed transformation).
+        """
         if name not in _TRANSFORMS:
             raise ValueError(f"unknown transformation {name!r}")
         rec = self.data[pid]
-        fwd, inv = _TRANSFORMS[name]
+        fwd = _TRANSFORMS[name]
         if revert:
             if rec["raw_values"] is None:
                 raise ValueError(f"trait {pid!r} has no transformation to revert")
@@ -109,7 +118,8 @@ class Phenotypes:
             rec["raw_values"] = None
             rec["transformation"] = "identity"
         else:
-            rec["raw_values"] = rec["values"].copy()
+            if rec["raw_values"] is None:  # keep the untransformed values
+                rec["raw_values"] = rec["values"].copy()
             v = rec["values"]
             ok = np.isfinite(v)
             out = v.copy()
@@ -133,7 +143,8 @@ class Phenotypes:
                 if p > best_p:
                     best, best_p = l, p
             lam = float(best)
-        rec["raw_values"] = rec["values"].copy()
+        if rec["raw_values"] is None:
+            rec["raw_values"] = rec["values"].copy()
         rec["values"] = self._bc(v, lam)
         rec["transformation"] = f"box_cox({lam:.3f})"
         return lam
@@ -165,7 +176,7 @@ class Phenotypes:
                 candidates += ["arcsin_sqrt"]
         best, best_p = "identity", -np.inf
         for name in candidates:
-            fwd, _ = _TRANSFORMS[name]
+            fwd = _TRANSFORMS[name]
             try:
                 t = fwd(pos)
             except ValueError:

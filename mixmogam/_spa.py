@@ -187,7 +187,8 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
     applies its variance ratio. ``two_sided="distance"`` adds the tails
     beyond +-|u|, as SPAtest, SAIGE and REGENIE do; ``"doubled"`` doubles
     the tail beyond u (at most one), LDAK's default, which puts half the
-    level in each tail of a skewed null.
+    level in each tail of a skewed null. ``n_threads`` > 1 evaluates the
+    variants on up to that many Numba workers, with unchanged values.
     """
     if two_sided not in ("distance", "doubled"):
         raise ValueError("two_sided must be 'distance' or 'doubled'")
@@ -214,7 +215,12 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
         np.broadcast_to(np.asarray(var_ratio, dtype=np.float64), (k,))))
     up, lo = np.empty(k), np.empty(k)
     both = two_sided == "distance"
-    (_rows_parallel if n_threads > 1 else _rows)(a, values, freqs, x, up, lo, both)
+    if n_threads > 1 and HAS_NUMBA:
+        from mixmogam._vb import _numba_thread_limit
+        with _numba_thread_limit(min(n_threads, max(k, 1))):
+            _rows_parallel(a, values, freqs, x, up, lo, both)
+    else:
+        _rows(a, values, freqs, x, up, lo, both)
     if both:
         log_p = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
     else:  # r* carries the sign of u: the tail beyond u is Phi(-|r*|)

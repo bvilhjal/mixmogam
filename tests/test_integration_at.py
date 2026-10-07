@@ -1,5 +1,6 @@
 """End-to-end A. thaliana integration test on the bundled Atwell data."""
 
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -29,7 +30,7 @@ def at_genotypes():
         cache.mkdir(exist_ok=True)
         with zipfile.ZipFile(AT_GENO) as zf:
             with zf.open("all_chromosomes_binary.csv") as src, open(csv, "wb") as dst:
-                dst.write(src.read())
+                shutil.copyfileobj(src, dst, 1 << 20)
     return read_regmap([str(csv)], data_format="binary", stride=25, max_variants=8000)
 
 
@@ -59,7 +60,6 @@ def test_at_emmax_end_to_end(at_genotypes):
     assert np.isfinite(ps).all()
     lam_gc = GwasResult(chromosome=gt_f.chromosome, position=gt_f.position,
                         p=ps).genomic_control()
-    # flowering time is highly structured in RegMap: LMM should tame most
-    # of it, but some residual inflation is expected at this SNP count
+    # smoke bound only: structure is partly tamed, some inflation remains
     assert 0.5 < lam_gc < 15
-    assert (ps < 1e-4).sum() > 0  # known FT associations present
+    assert (ps < 1e-4).sum() > 0  # some signal; no specific locus is asserted

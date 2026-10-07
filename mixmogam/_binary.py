@@ -26,7 +26,10 @@ def null_logistic(y, X, weights=None, offset=None, *, max_iter: int = 50,
 
     ``y`` holds 0/1 outcomes, ``X`` the full design (with intercept),
     ``weights`` optional sampling weights and ``offset`` an optional fixed
-    linear predictor. Returns ``gamma``, ``eta``, ``mu``, ``loglik``,
+    linear predictor. Newton steps with step halving, at most ``max_iter``,
+    stop once the largest coefficient change is within ``tol`` relative to
+    the coefficients or the log-likelihood change within ``tol`` relative to
+    the log-likelihood. Returns ``gamma``, ``eta``, ``mu``, ``loglik``,
     ``iterations`` and ``converged``. Raises ValueError when the outcome is
     (quasi-)separated by the covariates, so the maximum does not exist.
     """

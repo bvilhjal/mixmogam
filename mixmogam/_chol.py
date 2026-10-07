@@ -84,7 +84,8 @@ class CholeskyREML:
 
     def loglik(self, log_delta: float) -> float:
         """Profile log-likelihood at delta = exp(log_delta); -inf when
-        K + delta I is not numerically positive definite."""
+        K + delta I is not numerically positive definite or the whitened
+        residual sum of squares is zero (a perfect fit)."""
         self.evaluations += 1
         L = self._factorize(log_delta)
         if L is None:
@@ -109,10 +110,10 @@ class CholeskyREML:
     def _refine(f, a: float, b: float, c: float, fb: float) -> tuple[float, float]:
         """Minimize f = -loglik inside a bracket a < b < c (or c < b < a).
 
-        Brent's bounded method with an absolute tolerance in log delta:
-        1e-6 there is a relative 1e-6 in delta, as fine as the EMMA root
-        finder resolves it, whereas a relative tolerance in log delta would
-        chase rounding noise near delta = 1.
+        Brent's bounded method with an absolute tolerance of 1e-6 in log
+        delta, a relative 1e-6 in delta (the EMMA root finder uses an
+        absolute 1e-6 in delta; the two agree at delta = 1). A relative
+        tolerance in log delta would chase rounding noise near delta = 1.
         """
         lo, hi = min(a, c), max(a, c)
         res = optimize.minimize_scalar(f, bounds=(lo, hi), method="bounded",
@@ -150,8 +151,9 @@ class CholeskyREML:
             if fl < f0:
                 sign, a, b, fb = -1.0, x0, xl, fl
             else:
-                # Also inspect the interval when the warm start is a
-                # boundary: a nearby interior optimum can beat both ends.
+                # x0 beats both neighbours: the usual case for a warm start
+                # near the optimum, or x0 at a grid limit. Refine within
+                # [xl, xr]; a nearby interior optimum can beat x0.
                 return self._refine(f, xl, x0, xr, f0)
         step = LOCAL_STEP
         while True:
@@ -175,9 +177,11 @@ class CholeskyREML:
 
         ``start`` (a log delta, e.g. the previous LOCO group's optimum)
         triggers a local search; without it, or with ``grid=True``, a
-        coarse grid over the EMMA limits comes first. Returns delta,
-        log-likelihood, the number of factorizations and whether the coarse
-        profile had several interior maxima.
+        coarse grid over the EMMA limits comes first. Returns ``delta``,
+        ``log_delta``, the log-likelihood ``ll``, ``pseudo_heritability``
+        (1 / (1 + delta)), the number of factorizations ``evaluations`` and
+        ``multimodal``, whether the coarse profile had several interior
+        maxima.
         """
         self.evaluations = 0
         cache: dict[float, float] = {}

@@ -16,7 +16,8 @@ def fit_projected_he(yky, y2, trace_k, probe_norm2, df):
     ``y`` and ``K`` must already be projected onto the same residual
     subspace of dimension ``df``. ``probe_norm2`` contains ||K r||² for
     independent identity-covariance probes r, so its mean estimates tr(K²).
-    Complete orthogonal probes may instead supply an exact-trace oracle.
+    An orthonormal basis of the subspace, each vector scaled to squared norm
+    ``df``, makes that mean exact.
 
     Negative unconstrained coefficients select a boundary of the same
     least-squares problem, rather than an arbitrary heritability floor.

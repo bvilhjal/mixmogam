@@ -248,16 +248,26 @@ def test_individual_probabilities_are_parallel_invariant_and_condition_on_missin
 
 
 @pytest.mark.numba
-def test_parallel_rows_are_exact():
+def test_parallel_rows_are_exact_on_the_requested_workers(monkeypatch):
     numba = pytest.importorskip("numba")
     if numba.config.NUMBA_NUM_THREADS < 2:
         pytest.skip("requires NUMBA_NUM_THREADS >= 2 before Python starts")
+    from mixmogam import _vb
     rng = np.random.default_rng(36)
     a = rng.normal(size=300)
     values = np.tile(CALLS, (40, 1))
     freqs = np.column_stack([rng.dirichlet([20, 4, 1], 40), np.zeros(40)])
     u = rng.normal(0.0, 4.0, 40) * np.sqrt(np.sum(a * a) * 0.2)
     serial = spa_pvalue(u, a, values, freqs)
+    requested, limit = [], _vb._numba_thread_limit
+
+    def record(n_threads):
+        requested.append(n_threads)
+        return limit(n_threads)
+
+    monkeypatch.setattr(_vb, "_numba_thread_limit", record)
+    before = numba.get_num_threads()
     parallel = spa_pvalue(u, a, values, freqs, n_threads=2)
+    assert requested == [2] and numba.get_num_threads() == before
     np.testing.assert_array_equal(parallel[0], serial[0])
     np.testing.assert_array_equal(parallel[1], serial[1])

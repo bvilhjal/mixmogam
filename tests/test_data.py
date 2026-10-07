@@ -155,6 +155,18 @@ def test_phenotypes_transforms():
     assert picked in ("log", "sqrt", "anscombe", "identity")
 
 
+def test_revert_after_stacked_transforms_restores_untransformed_values():
+    ph = Phenotypes(["a", "b", "c"])
+    ph.add("t", [4.0, 9.0, 16.0])
+    ph.transform("t", "sqrt")
+    ph.transform("t", "log")
+    np.testing.assert_allclose(ph.values("t"), np.log([2.0, 3.0, 4.0]))
+    ph.box_cox("t", lam=1.0)
+    ph.transform("t", "identity", revert=True)
+    assert ph.transformation("t") == "identity"
+    np.testing.assert_array_equal(ph.values("t"), [4.0, 9.0, 16.0])
+
+
 def test_phenotypes_align_and_nan():
     ph = Phenotypes(["a", "b", "c"])
     ph.add("t", [1.0, np.nan, 3.0])

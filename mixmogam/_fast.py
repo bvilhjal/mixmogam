@@ -168,6 +168,8 @@ if HAS_NUMBA:
                             out[j, i] = fill
 
     def convert_block(g_int8: np.ndarray, dtype, impute: str, n_threads: int = 1) -> np.ndarray:
+        """(n, k) int8 calls -> (k, n) ``dtype`` block with no-calls set by
+        ``impute``: "mean" (the variant's called mean), "zero" or "none" (NaN)."""
         if impute == "none":  # rare path; keep NaN semantics simple
             return _convert_numpy(g_int8, dtype, impute)
         out = np.empty((g_int8.shape[1], g_int8.shape[0]), dtype=dtype)
@@ -183,4 +185,6 @@ else:  # pragma: no cover
     prange = range
 
     def convert_block(g_int8: np.ndarray, dtype, impute: str, n_threads: int = 1) -> np.ndarray:
+        """(n, k) int8 calls -> (k, n) ``dtype`` block with no-calls set by
+        ``impute``: "mean" (the variant's called mean), "zero" or "none" (NaN)."""
         return _convert_numpy(g_int8, dtype, impute)

@@ -65,8 +65,10 @@ def batched_pcg(
     ``apply_A(P, cols)`` returns A times the (n, len(cols)) block P, whose
     columns are the original columns ``cols`` -- columns may carry
     different operators (e.g. different LOCO kinships). Converged columns
-    are frozen. Returns ``(X, info)`` with ``info["iterations"]`` and the
-    final relative residual norms ``info["relres"]``.
+    are frozen. Returns ``(X, info)`` with ``info["iterations"]``, the
+    final relative residual norms ``info["relres"]`` and
+    ``info["converged"]``, whether every column reached ``tol`` within
+    ``max_iter`` iterations.
     """
     B = np.asarray(B, dtype=np.float64)
     vec = B.ndim == 1

@@ -1,6 +1,6 @@
+"""Genome-wide significance threshold from batched permutations."""
 import numpy as np
 
-"""Genome-wide significance threshold from batched permutations."""
 from mixmogam import Genotypes, LMM
 from mixmogam.scan import permutation_min_p
 from mixmogam.simulate import simulate_genotypes, simulate_kinship, simulate_traits

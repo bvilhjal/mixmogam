@@ -316,8 +316,9 @@ def prepare_moments(G, idx, Q, n_threads=1, sq_weights=None):
     held by LocoGenotypes. The mean and variance come from exact call
     counts and one pass accumulates the covariate products of the centered
     calls. Each variant is summed sequentially by the same arithmetic, so
-    every thread count, layout and storage format gives the same values;
-    the NumPy fallback can differ by reduction rounding.
+    every thread count, layout and storage format gives the same values.
+    Without Numba this raises ImportError; ``LocoGenotypes._prepare`` then
+    prepares with NumPy, which can differ by reduction rounding.
 
     ``sq_weights`` (one value per sample) are the squares of a row scale s:
     with ``Q`` already scaled (s Q~), the coefficients are those of the

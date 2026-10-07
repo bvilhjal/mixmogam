@@ -53,11 +53,11 @@ def simulate_traits(
 ) -> dict:
     """Simulate a standardized trait with polygenic background and QTLs.
 
-    Returns ``{"y", "u", "causal", "effects"}``: ``u`` is the full
-    infinitesimal genetic value (u ~ N(0, h2 K) in distribution, drawn
-    through the genotype projection so it matches the GRM the model will
-    fit), on top of which ``n_causal`` QTL effects of total variance
-    ``h2`` replace a like share of the background. ``effect_dist='equal'``
+    Returns ``{"y", "u", "causal", "effects"}``: ``u`` is the total genetic
+    value, of sample variance about ``h2``, half from an infinitesimal part
+    (drawn through the genotype projection, so it follows the GRM the model
+    will fit) and half from ``n_causal`` QTL effects; noise of variance
+    ``1 - h2`` is added and ``y`` standardized. ``effect_dist='equal'``
     gives every causal locus the same (absolute) effect so per-locus power
     is deterministic; ``'normal'`` draws N(0,1) effects (v1 style).
     """

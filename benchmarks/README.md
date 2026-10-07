@@ -92,8 +92,10 @@ python benchmarks/hratt_efficiency.py --baseline /tmp/mixmogam-baseline \
 
 Repeat `--case` for additional workloads. Keep the five thread variables
 above at one. Use `--profile` only for diagnosis, separately from formal
-timing. Storage and statistical fitting defaults are identical across
-the two workers.
+timing. The baseline predates cross-fitting and scores in-sample, while the
+optimized tree defaults to cross-fitted LOCO scores. Pass `--loco-folds 1`
+so both fit in-sample and the comparison isolates implementation cost;
+without it the ratio also includes the extra cross-fit work.
 
 **HE versus REML.** `hratt_he_comparison.py` compares the explicit
 `heritability_method="he"` and `"reml"` modes with fresh official LDAK-KVIK
@@ -250,9 +252,13 @@ beside them. Same-day checks separate code from host conditions:
 
 Official results are reused only on byte-identical inputs. Their timings
 come from the original runs, so cross-program time ratios also span the
-days and host loads of both runs. `--max-load L` (all four drivers, as in
-`efficiency_paired.py`) makes each timed fit wait until the one-minute load
-average is below L, and records the load and the wait with the fit.
+days and host loads of both runs. `--max-load L`, as in
+`efficiency_paired.py`, makes `ldak_kvik_comparison.py`,
+`hratt_efficiency.py`, `hratt_he_comparison.py` and
+`hratt_thread_scaling.py` wait before each timed fit until the one-minute
+load average is below L, and record the load and the wait with the fit;
+`hratt_weights_binary.py` and `hratt_followups.py` accept it too and wait
+before each process or case.
 
 ```sh
 python benchmarks/ldak_kvik_comparison.py --rerun-from benchmarks/results/OLD_RUN \

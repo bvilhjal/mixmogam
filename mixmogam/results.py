@@ -94,16 +94,21 @@ class GwasResult:
         return float(np.median(chi2) / _CHI2_1DF_MEDIAN)
 
     def neg_log10_p(self) -> np.ndarray:
+        """-log10 p per variant, p capped at 1 (p = 0 gives inf)."""
         return -np.log10(np.minimum(self.p, 1.0))
 
     def bonferroni_threshold(self, alpha: float = 0.05) -> float:
+        """``alpha`` divided by the number of variants in the result."""
         return alpha / self.p.size
 
     def top_snps(self, k: int = 10) -> "GwasResult":
+        """The ``k`` variants with the smallest p-values, smallest first."""
         idx = np.argsort(self.p)[:k]
         return self.take(idx)
 
     def take(self, idx) -> "GwasResult":
+        """Results for the variants at ``idx`` (indices or a boolean mask);
+        per-variant posterior extras are subset too, other extras copied."""
         idx = np.atleast_1d(idx)
         def sel(a):
             return None if a is None else np.asarray(a)[idx]
@@ -257,6 +262,7 @@ class GwasResult:
     # ------------------------------------------------------------------
 
     def to_dataframe(self):
+        """The variant columns :meth:`write_csv` writes, as a pandas DataFrame."""
         import pandas as pd
 
         data = {

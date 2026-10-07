@@ -1,9 +1,10 @@
 """Cross-fitted LOCO scores in HRATT (``loco_folds``).
 
-Each sample's LOCO polygenic score comes from fits on the other folds, so no
-sample's phenotype enters its own score: effects are not attenuated by
-in-sample absorption, and rare binary outcomes do not get offsets that
-nearly separate the cases.
+Each sample's LOCO polygenic score comes from fits on the other folds, so,
+for the supplied model settings, no sample's phenotype enters its own
+score and effects are not attenuated by in-sample absorption; rare binary
+outcomes do not get offsets that nearly separate the cases. Whole-trait
+variance estimation and model selection still see every phenotype.
 """
 
 import numpy as np

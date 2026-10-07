@@ -324,6 +324,9 @@ def fit_two_kinships(
 
     Profile the weight in [0, 1], including either component alone, after
     scaling both kinships to mean diagonal one and mean off-diagonal zero.
+    Both must be positive semidefinite after that scaling (checked first):
+    relationship matrices are, IBS similarity
+    (:func:`~mixmogam.kinship.ibs_kinship`) generally is not.
     The best grid interval is refined. Covariance components that cannot
     be distinguished after covariate adjustment raise ValueError.
     ``weight`` is None when the ordinary linear model wins (zero genetic
