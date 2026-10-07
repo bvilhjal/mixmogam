@@ -411,16 +411,17 @@ statistics.
 ## Measured resources and numerical agreement
 
 On two fixed 50,000 × 20,000 phensim HAPNEST panels, four-thread HRATT-HE took
-31.6-34.6 s with its cross-fitted LOCO scores and 20.7-21.7 s with in-sample
-scores (`loco_folds=1`), at 1.4 GiB peak RSS, or 0.8 GiB with two-bit calls
-and identical results; official LDAK-KVIK took 25.5-30.1 s at 0.65 GiB on
-3 October, when the host was slower. The cross-fit's five fold fits stay
-below `_vb._GEMM_MIN_COLUMNS` (6), so their genotype products are not
-threaded: four threads gain 1.3-fold instead of 1.5-fold. With cross-fitted
-scores one and four threads give identical association results; with
-in-sample scores they differ by rounding beyond the original array
-tolerance but agree in every significance decision.
+29.2-33.2 s with its cross-fitted LOCO scores (7 October) and 20.7-21.7 s with
+in-sample scores (`loco_folds=1`, 6 October), at 1.4 GiB peak RSS, or 0.8 GiB
+with two-bit calls and identical results; official LDAK-KVIK took 25.5-30.1 s
+at 0.65 GiB on 3 October, when the host was slower. From 50,000 samples the
+variational sweep threads its genotype products for any number of model
+columns, so four threads speed the five-fold cross-fit up 1.4-1.5-fold
+(in-sample fits: 1.5-1.6); 2.0.0.dev6 required six columns, which left the
+cross-fit at 1.3-fold. One and four threads differ by rounding beyond the
+original array tolerance but agree in every significance decision.
 Methods, ranges and caveats (swapping in the original cached runs, the
 Accelerate-linked official binary) are in the
-[archive](../benchmarks/results/20261006-kvik-20k-dev6/README.md) and
-report Section 4.8.
+[archive](../benchmarks/results/20261006-kvik-20k-dev6/README.md), its
+[cross-fit rerun](../benchmarks/results/20261007-kvik-20k-crossfit-gemm/README.md)
+and report Section 4.8.

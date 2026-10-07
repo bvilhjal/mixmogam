@@ -1,0 +1,32 @@
+{
+ "purpose": "Fitted-sweep timings with the threaded genotype products forced on or off, by model columns",
+ "script": "gemm_columns_probe.py",
+ "records": "records.json",
+ "command": "python -u gemm_columns_probe.py records.json 6.5",
+ "package_source": {
+  "commit": "1c50936e5ea27744da147dcf824f89f6dc3969d9",
+  "mixmogam/_vb.py_sha256": "7b82ae9283a846c0e32b26dfb9bb4c59d842fae2bba96273b0be3e14212fdf30",
+  "note": "HEAD's _vb.py, before _GEMM_MIN_COLUMNS was removed; the probe overrides the thresholds at run time"
+ },
+ "design": "VBEngine.fit, cross-fit shape (P folds, column p holds fold p out), 2,048 random int8 variants, centering only, n_threads=4, exactly 3 sweeps (tol=0) after untimed warm-ups; route on: _GEMM_MIN_SAMPLES=_GEMM_MIN_COLUMNS=1, off: _GEMM_MIN_COLUMNS=10**9; on/off alternate, 5 repetitions each",
+ "thread_environment": {
+  "OPENBLAS_NUM_THREADS": "1",
+  "OMP_NUM_THREADS": "1",
+  "MKL_NUM_THREADS": "1",
+  "VECLIB_MAXIMUM_THREADS": "1",
+  "NUMBA_NUM_THREADS": "8"
+ },
+ "load_gate": "one-minute load average below 6.5 before each timed fit (system services held it at 5.4-5.8)",
+ "versions": {
+  "python": "3.14.6",
+  "numpy": "2.4.6",
+  "scipy": "1.18.0",
+  "numba": "0.66.0",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O"
+ },
+ "sha256": {
+  "gemm_columns_probe.py": "1049b9984a2031f931753a12defb21183f91b1bfcf8d0281e1b85c6543e0abc3",
+  "records.json": "6384cebd8a21789dd786527e4daf1abf271408344a18d9fc1c10e9afeaa881ea"
+ },
+ "rerun_note": "The script is archived as run. Against a source without _GEMM_MIN_COLUMNS, its 'off' mode must raise _GEMM_MIN_SAMPLES (e.g. to 10**9) instead, or both modes take the threaded route."
+}

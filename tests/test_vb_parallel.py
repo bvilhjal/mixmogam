@@ -246,12 +246,13 @@ def test_hratt_parallel_matches_serial_with_phensim_data(phensim_problem):
 
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("b", [128, 32, 7])
-def test_gemm_workspace_matches_serial_and_float64_reference(dtype, b):
+@pytest.mark.parametrize("p", [2, 6])
+def test_gemm_workspace_matches_serial_and_float64_reference(dtype, b, p):
     from concurrent.futures import ThreadPoolExecutor
     pytest.importorskip("scipy.linalg.blas")  # load before discovering BLAS pools
     control = pytest.importorskip("threadpoolctl")
     rng = np.random.default_rng(877)
-    n, p = 503, 6
+    n = 503
     Z = rng.standard_normal((128, n)).astype(dtype)[:b]
     work = rng.standard_normal((n, p)).astype(dtype)
     changes = rng.standard_normal((128, p)).astype(dtype)[:b]
@@ -292,7 +293,6 @@ def test_large_gemm_dispatch_preserves_fit_and_reuses_one_pool(phensim_problem, 
     col_fold, col_group = np.array([2, 0, -1, 2]), np.array([-1, 1, 2, 0])
     expected = _fit_engine(_vb.VBEngine(lg, folds=folds), Y, col_fold, col_group, _vb.PRIOR_ENET)
     monkeypatch.setattr(_vb, "_GEMM_MIN_SAMPLES", 1)
-    monkeypatch.setattr(_vb, "_GEMM_MIN_COLUMNS", 1)
     original = _vb.ThreadPoolExecutor
     pools = []
 
@@ -322,7 +322,6 @@ def test_large_gemm_failure_joins_workers_and_restores_thread_controls(phensim_p
     gt, groups, Q, _, Y = phensim_problem
     engine = _vb.VBEngine(LocoGenotypes(gt, groups, Q, block=173), n_threads=4)
     monkeypatch.setattr(_vb, "_GEMM_MIN_SAMPLES", 1)
-    monkeypatch.setattr(_vb, "_GEMM_MIN_COLUMNS", 1)
     workers = []
 
     def fail_worker(left, right, out):
@@ -347,7 +346,6 @@ def test_large_gemm_loads_blas_before_setting_its_limit(phensim_problem, monkeyp
     gt, groups, Q, _, Y = phensim_problem
     lg = LocoGenotypes(gt, groups, Q, block=173)
     monkeypatch.setattr(_vb, "_GEMM_MIN_SAMPLES", 1)
-    monkeypatch.setattr(_vb, "_GEMM_MIN_COLUMNS", 1)
     initialized = []
     constructor = _vb._GemmWorkspace
     original_limits = control.threadpool_limits
@@ -376,7 +374,6 @@ def test_missing_threadpoolctl_retains_serial_gemms(phensim_problem, monkeypatch
     lg = LocoGenotypes(gt, groups, Q, block=173)
     expected = _fit_engine(_vb.VBEngine(lg), Y, np.full(4, -1), np.full(4, -1), _vb.PRIOR_ENET)
     monkeypatch.setattr(_vb, "_GEMM_MIN_SAMPLES", 1)
-    monkeypatch.setattr(_vb, "_GEMM_MIN_COLUMNS", 1)
     original_import = builtins.__import__
 
     def unavailable(name, *args, **kwargs):

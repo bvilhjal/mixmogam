@@ -49,10 +49,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ([`20261006-kvik-20k-dev6`](benchmarks/results/20261006-kvik-20k-dev6/README.md)),
   with cross-fitted and with in-sample scores. Cross-fitting took 1.28-1.38
   times the in-sample time on one thread and 1.53-1.59 on four: its five
-  fold fits stay below the six columns from which the variational sweep
-  threads its genotype products (`_vb._GEMM_MIN_COLUMNS`), so four threads
-  gained 1.27-1.33-fold instead of 1.47-1.57. One and four threads then give
-  identical association results.
+  fold fits stayed below the six columns from which the variational sweep
+  threaded its genotype products (`_vb._GEMM_MIN_COLUMNS`), so four threads
+  gained 1.27-1.33-fold instead of 1.47-1.57, and one and four threads gave
+  identical association results. The next item removes that threshold.
+- The variational sweep threads its genotype products from 50,000 samples
+  whatever the number of model columns; `_vb._GEMM_MIN_COLUMNS` (six) is
+  removed. Six was the smallest shape probed when it was set, not a
+  break-even: at 50,000 samples, threaded products sped fitted sweeps up
+  1.31-1.40-fold for two to eight columns alike (1.04-1.08 at 25,000).
+  HRATT's cross-fitted fold fits now use them. In a rerun of the
+  20,000-variant workload
+  ([`20261007-kvik-20k-crossfit-gemm`](benchmarks/results/20261007-kvik-20k-crossfit-gemm/README.md)),
+  four threads sped cross-fitted fits up 1.40 and 1.48 times instead of 1.27
+  and 1.33, and in same-day pairs four-thread fits took 0.90-0.94 times as
+  long as with 2.0.0.dev6. One-thread results are unchanged bit for bit.
+  Four-thread cross-fitted results now differ from one-thread ones by
+  rounding, as in-sample results already did (up to 1.3e-7 in effects and
+  1.3e-5 in p), with identical decisions at 0.05, 0.01, 0.001, Bonferroni
+  and 5e-8.
 
 ## [2.0.0.dev6] - 2026-10-06
 

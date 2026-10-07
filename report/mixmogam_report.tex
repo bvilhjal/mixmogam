@@ -1806,15 +1806,24 @@ commit e4089d8 exactly. With cross-fitted scores $h^2$ is unchanged, and
 the null chromosome's $\lgc$ moved from 0.951 to 0.946 and from 0.978 to
 0.984 (Table~\ref{tab:20k-science}).
 
-Four requested workers reduce the median wall time of the cross-fitted fits
+Four requested workers reduced the median wall time of the cross-fitted fits
 only by factors 1.27 and 1.33 on the unstructured and PC-adjusted
 confounded panels, to 34.63 and 31.64 seconds, against 1.57 and 1.47, to
 21.74 and 20.70 seconds, with in-sample scores
-(Table~\ref{tab:20k-resources}). Cross-fitting thus costs 1.28 and 1.38
+(Table~\ref{tab:20k-resources}). Cross-fitting thus cost 1.28 and 1.38
 times the in-sample time on one thread and 1.59 and 1.53 times on four.
-The variational sweep threads its genotype products only from six columns
-on, and the cross-fit fits five, one per fold; the four-worker fits ran at
-a CPU-to-wall ratio of 1.2, against 1.4 with in-sample scores. The
+In 2.0.0.dev6 the variational sweep threaded its genotype products only
+from six columns on, and the cross-fit fits five, one per fold; the
+four-worker fits ran at a CPU-to-wall ratio of 1.2, against 1.4 with
+in-sample scores. Six was the smallest shape probed when that threshold
+was set, not a break-even: at 50,000 samples, threaded products sped
+fitted sweeps up 1.31--1.40-fold for two to eight columns alike. The
+development revision after 2.0.0.dev6 threads them whatever the number of
+columns. Rerun with it on 7 October, four workers sped the cross-fitted
+fits up 1.40 and 1.48 times, to 33.15 and 29.21 seconds, at a CPU-to-wall
+ratio of 1.3; one-thread fits, whose code and results are unchanged, took
+1.05 and 1.02 times as long as on 6 October. In same-day pairs, four-worker
+cross-fitted fits took 0.90--0.94 times as long as with 2.0.0.dev6. The
 in-sample fits took 1.04--1.09 times as long as on 5 October. The official
 executable took 25.45 and 30.09 seconds on 3 October, when the host was
 slower (Section~\ref{sec:summaries}), so these times cannot be compared
@@ -1826,9 +1835,9 @@ peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
 LOCO, unchanged, took the same time and memory under both versions, with
 identical p-values. mixmogam's
 median peak RSS of 1.4~GiB is about 2.2 times the official executable's
-0.65~GiB. These results support useful optional parallelism with in-sample
-scores, and show that the cross-fitted default leaves most of it unused;
-they do not establish efficiency parity.
+0.65~GiB. These results support useful optional parallelism, which the
+cross-fitted default used only partly in 2.0.0.dev6; they do not establish
+efficiency parity.
 
 \begin{table}[htbp]
  \centering\small
@@ -1855,10 +1864,17 @@ $\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 24 repeated-run
 comparisons within a method and worker count are exact: eight cross-fitted,
 eight in-sample and eight official. Selected exponents and priors, integer
 iteration counts and convergence flags agree across counts. With
-cross-fitted scores, one and four workers give identical association
-arrays, since the fold fits' products are not threaded; only the
-cross-validation fit's coefficients, which select the prior, differ beyond
-the strict tolerance, so all six four-versus-one comparisons still fail it.
+cross-fitted scores in 2.0.0.dev6, one and four workers gave identical
+association arrays, since the fold fits' products were not threaded; only
+the cross-validation fit's coefficients, which select the prior, differed
+beyond the strict tolerance, so all six four-versus-one comparisons still
+failed it. With threaded fold fits (7 October) the association arrays
+differ as well, by about the in-sample amounts below: on the PC-adjusted
+panel by at most $1.2846\times10^{-7}$ in effects, $3.0606\times10^{-10}$
+in standard errors, $1.3189\times10^{-5}$ in p-values and
+$6.45\times10^{-5}$ in log-base-ten p-values. The rerun's one-thread
+results equal those of 6 October bit for bit, and its eight repeated-run
+comparisons are exact.
 With in-sample scores the differences equal those of the reruns with commit
 e4089d8. On the unstructured panel they are of the original run's size. On
 the PC-adjusted panel they are about tenfold: the largest are
@@ -1872,7 +1888,7 @@ rank-$q$ corrections from products of unprojected genotypes
 (Equation~\eqref{eq:rank-q}), which probably amplifies summation-order
 differences when PCs explain genotype variance. All-variant significance
 masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
-in all 60 checks. Unchanged decisions are useful evidence of stability
+in all 60 checks, and in the 30 checks of the 7 October rerun. Unchanged decisions are useful evidence of stability
 for these particular data and thresholds; they do not turn the six
 tolerance failures into passes or exclude threshold crossings elsewhere.
 
@@ -2699,7 +2715,10 @@ its commands and the hash of every reused file. The same-day checks are
 \code{20261005-}\allowbreak\code{same-day-dev5-e4089d8} and
 \code{20261006-}\allowbreak\code{same-day-}\allowbreak\code{e4089d8-dev6}. The figure and table
 generators read the reruns, take official LDAK-KVIK results from the
-original archives, and verify reused inputs and outputs by hash.
+original archives, and verify reused inputs and outputs by hash. The
+cross-fit rerun with threaded genotype products, its same-day pairs and
+the probe behind the change are in
+\code{20261007-}\allowbreak\code{kvik-20k-}\allowbreak\code{crossfit-gemm}.
 
 The paired dev5/current archive is
 \code{20261005-}\allowbreak\code{efficiency-paired-}\allowbreak\code{hratt}.

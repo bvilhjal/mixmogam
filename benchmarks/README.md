@@ -236,7 +236,10 @@ omitted. The reruns with 2.0.0.dev6, which the report uses, are:
 - `20261006-hapnest-kvik-dev6-n10000` and `-n50000`;
 - `20261006-kvik-he-dev6`;
 - `20261006-kvik-20k-dev6`, whose `thread-scaling-insample/` repeats the
-  thread experiment with in-sample scores (`--loco-folds 1`).
+  thread experiment with in-sample scores (`--loco-folds 1`);
+- `20261007-kvik-20k-crossfit-gemm`, which repeats its cross-fitted thread
+  experiment once fits with fewer than six columns thread their genotype
+  products.
 
 Reruns of HRATT on archives from before its rename also hold the original
 run's `kvik.*` outputs, linked unchanged. The other reruns with commit

@@ -76,13 +76,13 @@ stored two bits each, a quarter of the int8 memory, with identical results
 and `mmap=True` to leave them in the mapped bed file). See the
 [quickstart](docs/quickstart.md#larger-hratt-fits) for a configuration.
 
-On two 50,000 × 20,000 HAPNEST panels, four-thread HRATT-HE took 32-35 s at
+On two 50,000 × 20,000 HAPNEST panels, four-thread HRATT-HE took 29-33 s at
 1.4 GiB peak RSS, or 0.8 GiB with two-bit calls, and 21-22 s with in-sample
-scores (`loco_folds=1`): its five cross-fit fold fits are not yet threaded.
-Official LDAK-KVIK, timed on 3 October when the host was slower, took
-25-30 s at 0.65 GiB
-([archive](benchmarks/results/20261006-kvik-20k-dev6/README.md)). These are
-different estimators on two realizations, not a calibration study.
+scores (`loco_folds=1`). Official LDAK-KVIK, timed on 3 October when the host
+was slower, took 25-30 s at 0.65 GiB
+([archive](benchmarks/results/20261006-kvik-20k-dev6/README.md),
+[cross-fit rerun](benchmarks/results/20261007-kvik-20k-crossfit-gemm/README.md)).
+These are different estimators on two realizations, not a calibration study.
 
 ## Install
 
