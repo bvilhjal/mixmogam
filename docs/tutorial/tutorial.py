@@ -12,6 +12,7 @@ import numpy as np
 from scipy import stats
 
 from mixmogam import Genotypes, LMM, gwas, kinship
+from mixmogam.pca import principal_components
 from mixmogam.plotting import plot_manhattan, plot_qq
 from mixmogam.scan import permutation_min_p
 from mixmogam.simulate import simulate_genotypes, simulate_traits
@@ -90,9 +91,8 @@ print("\n-log10 p at the 8 QTL:")
 for k in lp: print(f"  {k:<9}", np.round(lp[k][c], 1))
 
 # ---- 5. Case-control and sampling weights (HRATT) ----------------------
-K = kinship.realized_relationship(gt)
-evals, evecs = np.linalg.eigh(K)
-pcs = evecs[:, -4:]                       # top 4 ancestry PCs
+K = kinship.realized_relationship(gt)     # for MLMM and LMM below
+pcs = principal_components(gt, k=4)       # built-in ancestry PCs
 liab = y + 0.0
 thr = np.quantile(liab, 0.8)
 y01 = (liab > thr).astype(float)

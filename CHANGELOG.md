@@ -64,6 +64,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The tutorial's ancestry PCs come from `mixmogam.pca` (its weighted-HRATT
+  lambda_GC 1.02 to 1.03; figures unchanged), and the report's evidence
+  table records the built-in-PC rerun.
 - `hratt_followups.py --scenarios` runs a subset of the selection
   scenarios; the sampling streams are unchanged.
 - The parallel-fit tests use a small NumPy panel instead of `phensim`, so

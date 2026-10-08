@@ -46,7 +46,8 @@ the departures listed below, and is not LDAK-KVIK.
 A kinship alone does not guarantee control of an environment that tracks
 ancestry. It models covariance, whereas a systematic environmental mean
 along an ancestry axis may require explicit covariates (`X`), such as the
-top principal components. In historical sim study S2 (two
+top principal components (`mixmogam.pca`; the command line's `--pcs`
+appends them). In historical sim study S2 (two
 demes, F_ST 0.02, an environment on deme with 50% of the variance),
 exact LOCO gave lambda_GC 1.27, and null SNPs in the top 1% of loading
 on the environment had mean chi2 2.27. With PC1 these became 1.11 and

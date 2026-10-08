@@ -125,16 +125,20 @@ structure is present, because the score test models allele frequencies from
 the covariates:
 
 ```python
-K = kinship.realized_relationship(gt)
-pcs = np.linalg.eigh(K)[1][:, -4:]                 # top 4 ancestry PCs
+K = kinship.realized_relationship(gt)             # for MLMM and LMM below
+pcs = principal_components(gt, k=4)               # built-in ancestry PCs
 rb = gwas(y01, gt, X=pcs, method="hratt", trait="binary")
 rw = gwas(y,   gt, X=pcs, method="hratt", sample_weights=w)   # e.g. 1/P(participation)
 ```
 
+`mixmogam pca --geno prefix --k 4 --out pcs.txt` writes these as a
+covariate file, and `mixmogam gwas ... --covar pcs.txt` (or `--pcs 4`)
+uses them without Python.
+
 | | λ_GC | Bonferroni hits | far from a QTL |
 |---|---|---|---|
 | Binary, 20% prevalence, with PCs | 0.99 | 4 | 0 |
-| Weighted (design effect 1.06), with PCs | 1.02 | 5 | 0 |
+| Weighted (design effect 1.06), with PCs | 1.03 | 5 | 0 |
 
 The first attempt without PCs gave λ_GC = 1.83 for the binary trait and an
 explicit "strong population structure remains" warning, which is the
@@ -195,8 +199,9 @@ packed (README).
 
 GxE interaction scans (`scan_gxe`), genotypic (non-additive) tests,
 two-kinship variance-component fits (`fit_two_kinships`), posterior
-association probabilities with an explicit effect-size prior, and HDF5 /
-EIGENSTRAT / PLINK I/O. See the quickstart.
+association probabilities with an explicit effect-size prior, a covariate
+file reader (`read_covariates`), and HDF5 / EIGENSTRAT / PLINK I/O. See
+the quickstart.
 
 ## Caveats
 
