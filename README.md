@@ -116,6 +116,15 @@ imputed dosages are currently unsupported. LOCO needs at least two
 chromosomes. All phenotype and covariate rows must follow the genotype
 sample order.
 
+The same scan from the shell (the `mixmogam` command; also `python -m
+mixmogam`), with rows aligned by sample ID and ancestry PCs built in:
+
+```sh
+mixmogam pca  --geno data/cohort --k 10 --out pcs.txt
+mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
+              --covar pcs.txt --out gwas.csv
+```
+
 ## Interpretation and scope
 
 - The target is a per-variant association conditional on covariates and a
@@ -132,7 +141,7 @@ sample order.
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
 - HRATT's weighted and binary tests take allele frequencies from the
   covariates: when weights or case fractions vary with ancestry, include
-  ancestry principal components.
+  ancestry principal components (`mixmogam.pca`).
 - A genome-wide lambda near one can hide miscalibration within SNP groups.
   The corrected-input benchmarks retain stratified diagnostics; larger
   independent simulation studies and validation of the corrected permutation

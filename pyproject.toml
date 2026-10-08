@@ -18,6 +18,9 @@ Homepage = "https://github.com/bvilhjal/mixmogam"
 Repository = "https://github.com/bvilhjal/mixmogam"
 Issues = "https://github.com/bvilhjal/mixmogam/issues"
 
+[project.scripts]
+mixmogam = "mixmogam.cli:main"
+
 [project.optional-dependencies]
 fast = ["numba>=0.59", "threadpoolctl>=3"]
 plot = ["matplotlib>=3.7"]

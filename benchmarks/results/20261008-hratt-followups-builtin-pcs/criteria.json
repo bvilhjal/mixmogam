@@ -1,0 +1,314 @@
+{
+  "F1": {
+    "cells": [
+      {
+        "relative_bias": -0.0013478436266319393,
+        "replicates": 10,
+        "mcse": 0.010044335996858021,
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w",
+        "pass": true
+      }
+    ],
+    "pass": true,
+    "all_methods": [
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt",
+        "estimand": "population_slopes",
+        "relative_bias": 0.0059659932298020465,
+        "replicates": 10,
+        "mcse": 0.019890351837285894
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt",
+        "estimand": "within_slopes",
+        "relative_bias": -0.006060806310871758,
+        "replicates": 10,
+        "mcse": 0.007044632701606199
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-insample",
+        "estimand": "population_slopes",
+        "relative_bias": -0.3102272950940469,
+        "replicates": 10,
+        "mcse": 0.0180721824285793
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-insample",
+        "estimand": "within_slopes",
+        "relative_bias": -0.31846307536493856,
+        "replicates": 10,
+        "mcse": 0.012765688391402777
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w",
+        "estimand": "population_slopes",
+        "relative_bias": 0.011029242658875515,
+        "replicates": 10,
+        "mcse": 0.02191114738353469
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w",
+        "estimand": "within_slopes",
+        "relative_bias": -0.0013478436266319393,
+        "replicates": 10,
+        "mcse": 0.010044335996858021
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "wls-w",
+        "estimand": "population_slopes",
+        "relative_bias": 0.012658663191508445,
+        "replicates": 10,
+        "mcse": 0.02120937837769598
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "wls-w",
+        "estimand": "within_slopes",
+        "relative_bias": -0.0004066099305080728,
+        "replicates": 10,
+        "mcse": 0.011426611816944635
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w-pooled",
+        "estimand": "population_slopes",
+        "relative_bias": 0.011029242658875515,
+        "replicates": 10,
+        "mcse": 0.02191114738353469
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w-pooled",
+        "estimand": "within_slopes",
+        "relative_bias": -0.0013478436266319393,
+        "replicates": 10,
+        "mcse": 0.010044335996858021
+      }
+    ]
+  },
+  "F2": {
+    "cells": [
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "ratio": "hratt/hratt-insample",
+        "mean": 1.0033565684730643,
+        "mcse": 0.003816499450649535,
+        "judged": true,
+        "pass": true
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "ratio": "hratt-w/wls-w",
+        "mean": 1.1906084737091303,
+        "mcse": 0.017918880303108772,
+        "judged": false,
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "F3": {
+    "cells": [],
+    "pass": false
+  },
+  "F4": {
+    "cells": [],
+    "pass": false
+  },
+  "F5": {
+    "cells": [
+      {
+        "cell": [
+          0.05,
+          "null",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w",
+        "lambda": 0.9888549569851867,
+        "low_maf_rate_1e-3": 0.8241657929466013,
+        "pass": true
+      },
+      {
+        "cell": [
+          0.05,
+          "null",
+          "binary",
+          0.05,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-bin-w",
+        "lambda": 0.9841260832765563,
+        "low_maf_rate_1e-3": 0.9765115040365957,
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "F6": {
+    "median_ratios": {
+      "hratt/hratt-insample": 1.1040594625588391,
+      "hratt-bin/hratt-bin-insample": null,
+      "hratt-w/hratt-he": null
+    },
+    "limits": {
+      "hratt/hratt-insample": 1.25,
+      "hratt-bin/hratt-bin-insample": 1.25,
+      "hratt-w/hratt-he": 1.3
+    },
+    "pass": false
+  },
+  "F7": {
+    "cells": [
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt",
+        "lambda": 1.001942755085536,
+        "lambda_mcse": 0.015281598976874793,
+        "judged": true,
+        "pass": true
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-insample",
+        "lambda": 0.9898540488568741,
+        "lambda_mcse": 0.015110727388587436,
+        "judged": false,
+        "pass": true
+      },
+      {
+        "cell": [
+          0.05,
+          "mixed",
+          "quantitative",
+          null,
+          "S4",
+          "c+PCs"
+        ],
+        "method": "hratt-w",
+        "lambda": 0.9592751760883262,
+        "lambda_mcse": 0.016850373465953538,
+        "judged": false,
+        "pass": true
+      }
+    ],
+    "pass": true
+  },
+  "failed_methods": {}
+}

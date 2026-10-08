@@ -94,6 +94,33 @@ def test_csv_roundtrip(scan_result, tmp_path):
     back = GwasResult.read_csv(path)
     assert len(back) == len(res)
     np.testing.assert_allclose(back.p, res.p, rtol=1e-5)
+    assert res.n == 400 and back.n == res.n
+    assert back.take([0, 1]).n == 400
+
+
+def test_csv_n_column_and_read_aliases(tmp_path):
+    res = GwasResult(chromosome=np.ones(3), position=np.arange(3),
+                     p=np.array([0.1, 0.2, 0.3]), n=17)
+    path = str(tmp_path / "res.csv")
+    res.write_csv(path)
+    assert open(path).readline().strip().split(",")[3] == "n"
+    assert GwasResult.read_csv(path).n == 17
+    pd = pytest.importorskip("pandas")
+    df = res.to_dataframe()
+    assert isinstance(df, pd.DataFrame) and list(df["n"]) == [17, 17, 17]
+
+    legacy = tmp_path / "legacy.csv"
+    legacy.write_text("chromosome,position,p\n1,10,0.5\n1,20,0.4\n")
+    assert GwasResult.read_csv(str(legacy)).n is None
+    aliased = tmp_path / "alias.csv"
+    aliased.write_text("chromosome,position,p,n_eff\n1,10,0.5,99\n1,20,0.4,99\n")
+    assert GwasResult.read_csv(str(aliased)).n == 99
+    varying = tmp_path / "vary.csv"
+    varying.write_text("chromosome,position,p,n\n1,10,0.5,99\n1,20,0.4,98\n")
+    with pytest.raises(ValueError, match="constant"):
+        GwasResult.read_csv(str(varying))
+    with pytest.raises(ValueError, match="positive sample count"):
+        GwasResult(chromosome=np.ones(1), position=np.zeros(1), p=np.ones(1), n=0)
 
 
 def test_plots(scan_result, tmp_path):

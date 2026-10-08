@@ -1,1 +1,1 @@
-"""Genotype and phenotype IO."""
+"""Genotype, phenotype and covariate IO."""

@@ -1,0 +1,270 @@
+diff --git a/benchmarks/hratt_followups.py b/benchmarks/hratt_followups.py
+index 7bebe7fe..14fedc2e 100644
+--- a/benchmarks/hratt_followups.py
++++ b/benchmarks/hratt_followups.py
+@@ -4,13 +4,16 @@ variances, binary null fits with fitted score coefficients, and doubled
+ saddlepoint tails; see the frozen plan (hratt_followups_plan.md).
+ 
+     python benchmarks/hratt_followups.py --out RUN [--pilot] [--max-load 6]
++    python benchmarks/hratt_followups.py --out RUN --scenarios S4
+     python benchmarks/hratt_followups.py --summarize RUN
+ 
+ Panels, traits and samples are those of hratt_weights_binary.py, same seeds:
+ each panel's sampling stream is replayed through the original cells in
+ order, so shared cells reuse the 5 October samples exactly. The new Fst 0.05
+ mixed cells draw from their own stream afterwards; "+PCs" cells add the top
+-10 principal components of the sample's genotypes to the covariate.
++10 principal components of the sample's genotypes to the covariate
++(:func:`mixmogam.pca.principal_components`, the SVD of the thinned panel;
++this driver computed its own randomized approximation until 2026-10-08).
+ """
+ from __future__ import annotations
+ 
+@@ -70,42 +73,6 @@ def case_name(cell):
+             + ("_pcs" if covariates == "c+PCs" else ""))
+ 
+ 
+-def top_pcs(G, k=N_PCS, seed=0, n_iter=4, n_markers=2000):
+-    """Top-k principal components of the standardized genotypes (n, m) by
+-    randomized subspace iteration (Halko et al. 2011), from ``n_markers``
+-    random markers with sample MAF >= 5%, as PCs are usually computed from a
+-    thinned panel."""
+-    rng = np.random.default_rng(seed)
+-    af = G.mean(axis=0) / 2
+-    common = np.flatnonzero(np.minimum(af, 1 - af) >= 0.05)
+-    G = G[:, np.sort(rng.choice(common, min(n_markers, common.size), replace=False))]
+-    n, m = G.shape
+-    mean = G.mean(axis=0)
+-    sd = G.std(axis=0)
+-    sd[sd == 0] = 1.0
+-
+-    def blocks():
+-        for start in range(0, m, 2000):
+-            stop = min(start + 2000, m)
+-            yield start, stop, (G[:, start:stop] - mean[start:stop]) / sd[start:stop]
+-
+-    def times(B):  # Z B
+-        return sum(Z @ B[start:stop] for start, stop, Z in blocks())
+-
+-    def times_t(A):  # Z' A
+-        out = np.empty((m, A.shape[1]))
+-        for start, stop, Z in blocks():
+-            out[start:stop] = Z.T @ A
+-        return out
+-
+-    Y = times(rng.standard_normal((m, k + 10)))
+-    for _ in range(n_iter):
+-        Y = times(times_t(np.linalg.qr(Y)[0]))
+-    Q = np.linalg.qr(Y)[0]
+-    U = np.linalg.svd(times_t(Q).T, full_matrices=False)[0]
+-    return (Q @ U)[:, :k]
+-
+-
+ def population_log_or(pop, tr, prev):
+     """Population marginal log odds ratios per counted A1 allele at the QTL
+     of the binary mixed trait: logistic regression on (1, c, 2 - g)."""
+@@ -139,7 +106,10 @@ def write_case(case, pop, tr, cell, rep, index, weights, args, log_or=None, with
+     fst, arch, trait, prev, scenario, covariates = cell
+     config = hb.write_case(case, pop, tr, cell[:5], rep, index, weights, args)
+     if covariates == "c+PCs":
+-        X = np.column_stack([tr["c"][index], top_pcs(pop["G"][index], seed=config["method_seed"])])
++        from mixmogam.pca import principal_components
++        X = np.column_stack([tr["c"][index],
++                             principal_components(pop["G"][index], k=N_PCS,
++                                                  random_state=config["method_seed"])])
+         ids = [f"S{i}" for i in index]
+         with open(case / "covariates.txt", "w") as fh:
+             for sid, row in zip(ids, X):
+@@ -550,7 +520,8 @@ def run_panel(rep, fst, args):
+     population is in memory, which is then released before the methods run.
+     Returns the number of failed cases."""
+     out = Path(args.out)
+-    cells = [c for c in CELLS if c[0] == fst and (c[1] == "null" or rep <= args.mixed_reps)]
++    cells = [c for c in CELLS if c[0] == fst and (c[1] == "null" or rep <= args.mixed_reps)
++             and (not args.scenarios or c[4] in args.scenarios)]
+     if not cells:
+         return 0
+     t = time.perf_counter()
+@@ -612,6 +583,8 @@ def main():
+                     help="panels run at once, each in its own process (sized by memory: "
+                          "a panel holds its 40,000 x m population only while writing its cases)")
+     ap.add_argument("--seed", type=int, default=20261005)
++    ap.add_argument("--scenarios", nargs="+", choices=hb.SCENARIOS,
++                    help="run only these selection scenarios (sampling streams are unchanged)")
+     ap.add_argument("--pilot", action="store_true", help="One replicate of every cell")
+     ap.add_argument("--worker", type=Path)
+     ap.add_argument("--methods", nargs="+")
+@@ -631,7 +604,8 @@ def main():
+     args.out = str(out)
+     out.mkdir(parents=True, exist_ok=False)
+     archive_sources(out, args)
+-    panels = [(rep, fst) for rep in range(1, args.null_reps + 1) for fst in sorted({c[0] for c in CELLS})]
++    panels = [(rep, fst) for rep in range(1, args.null_reps + 1)
++              for fst in sorted({c[0] for c in CELLS if not args.scenarios or c[4] in args.scenarios})]
+     if args.jobs > 1:
+         import multiprocessing
+         from concurrent.futures import ProcessPoolExecutor
+diff --git a/mixmogam/association.py b/mixmogam/association.py
+index b0134b64..e1844ce0 100644
+--- a/mixmogam/association.py
++++ b/mixmogam/association.py
+@@ -143,7 +143,7 @@ def _gwas_exact(y, gt, X, loco: bool, max_loco_groups: int, block: int,
+     res = GwasResult(chromosome=np.asarray(gt.chromosome), position=np.asarray(gt.position),
+                      p=p, variant_ids=np.asarray(gt.variant_ids), f_stat=f,
+                      beta=beta, se=se, af=gt.allele_freqs(),
+-                     effect_allele=gt.allele1, other_allele=gt.allele2)
++                     effect_allele=gt.allele1, other_allele=gt.allele2, n=n)
+     res.extra.update({"method": "exact", "statistic": "F", "loco": loco, "n": n,
+                       "n_loco_groups": len(labels), "loco_groups": labels,
+                       "pseudo_heritability": np.array(h2), "delta": np.array(delta),
+diff --git a/mixmogam/results.py b/mixmogam/results.py
+index fef2da41..550a8d2a 100644
+--- a/mixmogam/results.py
++++ b/mixmogam/results.py
+@@ -31,8 +31,13 @@ class GwasResult:
+     extra: dict = field(default_factory=dict)
+     effect_allele: Optional[np.ndarray] = None
+     other_allele: Optional[np.ndarray] = None
++    n: Optional[int] = None  # samples analysed; exported as the CSV ``n`` column
+ 
+     def __post_init__(self):
++        if self.n is not None:
++            if isinstance(self.n, (bool, np.bool_)) or not isinstance(self.n, (int, np.integer)) or self.n <= 0:
++                raise ValueError("n must be a positive sample count")
++            self.n = int(self.n)
+         self.p = np.asarray(self.p, dtype=float)
+         if self.p.ndim != 1:
+             raise ValueError("p must be one-dimensional")
+@@ -64,6 +69,8 @@ class GwasResult:
+         for name in ("n", "h0_rss"):
+             if name in scan:
+                 res.extra[name] = scan[name]
++        if "n" in scan:
++            res.n = scan["n"]
+         if fit is not None:
+             res.extra["pseudo_heritability"] = fit.pseudo_heritability
+             res.extra["delta"] = fit.delta
+@@ -130,6 +137,7 @@ class GwasResult:
+             var_perc=sel(self.var_perc),
+             extra=extra,
+             effect_allele=sel(self.effect_allele), other_allele=sel(self.other_allele),
++            n=self.n,
+         )
+ 
+     def power_analysis(self, causal, window: int = 0, alpha=None) -> dict:
+@@ -270,6 +278,8 @@ class GwasResult:
+             "position": self.position,
+             "p": self.p,
+         }
++        if self.n is not None:
++            data["n"] = np.full(self.p.size, self.n)
+         for key, arr in [
+             ("variant_id", self.variant_ids),
+             ("f_stat", self.f_stat),
+@@ -290,11 +300,15 @@ class GwasResult:
+     def write_csv(self, path: str) -> None:
+         """Write variant columns with round-trip precision.
+ 
+-        Binary score approximations use beta_one_step/se_null_score headers
+-        so that their interpretation survives export. Other extra metadata
+-        is not serialized.
++        The sample count ``n`` is written as a constant column (the headers
++        spell out what downstream sumstats readers map to their sample-size
++        field). Binary score approximations use beta_one_step/se_null_score
++        headers so that their interpretation survives export. Other extra
++        metadata is not serialized.
+         """
+         columns = {"chromosome": self.chromosome, "position": self.position, "p": self.p}
++        if self.n is not None:
++            columns["n"] = np.full(len(self), self.n)
+         for header, name in _CSV_OPTIONAL.items():
+             arr = getattr(self, name)
+             if arr is not None:
+@@ -325,6 +339,14 @@ class GwasResult:
+         chrom = col("chromosome", "chromosomes", dtype=str, required=True)
+         if chrom.size and all(c.lstrip("-").isdigit() for c in chrom):
+             chrom = chrom.astype(np.int64)
++        n_vals = col("n", "n_eff")
++        n = None
++        if n_vals is not None and n_vals.size:
++            if not np.isfinite(n_vals).all() or not np.all(n_vals == n_vals[0]):
++                raise ValueError("n must be a constant finite sample count")
++            if float(n_vals[0]) != int(n_vals[0]):
++                raise ValueError("n must be a whole sample count")
++            n = int(n_vals[0])
+         kwargs = {name: col(header, dtype=str if name in
+                   ("variant_ids", "effect_allele", "other_allele") else float)
+                   for header, name in _CSV_OPTIONAL.items()}
+@@ -337,7 +359,7 @@ class GwasResult:
+                           extra={"effect_method": "one-step-logistic"})
+         return cls(chromosome=chrom,
+                    position=col("position", "positions", dtype=np.int64, required=True),
+-                   p=col("p", "ps", "scores", required=True), **kwargs)
++                   p=col("p", "ps", "scores", required=True), n=n, **kwargs)
+ 
+ 
+ _CSV_OPTIONAL = {
+diff --git a/mixmogam/twostep.py b/mixmogam/twostep.py
+index 66a2ac52..a315b026 100644
+--- a/mixmogam/twostep.py
++++ b/mixmogam/twostep.py
+@@ -593,6 +593,7 @@ def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResu
+         se=se,
+         af=st.lg.mean / 2.0,
+         effect_allele=gt.allele1, other_allele=gt.allele2,
++        n=st.lg.n,
+     )
+     res.extra.update({"statistic": "chi2", "n": st.lg.n,
+                       "n_loco_groups": st.lg.n_groups, "loco_groups": st.labels})
+diff --git a/pyproject.toml b/pyproject.toml
+index 7898903b..ad2f7415 100644
+--- a/pyproject.toml
++++ b/pyproject.toml
+@@ -18,6 +18,9 @@ Homepage = "https://github.com/bvilhjal/mixmogam"
+ Repository = "https://github.com/bvilhjal/mixmogam"
+ Issues = "https://github.com/bvilhjal/mixmogam/issues"
+ 
++[project.scripts]
++mixmogam = "mixmogam.cli:main"
++
+ [project.optional-dependencies]
+ fast = ["numba>=0.59", "threadpoolctl>=3"]
+ plot = ["matplotlib>=3.7"]
+diff --git a/tests/test_results.py b/tests/test_results.py
+index 9ae31f1a..0c4213de 100644
+--- a/tests/test_results.py
++++ b/tests/test_results.py
+@@ -94,6 +94,33 @@ def test_csv_roundtrip(scan_result, tmp_path):
+     back = GwasResult.read_csv(path)
+     assert len(back) == len(res)
+     np.testing.assert_allclose(back.p, res.p, rtol=1e-5)
++    assert res.n == 400 and back.n == res.n
++    assert back.take([0, 1]).n == 400
++
++
++def test_csv_n_column_and_read_aliases(tmp_path):
++    res = GwasResult(chromosome=np.ones(3), position=np.arange(3),
++                     p=np.array([0.1, 0.2, 0.3]), n=17)
++    path = str(tmp_path / "res.csv")
++    res.write_csv(path)
++    assert open(path).readline().strip().split(",")[3] == "n"
++    assert GwasResult.read_csv(path).n == 17
++    pd = pytest.importorskip("pandas")
++    df = res.to_dataframe()
++    assert isinstance(df, pd.DataFrame) and list(df["n"]) == [17, 17, 17]
++
++    legacy = tmp_path / "legacy.csv"
++    legacy.write_text("chromosome,position,p\n1,10,0.5\n1,20,0.4\n")
++    assert GwasResult.read_csv(str(legacy)).n is None
++    aliased = tmp_path / "alias.csv"
++    aliased.write_text("chromosome,position,p,n_eff\n1,10,0.5,99\n1,20,0.4,99\n")
++    assert GwasResult.read_csv(str(aliased)).n == 99
++    varying = tmp_path / "vary.csv"
++    varying.write_text("chromosome,position,p,n\n1,10,0.5,99\n1,20,0.4,98\n")
++    with pytest.raises(ValueError, match="constant"):
++        GwasResult.read_csv(str(varying))
++    with pytest.raises(ValueError, match="positive sample count"):
++        GwasResult(chromosome=np.ones(1), position=np.zeros(1), p=np.ones(1), n=0)
+ 
+ 
+ def test_plots(scan_result, tmp_path):

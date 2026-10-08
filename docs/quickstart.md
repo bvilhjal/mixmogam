@@ -23,6 +23,24 @@ samples, y = pheno.complete("FT")
 gt, _ = gt.align_samples(list(samples))
 ```
 
+## Covariates and ancestry PCs
+
+```python
+import numpy as np
+from mixmogam.io.covariates import read_covariates, write_covariates
+from mixmogam.pca import principal_components
+
+cov = read_covariates("covariates.txt", sample_ids=gt.sample_ids)  # PLINK .cov or sample_id layouts
+pcs = principal_components(gt, k=10)          # SVD of a thinned marker panel
+X = np.column_stack([cov.values, pcs])
+write_covariates("pcs.txt", gt.sample_ids, pcs, names=[f"PC{j}" for j in range(1, 11)])
+```
+
+Rows are matched by the sample ID column (the PLINK IID); missing values
+are rejected naming the samples. Include the PCs among the covariates
+whenever weights or case fractions vary with ancestry; as covariates
+their scale is irrelevant.
+
 ## Association scan (LOCO by default)
 
 ```python
@@ -177,6 +195,26 @@ Two-kinship fits reject covariance components that cannot be distinguished
 after covariate adjustment. `weight=None` and zero shares mean the
 ordinary linear model won with zero genetic variance.
 
+## Command line
+
+`mixmogam gwas` and `mixmogam pca` (the `mixmogam` command; also
+`python -m mixmogam`) run the same code on files and write byte-identical
+output:
+
+```sh
+mixmogam pca  --geno data/cohort --k 10 --out pcs.txt
+mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name FT \
+              --covar pcs.txt --out gwas.csv
+mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name case \
+              --trait binary --weights weights.txt --pcs 10 --out gwas.csv
+```
+
+Phenotype and covariate rows are aligned to the genotype sample IDs, and
+samples without a phenotype value or with a non-positive weight are
+dropped with a line saying how many. `--pcs K` appends the built-in PCs
+(`mixmogam pca` writes them for other settings); `--trait` and `--weights`
+select the HRATT weighted/binary path.
+
 ## Input and inference contracts
 
 - Align phenotype and covariate rows by sample ID before scanning. Duplicate
@@ -201,6 +239,7 @@ ordinary linear model won with zero genetic variance.
   variance in squared phenotype-units per counted allele. This uses a normal
   approximation from `beta` and `se`, and is not a fine-mapping probability.
   Binary one-step effects are excluded.
-- CSV preserves variant columns and full float precision, including effect
-  alleles and the binary score-estimate labels above. Other fit/calibration
+- CSV preserves variant columns and full float precision, including `n`
+  (samples analysed), the effect alleles and the binary score-estimate
+  labels above. `read_csv` reads `n`/`n_eff` back. Other fit/calibration
   metadata in `result.extra` is not serialized.

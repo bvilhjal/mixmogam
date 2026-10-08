@@ -9,6 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `mixmogam.pca.principal_components`: built-in ancestry principal
+  components, the left singular vectors of a thinned marker panel
+  (default: 2,000 random variants with sample MAF >= 5%, standardized,
+  exact SVD with fixed column signs). `hratt_followups.py` uses it in its
+  "+PCs" cells instead of its own randomized approximation; the thinned
+  panels and seeds are unchanged, so only the eigensolver changed.
+  `ldak_kvik_comparison.py` keeps its bounded-memory full-panel Lanczos
+  until that comparison is next rerun.
+- The S4 rerun with the built-in PCs
+  ([`20261008-hratt-followups-builtin-pcs`](benchmarks/results/20261008-hratt-followups-builtin-pcs/README.md),
+  130 cases): F5 passed (lambda_GC 0.984-0.989; MAF 1-5% rates at 1e-3
+  0.82-0.98 times nominal, against 3.95-7.05 with pooled frequencies),
+  reproducing the 6 October S4 rows within Monte Carlo error. One case
+  segfaulted inside Apple Accelerate's `dgemm` under load and regenerates
+  cleanly (run README).
+- `mixmogam.io.covariates.read_covariates` / `write_covariates`: a
+  covariate-file reader for the PLINK 1 `.cov` layout (FID IID plus
+  covariates, header optional) and the single-ID layout, aligned to
+  genotypes by sample ID. Missing values are rejected naming the samples.
+- `GwasResult.n` and an `n` column in the summary-statistics CSV (the
+  headers already matched downstream sumstats column aliases; the sample
+  count was missing). `read_csv` reads `n`/`n_eff` back; older files load
+  unchanged with `n` unset.
+- A thin `mixmogam` command line (`[project.scripts]`; also
+  `python -m mixmogam`): `mixmogam gwas` scans one trait from PLINK
+  genotypes and phenotype/covariate/weight files (`--pcs K` appends the
+  built-in PCs), `mixmogam pca` writes PC covariates. Outputs are
+  byte-identical to the same call through the API.
 - The prespecified validation of the 2.0.0.dev6 follow-ups
   ([`20261006-hratt-followups`](benchmarks/results/20261006-hratt-followups/README.md),
   660 cases) passed five of seven criteria.
@@ -36,6 +64,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `hratt_followups.py --scenarios` runs a subset of the selection
+  scenarios; the sampling streams are unchanged.
 - The parallel-fit tests use a small NumPy panel instead of `phensim`, so
   CI runs them rather than skipping 23 of them.
 - Corrected the whitening docstring (the dropped spectrum is scaled at its

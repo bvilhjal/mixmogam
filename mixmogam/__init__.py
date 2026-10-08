@@ -11,6 +11,7 @@ __all__ = [
     "gwas",
     "kinship",
     "lmm",
+    "pca",
     "simulate",
     "__version__",
 ]
@@ -24,6 +25,7 @@ _LAZY = {
     "gwas": ("mixmogam.association", "gwas"),
     "kinship": ("mixmogam.kinship", None),
     "lmm": ("mixmogam.lmm", None),
+    "pca": ("mixmogam.pca", None),
     "simulate": ("mixmogam.simulate", None),
 }
 

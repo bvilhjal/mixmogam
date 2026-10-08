@@ -1,0 +1,232 @@
+"""Phenotype container with the v1 transformation suite."""
+
+from __future__ import annotations
+
+from typing import Callable, Dict, Optional, Sequence
+
+import numpy as np
+from scipy import stats
+
+__all__ = ["Phenotypes"]
+
+
+def _anscombe(x):
+    return 2.0 * np.sqrt(x + 3.0 / 8.0)
+
+
+def _arcsin_sqrt(x):
+    return np.arcsin(np.sqrt(np.clip(x, 0, 1)))
+
+
+_TRANSFORMS: Dict[str, Callable] = {
+    "identity": lambda x: x,
+    "log": np.log,
+    "sqrt": np.sqrt,
+    "sqr": np.square,
+    "exp": np.exp,
+    "anscombe": _anscombe,
+    "arcsin_sqrt": _arcsin_sqrt,
+}
+
+
+class Phenotypes:
+    """Named traits over a shared sample axis with tracked transformations.
+
+    ``data[pid]`` holds ``{"values": float array, "transformation": str,
+    "raw_values": array or None}``. Values may contain NaN (missing);
+    replicate-aware averaging is available when replicate ids were given
+    at parse time.
+    """
+
+    def __init__(self, sample_ids: Sequence[str]):
+        self.sample_ids = np.asarray(sample_ids)
+        self.data: Dict[str, dict] = {}
+        self.replicates: Optional[np.ndarray] = None
+
+    # ------------------------------------------------------------------
+    # Construction
+    # ------------------------------------------------------------------
+
+    def add(self, pid: str, values) -> None:
+        """Add or replace trait ``pid``: one value per sample, NaN if missing."""
+        values = np.asarray(values, dtype=np.float64).ravel()
+        if values.size != self.sample_ids.size:
+            raise ValueError(
+                f"trait {pid!r}: {values.size} values for "
+                f"{self.sample_ids.size} samples"
+            )
+        self.data[pid] = {"values": values, "transformation": "identity",
+                          "raw_values": None}
+
+    def __contains__(self, pid: str) -> bool:
+        return pid in self.data
+
+    def __len__(self) -> int:
+        return len(self.data)
+
+    def pids(self):
+        """Trait names, in the order they were added."""
+        return list(self.data.keys())
+
+    # ------------------------------------------------------------------
+    # Access and alignment
+    # ------------------------------------------------------------------
+
+    def values(self, pid: str) -> np.ndarray:
+        """Current values of trait ``pid``, after any transformation."""
+        return self.data[pid]["values"]
+
+    def transformation(self, pid: str) -> str:
+        """The last transformation applied to ``pid`` ("identity" if none)."""
+        return self.data[pid]["transformation"]
+
+    def complete(self, pid: str):
+        """(sample_ids, values) restricted to non-missing entries."""
+        v = self.values(pid)
+        ok = np.isfinite(v)
+        return self.sample_ids[ok], v[ok]
+
+    def align(self, sample_ids: Sequence[str], pid: str):
+        """Values for ``sample_ids`` (NaN where absent or missing)."""
+        if np.unique(self.sample_ids).size != self.sample_ids.size:
+            raise ValueError("duplicate sample IDs; aggregate replicates before alignment")
+        order = {s: i for i, s in enumerate(self.sample_ids)}
+        out = np.full(len(sample_ids), np.nan)
+        for j, s in enumerate(sample_ids):
+            if s in order:
+                out[j] = self.values(pid)[order[s]]
+        return out
+
+    # ------------------------------------------------------------------
+    # Transformations
+    # ------------------------------------------------------------------
+
+    def transform(self, pid: str, name: str, revert: bool = False) -> None:
+        """Apply transformation ``name`` to the non-missing values of ``pid``.
+
+        Transformations stack. ``revert=True`` instead restores the
+        untransformed values (``name`` must still be a listed transformation).
+        """
+        if name not in _TRANSFORMS:
+            raise ValueError(f"unknown transformation {name!r}")
+        rec = self.data[pid]
+        fwd = _TRANSFORMS[name]
+        if revert:
+            if rec["raw_values"] is None:
+                raise ValueError(f"trait {pid!r} has no transformation to revert")
+            rec["values"] = rec["raw_values"]
+            rec["raw_values"] = None
+            rec["transformation"] = "identity"
+        else:
+            if rec["raw_values"] is None:  # keep the untransformed values
+                rec["raw_values"] = rec["values"].copy()
+            v = rec["values"]
+            ok = np.isfinite(v)
+            out = v.copy()
+            out[ok] = fwd(v[ok])
+            rec["values"] = out
+            rec["transformation"] = name
+
+    def box_cox(self, pid: str, lam: Optional[float] = None) -> float:
+        """Box-Cox with lambda chosen by Shapiro-Wilk normality (v1 style)."""
+        rec = self.data[pid]
+        v = rec["values"]
+        ok = np.isfinite(v) & (v > 0)
+        if not ok.all():
+            raise ValueError("box_cox requires positive, complete values")
+        if lam is None:
+            lams = np.linspace(-2, 2, 41)
+            best, best_p = 0.0, -np.inf
+            for l in lams:
+                t = self._bc(v, l)
+                p = stats.shapiro(t).pvalue
+                if p > best_p:
+                    best, best_p = l, p
+            lam = float(best)
+        if rec["raw_values"] is None:
+            rec["raw_values"] = rec["values"].copy()
+        rec["values"] = self._bc(v, lam)
+        rec["transformation"] = f"box_cox({lam:.3f})"
+        return lam
+
+    @staticmethod
+    def _bc(x, lam):
+        if abs(lam) < 1e-8:
+            return np.log(x)
+        return (np.power(x, lam) - 1.0) / lam
+
+    def most_normal(self, pid: str) -> str:
+        """Apply the most-normalizing transform from the standard set.
+
+        Candidates are restricted to their domains; arcsin_sqrt requires
+        values in [0, 1]. Constant transforms are excluded.
+        """
+        rec = self.data[pid]
+        v = rec["values"]
+        ok = np.isfinite(v)
+        pos = v[ok]
+        candidates = ["identity"]
+        if pos.size < 3 or np.ptp(pos) == 0:
+            return "identity"
+        if (pos > 0).all():
+            candidates += ["log"]
+        if (pos >= 0).all():
+            candidates += ["sqrt", "anscombe"]
+            if (pos <= 1).all():
+                candidates += ["arcsin_sqrt"]
+        best, best_p = "identity", -np.inf
+        for name in candidates:
+            fwd = _TRANSFORMS[name]
+            try:
+                t = fwd(pos)
+            except ValueError:
+                continue
+            if not np.isfinite(t).all() or np.ptp(t) == 0:
+                continue
+            p = stats.shapiro(t).pvalue
+            if p > best_p:
+                best, best_p = name, p
+        if best != "identity":
+            self.transform(pid, best)
+        return best
+
+    # ------------------------------------------------------------------
+    # Replicates / incidence
+    # ------------------------------------------------------------------
+
+    def convert_to_averages(self, pid: str) -> None:
+        """Average a single untransformed trait over replicate groups.
+
+        Multiple traits share a sample axis and cannot be shortened one
+        at a time. Aggregate those inputs explicitly before construction.
+        """
+        if self.replicates is None:
+            raise ValueError("no replicate ids recorded")
+        if len(self.data) != 1 or self.data[pid]["raw_values"] is not None:
+            raise ValueError("replicate averaging requires a single untransformed trait")
+        v = self.values(pid)
+        reps = self.replicates
+        uniq, inv = np.unique(reps, return_inverse=True)
+        sums = np.bincount(inv, weights=np.where(np.isfinite(v), v, 0.0))
+        cnts = np.bincount(inv, weights=np.isfinite(v).astype(float))
+        with np.errstate(invalid="ignore", divide="ignore"):
+            means = np.where(cnts > 0, sums / np.maximum(cnts, 1), np.nan)
+        keep = np.ones(self.sample_ids.size, dtype=bool)
+        first = {}
+        for i, u in enumerate(inv):
+            if u not in first:
+                first[u] = i
+            else:
+                keep[i] = False
+        rec = self.data[pid]
+        rec["values"] = means[inv[keep]]
+        self.sample_ids = self.sample_ids[keep]
+        self.replicates = None
+
+    def incidence_matrix(self, sample_ids: Sequence[str]) -> np.ndarray:
+        """Z (n_obs, n_unique) mapping breeding values to observations."""
+        order = {s: i for i, s in enumerate(self.sample_ids)}
+        cols = [order[s] for s in sample_ids if s in order]
+        Z = np.zeros((len(cols), self.sample_ids.size))
+        Z[np.arange(len(cols)), cols] = 1.0
+        return Z
