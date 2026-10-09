@@ -67,6 +67,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The tutorial's ancestry PCs come from `mixmogam.pca` (its weighted-HRATT
   lambda_GC 1.02 to 1.03; figures unchanged), and the report's evidence
   table records the built-in-PC rerun.
+- The report (9 October) covers the changes of 7-8 October. Table 10 and the
+  abstract give the 20,000-variant cross-fitted fits with threaded fold
+  products (7 October: 33.2 and 29.2 s on four threads, against 34.6 and
+  31.6 s with 2.0.0.dev6); in-sample, storage and official rows are
+  unchanged. Section 2.13 describes the built-in PCs, Section 4.12 their S4
+  rerun, and the software section the command line, covariate files, the
+  CSV `n` column and the tutorial.
 - `hratt_followups.py --scenarios` runs a subset of the selection
   scenarios; the sampling streams are unchanged.
 - The parallel-fit tests use a small NumPy panel instead of `phensim`, so

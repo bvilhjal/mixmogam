@@ -1,8 +1,10 @@
 # Research report
 
-This revision describes [2.0.0.dev6](../CHANGELOG.md). Its LDAK-KVIK
-comparisons, HE-versus-REML fits and 20,000-variant workloads were rerun with
-it; older studies keep the versions they ran with.
+This revision (9 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
+unreleased changes through 8 October. Its LDAK-KVIK comparisons, HE-versus-REML
+fits and 20,000-variant workloads were rerun with 2.0.0.dev6, and the
+20,000-variant cross-fitted fits again once their genotype products were
+threaded; older studies keep the versions they ran with.
 
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
@@ -21,9 +23,11 @@ before the rename keep its earlier name. Section 2.12 extends HRATT to
 case-control outcomes and sampling weights, with retrospective score tests
 and a genotype saddlepoint approximation; Section 4.11 reports their
 prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
-covariate-specific genotype distributions, and Section 4.12 validates them.
+covariate-specific genotype distributions, and Section 4.12 validates them,
+including a rerun with the package's built-in ancestry PCs.
 The benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
-on the archived inputs, each timed fit waiting for a one-minute load average
+on the archived inputs (the 20,000-variant cross-fitted fits with the later
+revision, 7 October), each timed fit waiting for a one-minute load average
 below 5. Official LDAK-KVIK results are reused from the
 original runs of 3 October, when identical mixmogam code took 38% longer than
 a day later, so cross-program time ratios span days; same-day checks compare
@@ -78,7 +82,7 @@ source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
 The 20K archive records its timed code as `2.0.0.dev3` with uncommitted
 optimizations frozen in full; its computational modules match `2.0.0.dev4`.
-This manuscript describes `2.0.0.dev6`; the
+This manuscript describes `2.0.0.dev6` and its unreleased changes; the
 [changelog](../CHANGELOG.md) has the release history.
 
 ## Rebuild the manuscript

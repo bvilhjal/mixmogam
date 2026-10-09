@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{6 October 2026\\\small Research report for 2.0.0.dev6;
-benchmark reruns use 2.0.0.dev6}
+\date{9 October 2026\\\small Research report for 2.0.0.dev6 and the
+unreleased changes through 8 October}
 
 \begin{document}
 \maketitle
@@ -77,7 +77,7 @@ These small-panel stress tests do not establish a general ranking.
 We implement a HAPNEST-model simulator in phensim and measure generation
 through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
 moment-based variance fitting with four workers gives mixmogam median
-complete-fit times of 34.6 and 31.6 seconds on two fixed panels with its
+complete-fit times of 33.2 and 29.2 seconds on two fixed panels with its
 default cross-fitted scores (21.7 and 20.7 with in-sample scores), with
 1.4~GiB peak resident memory, or 0.8~GiB with calls stored two bits
 each. Official LDAK-KVIK took 25.45 and 30.09 seconds and 0.65~GiB on
@@ -103,7 +103,8 @@ HRATT's effect estimates were attenuated by about a third. Cross-fitted
 LOCO scores and covariate-specific genotype distributions then removed the
 attenuation and, with principal components among the covariates, the
 ancestry inflation in a second prespecified simulation, at 1.1 times the
-fitting time.
+fitting time. The package now computes those principal components itself,
+and a rerun with them reproduced that calibration.
 REML remains the default variance estimator without sampling weights.
 The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
@@ -211,10 +212,10 @@ mixmogam methods rerun with 2.0.0.dev6 on the same inputs &
 Six independent panels per cell; small quantitative-trait simulations,
 controlled LD and three discrete populations; official timings from
 three days earlier. \\
-Computational extension, 2.0.0.dev3 and dev6 reruns & Projected-moment validation;
+Computational extension, 2.0.0.dev3 and later reruns & Projected-moment validation;
 paired implementation, thread and storage comparisons; at 50,000 samples and
-20,000 markers, 24 mixmogam fits rerun with 2.0.0.dev6, 12 more with
-in-sample scores and 12 official fits & Two fixed timing panels; different variance estimators across
+20,000 markers, 12 cross-fitted mixmogam fits with threaded fold products,
+12 with in-sample scores, 12 storage fits and 12 official fits & Two fixed timing panels; different variance estimators across
 programs; strict thread-tolerance failures retained; official timings
 from a day when identical mixmogam code took 38\% longer. \\
 Work reduction, 2.0.0.dev5 & Paired fresh-process fits against frozen
@@ -232,7 +233,8 @@ with official LDAK-KVIK & Independent markers and discrete populations;
 two of seven criteria passed. \\
 Cross-fitted scores and covariate-specific genotype distributions &
 Prespecified simulation on the same samples, with $F_{ST}=0.05$ cells with
-and without principal components; 660 cases & Five of seven criteria
+and without principal components; 660 cases; the principal-component cells
+rerun with the built-in components (130 cases) & Five of seven criteria
 passed; weighted effects 5.4\% low under selection on the outcome. \\
 Archived external comparison & A provenance failure was identified:
 incorrect PLINK export encoding & External-program calibration, agreement,
@@ -610,8 +612,9 @@ memory.
 
 Coordinate sweeps parallelize independent candidate models and LOCO
 fits while preserving the Gauss--Seidel marker order within each model.
-For sufficiently large multi-model fits, residual matrix products also
-use an output-row partition and a pool capped at four workers. Each output
+In multi-model fits from 50,000 samples, residual matrix products also
+use an output-row partition and a pool capped at four workers; 2.0.0.dev6
+also required six models (Section~\ref{sec:20k-results}). Each output
 entry retains its complete marker reduction; there is no shared writable
 sum across workers. Detected BLAS pools are temporarily limited to one,
 and thread settings and workers are restored on exit. Apple Accelerate
@@ -923,7 +926,10 @@ With $\pi_{ij}=p_{ij}(1-p_{ij})$,
 which is Equation~\eqref{eq:retro-variance} when the covariates do not
 predict the genotype. Ancestry principal components must therefore be
 among the covariates. HRATT warns when the structure test still finds
-strong structure after the covariates.
+strong structure after the covariates. The package computes them
+(\code{mixmogam.pca}) as the leading left singular vectors of a thinned
+panel: by default 2,000 random markers with sample minor allele frequency
+at least 5\%, standardized, by an exact SVD with fixed signs.
 
 The saddlepoint uses the same model. Each called genotype is an
 independent Binomial$(2,p_{ij})$ draw given the covariates and the observed
@@ -1208,8 +1214,10 @@ of eight; \code{n\_threads} requests one or four workers. The official
 Mac executable receives the corresponding environment limit and native
 \code{--max-threads} argument. Requested counts do not assert identical
 thread execution across implementations. The fitted data and drivers are
-frozen. The reported mixmogam fits are reruns with 2.0.0.dev6, with
-cross-fitted and with in-sample scores, and the official fits come from the
+frozen. The reported cross-fitted mixmogam fits were rerun on 7 October
+with the revision that threads their fold fits' genotype products. The
+in-sample fits, which that change does not affect, and the storage fits
+are 2.0.0.dev6 reruns of 6 October. The official fits come from the
 original 2.0.0.dev3 experiment on the same inputs.
 Repeated timings on two phenotypes measure computational
 variability, not biological replication. The new data are also distinct
@@ -1289,7 +1297,8 @@ by an earlier implementation.
 The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
 (Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
 \ref{sec:he-results} and~\ref{sec:20k-results}) are reruns with
-2.0.0.dev6. Each repeated the mixmogam methods on the
+2.0.0.dev6, except the 20,000-marker cross-fitted fits, rerun once more on
+7 October (Section~\ref{sec:20k-design}). Each repeated the mixmogam methods on the
 archived inputs, after checking the genotype files against their export
 hashes. The official LDAK-KVIK outputs, logs and process measurements of
 the original runs were reused unchanged. Input identity makes the official
@@ -1798,36 +1807,33 @@ calibration or validity under environmental confounding.
 \subsection{Twenty thousand markers: speed, memory and numerical stability}
 \label{sec:20k-results}
 
-All 36 rerun mixmogam fits and the 12 reused official fits are complete,
-and every local cross-validation and LOCO fit converged. The mixmogam fits
+All mixmogam fits and the 12 reused official fits are complete, and
+every local cross-validation and LOCO fit converged. The mixmogam fits
 use the default cross-fitted LOCO scores, repeated with in-sample scores
 (\code{loco\_folds=1}), which reproduce the summaries of the reruns with
 commit e4089d8 exactly. With cross-fitted scores $h^2$ is unchanged, and
 the null chromosome's $\lgc$ moved from 0.951 to 0.946 and from 0.978 to
 0.984 (Table~\ref{tab:20k-science}).
 
-Four requested workers reduced the median wall time of the cross-fitted fits
-only by factors 1.27 and 1.33 on the unstructured and PC-adjusted
-confounded panels, to 34.63 and 31.64 seconds, against 1.57 and 1.47, to
-21.74 and 20.70 seconds, with in-sample scores
-(Table~\ref{tab:20k-resources}). Cross-fitting thus cost 1.28 and 1.38
-times the in-sample time on one thread and 1.59 and 1.53 times on four.
-In 2.0.0.dev6 the variational sweep threaded its genotype products only
-from six columns on, and the cross-fit fits five, one per fold; the
-four-worker fits ran at a CPU-to-wall ratio of 1.2, against 1.4 with
-in-sample scores. Six was the smallest shape probed when that threshold
-was set, not a break-even: at 50,000 samples, threaded products sped
-fitted sweeps up 1.31--1.40-fold for two to eight columns alike. The
-development revision after 2.0.0.dev6 threads them whatever the number of
-columns. Rerun with it on 7 October, four workers sped the cross-fitted
-fits up 1.40 and 1.48 times, to 33.15 and 29.21 seconds, at a CPU-to-wall
-ratio of 1.3; one-thread fits, whose code and results are unchanged, took
-1.05 and 1.02 times as long as on 6 October. In same-day pairs, four-worker
-cross-fitted fits took 0.90--0.94 times as long as with 2.0.0.dev6. The
-in-sample fits took 1.04--1.09 times as long as on 5 October. The official
-executable took 25.45 and 30.09 seconds on 3 October, when the host was
-slower (Section~\ref{sec:summaries}), so these times cannot be compared
-directly.
+Four requested workers sped the cross-fitted fits up 1.40 and 1.48 times
+on the unstructured and PC-adjusted confounded panels, to 33.15 and 29.21
+seconds, and the in-sample fits 1.57 and 1.47 times, to 21.74 and 20.70
+seconds (Table~\ref{tab:20k-resources}). In 2.0.0.dev6 the variational
+sweep threaded its genotype products only from six model columns on, and
+the cross-fit fits five, one per fold: four workers then gained only 1.27
+and 1.33-fold, to 34.63 and 31.64 seconds, at a CPU-to-wall ratio of 1.2
+against 1.4 with in-sample scores. Six was the smallest shape probed when
+that threshold was set, not a break-even: at 50,000 samples, threaded
+products sped fitted sweeps up 1.31--1.40-fold for two to eight columns
+alike, so the column threshold was dropped. In same-day pairs, four-worker
+cross-fitted fits took 0.90--0.94 times as long as with 2.0.0.dev6. On one
+thread, whose code and results are unchanged, cross-fitting cost 1.28 and
+1.38 times the in-sample time on 6 October; on four, 1.52 and 1.41 times
+across the two days. Host conditions moved the one-thread cross-fitted
+fits by 1.05 and 1.02 between those days, and the in-sample fits by
+1.04--1.09 between 5 and 6 October. The official executable took 25.45
+and 30.09 seconds on 3 October, when the host was slower
+(Section~\ref{sec:summaries}), so these times cannot be compared directly.
 A same-day check on 5 October ran the first
 panel's four-worker fit with both versions: 24.6 seconds and 4.4--5.1~GiB
 peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
@@ -1835,20 +1841,22 @@ peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
 LOCO, unchanged, took the same time and memory under both versions, with
 identical p-values. mixmogam's
 median peak RSS of 1.4~GiB is about 2.2 times the official executable's
-0.65~GiB. These results support useful optional parallelism, which the
-cross-fitted default used only partly in 2.0.0.dev6; they do not establish
-efficiency parity.
+0.65~GiB. These results support useful optional parallelism, now also for
+the cross-fitted default; they do not establish efficiency parity.
 
 \begin{table}[htbp]
  \centering\small
  \caption{Complete fits at 50,000 samples and 20,000 markers on identical
- inputs: mixmogam 2.0.0.dev6 reruns (6 October) with its default
- cross-fitted LOCO scores and with in-sample scores, and the original
- official fits (3 October). Wall time and peak RSS are median [minimum, maximum]
+ inputs: mixmogam with its default cross-fitted LOCO scores (the revision
+ after 2.0.0.dev6, 7 October) and with in-sample scores (2.0.0.dev6,
+ 6 October; unaffected by the later change), and the original official fits
+ (3 October). Wall time and peak RSS are median [minimum, maximum]
  of three fresh-process repetitions on each fixed panel. Speedup is
  relative to the same method's one-thread median. Timing boundaries
- are defined in Section~\ref{sec:20k-design}; cross-program ratios span
- three days with different host conditions.}
+ are defined in Section~\ref{sec:20k-design}; ratios across rows span
+ days with different host conditions. The two largest four-worker
+ cross-fitted times (47.49 and 39.23 seconds) coincided with high system
+ time, which points to memory compression.}
  \label{tab:20k-resources}
  \begin{tabular}{@{}lrrrr@{}}
  \toprule
@@ -1864,17 +1872,14 @@ $\mathrm{rtol}=10^{-6}$ and $\mathrm{atol}=10^{-8}$. All 24 repeated-run
 comparisons within a method and worker count are exact: eight cross-fitted,
 eight in-sample and eight official. Selected exponents and priors, integer
 iteration counts and convergence flags agree across counts. With
-cross-fitted scores in 2.0.0.dev6, one and four workers gave identical
-association arrays, since the fold fits' products were not threaded; only
-the cross-validation fit's coefficients, which select the prior, differed
-beyond the strict tolerance, so all six four-versus-one comparisons still
-failed it. With threaded fold fits (7 October) the association arrays
-differ as well, by about the in-sample amounts below: on the PC-adjusted
-panel by at most $1.2846\times10^{-7}$ in effects, $3.0606\times10^{-10}$
-in standard errors, $1.3189\times10^{-5}$ in p-values and
-$6.45\times10^{-5}$ in log-base-ten p-values. The rerun's one-thread
-results equal those of 6 October bit for bit, and its eight repeated-run
-comparisons are exact.
+cross-fitted scores, one and four workers differ by about the in-sample
+amounts below: on the PC-adjusted panel by at most $1.2846\times10^{-7}$ in
+effects, $3.0606\times10^{-10}$ in standard errors, $1.3189\times10^{-5}$
+in p-values and $6.45\times10^{-5}$ in log-base-ten p-values. One-thread
+results equal those of 2.0.0.dev6 bit for bit. In 2.0.0.dev6, whose fold
+fits' products were not threaded, one and four workers gave identical
+association arrays; only the cross-validation fit's coefficients, which
+select the prior, differed beyond the strict tolerance.
 With in-sample scores the differences equal those of the reruns with commit
 e4089d8. On the unstructured panel they are of the original run's size. On
 the PC-adjusted panel they are about tenfold: the largest are
@@ -1888,9 +1893,10 @@ rank-$q$ corrections from products of unprojected genotypes
 (Equation~\eqref{eq:rank-q}), which probably amplifies summation-order
 differences when PCs explain genotype variance. All-variant significance
 masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
-in all 60 checks, and in the 30 checks of the 7 October rerun. Unchanged decisions are useful evidence of stability
-for these particular data and thresholds; they do not turn the six
-tolerance failures into passes or exclude threshold crossings elsewhere.
+in all 60 checks, 30 cross-fitted and 30 in-sample. Unchanged decisions are
+useful evidence of stability for these particular data and thresholds; they
+do not turn the four-versus-one tolerance failures, six per set of fits,
+into passes or exclude threshold crossings elsewhere.
 
 Table~\ref{tab:20k-science} reports descriptive chromosome-6 diagnostics
 from four-worker cross-fitted fits. Local HE ratios are approximately 0.52 and 0.50,
@@ -2211,7 +2217,9 @@ of Section~\ref{sec:weights-binary-results}, regenerated from their seeds
 (archive \code{20261006-}\allowbreak\code{hratt-followups}, protocol frozen
 before the main run). The new cells were mixed traits at $F_{ST}=0.05$ and
 variants of the structured cells with 10 principal components among the
-covariates. All 660 cases completed, and five of seven criteria passed.
+covariates, which the driver computed from 2,000 thinned markers by four
+iterations of a randomized subspace method. All 660 cases completed, and
+five of seven criteria passed.
 
 \paragraph{Effects.}
 Cross-fitting removed the attenuation (Table~\ref{tab:followup-effects}):
@@ -2254,6 +2262,18 @@ the covariates, weighted tests rejected low-frequency variants at 0.85
 (quantitative) and 0.96 (binary) times the nominal rate at $10^{-3}$. The
 pooled-frequency model gave 6.54 and 3.96 with the same covariates, and
 the new model without principal components 5.86 and 3.16.
+
+A rerun of the five S4 cells on 8 October (archive
+\code{20261008-}\allowbreak\code{hratt-followups-}\allowbreak\code{builtin-pcs},
+130 cases, protocol frozen before the run) replaced those components by the
+built-in exact SVD of the same thinned panels; cells without components
+matched the 6 October results to three decimals. The rates became 0.82 and 0.98
+times nominal, with $\lgc$ 0.989 and 0.984, against 6.64 and 3.95 with pooled
+frequencies; in the 10-replicate mixed cell the rate was 0.77 against 0.92.
+The effect, power and chromosome-10 criteria still passed on these cells.
+One binary case crashed in Apple Accelerate's \code{dgemm} on a loaded host
+and completed cleanly when regenerated; its cell uses the other 29
+replicates.
 
 \paragraph{Time.}
 Cross-fitting took 1.11 (quantitative) and 1.08 (binary) times as long as
@@ -2644,14 +2664,25 @@ and two-bit routes, without hiding estimator changes or numerical failures.
 
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. This report describes package
-version 2.0.0.dev6; the known-covariance experiment uses baseline commit
+version 2.0.0.dev6 and the unreleased changes after it, listed in the
+changelog; the known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
-\code{benchmarks/denominator\_geometry.py}, with results, source snapshot,
-and manifest in \code{20261003-manuscript-geometry} beneath
+\code{benchmarks/}\allowbreak\code{denominator\_geometry.py}, with results, source snapshot,
+and manifest in \code{20261003-}\allowbreak\code{manuscript-}\allowbreak\code{geometry} beneath
 \code{benchmarks/results/}. The review archive is
 \code{20261003-critical-review}. Historical inputs retain their original
 source snapshots. The excluded external-program archive is also preserved
 for provenance; its results are not incorporated into the revised displays.
+
+Analyses run from Python or from a thin command line: \code{mixmogam gwas}
+reads PLINK genotypes with phenotype, covariate and sampling-weight files
+(covariates in the PLINK \code{.cov} or a single-ID layout, aligned by
+sample ID), optionally appends the built-in principal components, and
+writes summary statistics, now with the sample count; \code{mixmogam pca}
+writes the components as a covariate file. Both outputs are byte-identical
+to the same call through the Python interface, which tests check.
+\code{docs/tutorial.md} applies the methods to a simulated structured
+population.
 
 The matched phensim study is archived as \code{20261003-phensim-kvik},
 using mixmogam baseline \code{db232216} and phensim baseline
@@ -2716,8 +2747,9 @@ its commands and the hash of every reused file. The same-day checks are
 \code{20261006-}\allowbreak\code{same-day-}\allowbreak\code{e4089d8-dev6}. The figure and table
 generators read the reruns, take official LDAK-KVIK results from the
 original archives, and verify reused inputs and outputs by hash. The
-cross-fit rerun with threaded genotype products, its same-day pairs and
-the probe behind the change are in
+cross-fit rerun with threaded genotype products, which
+Table~\ref{tab:20k-resources} reports, its same-day pairs and the probe
+behind the change are in
 \code{20261007-}\allowbreak\code{kvik-20k-}\allowbreak\code{crossfit-gemm}.
 
 The paired dev5/current archive is
@@ -2733,7 +2765,9 @@ The steps between the versions are in
 
 The case-control and weighted validations are archived as
 \code{20261005-}\allowbreak\code{hratt-weights-binary} and
-\code{20261006-}\allowbreak\code{hratt-followups}, from
+\code{20261006-}\allowbreak\code{hratt-followups}, with the rerun on the
+built-in principal components in
+\code{20261008-}\allowbreak\code{hratt-followups-}\allowbreak\code{builtin-pcs}, from
 \code{benchmarks/}\allowbreak\code{hratt\_weights\_binary.py} and
 \code{benchmarks/}\allowbreak\code{hratt\_followups.py};
 \code{report/}\allowbreak\code{make\_weights\_}\allowbreak\code{binary\_tables.py}

@@ -1,15 +1,17 @@
 {
   "purpose": "Render measured evidence only; no simulation or fitting",
   "timed_versions": {
-    "mixmogam-he": "2.0.0.dev6 (20261006-kvik-20k-dev6), cross-fitted and in-sample scores",
+    "mixmogam-he": "cross-fitted: revision after 2.0.0.dev6 with threaded fold products (20261007-kvik-20k-crossfit-gemm, 7 October)",
+    "insample": "2.0.0.dev6 (20261006-kvik-20k-dev6, 6 October)",
+    "storage": "2.0.0.dev6 (20261006-kvik-20k-dev6, 6 October)",
     "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"
   },
-  "generator_sha256": "4684c78b83b25718a743f312e0ae749d71baa7b3b06c4ef234f98ba4efb7baf4",
+  "generator_sha256": "5aa33195902927cd8cf7583e77fadfc584f812630f0862e93a55a39de4df8b1f",
   "inputs": {
-    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/measurements.csv": "9cb598f090788ddf657f0e56ba425b4dcb347bd3452e330a06cec86795674440",
-    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a",
-    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/manifest.json": "81685392fe9953fa7a51f1c7ef3b7f20d879c54965de886bdf1526b02832e610",
-    "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling/comparisons.json": "59eae50a1904c654141474fd43cc9f060cf77a33646886f02a71565367bc7914",
+    "benchmarks/results/20261007-kvik-20k-crossfit-gemm/thread-scaling/measurements.csv": "d4aef7d4e7c5cbc601dbbf16aef60978423ca2b9ab9034cb6f42a4f0871574d7",
+    "benchmarks/results/20261007-kvik-20k-crossfit-gemm/thread-scaling/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a",
+    "benchmarks/results/20261007-kvik-20k-crossfit-gemm/thread-scaling/manifest.json": "efe13dfedbed392cc64074f448f08cf5da14f595a3c416f06d776adc206b8b16",
+    "benchmarks/results/20261007-kvik-20k-crossfit-gemm/thread-scaling/comparisons.json": "136ca70534bae26f336748e7b95f4c8f550bca5217397bc471349af215aeaaed",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/measurements.csv": "ef0322e31d43124bdf3b460d21f18bd71dc67bbc0b9a973b953a7273249b92a7",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/verification.json": "f2566591f69a8125424a6c670f5151d26548d6caeb593fb97ee89ed70545fd07",
     "benchmarks/results/20261003-kvik-20k/thread-scaling/manifest.json": "47d74c0b3e10c19d58970f120ba24354c43cb4958efbfe15b710811fb93822c8",
@@ -20,9 +22,9 @@
     "benchmarks/results/20261006-kvik-20k-dev6/thread-scaling-insample/status.json": "11cf59733d8b5c774a0e01ca3b001a5636c9c5eb43205204c5e5ea038814659a"
   },
   "outputs": {
-    "report/tables/kvik_20k_resources.tex": "294e97ac251d2267d5e241da27d69410e5704786b8cba82dad26e83e532cef46",
-    "report/tables/kvik_20k_science.tex": "f3b9da75afe5d2d2aaff4ef65004a9454dca7bbc9ffc58602740a66e213ded4d",
-    "report/tables/kvik_20k_storage.tex": "3d3da29c8471b442a9dd9f7eb76f10b0fe972a3b774b7ab82310bc8c41a02825"
+    "report/tables/kvik_20k_resources.tex": "8a4227810465305de1ef1c855d2fc6a6eac3abaa21ef5f5b0de2f84279506953",
+    "report/tables/kvik_20k_science.tex": "7a0e9bcdfe6bd946b98389c77760117ad77f5fc6648aeaf8db1cada3c25dee31",
+    "report/tables/kvik_20k_storage.tex": "e8d9a82ca921e983cbbbdfce78c2fbad62db400accfe6c7e986e69ff60480937"
   },
   "primary_fits": 24,
   "local_fits_rerun": 12,
