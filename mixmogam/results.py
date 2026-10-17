@@ -16,7 +16,12 @@ _CHI2_1DF_MEDIAN = float(stats.chi2.ppf(0.5, 1))  # 0.4549
 
 @dataclass
 class GwasResult:
-    """Association scan results with variant metadata."""
+    """Association results; ``af`` counts ``effect_allele``, not the minor allele.
+
+    ``n`` is the analysed headcount; ``n_eff`` is a separately supplied
+    effective sample size, never inferred for weighted or binary tests.
+    ``genome_build`` declares the coordinate assembly; it does not lift over.
+    """
 
     chromosome: np.ndarray
     position: np.ndarray
@@ -31,13 +36,22 @@ class GwasResult:
     extra: dict = field(default_factory=dict)
     effect_allele: Optional[np.ndarray] = None
     other_allele: Optional[np.ndarray] = None
-    n: Optional[int] = None  # samples analysed; exported as the CSV ``n`` column
+    n: Optional[int] = None  # samples analysed (headcount)
+    n_eff: Optional[float] = None
+    genome_build: Optional[str] = None
 
     def __post_init__(self):
         if self.n is not None:
             if isinstance(self.n, (bool, np.bool_)) or not isinstance(self.n, (int, np.integer)) or self.n <= 0:
                 raise ValueError("n must be a positive sample count")
             self.n = int(self.n)
+        if self.n_eff is not None:
+            if (isinstance(self.n_eff, (bool, np.bool_))
+                    or not isinstance(self.n_eff, (int, float, np.integer, np.floating))
+                    or not np.isfinite(self.n_eff) or self.n_eff <= 0):
+                raise ValueError("n_eff must be a positive finite effective sample size")
+            self.n_eff = float(self.n_eff)
+        self.genome_build = _genome_build(self.genome_build)
         self.p = np.asarray(self.p, dtype=float)
         if self.p.ndim != 1:
             raise ValueError("p must be one-dimensional")
@@ -137,7 +151,7 @@ class GwasResult:
             var_perc=sel(self.var_perc),
             extra=extra,
             effect_allele=sel(self.effect_allele), other_allele=sel(self.other_allele),
-            n=self.n,
+            n=self.n, n_eff=self.n_eff, genome_build=self.genome_build,
         )
 
     def power_analysis(self, causal, window: int = 0, alpha=None) -> dict:
@@ -278,8 +292,12 @@ class GwasResult:
             "position": self.position,
             "p": self.p,
         }
-        if self.n is not None:
+        if self.n is not None and self._export_headcount():
             data["n"] = np.full(self.p.size, self.n)
+        if self.n_eff is not None:
+            data["n_eff"] = np.full(self.p.size, self.n_eff)
+        if self.genome_build is not None:
+            data["genome_build"] = np.full(self.p.size, self.genome_build)
         for key, arr in [
             ("variant_id", self.variant_ids),
             ("f_stat", self.f_stat),
@@ -297,18 +315,29 @@ class GwasResult:
                 data[key] = arr
         return pd.DataFrame(data)
 
+    def _export_headcount(self):
+        # Readers often alias n to n_eff. A weighted or binary score does
+        # not inherit the ordinary quantitative-trait sample-size contract.
+        return (self.extra.get("effect_method") != "one-step-logistic"
+                and self.extra.get("trait") != "binary" and "kish_n" not in self.extra)
+
     def write_csv(self, path: str) -> None:
         """Write variant columns with round-trip precision.
 
-        The sample count ``n`` is written as a constant column (the headers
-        spell out what downstream sumstats readers map to their sample-size
-        field). Binary score approximations use beta_one_step/se_null_score
-        headers so that their interpretation survives export. Other extra
+        ``af`` is the frequency of ``effect_allele``. The headcount ``n``
+        is omitted for binary and weighted scores because downstream readers
+        often treat it as an effective size. An explicitly supplied ``n_eff``
+        is separate. ``genome_build``, when declared, is a constant column.
+        Binary effects use beta_one_step/se_null_score headers. Other extra
         metadata is not serialized.
         """
         columns = {"chromosome": self.chromosome, "position": self.position, "p": self.p}
-        if self.n is not None:
+        if self.n is not None and self._export_headcount():
             columns["n"] = np.full(len(self), self.n)
+        if self.n_eff is not None:
+            columns["n_eff"] = np.full(len(self), self.n_eff)
+        if self.genome_build is not None:
+            columns["genome_build"] = np.full(len(self), self.genome_build)
         for header, name in _CSV_OPTIONAL.items():
             arr = getattr(self, name)
             if arr is not None:
@@ -339,14 +368,19 @@ class GwasResult:
         chrom = col("chromosome", "chromosomes", dtype=str, required=True)
         if chrom.size and all(c.lstrip("-").isdigit() for c in chrom):
             chrom = chrom.astype(np.int64)
-        n_vals = col("n", "n_eff")
-        n = None
-        if n_vals is not None and n_vals.size:
-            if not np.isfinite(n_vals).all() or not np.all(n_vals == n_vals[0]):
-                raise ValueError("n must be a constant finite sample count")
-            if float(n_vals[0]) != int(n_vals[0]):
+        def constant(name, dtype=float):
+            values = col(name, dtype=dtype)
+            if values is None or not values.size:
+                return None
+            if not np.all(values == values[0]) or (dtype is float and not np.isfinite(values).all()):
+                raise ValueError(f"{name} must be a constant finite value")
+            return values[0]
+
+        n = constant("n")
+        if n is not None:
+            if float(n) != int(n):
                 raise ValueError("n must be a whole sample count")
-            n = int(n_vals[0])
+            n = int(n)
         kwargs = {name: col(header, dtype=str if name in
                   ("variant_ids", "effect_allele", "other_allele") else float)
                   for header, name in _CSV_OPTIONAL.items()}
@@ -359,7 +393,8 @@ class GwasResult:
                           extra={"effect_method": "one-step-logistic"})
         return cls(chromosome=chrom,
                    position=col("position", "positions", dtype=np.int64, required=True),
-                   p=col("p", "ps", "scores", required=True), n=n, **kwargs)
+                   p=col("p", "ps", "scores", required=True), n=n,
+                   n_eff=constant("n_eff"), genome_build=constant("genome_build", str), **kwargs)
 
 
 _CSV_OPTIONAL = {
@@ -369,3 +404,11 @@ _CSV_OPTIONAL = {
 }
 
 _SCORE_COLUMNS = {"beta": "beta_one_step", "se": "se_null_score"}
+
+
+def _genome_build(value):
+    if value is not None:
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("genome_build must be a nonempty assembly label or None")
+        value = value.strip()
+    return value

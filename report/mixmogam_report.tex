@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{9 October 2026\\\small Research report for 2.0.0.dev6 and the
-unreleased changes through 8 October}
+\date{16 October 2026\\\small Research report for 2.0.0.dev6 and the
+unreleased changes through 16 October}
 
 \begin{document}
 \maketitle
@@ -100,10 +100,13 @@ prespecified simulation the weighted test was calibrated under selection on
 the outcome, where the sandwich variance rejected up to 26 times too often,
 but weights that depend on ancestry inflated low-frequency tails, and
 HRATT's effect estimates were attenuated by about a third. Cross-fitted
-LOCO scores and covariate-specific genotype distributions then removed the
-attenuation and, with principal components among the covariates, the
-ancestry inflation in a second prespecified simulation, at 1.1 times the
-fitting time. The package now computes those principal components itself,
+LOCO scores reduced effect bias to within 2\% in most cells; weighted
+effects under selection on the outcome remained 5.4\% low (Monte Carlo
+standard error 2.1\%), failing the prespecified effect criterion.
+Covariate-specific genotype distributions with principal components
+removed the ancestry inflation in the tested cells. Cross-fitting cost
+1.08--1.11 times the fitting time; weighted fits cost 1.55 times HRATT-HE,
+failing the target of 1.3. The package now computes those principal components itself,
 and a rerun with them reproduced that calibration.
 REML remains the default variance estimator without sampling weights.
 The research agenda emphasizes
@@ -929,7 +932,11 @@ among the covariates. HRATT warns when the structure test still finds
 strong structure after the covariates. The package computes them
 (\code{mixmogam.pca}) as the leading left singular vectors of a thinned
 panel: by default 2,000 random markers with sample minor allele frequency
-at least 5\%, standardized, by an exact SVD with fixed signs.
+at least 5\%, standardized, by an exact float64 SVD with fixed signs.
+A conservative working-memory estimate is checked before scanning
+frequencies or allocating the panel, with a configurable default budget
+of 4~GiB. This excludes resident input calls and library overhead;
+it is an allocation guard rather than a measured peak-memory bound.
 
 The saddlepoint uses the same model. Each called genotype is an
 independent Binomial$(2,p_{ij})$ draw given the covariates and the observed
@@ -2678,9 +2685,15 @@ Analyses run from Python or from a thin command line: \code{mixmogam gwas}
 reads PLINK genotypes with phenotype, covariate and sampling-weight files
 (covariates in the PLINK \code{.cov} or a single-ID layout, aligned by
 sample ID), optionally appends the built-in principal components, and
-writes summary statistics, now with the sample count; \code{mixmogam pca}
+writes summary statistics; \code{mixmogam pca}
 writes the components as a covariate file. Both outputs are byte-identical
 to the same call through the Python interface, which tests check.
+The CSV's \code{af} counts the effect allele (PLINK BIM A1), not the
+minor allele. Ordinary quantitative scans export the headcount
+\code{n}; binary and sampling-weighted scores omit it to prevent its
+interpretation as an effective size. An explicitly supplied \code{n\_eff}
+remains separate. A declared \code{genome\_build} survives export and
+variant selection without converting coordinates or validating the assembly.
 \code{docs/tutorial.md} applies the methods to a simulated structured
 population.
 

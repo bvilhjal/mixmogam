@@ -1,12 +1,12 @@
 {
-  "revision": "2026-10-09-report-update",
-  "recorded_at_utc": "2026-10-09T06:05:22.395188+00:00",
+  "revision": "2026-10-16-review-fixes",
+  "recorded_at_utc": "2026-10-16T21:48:38.584757+00:00",
   "package_version": "2.0.0.dev6",
-  "parent_commit": "686564c0c670b4c31d6e4a434cd76bb409f9219e",
-  "revision_state": "Delivered by the Git commit containing this manifest, after 686564c0. Covers the changes of 7-8 October: Table 10 and the abstract give the 20,000-marker cross-fitted fits with threaded fold products (20261007-kvik-20k-crossfit-gemm) instead of the 2.0.0.dev6 reruns, whose numbers stay in the text; in-sample, storage and official rows are unchanged. Section 2.9 drops the six-column rule, Section 2.13 describes the built-in ancestry PCs (mixmogam.pca), Section 4.12 reports their S4 rerun (20261008-hratt-followups-builtin-pcs), and the software section covers the command line, covariate files, the CSV n column and the tutorial.",
+  "parent_commit": "d080bb357152879af5adae24ceb293a675a4c7d0",
+  "revision_state": "Uncommitted review fixes based on d080bb35: separate headcount from effective sample size in exports, declare coordinate assembly, guard PCA allocations, repair active-profile power checks, and retain failed follow-up criteria in the abstract. Historical studies and their producing sources are unchanged; no association benchmark was rerun for these fixes.",
   "pdf": {
     "path": "report/mixmogam_report.pdf",
-    "sha256": "3fe0170790c4096eb66288ae31458b7a85b880a698f2da84c836befa4306019d",
+    "sha256": "b2a2fbdf0a1e9802a04b7e7e980ff10d19e9fb67e7b1fcbee6cd82cc92ca5dcd",
     "pages": 51
   },
   "counts": {
@@ -17,22 +17,22 @@
     "research_priorities": 6
   },
   "input_sha256": {
-    "CHANGELOG.md": "4d0717cdaf1c9481005c66eea6f41c5731a9320c8f27efa82207ef96b0685fc2",
-    "MANIFEST.in": "624ffaa96e437de279743e248919e0bb8b9a108879bc29d8a5d3c3847a2bb8a4",
-    "README.md": "feca8947b191af77dfaeb34477893db44d1a3d71ab0efbd287c4c25200d60e9e",
+    "CHANGELOG.md": "66d43bbed9f161021e5f2cc3d4d7394961b2c24ec26e2e337b5d3495e6b3dcfc",
+    "MANIFEST.in": "34261e9066490593864c6269dab8b9dc6415f9bf08d9d0b3f64d7e694d4294a3",
+    "README.md": "cf62612bc735f061c88091e5aa2f9e596b0fe18e41ba134920c54686e7be68bf",
     "benchmarks/README.md": "7a9af047d2f1d16fcd946aa7f57902282bf68faac57bb36b6d2261df9157b75c",
-    "benchmarks/denominator_geometry.py": "6a65986ac417dcdc69919d4501d5070bc0e41bd7546ec6c58b1ede48f2b9903a",
+    "benchmarks/denominator_geometry.py": "8e038e5cd57fe2795089bb7f6f79a2d8b180d0d2f89dba477575014df55fd0a4",
     "benchmarks/efficiency_paired.py": "b560742bb58d066d8a6a07aee6a3d6cec920e46d9ca9da7ef3f3070cf8868564",
-    "benchmarks/hratt_efficiency.py": "52e271c21b35bb7407adfd5d7f27b07f13b32aea874a03693d5f41a0069110dc",
+    "benchmarks/hratt_efficiency.py": "d9eed0b5fa321fa0f3a34849eb754c4caad2d2f9724dc95f13af510786c023ad",
     "benchmarks/hratt_followups.py": "a2c755c845f23d910cf94113876758568c537c87551c97e563579e8e76dd470d",
     "benchmarks/hratt_followups_plan.md": "bd8b3a2f32c041763b4af828fabf20157d0cc77b4e7ef8cc990ec6c3bc8e8993",
     "benchmarks/hratt_he_comparison.py": "d4b8e583df9d6c25f6dbeb34fba5c6815e84aba65b030a2c6b701fe4e4c6fb3d",
-    "benchmarks/hratt_he_validation.py": "08d3f843241d29ca480b3be0eadd393b50cfcfb17823c880204ba4b7543c11b4",
+    "benchmarks/hratt_he_validation.py": "26c1dfd2cf79835f32f7dddd288913bf54ea725e04766a2d55b5c75aa3ebece0",
     "benchmarks/hratt_thread_scaling.py": "fc772d2c2df70022b20984fe68c4310800abd18ccdde83c4b768d5393b6678e3",
     "benchmarks/hratt_weights_binary.py": "4b959ee076d3da81d7db20eed6b19c690dba4b5c7e1b723c85c5258c35a9b19f",
     "benchmarks/hratt_weights_binary_plan.md": "e7cb6672cc942f2d4059ed704df638d91ae3c8a0b320e7e955d028c74970682d",
     "benchmarks/ldak_kvik_20k_plan.md": "f0063c1f1468b624521755bc8c733061bbceec2dea735272fbcbbd3ca0231945",
-    "benchmarks/ldak_kvik_comparison.py": "3409bb6cffd1c2d41a497b565204a8b38905487d4dfda5d3394603113c6f4e1b",
+    "benchmarks/ldak_kvik_comparison.py": "cc68ff4d96b9778a09bb63f594e80fe39d0b604770b72aa05f000f622b178d10",
     "benchmarks/ldak_kvik_comparison_plan.md": "5a2fe979a538a980b4930c96cb5a74c645ae27f30c3e0c69bcbae99f0521f16a",
     "benchmarks/ldak_kvik_scaling_plan.md": "3d7efa92dedf8fef49984747e998517b30599f3571dccef7fcea57645364ed64",
     "benchmarks/results/20261002T200925Z/benchmarks.csv": "2dd88d036ac220e3cfe004dccf123de94f44d089225c22ed89f8d27a88d0756f",
@@ -484,11 +484,15 @@
     "benchmarks/results/20261008-hratt-followups-builtin-pcs/plan.md": "bd8b3a2f32c041763b4af828fabf20157d0cc77b4e7ef8cc990ec6c3bc8e8993",
     "benchmarks/slq_defaults.py": "f8782911dca435c7a3201befad2e6e3c293f62b0346ec0565e76f5831a37ea6e",
     "docs/design.md": "6d4578089e6d768a5b0e53f60091dc0d3a701248ed7d880586c7039432c802e5",
-    "docs/quickstart.md": "38cd25a575f9f512375047c5a6d2bb6ca807424c6ffd751313d7d5fe670915e6",
+    "docs/quickstart.md": "c5345ee98cb2c3eb53447d0d23c9600c4083b0555d153687a9bd6cdb264b197e",
     "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
     "docs/tutorial.md": "511e931958fe5fe7866f6207db75e310a9993edc260510a3fbdffb288deaa5d2",
     "mixmogam/__init__.py": "b4f7aa6d7b2e93d21d379bc49191b2c7f7d673bd0a99e6f246dd1fb403d9ab8d",
-    "report/README.md": "567bfa70be55bf8891edd5f412a7731b4063143f3a3f686cde5c7bc43eab3eda",
+    "mixmogam/association.py": "344279554b311970745aedef740a15284156beae53cd191cdbad0a71cca556ff",
+    "mixmogam/cli.py": "5eed81fb080a9dafd03289beaad0df30f5e87ea8b67068486bec9174fb6cbb47",
+    "mixmogam/pca.py": "e335a7454f856e5b1128197bb2d428bf9c093e33404855b34083f3236fe2cf33",
+    "mixmogam/results.py": "d52645e91046f8d9877efc16be1f7f5e09345cc1c456f4086959637da5275063",
+    "report/README.md": "2ff25e086be6175adc46c42326a450dc40761e773b5851cb328eb4870f924039",
     "report/dev5_table_manifest.json": "9b9dc2bb79c50e12a7a41a3669ce09c6ceeff0979aed1e07c91080baf23a399c",
     "report/efficiency_table_manifest.json": "b3f815b0c3f88d54c45dba4bd776803b375dad3f6c7a4ab16f6f27510cd70d41",
     "report/figure_manifest.json": "117e8c9e67af2fe9aefdecf89c63441b51cace9f168045b841e305cce182a403",
@@ -510,7 +514,7 @@
     "report/make_ldak_kvik_figures.py": "6be9c539e116bc4979d2e31db8a0c56c2f978351e91bbb38c40ffb460d95d388",
     "report/make_streaming_tables.py": "6d89096fe0705c13adada736cf7a1645ebc52e2d5a7146e764915b37c92175b9",
     "report/make_weights_binary_tables.py": "41e7c6ef11cc82f32e011260f2ca3a2950dbe686e25ebda973767defd5eec86b",
-    "report/mixmogam_report.tex": "e564dbb37570886e2d2b14bcdcb5a26dbc5f6f415a5390d733697333c2fc770c",
+    "report/mixmogam_report.tex": "4164214f0ed58a4b8fc692cbe9471e399655f0729cdede064738ffc6d3732eaf",
     "report/references.json": "a29b4c3444fa549f0db30c0f93a5c4b730948f1fb69af9906edff1a6edb74dc4",
     "report/streaming_table_manifest.json": "3218d2e84ecb872187a4a2dc16ba01c0b6043ea8afd5ea97c380e09f4bda4907",
     "report/tables/calibration.tex": "c6a0896f7ce1675cc2b41b446b328676e7c233b6a806bf7f2f4916a481e7e9ea",
@@ -533,10 +537,15 @@
     "report/tables/weights_binary_binary.tex": "28c8bb4fa3e6b56ffc15cc1e4d2e771c874444cf64ca41ab27a26d8213166180",
     "report/tables/weights_binary_quantitative.tex": "a5ef5617e293bd354859bfc02675a65c83d5f9dcd66f79213e99940d84591ab6",
     "report/weights_binary_table_manifest.json": "06ee8ac8773cc2253ad6ca32a393c3d181f7900c1bbd9a7654348d9d8cc82f71",
+    "tests/test_benchmark_power.py": "01ca46761a16c5ecf6bf5a1442fd040b08b61e3fb9e235f6bccf1e99936c7587",
+    "tests/test_cli.py": "9aca06cbd3322acc0f94a1bfb1da64758933629c222576742c329112fedf9dfa",
     "tests/test_hratt_he.py": "bd9089e10bdf9f5fcf2931a22047d6334480776404e4a2c5df06f223ab786b4f",
     "tests/test_hratt_parallel.py": "9c169427cde025abc172bba2c7c6c8cd2860398229a277fa9fed16f6f1a09158",
     "tests/test_hratt_preconditioner_reuse.py": "87f4844d92c5b5e93f64d76fadf85ce0af9aeb89e749bbba13156989ae7a6ef4",
-    "tests/test_ldak_kvik_comparison.py": "a18d9140819c3a034a697ff4f60a94f0c1633fc01f0e532dec1578222ef59962"
+    "tests/test_ldak_kvik_comparison.py": "a18d9140819c3a034a697ff4f60a94f0c1633fc01f0e532dec1578222ef59962",
+    "tests/test_pca.py": "2a787410f7a27bec55b675e8663a0dba959d64c2b7ddc9db7c8ca4471c594731",
+    "tests/test_results.py": "8b9681c8544430e2648df2d5c77447f8de27e9d53ea04662d5e299dc8b35df02",
+    "tests/test_review_regressions.py": "cfeada8e5212d4089f89dae3712789eed9d5d7fd46e25f3061764832dd0b1fb2"
   },
   "package_source_sha256": {
     "mixmogam/__init__.py": "b4f7aa6d7b2e93d21d379bc49191b2c7f7d673bd0a99e6f246dd1fb403d9ab8d",
@@ -552,8 +561,8 @@
     "mixmogam/_spa.py": "ca2082f716398f28bb4cc85280dbdab986eb63dd0d4f8a4bb8b541e273c0825b",
     "mixmogam/_standardize.py": "90da8265c7a4e98f191de47b673c19df3795f6829654014df10bc2e3bc2d860e",
     "mixmogam/_vb.py": "0853ef2173118865da5da123f86985157e28bf83f8f3a9c10e19aa874d215db9",
-    "mixmogam/association.py": "17ae122984ef7b1328295eccad5b30759f56bf5d44cc18464458a65fae63088a",
-    "mixmogam/cli.py": "4c318e37f5c55aed80ef14e938f70e85cde6d7cd4e910cff2801ab3bd26a4cb5",
+    "mixmogam/association.py": "344279554b311970745aedef740a15284156beae53cd191cdbad0a71cca556ff",
+    "mixmogam/cli.py": "5eed81fb080a9dafd03289beaad0df30f5e87ea8b67068486bec9174fb6cbb47",
     "mixmogam/genotypes.py": "0179f17efae0aba7655722737d376d725a2b15502cdc81659ed9764ac3887937",
     "mixmogam/io/__init__.py": "e16b9742d2af898d683d2667b4c9b2865f818ec10b7722d6036a64a778be7ee1",
     "mixmogam/io/covariates.py": "4acaa8c413d6df8b7b2f7fc973f0be540df3c3c36a5b8f51429cb6e5567ccffb",
@@ -565,10 +574,10 @@
     "mixmogam/kinship.py": "35de53fa02c2d358b9e4a046010239abda4cd262bc1e10e30dd511aefd06669b",
     "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
     "mixmogam/lmm.py": "e8c0cbc3928762866c2c3cadaf15ebdbe4c0eb041a4ec5f2e3cd0fd568eb6594",
-    "mixmogam/pca.py": "95b10170ca3fc90f2103d813ae7122cd9b041dacd11e89680478fe612de68e9c",
+    "mixmogam/pca.py": "e335a7454f856e5b1128197bb2d428bf9c093e33404855b34083f3236fe2cf33",
     "mixmogam/phenotypes.py": "825bb31a8998c0884b7f1fb33eba1b5398b52497ab7063d42244de280baaae1d",
     "mixmogam/plotting.py": "9c602d5ccdd239bc0fdd0195d32175d04315acb19ee1f6bf067a43f4316e837a",
-    "mixmogam/results.py": "042e026a91ebacfc92cc405f8b9c24c5cb709a36b9ba365ecb01488559bb1098",
+    "mixmogam/results.py": "d52645e91046f8d9877efc16be1f7f5e09345cc1c456f4086959637da5275063",
     "mixmogam/scan.py": "53c0e04ab8a51ad0975ae62de3261ad458fb69cd21174811366b3c29dcd66e60",
     "mixmogam/simulate.py": "730c36210b22de89a208a6ec22f0221298e0b3218b1b385336e84723a5e616c6",
     "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
@@ -645,7 +654,7 @@
   },
   "build": {
     "engine": "Tectonic 0.17.0",
-    "command": "tectonic --keep-logs --keep-intermediates mixmogam_report.tex",
+    "command": "tectonic --keep-logs --keep-intermediates --outdir /private/tmp/mixmogam-report-review mixmogam_report.tex",
     "cwd": "report",
     "project_type": "Multi-file LaTeX with generated tables and PDF figures",
     "layout_warnings": 0,
@@ -959,5 +968,44 @@
     "change": "mixmogam.pca.principal_components: exact SVD of 2,000 random markers with sample MAF >= 0.05, standardized, fixed signs; same thinning draws as the retired hratt_followups.top_pcs (four-iteration randomized subspace iteration)",
     "scope": "S4 cells at Fst 0.05: 130 cases, 129 completed; one null binary case segfaulted in Accelerate cblas_dgemm under load and regenerated cleanly (not used)",
     "result": "F1, F2, F5, F7 pass on the S4 cells; MAF 1-5% rates at 1e-3 with PCs 0.82 (quantitative) and 0.98 (binary) x nominal, lambda_GC 0.989/0.984, against 6.64/3.95 with pooled frequencies; mixed cell 0.77 (6 October 0.92); non-PC cells match 6 October to three decimals"
+  },
+  "review_fixes": {
+    "previous_report": {
+      "revision": "2026-10-09-report-update",
+      "recorded_at_utc": "2026-10-09T06:05:22.395188+00:00",
+      "parent_commit": "686564c0c670b4c31d6e4a434cd76bb409f9219e",
+      "revision_state": "Delivered by the Git commit containing this manifest, after 686564c0. Covers the changes of 7-8 October: Table 10 and the abstract give the 20,000-marker cross-fitted fits with threaded fold products (20261007-kvik-20k-crossfit-gemm) instead of the 2.0.0.dev6 reruns, whose numbers stay in the text; in-sample, storage and official rows are unchanged. Section 2.9 drops the six-column rule, Section 2.13 describes the built-in ancestry PCs (mixmogam.pca), Section 4.12 reports their S4 rerun (20261008-hratt-followups-builtin-pcs), and the software section covers the command line, covariate files, the CSV n column and the tutorial.",
+      "pdf": {
+        "path": "report/mixmogam_report.pdf",
+        "sha256": "3fe0170790c4096eb66288ae31458b7a85b880a698f2da84c836befa4306019d",
+        "pages": 51
+      }
+    },
+    "validation": {
+      "unique_tests_passed": 684,
+      "fast_suite": "662 passed; 10 additional input-validation cases added afterwards and passed with all 26 result-contract tests",
+      "slow_and_integration": "11 passed, including the bundled Atwell smoke test; no prespecified locus recovery was assessed",
+      "foreign_reader": "1 optional LDpred3 compatibility test passed on the independent BED fixture and mixmogam export",
+      "commands": [
+        "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=4 python -m pytest -q -m \"not slow and not integration and not external\"",
+        "same environment: python -m pytest -q tests/test_results.py",
+        "same environment: python -m pytest -q -m \"(slow or integration) and not external\"",
+        "same environment: python -m pytest -q tests/test_review_regressions.py -k \"bed_foreign or official_plink\"",
+        "ruff check .",
+        "python -m build --no-isolation --outdir /private/tmp/mixmogam-review-dist"
+      ],
+      "environment": {
+        "python": "3.14.6",
+        "blas_threads": 1,
+        "numba_thread_capacity": 4
+      },
+      "lint": "passed; git diff --check passed",
+      "artifacts": "Wheel built from sdist and installed in an isolated target: exact GWAS, CSV/build/subsetting, unchanged PCA values and binary sample-size exports passed",
+      "power_guard": "AC/battery, Low Power Mode, inactive battery profile and unreadable settings checked; both common guards also passed on the live host",
+      "visual_review": "All 51 pages rendered with PDFKit and inspected in contact sheets; pages 1, 2, 13, 46 and 47 inspected at reading size. No overfull boxes or unresolved references.",
+      "warnings": "Existing legacy-TPED/truncated-spectrum warnings in fast tests; expected ancestry-covariate warning in the slow binary test; existing caption hypcap option warning in LaTeX."
+    },
+    "evidence_boundary": "Implementation and format checks do not establish scientific calibration. Weighted S3 effect bias and weighted runtime remain failed criteria; dosage support, prespecified real-data locus recovery and broader independent calibration remain future work.",
+    "repository_archive": "The large Atwell ZIP is present in the initial commit, already an ancestor of origin/master. No archive or repository history was deleted or rewritten."
   }
 }

@@ -15,6 +15,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import subprocess
 import sys
 
@@ -115,8 +116,11 @@ def main():
         parser.error("at least two phenotype replicates are required")
     if sys.platform == "darwin":
         battery = subprocess.check_output(["pmset", "-g", "batt"], text=True)
-        settings = subprocess.check_output(["pmset", "-g"], text=True)
-        if "AC Power" not in battery or any(s.split() == ["lowpowermode", "1"] for s in settings.splitlines()):
+        settings = subprocess.check_output(["pmset", "-g", "custom"], text=True)
+        ac = re.search(r"(?ms)^AC Power:\s*\n(.*?)(?=^\S|\Z)", settings)
+        if ac is None:
+            raise SystemExit("cannot verify AC power settings from pmset -g custom")
+        if "AC Power" not in battery or re.search(r"lowpowermode\s+1\b", ac[1]):
             raise SystemExit("requires AC power with Low Power Mode disabled")
     args.output.mkdir(parents=True, exist_ok=False)
     rows, cases = [], []

@@ -19,6 +19,7 @@ def principal_components(
     n_markers: Optional[int] = 2000,
     random_state=0,
     block: int = 2048,
+    max_memory_gib: float = 4.0,
     return_info: bool = False,
 ):
     """Leading ancestry principal components for use as covariates.
@@ -45,6 +46,14 @@ def principal_components(
     holds ``variants`` (the thinned variant indices), ``singular_values``
     and ``explained_variance_ratio``.
 
+    Before scanning allele frequencies or allocating the panel, a conservative
+    working-memory estimate must fit ``max_memory_gib`` (default 4 GiB).
+    It includes the requested panel, decoding, SVD factors and workspace,
+    but excludes resident input calls and library/allocator overhead. This
+    is an allocation guard, not a measured peak-RSS guarantee. Lower
+    ``n_markers`` or supply external PCs if the panel exceeds the budget;
+    increasing the budget leaves the float64 SVD unchanged.
+
     ``random_state=None`` draws fresh thinning randomness; every other
     value seeds ``numpy.random.default_rng``. Before this was built in,
     each benchmark computed its own PCs (randomized subspace iteration in
@@ -63,6 +72,25 @@ def principal_components(
         raise ValueError("n_markers must be a positive integer or None")
     if not isinstance(block, (int, np.integer)) or isinstance(block, (bool, np.bool_)) or block < 1:
         raise ValueError("block must be a positive integer")
+    if (isinstance(max_memory_gib, (bool, np.bool_))
+            or not isinstance(max_memory_gib, (int, float, np.integer, np.floating))
+            or not np.isfinite(max_memory_gib) or max_memory_gib <= 0):
+        raise ValueError("max_memory_gib must be positive and finite")
+
+    n = G.n_samples
+    m = G.n_variants if n_markers is None else min(n_markers, G.n_variants)
+    rank = min(n, m)
+    # Panel + its LAPACK copy + U, Vt, divide-and-conquer workspace,
+    # and the last decoded block, which remains live at the SVD call.
+    svd_bytes = 8 * (2 * n * m + n * rank + rank * m + 4 * rank**2 + n * min(block, m))
+    # allele_freqs uses blocks of 8192 int8 calls, a mask and a masked copy.
+    frequency_bytes = 3 * n * min(8192, G.n_variants) + 24 * G.n_variants
+    estimated_bytes = max(svd_bytes, frequency_bytes)
+    if estimated_bytes > max_memory_gib * 1024**3:
+        raise ValueError(f"PCA working-memory estimate {estimated_bytes / 1024**3:.2f} GiB "
+                         f"exceeds max_memory_gib={max_memory_gib:g} for {n} samples and "
+                         f"up to {m} markers; lower n_markers, use external PCs, or "
+                         "explicitly increase max_memory_gib")
 
     maf = G.allele_freqs(minor=True)
     common = np.flatnonzero(maf >= min_maf)  # NaN MAF (all-missing) never passes
@@ -75,7 +103,6 @@ def principal_components(
         # The draw is the one hratt_followups.top_pcs made, so its thinned
         # panels (and therefore its S4 covariates) are unchanged.
         take = np.sort(rng.choice(common, min(n_markers, common.size), replace=False))
-    n = G.n_samples
     if k > min(n, take.size):
         raise ValueError(f"k={k} exceeds the {min(n, take.size)} components available "
                          f"from {take.size} thinned variants and {n} samples")

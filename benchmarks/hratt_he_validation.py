@@ -14,6 +14,7 @@ import json
 import os
 from pathlib import Path
 import platform
+import re
 import shutil
 import subprocess
 import sys
@@ -133,7 +134,10 @@ def main():
     if platform.system() == "Darwin":
         power = subprocess.check_output(["pmset", "-g", "batt"], text=True)
         settings = subprocess.check_output(["pmset", "-g", "custom"], text=True)
-        if "AC Power" not in power or "lowpowermode         1" in settings:
+        ac = re.search(r"(?ms)^AC Power:\s*\n(.*?)(?=^\S|\Z)", settings)
+        if ac is None:
+            raise RuntimeError("cannot verify AC power settings from pmset -g custom")
+        if "AC Power" not in power or re.search(r"lowpowermode\s+1\b", ac[1]):
             raise RuntimeError("validation requires AC power without Low Power Mode")
     else:
         power = settings = None

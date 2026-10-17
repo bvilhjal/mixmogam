@@ -41,6 +41,13 @@ are rejected naming the samples. Include the PCs among the covariates
 whenever weights or case fractions vary with ancestry; as covariates
 their scale is irrelevant.
 
+The float64 SVD has a default working-memory budget of 4 GiB, checked
+before allele-frequency scanning and panel allocation. The estimate
+excludes resident input genotypes and library overhead. Lower `n_markers`
+or provide external PCs for larger cohorts; an explicit
+`max_memory_gib=8` raises the budget without changing the algorithm.
+The CLI exposes `pca --max-memory-gib` and `gwas --pca-max-memory-gib`.
+
 ## Association scan (LOCO by default)
 
 ```python
@@ -239,7 +246,16 @@ select the HRATT weighted/binary path.
   variance in squared phenotype-units per counted allele. This uses a normal
   approximation from `beta` and `se`, and is not a fine-mapping probability.
   Binary one-step effects are excluded.
-- CSV preserves variant columns and full float precision, including `n`
-  (samples analysed), the effect alleles and the binary score-estimate
-  labels above. `read_csv` reads `n`/`n_eff` back. Other fit/calibration
-  metadata in `result.extra` is not serialized.
+- CSV preserves variant columns and full float precision. `af` is the
+  frequency of `effect_allele` (BIM A1), not MAF. `n` is the analysed
+  headcount and is omitted for binary and sampling-weighted scores:
+  downstream readers often alias it to effective sample size, which these
+  tests do not determine. The headcount remains in `result.n`. An explicitly
+  supplied `result.n_eff` is exported separately and can be nonintegral;
+  `read_csv` never interprets it as headcount. Binary effects retain the
+  score-estimate labels above.
+- `gwas(..., genome_build="GRCh38")` or CLI `--genome-build GRCh38` declares
+  the coordinate assembly in the CSV. `read_csv` and variant subsetting
+  preserve it. This is a provenance label, not liftover or assembly
+  validation; pass it explicitly to downstream tools that require a build.
+  Other fit/calibration metadata in `result.extra` is not serialized.

@@ -7,8 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Binary and sampling-weighted result exports omit the headcount `n`,
+  which downstream sumstats readers may treat as effective sample size.
+  The API retains the headcount; explicit `n_eff` is now separate, accepts
+  nonintegral values, and survives CSV loading and variant selection.
+- PCA checks a conservative working-memory estimate before frequency
+  scanning or allocating the float64 panel (default budget: 4 GiB,
+  configurable through the API and both CLI commands). Its SVD and
+  numerical results are unchanged within the budget.
+- Benchmark power checks read the AC profile from `pmset -g custom`;
+  `pmset -g` can omit profile settings. Inactive battery settings do not
+  reject an AC-powered run, and missing AC settings fail explicitly.
+- The report abstract retains the follow-up study's failed effect-bias
+  criterion (weighted S3: -5.4%, MCSE 2.1%) and weighted-runtime criterion
+  (1.55 times HRATT-HE versus a target of 1.3).
+
 ### Added
 
+- Optional `gwas(..., genome_build=...)` / CLI `--genome-build` declares
+  the coordinate assembly; CSV, DataFrame and variant selection preserve
+  the label without guessing or converting coordinates. The `af` contract
+  explicitly counts `effect_allele`, including frequencies above 0.5.
 - `mixmogam.pca.principal_components`: built-in ancestry principal
   components, the left singular vectors of a thinned marker panel
   (default: 2,000 random variants with sample MAF >= 5%, standardized,

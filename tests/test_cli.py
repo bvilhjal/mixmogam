@@ -95,6 +95,8 @@ def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
     api = _api(dataset, tmp_path / "api.csv", method="hratt", trait="binary",
                weights=True, pcs=3, name="case", pheno="pheno2")
     assert out.read_bytes() == api.read_bytes()
+    header = out.read_text().splitlines()[0].split(",")
+    assert "n" not in header and "n_eff" not in header
     sub = tmp_path / "sub.csv"
     ran = subprocess.run([sys.executable, "-m", "mixmogam", *base, "--out", str(sub)],
                          env=ENV, capture_output=True, text=True)
@@ -124,6 +126,26 @@ def test_pca_command_matches_the_api(dataset, tmp_path):
     gt = read_plink(dataset["prefix"])
     np.testing.assert_array_equal(cov.values, principal_components(gt, k=3, random_state=7))
     np.testing.assert_array_equal(cov.sample_ids, gt.sample_ids)
+
+
+def test_cli_declared_genome_build(dataset, tmp_path):
+    from mixmogam.results import GwasResult
+    out = tmp_path / "gwas.csv"
+    assert main(["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+                 "--genome-build", "GRCh38", "--out", str(out)]) == 0
+    assert GwasResult.read_csv(out).genome_build == "GRCh38"
+
+
+@pytest.mark.parametrize("command,options", [("pca", ["--k", "3", "--max-memory-gib", "0.000001"]),
+                                           ("gwas", ["--pcs", "3", "--pca-max-memory-gib", "0.000001"])])
+def test_cli_pca_budget_failure_is_actionable(dataset, tmp_path, capsys, command, options):
+    out = tmp_path / "result.txt"
+    args = [command, "--geno", dataset["prefix"], "--out", str(out), *options]
+    if command == "gwas":
+        args += ["--pheno", dataset["pheno1"]]
+    assert main(args) == 2
+    assert "PCA working-memory estimate" in capsys.readouterr().err
+    assert not out.exists()
 
 
 def test_cli_errors_and_version(dataset, tmp_path):

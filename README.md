@@ -111,6 +111,11 @@ result.write_csv("gwas.csv")
 ```
 
 PLINK dosages count BIM allele A1, recorded as `result.effect_allele`.
+The CSV's `af` is the frequency of that effect allele, which may exceed
+0.5. Declare the coordinate assembly with `gwas(..., genome_build="GRCh38")`
+or `mixmogam gwas --genome-build GRCh38`; the label is preserved in the CSV
+without converting coordinates. Use the actual assembly, such as TAIR10
+for a matching Arabidopsis panel, rather than guessing from positions.
 Genotype calls must be integral 0/1/2, with -1 for missing; fractional
 imputed dosages are currently unsupported. LOCO needs at least two
 chromosomes. All phenotype and covariate rows must follow the genotype

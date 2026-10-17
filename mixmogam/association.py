@@ -161,6 +161,7 @@ def gwas(
     max_loco_groups: int = 25,
     block: int = 2048,
     dtype=None,
+    genome_build: Optional[str] = None,
     **kwargs,
 ) -> GwasResult:
     """Mixed-model GWAS of phenotype ``y`` on genotypes ``gt``.
@@ -174,12 +175,16 @@ def gwas(
     loco : leave-one-chromosome-out (only ``"exact"`` can switch it off)
     max_loco_groups : chromosomes beyond this are merged into contiguous
         groups of balanced size (BOLT-LMM's genome segments)
+    genome_build : optional declared coordinate assembly (e.g. GRCh38 or
+        TAIR10), preserved in the result and CSV; no coordinate conversion
     kwargs : passed to the two-step method (see :mod:`mixmogam.twostep`);
         ``"exact"`` accepts only ``n_threads`` (default 1), which decodes
         genotype blocks in parallel (Numba) with unchanged values. Binary
         (case-control) outcomes, ``trait="binary"``, and sampling weights,
         ``sample_weights=w``, are HRATT options (``method="hratt"``).
     """
+    from mixmogam.results import _genome_build
+    genome_build = _genome_build(genome_build)
     y = np.asarray(y, dtype=np.float64).ravel()
     if y.size != gt.n_samples or y.size == 0:
         raise ValueError("y and genotypes disagree on the sample count or are empty")
@@ -207,7 +212,9 @@ def gwas(
         dtype = np.float32 if dtype is None else dtype
         if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise ValueError("dtype must be float32 or float64")
-        return _gwas_exact(y, gt, X, loco, max_loco_groups, block, dtype, n_threads=int(n_threads))
+        result = _gwas_exact(y, gt, X, loco, max_loco_groups, block, dtype, n_threads=int(n_threads))
+        result.genome_build = genome_build
+        return result
     if dtype is not None:
         raise TypeError("dtype is an exact-scan option; two-step methods decode their stored calls to float32")
     if not loco:
@@ -217,4 +224,6 @@ def gwas(
     fn = {"bolt-inf": twostep.bolt_inf, "bolt": twostep.bolt, "hratt": twostep.hratt}.get(method)
     if fn is None:
         raise ValueError(f"unknown method {method!r}")
-    return fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
+    result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
+    result.genome_build = genome_build
+    return result

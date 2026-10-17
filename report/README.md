@@ -1,7 +1,10 @@
 # Research report
 
-This revision (9 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
-unreleased changes through 8 October. Its LDAK-KVIK comparisons, HE-versus-REML
+This revision (16 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
+unreleased changes through 16 October. The abstract retains the failed
+weighted-effect and runtime criteria; the software contracts describe
+sample-size and assembly metadata and the PCA memory guard.
+Its LDAK-KVIK comparisons, HE-versus-REML
 fits and 20,000-variant workloads were rerun with 2.0.0.dev6, and the
 20,000-variant cross-fitted fits again once their genotype products were
 threaded; older studies keep the versions they ran with.

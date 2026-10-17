@@ -114,13 +114,74 @@ def test_csv_n_column_and_read_aliases(tmp_path):
     assert GwasResult.read_csv(str(legacy)).n is None
     aliased = tmp_path / "alias.csv"
     aliased.write_text("chromosome,position,p,n_eff\n1,10,0.5,99\n1,20,0.4,99\n")
-    assert GwasResult.read_csv(str(aliased)).n == 99
+    effective = GwasResult.read_csv(str(aliased))
+    assert effective.n is None and effective.n_eff == 99
     varying = tmp_path / "vary.csv"
     varying.write_text("chromosome,position,p,n\n1,10,0.5,99\n1,20,0.4,98\n")
     with pytest.raises(ValueError, match="constant"):
         GwasResult.read_csv(str(varying))
     with pytest.raises(ValueError, match="positive sample count"):
         GwasResult(chromosome=np.ones(1), position=np.zeros(1), p=np.ones(1), n=0)
+
+
+@pytest.mark.parametrize("extra", [{"effect_method": "one-step-logistic"},
+                                  {"trait": "binary"}, {"kish_n": 12.5}])
+def test_score_exports_do_not_alias_headcount_to_effective_size(extra, tmp_path):
+    res = GwasResult(chromosome=np.ones(2), position=np.arange(2), p=np.array([.1, .3]),
+                     n=100, extra=extra)
+    path = tmp_path / "score.csv"
+    res.write_csv(path)
+    assert "n" not in path.read_text().splitlines()[0].split(",")
+    assert GwasResult.read_csv(path).n is None
+    assert res.n == 100
+    res.n_eff = 31.5  # an explicit external contract, not an inferred size
+    res.write_csv(path)
+    back = GwasResult.read_csv(path)
+    assert back.n is None and back.n_eff == 31.5
+    pd = pytest.importorskip("pandas")
+    assert isinstance(res.to_dataframe(), pd.DataFrame)
+    assert "n" not in res.to_dataframe().columns
+
+
+@pytest.mark.parametrize("size", [True, "31.5", -1, 0, np.nan, np.inf])
+def test_invalid_effective_sample_size(size):
+    with pytest.raises(ValueError, match="n_eff"):
+        GwasResult(chromosome=np.ones(1), position=np.zeros(1), p=np.ones(1), n_eff=size)
+
+
+@pytest.mark.parametrize("build", ["", "   ", 38, True])
+def test_invalid_genome_build(build):
+    with pytest.raises(ValueError, match="genome_build"):
+        GwasResult(chromosome=np.ones(1), position=np.zeros(1), p=np.ones(1), genome_build=build)
+
+
+def test_effective_size_and_build_are_distinct_and_survive_selection(tmp_path):
+    path = tmp_path / "result.csv"
+    path.write_text("chromosome,position,p,n,n_eff,genome_build,af,effect_allele,other_allele\n"
+                    "1,10,0.1,100,31.5,TAIR10,0.9,A,G\n"
+                    "1,20,0.2,100,31.5,TAIR10,0.1,C,T\n")
+    res = GwasResult.read_csv(path).take([1, 0])
+    assert res.n == 100 and res.n_eff == 31.5 and res.genome_build == "TAIR10"
+    np.testing.assert_array_equal(res.af, [.1, .9])
+    res.write_csv(path)
+    back = GwasResult.read_csv(path)
+    assert back.n == 100 and back.n_eff == 31.5 and back.genome_build == "TAIR10"
+    pd = pytest.importorskip("pandas")
+    df = back.to_dataframe()
+    assert isinstance(df, pd.DataFrame)
+    assert list(df["genome_build"]) == ["TAIR10", "TAIR10"]
+    assert list(df["n_eff"]) == [31.5, 31.5]
+
+
+@pytest.mark.parametrize("column,values", [("genome_build", ("GRCh37", "GRCh38")),
+                                           ("n_eff", ("31.5", "32")),
+                                           ("n_eff", ("nan", "nan")),
+                                           ("n_eff", ("-1", "-1"))])
+def test_csv_rejects_invalid_constant_metadata(tmp_path, column, values):
+    path = tmp_path / "bad.csv"
+    path.write_text(f"chromosome,position,p,{column}\n1,10,.1,{values[0]}\n1,20,.2,{values[1]}\n")
+    with pytest.raises(ValueError, match=column):
+        GwasResult.read_csv(path)
 
 
 def test_plots(scan_result, tmp_path):

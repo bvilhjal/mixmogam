@@ -80,8 +80,11 @@ def power_state():
     if sys.platform != "darwin":
         return {"guard": "not applicable outside macOS"}
     battery = subprocess.check_output(["pmset", "-g", "batt"], text=True)
-    settings = subprocess.check_output(["pmset", "-g"], text=True)
-    if "AC Power" not in battery or re.search(r"lowpowermode\s+1", settings):
+    settings = subprocess.check_output(["pmset", "-g", "custom"], text=True)
+    ac = re.search(r"(?ms)^AC Power:\s*\n(.*?)(?=^\S|\Z)", settings)
+    if ac is None:
+        raise RuntimeError("cannot verify AC power settings from pmset -g custom")
+    if "AC Power" not in battery or re.search(r"lowpowermode\s+1\b", ac[1]):
         raise RuntimeError("benchmarks require AC power and Low Power Mode off")
     return {"battery": battery, "settings": settings}
 

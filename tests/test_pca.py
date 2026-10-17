@@ -110,3 +110,28 @@ def test_input_validation():
         principal_components(Genotypes(np.full((10, 5), 2, dtype=np.int8)), k=1)
     with pytest.raises(ValueError, match="hard calls"):
         principal_components(np.full((10, 5), 7, dtype=np.int8), k=1)
+
+
+def test_memory_guard_precedes_frequency_scan_and_panel_allocation(monkeypatch):
+    gt = Genotypes(structured_calls(n=12, m=20))
+    # Represent a large panel without allocating one. The frequency scan
+    # must never be reached, even before the standardized matrix exists.
+    monkeypatch.setattr(gt, "n_samples", 400_000)
+    monkeypatch.setattr(gt, "n_variants", 20_000)
+    def forbidden(*args, **kwargs):
+        pytest.fail("frequency scan reached before rejecting oversized PCA")
+    monkeypatch.setattr(gt, "allele_freqs", forbidden)
+    with pytest.raises(ValueError, match="PCA working-memory estimate.*exceeds"):
+        principal_components(gt)
+
+
+@pytest.mark.parametrize("budget", [0, -1, np.inf, np.nan, True, "4"])
+def test_invalid_memory_budget(budget):
+    with pytest.raises(ValueError, match="max_memory_gib"):
+        principal_components(structured_calls(n=12, m=20), k=2, max_memory_gib=budget)
+
+
+def test_memory_budget_does_not_change_the_pcs():
+    gt = Genotypes(structured_calls(n=40, m=60))
+    np.testing.assert_array_equal(principal_components(gt, k=3, max_memory_gib=.01),
+                                  principal_components(gt, k=3, max_memory_gib=4))

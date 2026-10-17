@@ -36,6 +36,47 @@ def test_plink_matches_documented_bits(tmp_path):
     assert (tmp_path / "written.bim").read_text().split()[-2:] == ["T", "C"]
 
 
+@pytest.fixture
+def plink_specification(tmp_path):
+    """PLINK 1.9's six-sample example plus e4 with A1 frequency 0.7.
+
+    Specification: https://www.cog-genomics.org/plink2/formats#bed
+    This checks byte order and padding against calls fixed independently
+    of either package's writer.
+    """
+    prefix = tmp_path / "spec"
+    prefix.with_suffix(".fam").write_text("".join(f"0 s{i} 0 0 0 -9\n" for i in range(6)))
+    prefix.with_suffix(".bim").write_text("1 snp1 0 1 G A\n1 snp2 0 2 C T\n"
+                                         "2 snp3 0 3 A C\n2 common 0 4 T C\n")
+    prefix.with_suffix(".bed").write_bytes(bytes.fromhex("6c1b01 dc0f e70f 6b01 e400"))
+    expected = np.array([[2, 0, -1, 0, 0, 0], [0, -1, 1, 0, 0, 0],
+                         [0, 1, 1, -1, -1, 2], [2, -1, 1, 0, 2, 2]], dtype=np.int8).T
+    return prefix, expected
+
+
+@pytest.mark.parametrize("options", [{}, {"packed": True}, {"packed": True, "mmap": True}])
+def test_official_plink_fixture_with_padding_and_common_a1(tmp_path, plink_specification, options):
+    prefix, expected = plink_specification
+    gt = read_plink(str(prefix), **options)
+    np.testing.assert_array_equal(np.asarray(gt.G), expected)
+    assert gt.allele_freqs()[-1] == pytest.approx(.7)
+    assert gt.allele1[-1] == "T"
+    out = tmp_path / "written_spec"
+    write_plink(gt, str(out))
+    assert out.with_suffix(".bed").read_bytes() == prefix.with_suffix(".bed").read_bytes()
+
+
+@pytest.mark.external
+def test_bed_foreign_reader_agrees_with_specification(tmp_path, plink_specification):
+    """Optional seam check; LDpred3 remains outside the install dependencies."""
+    foreign = pytest.importorskip("ldpred3.genotype_io")
+    prefix, expected = plink_specification
+    np.testing.assert_array_equal(foreign.read_bed(str(prefix.with_suffix(".bed")), 6, 4), expected)
+    out = tmp_path / "mixmogam_export"
+    write_plink(read_plink(str(prefix)), str(out))
+    np.testing.assert_array_equal(foreign.read_bed(str(out.with_suffix(".bed")), 6, 4), expected)
+
+
 def test_mac_counts_alleles_and_af_has_a_direction():
     gt = Genotypes([[0, 2, -1], [0, 2, -1], [1, 1, -1], [1, 1, 2]])
     np.testing.assert_array_equal(gt.filter_variants(min_mac=2).variant_ids, ["V0", "V1"])

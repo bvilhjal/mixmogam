@@ -52,6 +52,9 @@ def _parser() -> argparse.ArgumentParser:
                       help="parallel genotype preparation (values are identical at every count)")
     gwas.add_argument("--max-loco-groups", type=int, default=25)
     gwas.add_argument("--out", "-o", required=True, help="summary-statistic CSV")
+    gwas.add_argument("--genome-build", help="declared coordinate assembly (e.g. GRCh38 or TAIR10); no liftover")
+    gwas.add_argument("--pca-max-memory-gib", type=float, default=4.0,
+                      help="working-memory budget for --pcs (default 4 GiB)")
 
     pca = sub.add_parser("pca", help="ancestry PCs of the genotypes, as a covariate file",
                          description="Run mixmogam.pca.principal_components and write a covariate file.")
@@ -63,6 +66,8 @@ def _parser() -> argparse.ArgumentParser:
     pca.add_argument("--n-markers", type=int, default=2000,
                      help="markers in the thinned panel (default 2000)")
     pca.add_argument("--seed", type=int, default=0, help="thinning seed (default 0)")
+    pca.add_argument("--max-memory-gib", type=float, default=4.0,
+                     help="PCA working-memory budget (default 4 GiB)")
     return ap
 
 
@@ -74,6 +79,7 @@ def _cmd_pca(args) -> int:
     gt = read_plink(args.geno)
     pcs, info = principal_components(gt, k=args.k, min_maf=args.min_maf,
                                      n_markers=args.n_markers, random_state=args.seed,
+                                     max_memory_gib=args.max_memory_gib,
                                      return_info=True)
     write_covariates(args.out, gt.sample_ids, pcs,
                      names=[f"PC{j}" for j in range(1, args.k + 1)])
@@ -131,7 +137,7 @@ def _cmd_gwas(args) -> int:
     if w is not None:
         w = w[complete]
     if args.pcs:
-        columns.append(principal_components(subset, k=args.pcs))
+        columns.append(principal_components(subset, k=args.pcs, max_memory_gib=args.pca_max_memory_gib))
     X = np.column_stack(columns) if columns else None
 
     method = args.method
@@ -150,7 +156,8 @@ def _cmd_gwas(args) -> int:
         kwargs["trait"] = args.trait
     if w is not None:
         kwargs["sample_weights"] = w
-    result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups, **kwargs)
+    result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
+                  genome_build=args.genome_build, **kwargs)
     result.write_csv(args.out)
     print(f"wrote {len(result)} variants for {result.n} samples to {args.out}")
     return 0
