@@ -1,9 +1,12 @@
 # Research report
 
-This revision (16 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
-unreleased changes through 16 October. The abstract retains the failed
+This revision (17 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
+unreleased changes through 17 October. The abstract retains the failed
 weighted-effect and runtime criteria; the software contracts describe
-sample-size and assembly metadata and the PCA memory guard.
+sample-size and assembly metadata and the PCA memory guard. Section 4.13
+adds the first real-data result: a prespecified positive-control check on
+the bundled RegMap panel, which found six of seven known major genes with
+every method and failed its criterion on MOT1.
 Its LDAK-KVIK comparisons, HE-versus-REML
 fits and 20,000-variant workloads were rerun with 2.0.0.dev6, and the
 20,000-variant cross-fitted fits again once their genotype products were
@@ -56,6 +59,7 @@ Table 1. Evidence and provenance used in the manuscript.
 | Case-control outcomes and sampling weights | `20261005-hratt-weights-binary` | Prespecified simulation: 30 null and 10 mixed replicates per cell, six selection scenarios, prevalence 1-20%, Fst 0 and 0.05, with official LDAK-KVIK and LDAK's weighted regression |
 | Cross-fitted scores and covariate-specific genotype distributions | `20261006-hratt-followups` | Prespecified validation on the same samples plus Fst 0.05 cells with and without 10 PCs; 660 cases |
 | Built-in-PC equivalence rerun | `20261008-hratt-followups-builtin-pcs` | The S4 cells re-run with `mixmogam.pca.principal_components`, the exact SVD of the same thinned panels, replacing the driver's randomized iteration; 130 cases, calibration matches within Monte Carlo error |
+| Known major genes on real data | `20261017-atwell-controls` | Prespecified positive controls on the bundled RegMap panel and Atwell phenotypes, four methods; A1 failed (MOT1 on raw values), A2 passed; log-scale and HRATT-convergence follow-ups are exploratory |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -100,6 +104,7 @@ python report/make_dev5_tables.py
 python report/make_streaming_tables.py
 python report/make_weights_binary_tables.py
 python report/make_followup_tables.py
+python report/make_atwell_table.py
 cd report
 tectonic mixmogam_report.tex
 ```

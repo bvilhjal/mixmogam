@@ -17,15 +17,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scanning or allocating the float64 panel (default budget: 4 GiB,
   configurable through the API and both CLI commands). Its SVD and
   numerical results are unchanged within the budget.
+- `read_regmap` streams its file in 4,096-row chunks. The bundled 250K
+  panel (1,307 x 214,051) peaked at a 21 GB footprint when every line,
+  cell and float64 value was held at once; it now reads in 37 s instead
+  of 60 s, with calls identical to the previous reader and to a per-line
+  decode. A padded missing cell (`, NA`) parses as missing instead of
+  failing, and non-calls are refused before the int8 narrowing.
 - Benchmark power checks read the AC profile from `pmset -g custom`;
   `pmset -g` can omit profile settings. Inactive battery settings do not
   reject an AC-powered run, and missing AC settings fail explicitly.
+  `sim_study.py`, `run_benchmarks.py`, `structure_calibration.py`,
+  `ldak_kvik_reference.py` and `review_memory.py` use the same check;
+  the first four refused only battery power, not Low Power Mode.
 - The report abstract retains the follow-up study's failed effect-bias
   criterion (weighted S3: -5.4%, MCSE 2.1%) and weighted-runtime criterion
   (1.55 times HRATT-HE versus a target of 1.3).
 
 ### Added
 
+- `benchmarks/atwell_controls.py`: a prespecified positive-control check
+  on the bundled RegMap panel. Seven Atwell phenotypes have a known major
+  gene; a gene is found when its 50 kb window reaches 0.05/m. The 17
+  October run ([`20261017-atwell-controls`](benchmarks/results/20261017-atwell-controls/README.md))
+  found RPS5, RPM1 (twice), RPS2, FRI and HKT1 with `exact`, `bolt-inf`,
+  `hratt` and OLS with 10 PCs. No method found MOT1 on raw Mo values,
+  so criterion A1 failed. On log10 values an exploratory rerun ranked MOT1
+  first. HRATT's variational fits did not converge on the five traits
+  whose heritability estimate reached its upper bound. The report gains
+  Section 4.13, and `tests/test_integration_at.py` now requires `exact` to
+  find RPS5 and RPM1 on a partial panel (it fails when phenotypes are
+  shuffled across accessions).
 - Optional `gwas(..., genome_build=...)` / CLI `--genome-build` declares
   the coordinate assembly; CSV, DataFrame and variant selection preserve
   the label without guessing or converting coordinates. The `af` contract

@@ -22,7 +22,9 @@ import numpy as np
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "benchmarks"))
 
+from hratt_efficiency import power_state  # noqa: E402
 from mixmogam import Genotypes  # noqa: E402
 from mixmogam._loco import LocoGenotypes  # noqa: E402
 
@@ -33,14 +35,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
-    power = "not checked on this platform"
-    if sys.platform == "darwin":
-        battery = subprocess.check_output(["pmset", "-g", "batt"], text=True)
-        settings = subprocess.check_output(["pmset", "-g"], text=True)
-        low_power = any(line.split() == ["lowpowermode", "1"] for line in settings.splitlines())
-        if "AC Power" not in battery or low_power:
-            raise SystemExit("refusing to benchmark without AC power and Low Power Mode disabled")
-        power = "AC; Low Power Mode 0"
+    power = power_state()  # refuses battery power and Low Power Mode on macOS
 
     source = subprocess.check_output(["git", "show", f"{BASELINE}:mixmogam/_loco.py"], cwd=ROOT)
     baseline = {"__name__": "baseline_loco"}

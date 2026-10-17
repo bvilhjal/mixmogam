@@ -39,8 +39,9 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 from mixmogam import __version__, gwas  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
 from mixmogam.io.plink import read_plink, write_plink  # noqa: E402
+from hratt_efficiency import power_state  # noqa: E402
 from structure_calibration import (  # noqa: E402
-    _on_battery, load_dataset, simulate_phenotype, structure_loading)
+    load_dataset, simulate_phenotype, structure_loading)
 
 CHI2_MED = stats.chi2.ppf(0.5, 1)
 
@@ -61,9 +62,7 @@ def main():
     ap.add_argument("--reps", type=int, default=6)
     ap.add_argument("--threads", type=int, default=2)
     args = ap.parse_args()
-    if _on_battery():
-        print("refusing to run on battery power")
-        return 2
+    power_state()  # refuses battery power and Low Power Mode on macOS
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = ROOT / "benchmarks" / "results" / f"{run_id}-kvik-reference"
     work = out / "ldak_work"

@@ -2,7 +2,7 @@
 
 Measured-evidence suite (family convention: run archives under
 `results/<run-id>/` with a source snapshot). Runners refuse to start on
-battery power like the sibling packages.
+battery power or with macOS Low Power Mode on, like the sibling packages.
 
 **Review correction, 2026-10-03 (`2.0.0.dev1`).** Archives through
 `20261003T122520Z` precede the current fixes. The LDAK reference run
@@ -15,6 +15,21 @@ counting missing results as nonsignificant. The default permutation scheme
 also changed; previous thresholds belong to `scheme="projected"`.
 The archived sources/results remain intact. See the
 [critical review](../docs/review-2026-10-03.md).
+
+**Known major genes on real data.** `atwell_controls.py` runs `exact`,
+`bolt-inf`, `hratt` and OLS with 10 built-in PCs on the bundled RegMap panel
+(1,307 x 214,051) for seven Atwell phenotypes with a known major gene,
+and reports whether each gene's 50 kb window reaches 0.05/m. The
+[prespecified plan](atwell_controls_plan.md) was written before the first
+fit. The 17 October run
+([`20261017-atwell-controls`](results/20261017-atwell-controls/README.md))
+found six of seven genes with every method, failing A1 on MOT1. On log10
+Mo, an exploratory rerun ranked MOT1 first. The run takes about 13 minutes
+and 1.8 GiB, mostly `hratt`.
+
+```sh
+python benchmarks/atwell_controls.py
+```
 
 **Matched simulation comparison.** `ldak_kvik_comparison.py` compares exact
 LOCO, mixmogam BOLT-inf and mixmogam HRATT with the official LDAK-KVIK executable.

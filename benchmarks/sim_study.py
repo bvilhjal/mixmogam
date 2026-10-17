@@ -40,6 +40,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from hratt_efficiency import power_state  # noqa: E402
 from mixmogam import LMM, __version__, gwas  # noqa: E402
 from mixmogam.kinship import realized_relationship  # noqa: E402
 from mixmogam.results import GwasResult  # noqa: E402
@@ -60,16 +61,6 @@ LARGE_SCENARIOS = {
     "S5_n20k": dict(n=20_000, m=50_000, h2=0.5, n_causal=30, confounding=0.0,
                     generator="blocks"),
 }
-
-
-def _on_battery() -> bool:
-    try:
-        out = subprocess.run(
-            ["pmset", "-g", "batt"], capture_output=True, text=True, timeout=5
-        ).stdout
-        return "Battery Power" in out
-    except Exception:
-        return False
 
 
 def _peak_rss_gb() -> float:
@@ -378,9 +369,7 @@ def main():
     ap.add_argument("--large", action="store_true",
                     help="add the n=10k / n=20k large-n scenarios")
     args = ap.parse_args()
-    if _on_battery():
-        print("refusing to run on battery power (timings not trustworthy)")
-        return 2
+    power_state()  # refuses battery power and Low Power Mode on macOS
 
     if args.quick:
         SCENARIOS["S3_large"] = dict(n=2_000, m=20_000, h2=0.5, n_causal=20, confounding=0.0)

@@ -108,6 +108,11 @@ removed the ancestry inflation in the tested cells. Cross-fitting cost
 1.08--1.11 times the fitting time; weighted fits cost 1.55 times HRATT-HE,
 failing the target of 1.3. The package now computes those principal components itself,
 and a rerun with them reproduced that calibration.
+On the bundled \emph{Arabidopsis thaliana} panel, a prespecified check
+found six of seven genes with known large effects on Atwell's phenotypes,
+under every method. No method found MOT1 for molybdenum on the
+prespecified raw scale, so the check failed its criterion; on log values,
+an exploratory rerun ranked MOT1 first.
 REML remains the default variance estimator without sampling weights.
 The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
@@ -1292,7 +1297,8 @@ We exclude its empirical results, concordance coefficients, and real-data
 calibration curves from this revision. The underlying RegMap resource
 \citep{horton2012} remains suitable for a future controlled benchmark,
 but neither its archived export nor a redraw of its old results validates
-the corrected package.
+the corrected package. Section~\ref{sec:atwell-results} uses the panel
+only for a prespecified positive-control check.
 
 New numerical results record the generating script, seeds, software
 versions, requested BLAS thread limits, genotype hashes, and package
@@ -2322,6 +2328,60 @@ on 5 October, before the covariate-specific frequencies.
  \end{tabular}
 \end{table}
 
+\subsection{Known major genes on the RegMap panel: prespecified check}
+\label{sec:atwell-results}
+
+Simulated data cannot contain the errors of real files, such as sample
+IDs that do not join or positions on another assembly. The
+bundled RegMap panel (1,307 accessions, 214,051 SNPs) carries the
+phenotypes of \citet{atwell2010}. For seven of them a single gene with a
+large effect is known (Table~\ref{tab:atwell}). Before the first fit we
+fixed the controls, raw phenotype values, a window of 50~kb around each
+TAIR10 gene body, the threshold $0.05/m$ and two criteria (archive
+\code{20261017-}\allowbreak\code{atwell-controls}). A1 required exact LOCO
+to find all seven genes; it failed. A2 required BOLT-LMM-inf and HRATT to
+find every gene exact LOCO found; it passed.
+
+All four methods found the same six genes. The best window variant ranked
+first or second genome-wide, inside the gene body or within 7~kb of it.
+Every phenotyped accession joined the panel, and the signals sit at the
+genes, so the sample join and the positions hold on these files. (Allele
+coding cannot be checked this way: swapping it leaves $p$ unchanged.) No method found MOT1
+for molybdenum. In an exploratory rerun on $\log_{10}$ values, exact LOCO
+ranked a variant inside MOT1 first ($p=6\times10^{-10}$). Seven
+accessions carry its minor allele, with median Mo 0.47 against 2.53 for
+the rest. \citet{baxter2008} traced low shoot Mo to a MOT1 promoter
+deletion in seven low-Mo accessions; we did not check whether they are
+the same seven. On the raw scale the high tail of the common allele
+dominates the variance. The miss lies in the prespecified raw scale, and
+a real-data plan should fix each trait's scale in advance.
+
+HRATT's variational fits did not converge on the five traits where its
+heritability estimate reached the upper bound (0.992 or more): the four
+hypersensitive responses and FLC expression. They ran to 100 iterations
+in 101--143 seconds, against 12--30 seconds for the converged fits and
+under two seconds for the other methods. They still found every control.
+These samples hold 84 to 166 accessions, where \code{auto} uses exact LOCO.
+The check covers data handling and power at large effects. It does not
+test tail calibration.
+
+\begin{table}[htbp]
+ \centering\footnotesize
+ \caption{Known major genes on the RegMap panel: the smallest $p$ within
+ 50~kb of the gene body and, in parentheses, its genome-wide rank, for
+ raw phenotypes. Exact is exact LOCO; OLS+PCs has 10 built-in principal
+ components. $^\dagger$Above $0.05/m$ ($2.4$--$2.5\times10^{-7}$).
+ $^*$No criterion: FLC and FRI both regulate FLC expression.}
+ \label{tab:atwell}
+ \begin{tabular}{@{}llrllll@{}}
+ \toprule
+ Trait & Gene & $n$ & Exact & BOLT-inf & HRATT & OLS+PCs \\
+ \midrule
+ \tabinput{tables/atwell_controls.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
 \FloatBarrier
 
 \section{Discussion}
@@ -2792,8 +2852,9 @@ identities, and evidence map. The figure generator reads recorded results and do
 rerun old analyses. The figure and report manifests identify source
 hashes; the bibliography metadata records verified DOI identities.
 No new human-participant data were collected for this revision. The
-new experiments are entirely simulated. Historical RegMap results are
-not used to support current performance claims.
+new experiments are simulated, apart from the positive-control check on
+the bundled RegMap panel (Section~\ref{sec:atwell-results}). Historical
+RegMap results are not used to support current performance claims.
 
 \appendix
 \section{Useful identities and interpretation checks}
@@ -2869,11 +2930,23 @@ Abney M (2015). Permutation testing in the presence of polygenic
 variation. \emph{Genet Epidemiol} 39(4):249--258.
 \href{https://doi.org/10.1002/gepi.21893}{doi:10.1002/gepi.21893}
 
+\bibitem[Atwell et~al.(2010)]{atwell2010}
+Atwell S, Huang YS, Vilhj\'almsson BJ, et~al. (2010). Genome-wide
+association study of 107 phenotypes in \emph{Arabidopsis thaliana} inbred
+lines. \emph{Nature} 465(7298):627--631.
+\href{https://doi.org/10.1038/nature08800}{doi:10.1038/nature08800}
 
 \bibitem[Baumdicker et~al.(2022)]{baumdicker2022}
 Baumdicker F, Bisschop G, Goldstein D, et~al. (2022). Efficient ancestry
 and mutation simulation with msprime 1.0. \emph{Genetics} 220(3):iyab229.
 \href{https://doi.org/10.1093/genetics/iyab229}{doi:10.1093/genetics/iyab229}
+
+\bibitem[Baxter et~al.(2008)]{baxter2008}
+Baxter I, Muthukumar B, Park HC, et~al. (2008). Variation in molybdenum
+content across broadly distributed populations of \emph{Arabidopsis
+thaliana} is controlled by a mitochondrial molybdenum transporter (MOT1).
+\emph{PLoS Genet} 4(2):e1000004.
+\href{https://doi.org/10.1371/journal.pgen.1000004}{doi:10.1371/journal.pgen.1000004}
 
 \bibitem[Berisa and Pickrell(2016)]{berisa2016}
 Berisa T, Pickrell JK (2016). Approximately independent linkage

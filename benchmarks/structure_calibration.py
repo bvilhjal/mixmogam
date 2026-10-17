@@ -30,7 +30,6 @@ import datetime as dt
 import json
 import platform
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -40,7 +39,9 @@ from scipy import stats
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
+sys.path.insert(0, str(ROOT / "benchmarks"))
 
+from hratt_efficiency import power_state  # noqa: E402
 from mixmogam import __version__, gwas  # noqa: E402
 from mixmogam._cg import SpectralPreconditioner  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
@@ -58,15 +59,6 @@ METHODS = {
     "hratt-spectral": dict(method="hratt", denominator="spectral"),
 }
 CHI2_MED = stats.chi2.ppf(0.5, 1)
-
-
-def _on_battery() -> bool:
-    try:
-        out = subprocess.run(["pmset", "-g", "batt"], capture_output=True, text=True,
-                             timeout=5).stdout
-        return "Battery Power" in out
-    except Exception:
-        return False
 
 
 def load_dataset(name: str, quick: bool) -> Genotypes:
@@ -140,9 +132,7 @@ def main():
     ap.add_argument("--reps", type=int, default=10)
     ap.add_argument("--datasets", default="sim_none,sim_strong,at_regmap")
     args = ap.parse_args()
-    if _on_battery():
-        print("refusing to run on battery power (timings not trustworthy)")
-        return 2
+    power_state()  # refuses battery power and Low Power Mode on macOS
     run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     out = ROOT / "benchmarks" / "results" / f"{run_id}-structure-calibration"
     out.mkdir(parents=True, exist_ok=True)

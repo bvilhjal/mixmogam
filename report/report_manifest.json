@@ -1,26 +1,28 @@
 {
-  "revision": "2026-10-16-review-fixes",
-  "recorded_at_utc": "2026-10-16T21:48:38.584757+00:00",
+  "revision": "2026-10-17-atwell-controls",
+  "recorded_at_utc": "2026-10-17T02:17:48.822008+00:00",
   "package_version": "2.0.0.dev6",
-  "parent_commit": "d080bb357152879af5adae24ceb293a675a4c7d0",
-  "revision_state": "Uncommitted review fixes based on d080bb35: separate headcount from effective sample size in exports, declare coordinate assembly, guard PCA allocations, repair active-profile power checks, and retain failed follow-up criteria in the abstract. Historical studies and their producing sources are unchanged; no association benchmark was rerun for these fixes.",
+  "parent_commit": "59a4d1bd8def1690f3bbfdf15d4a3516ef482576",
+  "revision_state": "Uncommitted changes based on 59a4d1bd: Section 4.13 and Table 21 report the prespecified Atwell positive-control check (20261017-atwell-controls; A1 failed on MOT1 with raw values, A2 passed; exploratory log-scale and HRATT-convergence follow-ups), the abstract states it, and the provenance text no longer calls every new experiment simulated. read_regmap streams in chunks with identical calls; five older benchmark drivers use the shared AC/Low Power Mode guard. Other studies and their producing sources are unchanged.",
   "pdf": {
     "path": "report/mixmogam_report.pdf",
-    "sha256": "b2a2fbdf0a1e9802a04b7e7e980ff10d19e9fb67e7b1fcbee6cd82cc92ca5dcd",
-    "pages": 51
+    "sha256": "f3c1b574b79663e2e6d5e72e603af72af20f665879ddabf8e8d2589a441a28dc",
+    "pages": 52
   },
   "counts": {
     "figures": 5,
-    "tables": 20,
+    "tables": 21,
     "numbered_equations": 23,
-    "verified_bibliography_entries": 32,
+    "verified_bibliography_entries": 34,
     "research_priorities": 6
   },
   "input_sha256": {
-    "CHANGELOG.md": "66d43bbed9f161021e5f2cc3d4d7394961b2c24ec26e2e337b5d3495e6b3dcfc",
+    "CHANGELOG.md": "ab29e235caf5cbbfb1c14b188aa909bbcd28242b5ad9d9d162420bb9d6e8d341",
     "MANIFEST.in": "34261e9066490593864c6269dab8b9dc6415f9bf08d9d0b3f64d7e694d4294a3",
     "README.md": "cf62612bc735f061c88091e5aa2f9e596b0fe18e41ba134920c54686e7be68bf",
-    "benchmarks/README.md": "7a9af047d2f1d16fcd946aa7f57902282bf68faac57bb36b6d2261df9157b75c",
+    "benchmarks/README.md": "89d5b3a8d539c35b6be3111e46ee78b5c0f76e7ef3759270a28593b79ec55599",
+    "benchmarks/atwell_controls.py": "9256c3ad4e9f1e6afb4c4bf799a54389c27c06405663a885d81a179943463cab",
+    "benchmarks/atwell_controls_plan.md": "5406a53d8d94ce5cf3ddb7db2800825f5d11334f4d8ac1c8a780f48db99689f9",
     "benchmarks/denominator_geometry.py": "8e038e5cd57fe2795089bb7f6f79a2d8b180d0d2f89dba477575014df55fd0a4",
     "benchmarks/efficiency_paired.py": "b560742bb58d066d8a6a07aee6a3d6cec920e46d9ca9da7ef3f3070cf8868564",
     "benchmarks/hratt_efficiency.py": "d9eed0b5fa321fa0f3a34849eb754c4caad2d2f9724dc95f13af510786c023ad",
@@ -34,6 +36,7 @@
     "benchmarks/ldak_kvik_20k_plan.md": "f0063c1f1468b624521755bc8c733061bbceec2dea735272fbcbbd3ca0231945",
     "benchmarks/ldak_kvik_comparison.py": "cc68ff4d96b9778a09bb63f594e80fe39d0b604770b72aa05f000f622b178d10",
     "benchmarks/ldak_kvik_comparison_plan.md": "5a2fe979a538a980b4930c96cb5a74c645ae27f30c3e0c69bcbae99f0521f16a",
+    "benchmarks/ldak_kvik_reference.py": "de8bcd16fa0de997a857f979d26285dc329ec31fc568c067d7c36936d3cb538a",
     "benchmarks/ldak_kvik_scaling_plan.md": "3d7efa92dedf8fef49984747e998517b30599f3571dccef7fcea57645364ed64",
     "benchmarks/results/20261002T200925Z/benchmarks.csv": "2dd88d036ac220e3cfe004dccf123de94f44d089225c22ed89f8d27a88d0756f",
     "benchmarks/results/20261003-critical-review/loco_memory.json": "23e99525b7a335073b86bdcd16b0804cf0842863b698ab34f0b0725e25dfa89b",
@@ -482,7 +485,24 @@
     "benchmarks/results/20261008-hratt-followups-builtin-pcs/completion.json": "5b697373180655a0bc2b5461c56b36a6e9c914edd406ef6412f87dfbe306203a",
     "benchmarks/results/20261008-hratt-followups-builtin-pcs/criteria.json": "de483103d36ac27f79cd84b6e1a5541aa08f224253b2e31b0af8e7d5fbac54d9",
     "benchmarks/results/20261008-hratt-followups-builtin-pcs/plan.md": "bd8b3a2f32c041763b4af828fabf20157d0cc77b4e7ef8cc990ec6c3bc8e8993",
+    "benchmarks/results/20261017-atwell-controls/README.md": "fa6bd56d97818c48c6d715efd96b0e03ca09264cd76b14923fa2953b521e4403",
+    "benchmarks/results/20261017-atwell-controls/criteria.json": "fa308304c9e620bc94e5dc7accdc22549490df7190ac86176354edfb4fd9f464",
+    "benchmarks/results/20261017-atwell-controls/environment.json": "5fce778cab02b4df755c520fbb35aec0fec572ca91026660e6917a7a35c305b2",
+    "benchmarks/results/20261017-atwell-controls/exploratory/explore.log": "4df53df8d1711d36aa145d32ca86470a1c52789db01f4eccbc011347af4958a6",
+    "benchmarks/results/20261017-atwell-controls/exploratory/explore.py": "34c991b9ebcb0b5b8b5e8d976d82e72f33cd6e67692f74ec3bc5e3ab48409e24",
+    "benchmarks/results/20261017-atwell-controls/exploratory/hratt_convergence.csv": "a0a69c46df3ffb41ede303737ff62d1883b0da7b821d26408b69c21638c71175",
+    "benchmarks/results/20261017-atwell-controls/exploratory/mo98.csv": "ce586a3107cd750b69933523a2a03ebc91786846c13216e3e10d2d0183183cbb",
+    "benchmarks/results/20261017-atwell-controls/exploratory/mot1_alleles.py": "efdc9165f556cf1528b29dfd571c64c24fb7f68895abb8cd27b0d69f1ced8752",
+    "benchmarks/results/20261017-atwell-controls/plan.md": "5406a53d8d94ce5cf3ddb7db2800825f5d11334f4d8ac1c8a780f48db99689f9",
+    "benchmarks/results/20261017-atwell-controls/run.log": "f64a0376c86640a75fb503fea3cd372a9a4e0ba0a3e196708e37be55e8f8b84e",
+    "benchmarks/results/20261017-atwell-controls/scans.csv": "0a490ef175b936431e6f62299936aa2734e71dd262171a2b367f66c33d36467d",
+    "benchmarks/results/20261017-atwell-controls/top_hits.npz": "a3890ac0852ed8734bcea5282f4c43ef2d0db42dc9cb8815aced43186eae6877",
+    "benchmarks/results/20261017-atwell-controls/windows.csv": "d82fe740f716086af11cc962b0033b14b33d46d678e2ebddf4aec81b0972b5e6",
+    "benchmarks/review_memory.py": "74149d8c424981eabf6e970ae1df39a73fad6d3cb943df367985d354dac778e8",
+    "benchmarks/run_benchmarks.py": "a6afb66f26056689dff73037a24f97b0518e4240b95f541182a795ff1c0cd022",
+    "benchmarks/sim_study.py": "8d006023f6fe197e25a53a89f3b587f5d1685383065993fdb27111bbebee61ef",
     "benchmarks/slq_defaults.py": "f8782911dca435c7a3201befad2e6e3c293f62b0346ec0565e76f5831a37ea6e",
+    "benchmarks/structure_calibration.py": "bba3f52a6f806cb9144681ac0af0857b86cf474f229f14325e18376ecc5519fd",
     "docs/design.md": "6d4578089e6d768a5b0e53f60091dc0d3a701248ed7d880586c7039432c802e5",
     "docs/quickstart.md": "c5345ee98cb2c3eb53447d0d23c9600c4083b0555d153687a9bd6cdb264b197e",
     "docs/review-2026-10-03.md": "a72b39275f1124e03b9927a8aed49b65dc2288be769aa0508c9ac1a40dba30a2",
@@ -492,7 +512,8 @@
     "mixmogam/cli.py": "5eed81fb080a9dafd03289beaad0df30f5e87ea8b67068486bec9174fb6cbb47",
     "mixmogam/pca.py": "e335a7454f856e5b1128197bb2d428bf9c093e33404855b34083f3236fe2cf33",
     "mixmogam/results.py": "d52645e91046f8d9877efc16be1f7f5e09345cc1c456f4086959637da5275063",
-    "report/README.md": "2ff25e086be6175adc46c42326a450dc40761e773b5851cb328eb4870f924039",
+    "report/README.md": "59353474bdc887fded130cb55c2302148bab537ffe672b155c9f196238276f34",
+    "report/atwell_table_manifest.json": "0ab87b00728df11453ab0f3dc5a37ff8b51b2f7b1e927202659973d9c622d3df",
     "report/dev5_table_manifest.json": "9b9dc2bb79c50e12a7a41a3669ce09c6ceeff0979aed1e07c91080baf23a399c",
     "report/efficiency_table_manifest.json": "b3f815b0c3f88d54c45dba4bd776803b375dad3f6c7a4ab16f6f27510cd70d41",
     "report/figure_manifest.json": "117e8c9e67af2fe9aefdecf89c63441b51cace9f168045b841e305cce182a403",
@@ -507,6 +528,7 @@
     "report/hapnest_manifest.json": "0241b70001d9d5df37d585b7af284a39faf98c143e4d9281121cbdf708d8183c",
     "report/kvik_figure_manifest.json": "8f14a82dd927c9be886ba50512f6c7b20c5f1ac0250ce59ee02efdb5b90397fe",
     "report/kvik_scaling_manifest.json": "afb1b95de106fe2ce6db27aa6925754e5c0c4f97df78a5352d49c98706d21f39",
+    "report/make_atwell_table.py": "369dd79171a3a9ea64718b426c93a3b0334bc87bd1d10263d64bbc773c785f18",
     "report/make_dev5_tables.py": "4c06d1ca4b4ebf4057bebce4c0345e0b45bd05616b974b2cdbc6db27cd850c03",
     "report/make_efficiency_tables.py": "5aa33195902927cd8cf7583e77fadfc584f812630f0862e93a55a39de4df8b1f",
     "report/make_figures.py": "c3b5be01ab4114478231d82bcb2f0960c39904a56e159220a63469ccbfe70860",
@@ -514,9 +536,10 @@
     "report/make_ldak_kvik_figures.py": "6be9c539e116bc4979d2e31db8a0c56c2f978351e91bbb38c40ffb460d95d388",
     "report/make_streaming_tables.py": "6d89096fe0705c13adada736cf7a1645ebc52e2d5a7146e764915b37c92175b9",
     "report/make_weights_binary_tables.py": "41e7c6ef11cc82f32e011260f2ca3a2950dbe686e25ebda973767defd5eec86b",
-    "report/mixmogam_report.tex": "4164214f0ed58a4b8fc692cbe9471e399655f0729cdede064738ffc6d3732eaf",
-    "report/references.json": "a29b4c3444fa549f0db30c0f93a5c4b730948f1fb69af9906edff1a6edb74dc4",
+    "report/mixmogam_report.tex": "faf3a263ee67658c417c6d43a1bc492f11cbb8509cd803b1b3167f27c4b6235f",
+    "report/references.json": "5061b8e7af0f38c2258bfa0f2d5f9b4512747977c8e1f9856da71bd2f4abf44e",
     "report/streaming_table_manifest.json": "3218d2e84ecb872187a4a2dc16ba01c0b6043ea8afd5ea97c380e09f4bda4907",
+    "report/tables/atwell_controls.tex": "a26b5ed64f712beab3f55aacbaba0614725547a2e0d1eab559f7731a4cb6059e",
     "report/tables/calibration.tex": "c6a0896f7ce1675cc2b41b446b328676e7c233b6a806bf7f2f4916a481e7e9ea",
     "report/tables/dev5_paired.tex": "a18d2c9545fbf2a3cd9cf6d8a0d65f0346a4b19e18805baf0c6afaafc625a5cb",
     "report/tables/dev5_slq.tex": "63bafe8d2fd6e835cd4a9c125a25fda03941c2357158ba5ddae7baefc92953e6",
@@ -542,6 +565,8 @@
     "tests/test_hratt_he.py": "bd9089e10bdf9f5fcf2931a22047d6334480776404e4a2c5df06f223ab786b4f",
     "tests/test_hratt_parallel.py": "9c169427cde025abc172bba2c7c6c8cd2860398229a277fa9fed16f6f1a09158",
     "tests/test_hratt_preconditioner_reuse.py": "87f4844d92c5b5e93f64d76fadf85ce0af9aeb89e749bbba13156989ae7a6ef4",
+    "tests/test_integration_at.py": "ba34601bdd12986576dee99bf0a9cbee694424599447d8d15481ab77bb9d2349",
+    "tests/test_io.py": "51bff54791dd3f03638fb15f770436e9c6b02587900b28e5c974beee1c1eb435",
     "tests/test_ldak_kvik_comparison.py": "a18d9140819c3a034a697ff4f60a94f0c1633fc01f0e532dec1578222ef59962",
     "tests/test_pca.py": "2a787410f7a27bec55b675e8663a0dba959d64c2b7ddc9db7c8ca4471c594731",
     "tests/test_results.py": "8b9681c8544430e2648df2d5c77447f8de27e9d53ea04662d5e299dc8b35df02",
@@ -570,7 +595,7 @@
     "mixmogam/io/hdf5.py": "30cfc31dc04390a559c5d3a3664cc6b4091de419be8199cc7d72b944b313e2a3",
     "mixmogam/io/phenofile.py": "2445a9b4354c0265161b04655bcda97f1cd644be02c481971846587a1c5c8a04",
     "mixmogam/io/plink.py": "a12491580e0a2d57d3d22e8518439e5fc25d678d83dee568af1db0c97f7301cc",
-    "mixmogam/io/regmap.py": "a2ca92271ef92e74c773644cd15087bdb3f570e035de4b74ca0de97d26fbee02",
+    "mixmogam/io/regmap.py": "8455bd64df78a7a281dd2d16ac10b5dda6ec7e8ff28ef28da1961a3dada52389",
     "mixmogam/kinship.py": "35de53fa02c2d358b9e4a046010239abda4cd262bc1e10e30dd511aefd06669b",
     "mixmogam/ldscore.py": "6066212e7fc0697219e5ffca83319fd41866f64ed22336c1b379376edb798b64",
     "mixmogam/lmm.py": "e8c0cbc3928762866c2c3cadaf15ebdbe4c0eb041a4ec5f2e3cd0fd568eb6594",
@@ -845,7 +870,7 @@
       }
     }
   },
-  "evidence_boundary": "Known-covariance geometry, scientific calibration and computational scalability are separate evidence. The original n=800 matched study has six independent panels per cell. The 20K workload has one phenotype per scenario and repeated timings, not independent calibration replication. HE and official LDAK fit different covariance workflows; reported h2 values are not interchangeable. HAPNEST simulation-only reaches 100K samples at 12K variants; GWAS reaches 50K samples at 20K variants. Synthetic references do not validate empirical human diversity or upstream Julia equivalence. Research directions remain proposals. The 2.0.0.dev5 comparison has two repetitions per source on simulated panels under unrelated host load; the Lanczos study tests the trace estimator on six panels with one phenotype each. Benchmark reruns reuse official outputs on identical inputs; their cross-program timings span two days. The genotype-streaming archive has two repetitions per source on synthetic panels at 10,000 and 20,000 samples on an idle host. The e4089d8 reruns repeat only the mixmogam half; one same-day check of two workloads separates code from host conditions.",
+  "evidence_boundary": "Known-covariance geometry, scientific calibration and computational scalability are separate evidence. The original n=800 matched study has six independent panels per cell. The 20K workload has one phenotype per scenario and repeated timings, not independent calibration replication. HE and official LDAK fit different covariance workflows; reported h2 values are not interchangeable. HAPNEST simulation-only reaches 100K samples at 12K variants; GWAS reaches 50K samples at 20K variants. Synthetic references do not validate empirical human diversity or upstream Julia equivalence. Research directions remain proposals. The 2.0.0.dev5 comparison has two repetitions per source on simulated panels under unrelated host load; the Lanczos study tests the trace estimator on six panels with one phenotype each. Benchmark reruns reuse official outputs on identical inputs; their cross-program timings span two days. The genotype-streaming archive has two repetitions per source on synthetic panels at 10,000 and 20,000 samples on an idle host. The e4089d8 reruns repeat only the mixmogam half; one same-day check of two workloads separates code from host conditions. The Atwell check tests data handling and power at known large effects in 84-166 inbred accessions, not tail calibration; its log-scale and convergence results are exploratory, and allele coding cannot be checked by locus recovery.",
   "benchmark_reruns": {
     "archives": [
       "benchmarks/results/20261006-phensim-kvik-dev6",
@@ -1007,5 +1032,80 @@
     },
     "evidence_boundary": "Implementation and format checks do not establish scientific calibration. Weighted S3 effect bias and weighted runtime remain failed criteria; dosage support, prespecified real-data locus recovery and broader independent calibration remain future work.",
     "repository_archive": "The large Atwell ZIP is present in the initial commit, already an ancestor of origin/master. No archive or repository history was deleted or rewritten."
+  },
+  "atwell_controls": {
+    "previous_report": {
+      "revision": "2026-10-16-review-fixes",
+      "recorded_at_utc": "2026-10-16T21:48:38.584757+00:00",
+      "parent_commit": "d080bb357152879af5adae24ceb293a675a4c7d0",
+      "revision_state": "Uncommitted review fixes based on d080bb35: separate headcount from effective sample size in exports, declare coordinate assembly, guard PCA allocations, repair active-profile power checks, and retain failed follow-up criteria in the abstract. Historical studies and their producing sources are unchanged; no association benchmark was rerun for these fixes.",
+      "pdf": {
+        "path": "report/mixmogam_report.pdf",
+        "sha256": "b2a2fbdf0a1e9802a04b7e7e980ff10d19e9fb67e7b1fcbee6cd82cc92ca5dcd",
+        "pages": 51
+      }
+    },
+    "archive": "benchmarks/results/20261017-atwell-controls",
+    "plan": "benchmarks/atwell_controls_plan.md (written before the first fit; archived as plan.md)",
+    "criteria": {
+      "A1": {
+        "pass": false,
+        "recovered_by_exact": 6,
+        "controls": 7
+      },
+      "A2": {
+        "pass": true,
+        "bolt-inf": true,
+        "hratt": true
+      },
+      "recovered": {
+        "exact": [
+          "FRI/FRI",
+          "Na23/HKT1",
+          "avrB/RPM1",
+          "avrPphB/RPS5",
+          "avrRpm1/RPM1",
+          "avrRpt2/RPS2"
+        ],
+        "bolt-inf": [
+          "FRI/FRI",
+          "Na23/HKT1",
+          "avrB/RPM1",
+          "avrPphB/RPS5",
+          "avrRpm1/RPM1",
+          "avrRpt2/RPS2"
+        ],
+        "hratt": [
+          "FRI/FRI",
+          "Na23/HKT1",
+          "avrB/RPM1",
+          "avrPphB/RPS5",
+          "avrRpm1/RPM1",
+          "avrRpt2/RPS2"
+        ],
+        "ols+pcs": [
+          "FRI/FRI",
+          "Na23/HKT1",
+          "avrB/RPM1",
+          "avrPphB/RPS5",
+          "avrRpm1/RPM1",
+          "avrRpt2/RPS2"
+        ]
+      },
+      "peak_rss_gib": 1.79742431640625,
+      "seconds": 774.3
+    },
+    "validation": {
+      "fast_suite": "678 passed (-m 'not slow and not integration and not external')",
+      "slow_and_integration": "13 passed, including exact recovery of RPS5 and RPM1 on a partial panel; that test fails with phenotypes shuffled across accessions",
+      "reader": "streaming read_regmap identical to the 59a4d1bd reader at three thinning settings and to a per-line decode of all 214,051 rows; 37 s versus 60 s, peak footprint 2.3 GB for the whole comparison process versus 21 GB for one old full read",
+      "environment": {
+        "python": "3.14.6",
+        "blas_threads": 1,
+        "numba_thread_capacity": 4
+      },
+      "lint": "ruff check . passed; git diff --check passed",
+      "build": "Tectonic, 52 pages, no overfull boxes or unresolved references; pages 39 and 42 rendered and inspected"
+    }
   }
 }

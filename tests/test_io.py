@@ -95,6 +95,35 @@ def test_regmap_csv(toy, tmp_path):
     np.testing.assert_array_equal(back.G, toy.G[:, :10])
 
 
+def test_regmap_streams_padded_cells_across_chunks(tmp_path, monkeypatch):
+    import mixmogam.io.regmap as regmap
+
+    monkeypatch.setattr(regmap, "_ROWS_PER_CHUNK", 2)  # 7 kept rows: 3 full chunks + 1
+    path = tmp_path / "padded.csv"
+    rows = [[(i + j) % 3 for j in range(3)] for i in range(15)]
+    rows[4][1] = "NA"  # the bundled RegMap layout pads every cell: ", NA"
+    with open(path, "w") as fh:
+        fh.write("Chromosome, Positions, a, b, c\n")
+        for i, row in enumerate(rows):
+            fh.write(f"{1 + i // 8}, {100 * i}, " + ", ".join(map(str, row)) + "\n")
+    gt = regmap.read_regmap([str(path)], stride=2)
+    kept = np.array([[MISSING if v == "NA" else v for v in rows[i]] for i in range(0, 15, 2)])
+    assert gt.G.dtype == np.int8
+    np.testing.assert_array_equal(gt.G, kept.T)
+    np.testing.assert_array_equal(gt.position, np.arange(0, 1500, 200))
+    np.testing.assert_array_equal(gt.chromosome, [1, 1, 1, 1, 2, 2, 2, 2])
+    capped = regmap.read_regmap([str(path)], stride=2, max_variants=5)
+    np.testing.assert_array_equal(capped.G, kept[:5].T)
+
+
+@pytest.mark.parametrize("cell", ["0.5", "3", "258", "-2", "inf"])
+def test_regmap_refuses_non_calls_before_narrowing(tmp_path, cell):
+    path = tmp_path / "bad.csv"
+    path.write_text(f"Chromosome,Position,a,b\n1,1,0,1\n1,2,{cell},1\n")
+    with pytest.raises(ValueError, match="hard calls"):
+        read_regmap([str(path)], data_format="float")
+
+
 def test_regmap_nucleotides(tmp_path):
     path = tmp_path / "nt.csv"
     with open(path, "w") as fh:

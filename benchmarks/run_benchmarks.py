@@ -22,22 +22,14 @@ from pathlib import Path
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+from hratt_efficiency import power_state  # noqa: E402
 from mixmogam import LMM  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
 from mixmogam.kinship import realized_relationship  # noqa: E402
 from mixmogam.scan import permutation_min_p  # noqa: E402
 from mixmogam.simulate import simulate_genotypes, simulate_traits  # noqa: E402
-
-
-def _on_battery() -> bool:
-    try:
-        out = subprocess.run(
-            ["pmset", "-g", "batt"], capture_output=True, text=True, timeout=5
-        ).stdout
-        return "Battery Power" in out
-    except Exception:
-        return False
 
 
 def bench_scan_vs_reference(n=2000, m=10000, seed=5):
@@ -165,9 +157,7 @@ def main():
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
-    if _on_battery():
-        print("refusing to run on battery power (timings not trustworthy)")
-        return 2
+    power_state()  # refuses battery power and Low Power Mode on macOS
 
     rows = []
     rows.append(
