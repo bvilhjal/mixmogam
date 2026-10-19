@@ -73,6 +73,7 @@ def test_eigenstrat_roundtrip(toy, tmp_path):
             fh.write("".join(str(int(v)) for v in g) + "\n")
     back = read_eigenstrat(prefix)
     np.testing.assert_array_equal(back.G, toy.G)
+    assert back.G.flags.f_contiguous  # variant-major, as PLINK input
     np.testing.assert_array_equal(back.allele1, np.repeat("C", toy.n_variants))
     np.testing.assert_array_equal(back.allele2, np.repeat("T", toy.n_variants))
     write_plink(back, prefix + "_plink")
@@ -144,6 +145,7 @@ def test_hdf5_roundtrip(toy, tmp_path):
     write_hdf5(toy, path)
     back = read_hdf5(path)
     np.testing.assert_array_equal(back.G, toy.G)
+    assert back.G.flags.f_contiguous  # variant-major, as PLINK input
     assert list(back.sample_ids) == list(toy.sample_ids)
 
 

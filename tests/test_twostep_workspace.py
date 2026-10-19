@@ -111,9 +111,16 @@ def test_two_step_workspace_matches_original(dtype, large_block):
             for start in range(0, idx.size, rows):
                 yield idx[start : start + rows], g, block[start : start + rows]
 
+    def wide_slices(rows):
+        # LocoGenotypes.wide_slices: the same slices decoded to float64 (the
+        # tracked widening records each slice's float64 size).
+        for idx, g, block in raw_slices(rows):
+            yield idx, g, block.astype(np.float64)
+
     zz = np.einsum("ij,ij->i", np.asarray(Z), np.asarray(Z), dtype=np.float64)
     lg = SimpleNamespace(n=n, m=m, dtype=np.dtype(dtype), groups=groups,
                          blocks=lambda reuse=False: iter(blocks), raw_slices=raw_slices,
+                         wide_slices=wide_slices,
                          zz=zz, Q=np.empty((n, 0)), _projection=np.empty((m, 0)),
                          project=lambda v: np.asarray(v, dtype=np.float64))
     y = rng.normal(size=n) + latent

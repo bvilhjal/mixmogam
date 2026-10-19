@@ -180,10 +180,9 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
     m = lg.m
     U, J, zvar, rho = np.zeros(m), np.zeros(m), np.zeros(m), np.zeros(m)
     tile = max(1, (16 * 1024**2) // max(8 * n, 1))
-    for idx, g, Z in lg.raw_slices(tile):
+    for idx, g, Z64 in lg.wide_slices(tile):
         G_ = groups[g]
         qg = G_["q"]
-        Z64 = Z.astype(np.float64, copy=False)
         P = Z64 @ G_["side"]  # z'r, H = X'Wz, Q_X'z (per row)
         S = (Z64 * Z64) @ G_["sq"]  # sum W z^2, sum z^2
         zr, H, cu = P[:, 0], P[:, 1:1 + qg], P[:, 1 + qg:]

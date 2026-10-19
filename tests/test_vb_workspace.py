@@ -256,6 +256,27 @@ def test_partial_gram_cache_matches_full_and_skips_unused_folds(workspace, monke
     _assert_same_fit(full, _fit(VBEngine(lg, folds=folds), Y[:, :2], np.full(2, -1), np.array([0, 1])))
 
 
+def test_partitioned_folds_sum_the_fold_grams(workspace):
+    # With every fold requested (cross-fitting) the all-sample products are
+    # the sums of the folds' own, taken from fold-sorted samples: the same
+    # matrices up to float64 rounding, and the same fit.
+    lg, folds, Y = workspace
+    all_folds = np.arange(3)
+    eng = VBEngine(lg, folds=folds)
+    for idx, _, Z in eng._subblocks():
+        grams, coefs = eng._gram(Z, idx, all_folds)
+        expected = _projected_gram(lg, idx, Z, folds)
+        eps = np.finfo(lg.dtype).eps
+        np.testing.assert_allclose(grams, expected, rtol=0, atol=64 * eps * np.abs(expected).max())
+        expected = _projected_coefs(lg, idx, Z, folds)
+        np.testing.assert_allclose(coefs, expected, rtol=0, atol=1e-12 * np.abs(expected).max())
+    expected = _fit(_DenseWorkspaceOracle(lg, folds=folds), Y[:, :3], all_folds, np.full(3, -1))
+    result = _fit(eng, Y[:, :3], all_folds, np.full(3, -1))
+    assert result["converged"] and expected["converged"]
+    for key in ("beta", "resid", "prediction"):
+        np.testing.assert_allclose(result[key], expected[key], rtol=1e-5, atol=1e-9)
+
+
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
 def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, prior_type):
     lg, folds, Y = workspace
@@ -398,8 +419,20 @@ def test_sample_tiled_prediction_matches_dense(dtype):
     Z1 = rng.standard_normal((last, n)).astype(dtype)
     idx = rng.permutation(first + last)
     blocks = [(idx[:first], 0, Z0), (idx[first:], 1, Z1)]
+    rows = {id(i): Z for i, _, Z in blocks}
+
+    def wide_tiles(variants, samples, buffer=None):
+        tiles = []
+        for start in range(0, n, samples):
+            stop = min(start + samples, n)
+            tiles.append((start, stop, rows[id(variants)][:, start:stop].astype(np.float64)))
+        return iter(tiles)
+
     lg = SimpleNamespace(n=n, m=first + last, raw_slices=lambda rows=None: iter(blocks),
+                         slices=lambda rows=None: iter([(i, g) for i, g, _ in blocks]),
+                         wide_tiles=wide_tiles,
                          Q=np.empty((n, 0)), _projection=np.empty((first + last, 0)))
+    assert len(list(wide_tiles(blocks[0][0], (16 * 1024**2) // (8 * first)))) == 2
     beta = rng.standard_normal((first + last, 3))
     prediction = VBEngine(lg).predict(beta)
     assert prediction.dtype == np.float64

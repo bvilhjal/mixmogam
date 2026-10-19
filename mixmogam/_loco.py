@@ -234,24 +234,42 @@ class LocoGenotypes:
             self.zz[take] = np.einsum("ij,ij->i", Z, Z)
 
     def _decode(self, idx: np.ndarray, out: Optional[np.ndarray] = None,
-                scaled: bool = True) -> np.ndarray:
-        """Unprojected standardized rows (k, n) of ``idx``, by table lookup
-        (times the row scale, when there is one, unless ``scaled=False``)."""
+                scaled: bool = True, start: int = 0, stop: Optional[int] = None) -> np.ndarray:
+        """Unprojected standardized rows (k, stop - start) of ``idx`` for
+        samples start:stop (default all), by table lookup (times the row
+        scale, when there is one, unless ``scaled=False``). A float64 ``out``
+        receives the storage-precision values widened, without a separate
+        storage-precision copy."""
         from mixmogam._standardize import decode_table
 
         self._check_source()
+        stop = self.n if stop is None else stop
         if out is None:
-            out = np.empty((idx.size, self.n), dtype=self.dtype)
+            out = np.empty((idx.size, stop - start), dtype=self.dtype)
         if idx.size:
-            decode_table(self.gt.G, idx, self._lut[idx], out, self.n_threads,
-                         compiled=self._compiled)
-            if scaled and self.row_scale is not None:
-                out *= self._scale_store
+            scale = scaled and self.row_scale is not None
+            # Scaled values are rounded in the storage precision first.
+            target = (np.empty(out.shape, dtype=self.dtype)
+                      if scale and out.dtype != self.dtype else out)
+            decode_table(self.gt.G, idx, self._lut[idx], target, self.n_threads,
+                         compiled=self._compiled, start=start)
+            if scale:
+                target *= self._scale_store[start:stop]
+            if target is not out:
+                out[:] = target
         return out
 
     def _slice_rows(self) -> int:
         row = max(self.n * self.dtype.itemsize, 1)
         return max(1, min(max(_SLICE_BYTES // row, _MIN_SLICE_ROWS), _MAX_SLICE_BYTES // row))
+
+    def slices(self, rows: Optional[int] = None):
+        """Yield ``(variant_indices, group)``, at most ``rows`` per slice
+        and within one block: the slices of :meth:`raw_slices`, undecoded."""
+        rows = self._slice_rows() if rows is None else max(1, int(rows))
+        for idx, g in self._blocks:
+            for start in range(0, idx.size, rows):
+                yield idx[start : start + rows], g
 
     def raw_slices(self, rows: Optional[int] = None):
         """Yield ``(variant_indices, group, z)``: unprojected standardized
@@ -261,10 +279,35 @@ class LocoGenotypes:
         rows = self._slice_rows() if rows is None else max(1, int(rows))
         largest = max((idx.size for idx, _ in self._blocks), default=1)
         buffer = np.empty((min(rows, largest), self.n), dtype=self.dtype)
-        for idx, g in self._blocks:
-            for start in range(0, idx.size, rows):
-                take = idx[start : start + rows]
-                yield take, g, self._decode(take, out=buffer[: take.size])
+        for take, g in self.slices(rows):
+            yield take, g, self._decode(take, out=buffer[: take.size])
+
+    def wide_slices(self, rows: int):
+        """:meth:`raw_slices` in float64: rows decoded straight to float64
+        into one reused buffer. The values are the storage-precision rows
+        widened, without a storage-precision copy first."""
+        self._check_source()
+        rows = max(1, int(rows))
+        largest = max((idx.size for idx, _ in self._blocks), default=1)
+        buffer = np.empty((min(rows, largest), self.n))
+        for take, g in self.slices(rows):
+            yield take, g, self._decode(take, out=buffer[: take.size])
+
+    def wide_tiles(self, idx: np.ndarray, samples: int, buffer: Optional[np.ndarray] = None):
+        """Yield ``(start, stop, z)``: float64 unprojected standardized rows
+        (k, stop - start) of variants ``idx`` for ``samples`` samples at a
+        time, decoded straight into one reused buffer (valid until the next
+        iteration; ``buffer``, a flat float64 array, when large enough). The
+        values are the storage-precision rows widened, so products match
+        those of widened :meth:`raw_slices` rows; no storage-precision copy
+        is made first."""
+        samples = max(1, min(int(samples), self.n))
+        if buffer is None or buffer.size < idx.size * samples:
+            buffer = np.empty(idx.size * samples)
+        for start in range(0, self.n, samples):
+            stop = min(start + samples, self.n)
+            z = buffer[: idx.size * (stop - start)].reshape(idx.size, stop - start)
+            yield start, stop, self._decode(idx, out=z, start=start, stop=stop)
 
     def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray) -> np.ndarray:
         """out = z - c Q' for the rows of ``idx``: float64 arithmetic, one

@@ -118,9 +118,15 @@ proximal-contamination deflation.
   requested fold matrices are prepared. They are computed in float64 and
   stored in the genotype precision; blocks are cached in order up to a
   1e9-byte budget and the rest recomputed each sweep, for the folds that
-  fit uses. Reused workspaces avoid repeatedly widening whole genotype
-  blocks; residual accumulation remains float64.
-  The coordinate loop has an optional Numba implementation.
+  fit uses. When the folds partition the samples (cross-fitting, BOLT-LMM's
+  cross-validation), the all-sample Gram is the sum of the fold Grams,
+  taken from fold-sorted samples. Reused workspaces avoid repeatedly
+  widening whole genotype blocks; residual accumulation remains float64,
+  and the residual update tests sample folds instead of reading an
+  (n, columns) mask. The coordinate loop has an optional Numba
+  implementation that sweeps one model column at a time, so the in-block
+  corrections run along contiguous Gram rows and vectorize; every column
+  keeps its SNP order, serially or in parallel.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML
   on the operator: 24 Lanczos steps and 48 Rademacher probes. A pass over
   the genotypes costs about the same for 1 to 64 columns; 24 steps matched
@@ -305,12 +311,18 @@ corrections to products of unprojected rows. No float copy of the
 genotypes is retained: every pass decodes them. Calls may be stored two bits
 each (`PackedCalls`, PLINK's bed layout, in memory or memory-mapped), and
 preparation computes the mean and variance from exact call counts, so int8
-and two-bit storage give identical values. One thread decodes about 0.2 ns
-per genotype from two-bit storage, 0.26 ns from variant-major (PLINK order)
-int8 and 0.7 ns from sample-major int8 arrays. One-pass consumers decode 16 MiB slices
-(at least 256 variants, at most 512 MiB) into reused buffers. BOLT-LMM's
+and two-bit storage give identical values. One thread decodes about 0.16 ns
+per genotype from variant-major (PLINK order) int8, by comparisons that
+vectorize rather than a table gather, 0.2 ns from two-bit storage and
+1 ns from sample-major int8 arrays, a transpose. The readers produce
+variant-major calls, and selecting or aligning samples keeps that order.
+One-pass consumers decode 16 MiB slices
+(at least 256 variants, at most 512 MiB) into reused buffers; those that
+need float64 rows (predictions, out-of-fold scores, test statistics)
+decode straight into float64 tiles. BOLT-LMM's
 in-sample LD scores stream each chromosome through a sliding position
-window, holding the widest window rather than the genotype matrix. The
+window, holding the widest window rather than the genotype matrix, and
+compute each pair once, crediting both variants. The
 stored calls (int8 or two-bit), Gram matrices, residuals and workspaces are
 separate allocations.
 PLINK input decoding and genotype validation also use bounded tiles. None of

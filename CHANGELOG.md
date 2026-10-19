@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Computational efficiency
+
+Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-paired`).
+Statistics are bit-identical except where noted.
+
+- Decoding variant-major int8 calls selects each standardized value by
+  comparisons instead of a table gather: 0.16 instead of 0.26 ns per
+  genotype on one M2 Pro thread, in every streamed pass of the two-step
+  methods.
+- `Genotypes.filter_samples` and `align_samples` kept the calls but made
+  them sample-major, which every later pass decoded about six times slower
+  (1 ns per genotype); they now keep variant-major calls variant-major,
+  copying in bounded variant blocks. The HDF5 and EIGENSTRAT readers
+  return variant-major calls, as the PLINK readers did.
+- The variational coordinate kernel sweeps one model column at a time
+  with unsigned loop bounds, so the in-block Gram corrections vectorize:
+  1.2-1.7 times faster sweeps, serial and parallel kernels identical.
+- The variational residual update tests fold labels instead of reading an
+  (n, columns) float64 mask (BOLT-LMM's cross-validation: 90 columns).
+- Gram matrices of folds that partition the samples (HRATT's cross-fit,
+  BOLT-LMM's cross-validation) come from fold-sorted samples, the
+  all-sample Gram as their sum: no all-sample GEMM and no mask scans.
+  Equal to the previous matrices up to float64 rounding.
+- Predictions, out-of-fold LOCO scores and the retrospective and binary
+  score statistics decode their float64 rows directly (with a sample
+  range) instead of widening float32 copies; same values and products.
+- BOLT-LMM's LD scores compute each pair once and credit both variants:
+  about half the window products. Equal up to float32 product rounding.
+- The exact path's REML search starts Brent's method from its three known
+  bracket values (the first step is their parabola), with the same
+  1e-6 tolerance in log delta: 15% fewer Cholesky factorizations on the
+  3,000 x 44,000 panel (271 instead of 320), log10 p within 2.5e-6.
+
 ### Fixed
 
 - Binary and sampling-weighted result exports omit the headcount `n`,

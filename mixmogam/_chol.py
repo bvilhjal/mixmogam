@@ -36,6 +36,66 @@ LOCAL_STEP = 0.05
 X_TOL = 1e-6  # absolute, in log(delta)
 
 
+_GOLDEN = 0.3819660112501051  # (3 - sqrt(5)) / 2
+_SQRT_EPS = math.sqrt(np.finfo(float).eps)
+
+
+def _brent(f, a, b, c, fa, fb, fc, lo, hi):
+    """Brent's minimization (parabolic steps, golden-section fallback) on
+    [lo, hi] from the evaluated points a, b, c with fb <= fa, fc.
+
+    The termination rule and step safeguards are those of SciPy's bounded
+    method (absolute tolerance ``X_TOL``); the difference is the start:
+    x = b, with the other two points as w and v, so the first step can be
+    the parabola through all three.
+    """
+    x, fx = b, fb
+    (w, fw), (v, fv) = sorted([(a, fa), (c, fc)], key=lambda t: t[1])
+    step = previous = hi - lo  # permits a first parabolic step
+    for _ in range(500):  # SciPy's default evaluation limit
+        tol1 = _SQRT_EPS * abs(x) + X_TOL / 3.0
+        tol2 = 2.0 * tol1
+        mid = 0.5 * (lo + hi)
+        if abs(x - mid) <= tol2 - 0.5 * (hi - lo):
+            return x, fx
+        golden = True
+        if abs(previous) > tol1:
+            r = (x - w) * (fx - fv)
+            q = (x - v) * (fx - fw)
+            p = (x - v) * q - (x - w) * r
+            q = 2.0 * (q - r)
+            if q > 0.0:
+                p = -p
+            q = abs(q)
+            if abs(p) < abs(0.5 * q * previous) and q * (lo - x) < p < q * (hi - x):
+                previous, step = step, p / q
+                golden = False
+                u = x + step
+                if (u - lo) < tol2 or (hi - u) < tol2:
+                    step = tol1 if mid >= x else -tol1
+        if golden:
+            previous = (hi - x) if x < mid else (lo - x)
+            step = _GOLDEN * previous
+        u = x + (step if abs(step) >= tol1 else math.copysign(tol1, step))
+        fu = f(u)
+        if fu <= fx:
+            if u >= x:
+                lo = x
+            else:
+                hi = x
+            v, fv, w, fw, x, fx = w, fw, x, fx, u, fu
+        else:
+            if u < x:
+                lo = u
+            else:
+                hi = u
+            if fu <= fw or w == x:
+                v, fv, w, fw = w, fw, u, fu
+            elif fu <= fv or v == x or v == w:
+                v, fv = u, fu
+    return x, fx
+
+
 class CholeskyREML:
     """REML (or ML) variance ratio of y = X b + u + e, u ~ N(0, vg K).
 
@@ -110,15 +170,23 @@ class CholeskyREML:
     def _refine(f, a: float, b: float, c: float, fb: float) -> tuple[float, float]:
         """Minimize f = -loglik inside a bracket a < b < c (or c < b < a).
 
-        Brent's bounded method with an absolute tolerance of 1e-6 in log
-        delta, a relative 1e-6 in delta (the EMMA root finder uses an
-        absolute 1e-6 in delta; the two agree at delta = 1). A relative
-        tolerance in log delta would chase rounding noise near delta = 1.
+        Brent's method with an absolute tolerance of 1e-6 in log delta, a
+        relative 1e-6 in delta (the EMMA root finder uses an absolute 1e-6
+        in delta; the two agree at delta = 1). A relative tolerance in log
+        delta would chase rounding noise near delta = 1. The three bracket
+        values are already known (``f`` caches them), so the first step is
+        the parabola through them rather than a golden-section probe. The
+        later steps and the stopping rule are those of SciPy's bounded
+        method, which cannot start from known points.
         """
         lo, hi = min(a, c), max(a, c)
-        res = optimize.minimize_scalar(f, bounds=(lo, hi), method="bounded",
-                                       options={"xatol": X_TOL})
-        return (float(res.x), float(res.fun)) if res.fun <= fb else (b, fb)
+        if not lo < b < hi:  # a bracket collapsed onto a grid limit
+            res = optimize.minimize_scalar(f, bounds=(lo, hi), method="bounded",
+                                           options={"xatol": X_TOL})
+            x, fx = float(res.x), float(res.fun)
+        else:
+            x, fx = _brent(f, a, b, c, f(a), fb, f(c), lo, hi)
+        return (x, fx) if fx <= fb else (b, fb)
 
 
     def _coarse(self, f) -> tuple[float, float, bool]:

@@ -17,6 +17,26 @@ MISSING = -1  # internal missing genotype code
 _HARD_CALL_WORK_BYTES = 8 * 1024**2
 
 
+# int8 calls copied per block when samples are selected or reordered.
+_SAMPLE_COPY_CELLS = 16 * 1024**2
+
+
+def _variant_major(G) -> bool:
+    """Whether each variant's calls are contiguous (PLINK order), the layout
+    the two-step methods decode about six times faster than sample-major."""
+    return not G.strides[0] > G.strides[1]
+
+
+def _copy_samples(G, rows, out, out_rows=slice(None)):
+    """out[out_rows] = G[rows] in bounded variant blocks (no full-size
+    temporary), whatever the memory order of ``out``."""
+    step = max(1, _SAMPLE_COPY_CELLS // max(out.shape[0], 1))
+    for start in range(0, G.shape[1], step):
+        cols = slice(start, min(start + step, G.shape[1]))
+        out[out_rows, cols] = G[rows, cols]
+    return out
+
+
 def _bounded_blocks(array, max_elements):
     """Views with bounded element counts, including very tall inputs."""
     n, m = array.shape
@@ -210,8 +230,16 @@ class Genotypes:
         """New genotypes holding only the selected samples (indices or a
         boolean mask), in that order; packed calls stay packed."""
         idx = np.asarray(sample_indices)
+        if self.packed:
+            calls = self.G.take_samples(idx)
+        else:
+            # Keep variant-major calls variant-major: G[idx, :] would be
+            # sample-major, which every later decoding pass reads slower.
+            k = np.arange(self.n_samples)[idx].size
+            order = "F" if _variant_major(self.G) else "C"
+            calls = _copy_samples(self.G, idx, np.empty((k, self.n_variants), dtype=np.int8, order=order))
         return Genotypes(
-            self.G.take_samples(idx) if self.packed else self.G[idx, :],
+            calls,
             sample_ids=self.sample_ids[idx],
             chromosome=self.chromosome,
             position=self.position,
@@ -244,8 +272,9 @@ class Genotypes:
         if self.packed:
             calls = self.G.take_samples(np.asarray(cols, dtype=np.int64)).with_missing(~found)
         else:
-            calls = np.full((wanted.size, self.n_variants), MISSING, dtype=np.int8)
-            calls[found] = self.G[np.asarray(cols, dtype=np.int64)[found]]
+            order = "F" if _variant_major(self.G) else "C"
+            calls = np.full((wanted.size, self.n_variants), MISSING, dtype=np.int8, order=order)
+            _copy_samples(self.G, np.asarray(cols, dtype=np.int64)[found], calls, found)
         out = Genotypes(calls, sample_ids=wanted, chromosome=self.chromosome,
                         position=self.position, variant_ids=self.variant_ids,
                         allele1=self.allele1, allele2=self.allele2)

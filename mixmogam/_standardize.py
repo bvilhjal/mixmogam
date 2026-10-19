@@ -14,8 +14,8 @@ values, sum_i v_i z_i^2 - |c|^2, accumulated in the same sample loop.
 Every later pass decodes through a per-variant table: hard calls 0/1/2 can
 only standardize to three values, computed once in float64, so decoding
 selects them (no-calls are 0) without arithmetic. One M2 Pro thread decodes
-about 0.2 ns per genotype from two-bit codes, 0.26 ns from variant-major
-int8 (PLINK order) and 0.7 ns from sample-major int8. Covariates are
+about 0.16 ns per genotype from variant-major int8 (PLINK order), 0.2 ns
+from two-bit codes and 1 ns from sample-major int8. Covariates are
 removed by the consumers, never per variant.
 """
 
@@ -202,72 +202,87 @@ def _moments_packed_parallel(data, n, idx, Q, mean, sd, coefficients, zz, sqw):
                              sqw, wsq)
 
 
-def _decode_variants(G, idx, lut, out):
-    """Variant-major storage: each variant's calls are contiguous."""
-    n = G.shape[0]
+def _select_call(v, l0, l1, l2, missing):
+    """The value of validated call ``v`` (-1, 0, 1 or 2): the lookup row's
+    entries chosen by comparisons, which vectorize where a table gather
+    does not (0.16 against 0.26 ns per genotype on one M2 Pro thread)."""
+    return (l2 if v == 2 else l1) if v >= 1 else (l0 if v == 0 else missing)
+
+
+def _decode_column(col, l0, l1, l2, missing, out):
+    for i in range(col.size):
+        out[i] = _select_call(col[i], l0, l1, l2, missing)
+
+
+def _decode_variants(G, idx, lut, out, start):
+    """Variant-major storage: each variant's calls are contiguous. Rows of
+    ``out`` hold samples start:start + out.shape[1]."""
+    stop = start + out.shape[1]
     for r in range(idx.size):
-        j = idx[r]
-        for i in range(n):
-            out[r, i] = lut[r, G[i, j] & 3]
+        _decode_column(G[start:stop, idx[r]], lut[r, 0], lut[r, 1], lut[r, 2], lut[r, 3], out[r])
 
 
-def _decode_variants_parallel(G, idx, lut, out):
-    n = G.shape[0]
+def _decode_variants_parallel(G, idx, lut, out, start):
+    stop = start + out.shape[1]
     for r in prange(idx.size):
-        j = idx[r]
-        for i in range(n):
-            out[r, i] = lut[r, G[i, j] & 3]
+        _decode_column(G[start:stop, idx[r]], lut[r, 0], lut[r, 1], lut[r, 2], lut[r, 3], out[r])
 
 
-def _decode_tile(G, idx, lut, out, i0, i1):
+def _decode_tile(G, idx, lut, out, i0, i1, start):
     for r0 in range(0, idx.size, _TILE):
         for r in range(r0, min(r0 + _TILE, idx.size)):
             j = idx[r]
             for i in range(i0, i1):
-                out[r, i] = lut[r, G[i, j] & 3]
+                out[r, i - start] = lut[r, G[i, j] & 3]
 
 
-def _decode_samples(G, idx, lut, out):
+def _decode_samples(G, idx, lut, out, start):
     """Sample-major storage: decode square tiles, so the strided reads of a
     tile's sample rows and its row writes both stay in cache."""
-    n = G.shape[0]
-    for i0 in range(0, n, _TILE):
-        _decode_tile(G, idx, lut, out, i0, min(i0 + _TILE, n))
+    stop = start + out.shape[1]
+    for i0 in range(start, stop, _TILE):
+        _decode_tile(G, idx, lut, out, i0, min(i0 + _TILE, stop), start)
 
 
-def _decode_samples_parallel(G, idx, lut, out):
-    n = G.shape[0]
-    for t in prange((n + _TILE - 1) // _TILE):
-        _decode_tile(G, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, n))
+def _decode_samples_parallel(G, idx, lut, out, start):
+    stop = start + out.shape[1]
+    for t in prange((out.shape[1] + _TILE - 1) // _TILE):
+        i0 = start + t * _TILE
+        _decode_tile(G, idx, lut, out, i0, min(i0 + _TILE, stop), start)
 
 
-def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut):
-    """Rows r0:r1 from two-bit codes; ``lut`` is in call order (call & 3)."""
-    n = out.shape[1]
-    full = n // 4
+def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut, start):
+    """Rows r0:r1 from two-bit codes; ``lut`` is in call order (call & 3).
+    Whole bytes serve four samples; a range that starts or ends inside a
+    byte decodes those samples one at a time."""
+    stop = start + out.shape[1]
+    first = min(stop, (start + 3) // 4 * 4)  # the first sample of a whole byte
+    last = max(first, stop // 4 * 4)  # and the end of the whole bytes
     for r in range(r0, r1):
         code_lut[0], code_lut[1], code_lut[2], code_lut[3] = lut[r, 2], lut[r, 3], lut[r, 1], lut[r, 0]
         row = data[idx[r]]
-        for b in range(full):
+        for i in range(start, first):
+            out[r, i - start] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
+        for b in range(first // 4, last // 4):
             byte = row[b]
-            i = 4 * b
+            i = 4 * b - start
             out[r, i] = code_lut[byte & 3]
             out[r, i + 1] = code_lut[(byte >> 2) & 3]
             out[r, i + 2] = code_lut[(byte >> 4) & 3]
             out[r, i + 3] = code_lut[byte >> 6]
-        for i in range(4 * full, n):
-            out[r, i] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
+        for i in range(last, stop):
+            out[r, i - start] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
 
 
-def _decode_packed(data, idx, lut, out):
+def _decode_packed(data, idx, lut, out, start):
     """Variant-major two-bit codes: one byte serves four samples."""
-    _decode_packed_rows(data, idx, lut, out, 0, idx.size, np.empty(4, dtype=out.dtype))
+    _decode_packed_rows(data, idx, lut, out, 0, idx.size, np.empty(4, dtype=out.dtype), start)
 
 
-def _decode_packed_parallel(data, idx, lut, out):
+def _decode_packed_parallel(data, idx, lut, out, start):
     for t in prange((idx.size + _TILE - 1) // _TILE):
         _decode_packed_rows(data, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, idx.size),
-                            np.empty(4, dtype=out.dtype))
+                            np.empty(4, dtype=out.dtype), start)
 
 
 def _project_rows(z, coefficients, Qt, out):
@@ -301,6 +316,8 @@ if HAS_NUMBA:
     _project_rows = njit(cache=True)(_project_rows)
     _moments_columns_serial = njit(cache=True)(_moments_columns_serial)
     _moments_columns_parallel = njit(parallel=True, cache=True)(_moments_columns_parallel)
+    _select_call = njit(inline="always", cache=True)(_select_call)
+    _decode_column = njit(cache=True)(_decode_column)
     _decode_variants = njit(cache=True)(_decode_variants)
     _decode_variants_parallel = njit(parallel=True, cache=True)(_decode_variants_parallel)
     _decode_tile = njit(cache=True)(_decode_tile)
@@ -343,36 +360,39 @@ def prepare_moments(G, idx, Q, n_threads=1, sq_weights=None):
     return mean, sd, coefficients, zz
 
 
-def decode_table(G, idx, lut, out, n_threads=1, compiled=True):
+def decode_table(G, idx, lut, out, n_threads=1, compiled=True, start=0):
     """Decode variants ``idx`` into rows of ``out`` from their lookup rows.
 
     ``lut`` (k, 4) holds each requested variant's standardized values of
     calls 0, 1 and 2, then 0 for a no-call (index ``code & 3``), already in
-    the storage precision. The compiled kernels follow the storage layout;
-    without Numba (or with ``compiled=False``, for storage that is not an
-    in-memory array) the gather is done in bounded NumPy chunks.
+    the storage precision; ``out`` may be wider (float64 rows hold the same
+    values). Its columns are samples ``start`` to ``start + out.shape[1]``.
+    The compiled kernels follow the storage layout; without Numba (or with
+    ``compiled=False``, for storage that is not an in-memory array) the
+    gather is done in bounded NumPy chunks.
     """
+    stop = start + out.shape[1]
     if not (HAS_NUMBA and compiled):
-        step = max(1, _NUMPY_DECODE_CELLS // max(G.shape[0], 1))
-        for start in range(0, idx.size, step):
-            codes = np.asarray(G[:, idx[start : start + step]]).T.astype(np.intp) & 3
-            out[start : start + codes.shape[0]] = np.take_along_axis(
-                lut[start : start + codes.shape[0]], codes, axis=1)
+        step = max(1, _NUMPY_DECODE_CELLS // max(out.shape[1], 1))
+        for first in range(0, idx.size, step):
+            codes = np.asarray(G[start:stop, idx[first : first + step]]).T.astype(np.intp) & 3
+            out[first : first + codes.shape[0]] = np.take_along_axis(
+                lut[first : first + codes.shape[0]], codes, axis=1)
         return out
     if isinstance(G, PackedCalls):
         if n_threads > 1:
             with _numba_thread_limit(min(_validate_n_threads(n_threads), max(idx.size, 1))):
-                _decode_packed_parallel(G.data, idx, lut, out)
+                _decode_packed_parallel(G.data, idx, lut, out, start)
         else:
-            _decode_packed(G.data, idx, lut, out)
+            _decode_packed(G.data, idx, lut, out, start)
         return out
     sample_major = G.strides[0] > G.strides[1]
     if n_threads > 1:
         n_threads = _validate_n_threads(n_threads)
         kernel = _decode_samples_parallel if sample_major else _decode_variants_parallel
-        work = (G.shape[0] + _TILE - 1) // _TILE if sample_major else idx.size
+        work = (out.shape[1] + _TILE - 1) // _TILE if sample_major else idx.size
         with _numba_thread_limit(min(n_threads, max(work, 1))):
-            kernel(G, idx, lut, out)
+            kernel(G, idx, lut, out, start)
     else:
-        (_decode_samples if sample_major else _decode_variants)(G, idx, lut, out)
+        (_decode_samples if sample_major else _decode_variants)(G, idx, lut, out, start)
     return out

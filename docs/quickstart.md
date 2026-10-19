@@ -172,6 +172,13 @@ packed=True)` holds the bed's codes in memory (a quarter of the int8 bytes),
 array. Results are identical to int8 storage. Residuals and other workspaces
 remain resident: this is not a fully out-of-core fit.
 
+An int8 array is decoded fastest variant-major, each variant's calls
+contiguous, as the readers return them and as `Genotypes(G.T)` gives for a
+C-ordered (variants, samples) array: about 0.16 ns per call on one thread,
+against 1 ns for a C-ordered (samples, variants) array, whose decoding is a
+transpose. Pass `np.asfortranarray(G)` (or `packed=True`) for such arrays;
+selecting or aligning samples keeps the order it is given.
+
 ## The mixed model by hand
 
 ```python

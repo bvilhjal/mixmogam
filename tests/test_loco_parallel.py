@@ -228,3 +228,31 @@ def test_invalid_covariate_shape_is_rejected_before_standardization(monkeypatch,
     gt, groups, _ = problem("F", True)
     with pytest.raises(ValueError, match="two-dimensional array with one row per sample"):
         LocoGenotypes(gt, groups, np.zeros(shape), n_threads=n_threads)
+
+
+@pytest.mark.parametrize("order", ["C", "F", "strided", "packed"])
+@pytest.mark.parametrize("n_threads", [1, 2])
+@pytest.mark.parametrize("weighted", [False, True])
+def test_sample_ranges_decode_the_same_values_in_float64(order, n_threads, weighted):
+    # Sample tiles (any start, including inside a two-bit byte) decoded
+    # straight to float64 hold the storage-precision rows widened, as do
+    # the float64 slices; row-scaled values are rounded in storage first.
+    pytest.importorskip("numba")
+    if n_threads > 1:
+        require_threads(n_threads)
+    gt, groups, Q = problem(order, True)
+    scale = np.random.default_rng(3).uniform(0.5, 2.0, gt.n_samples) if weighted else None
+    lg = LocoGenotypes(gt, groups, Q, block=9, n_threads=n_threads, row_scale=scale)
+    expected = {tuple(idx): z.astype(np.float64) for idx, _, z in lg.raw_slices(7)}
+    for idx, g, z in lg.wide_slices(7):
+        assert z.dtype == np.float64
+        np.testing.assert_array_equal(z, expected[tuple(idx)])
+    buffer = np.empty(4)  # too small: replaced
+    for samples in (1, 6, 53, gt.n_samples):
+        for idx, _ in lg.slices(7):
+            tiles = list((start, stop, z.copy()) for start, stop, z in lg.wide_tiles(idx, samples, buffer))
+            assert [t[0] for t in tiles] == list(range(0, gt.n_samples, samples))
+            np.testing.assert_array_equal(np.hstack([t[2] for t in tiles]), expected[tuple(idx)])
+    unscaled = lg._decode(np.array([5, 0, 11]), scaled=False, start=3, stop=10)
+    full = lg._decode(np.array([5, 0, 11]), scaled=False)
+    np.testing.assert_array_equal(unscaled, full[:, 3:10])

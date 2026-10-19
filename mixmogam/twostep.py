@@ -316,8 +316,7 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
     # Widen at most 16 MiB of variant rows, retaining each full sample
     # reduction. The minimum one-row tile and native BLAS scratch are separate.
     tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
-    for idx, g, Z in st.lg.raw_slices(tile):
-        Z64 = Z.astype(np.float64, copy=False)
+    for idx, g, Z64 in st.lg.wide_slices(tile):
         num[idx] = Z64 @ Wp[:, g]
         if retrospective:
             z = Z64 if inv_s is None else Z64 * inv_s
@@ -1415,12 +1414,12 @@ def _out_of_fold_loco(lg: LocoGenotypes, beta: np.ndarray, folds: np.ndarray) ->
     own = np.zeros((n, G))  # each sample's group shares of z'beta under its fold's fit
     coef = np.zeros((k, q, G))  # c'beta per fold and group
     pick = np.arange(n)
-    for idx, g, Z in lg.raw_slices():
+    buffer = np.empty(2 * 1024**2)  # 16 MiB of float64 tiles, reused
+    for idx, g in lg.slices():
         bb = beta[idx]
         rows = max(1, (16 * 1024**2) // (8 * idx.size))
-        for start in range(0, n, rows):
-            stop = min(start + rows, n)
-            part = Z[:, start:stop].T.astype(np.float64) @ bb
+        for start, stop, z in lg.wide_tiles(idx, rows, buffer):
+            part = z.T @ bb
             own[start:stop, g] += part[pick[: stop - start], folds[start:stop]]
         if q:
             coef[:, :, g] += (lg._projection[idx].T @ bb).T

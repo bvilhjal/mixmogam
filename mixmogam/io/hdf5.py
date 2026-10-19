@@ -43,7 +43,17 @@ def read_hdf5(path: str) -> Genotypes:
         if fmt != "mixmogam-v2":
             fh.close()
             return read_hdf5_v1(path)
-        G = fh["genotypes"][:]
+        # Stored sample-major; read it variant-major (as PLINK input), which
+        # the two-step methods decode about six times faster, a bounded slab
+        # of whole chunk columns at a time.
+        data = fh["genotypes"]
+        n, m = data.shape
+        G = np.empty((n, m), dtype=np.int8, order="F")
+        width = data.chunks[1] if data.chunks else m
+        step = max(1, (64 * 1024**2) // max(n, 1))
+        step = max(width, step - step % width) if step >= width else step
+        for start in range(0, m, step):
+            G[:, start : start + step] = data[:, start : start + step]
         samples = fh["samples"][:].astype(str)
         chrom = fh["variants/chromosome"][:]
         if chrom.dtype.kind in "SO":

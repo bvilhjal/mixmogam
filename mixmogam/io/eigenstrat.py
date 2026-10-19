@@ -41,7 +41,7 @@ def read_eigenstrat(prefix: str) -> Genotypes:
             rows.append(np.frombuffer(line.strip().encode(), dtype=np.uint8))
     m = len(rows)
     n = len(samples)
-    G = np.empty((n, m), dtype=np.int8)
+    G = np.empty((n, m), dtype=np.int8, order="F")  # variant-major, as PLINK
     for j, row in enumerate(rows):
         if row.size != n:
             raise ValueError(f"geno line {j} has {row.size} chars, expected {n}")

@@ -56,6 +56,29 @@ def test_genotypes_alignment(small_gt):
         small_gt.align_samples(["nope"])
 
 
+@pytest.mark.parametrize("order", ["C", "F"])
+def test_sample_selection_keeps_the_memory_order(monkeypatch, order):
+    # Variant-major calls (PLINK order) decode about six times faster in the
+    # two-step methods; selecting or aligning samples must not silently make
+    # them sample-major. Small copy blocks exercise the bounded copies.
+    import mixmogam.genotypes as genotypes
+
+    monkeypatch.setattr(genotypes, "_SAMPLE_COPY_CELLS", 37)
+    rng = np.random.default_rng(9)
+    G = np.array(rng.integers(-1, 3, size=(23, 41)), dtype=np.int8, order=order)
+    gt = Genotypes(G, sample_ids=[f"s{i}" for i in range(23)])
+    rows = np.array([5, 0, 22, 7, 11])
+    mask = np.arange(23) % 3 == 0
+    wanted = ["s3", "nope", "s0", "s19"]
+    aligned, found = gt.align_samples(wanted, strict=False)
+    expected = np.full((4, 41), MISSING, dtype=np.int8)
+    expected[found] = G[[3, 0, 19]]
+    for out, want in ((gt.filter_samples(rows).G, G[rows]), (gt.filter_samples(mask).G, G[mask]),
+                      (aligned.G, expected)):
+        np.testing.assert_array_equal(out, want)
+        assert out.flags.f_contiguous if order == "F" else out.flags.c_contiguous
+
+
 def test_grm_matches_naive(small_gt):
     K = realized_relationship(small_gt)
     # naive: standardize columns over called genotypes, accumulate

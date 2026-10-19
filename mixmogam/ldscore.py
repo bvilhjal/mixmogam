@@ -24,7 +24,9 @@ def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
     a sliding window of decoded, unprojected rows: covariates leave the
     products through the prepared coefficients, Z_j Z_k' = z_j z_k' - c_j c_k'
     (exact up to the storage rounding of z), and the norms are the prepared
-    squared norms of Z. Memory is the widest window times n.
+    squared norms of Z. Each pair's r^2 is computed once, in the window
+    ahead of the earlier variant's block, and credited to both variants.
+    Memory is the widest such window times n.
     """
     gt = lg.gt
     n = lg.n
@@ -40,33 +42,36 @@ def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
         norms = lg.zz[idx] / n
         starts = np.arange(0, idx.size, block)
         stops = np.minimum(starts + block, idx.size)
-        lows = np.searchsorted(p_c, p_c[starts] - window_bp, side="left")
         highs = np.searchsorted(p_c, p_c[stops - 1] + window_bp, side="right")
-        rows = np.empty((int(np.max(highs - lows)), n), dtype=lg.dtype)
-        held_lo = held_hi = 0  # rows holds the window idx[held_lo:held_hi]
-        for s, e, lo, hi in zip(starts, stops, lows, highs):
-            if lo > held_lo:
+        rows = np.empty((int(np.max(highs - starts)), n), dtype=lg.dtype)
+        held_lo = held_hi = 0  # rows holds idx[held_lo:held_hi]
+        for s, e, hi in zip(starts, stops, highs):
+            if s > held_lo:
                 # Move the kept rows to the front in chunks no longer than the
                 # shift: overlapping slices would make NumPy copy via a fresh
                 # temporary the size of the window.
-                shift, kept = lo - held_lo, max(held_hi - lo, 0)
+                shift, kept = s - held_lo, max(held_hi - s, 0)
                 for start in range(0, kept, shift):
                     stop = min(start + shift, kept)
                     rows[start:stop] = rows[start + shift : stop + shift]
-                held_lo, held_hi = lo, max(held_hi, lo)
+                held_lo, held_hi = s, max(held_hi, s)
             if hi > held_hi:
                 lg._decode(idx[held_hi:hi], out=rows[held_hi - held_lo : hi - held_lo])
                 held_hi = hi
-            window = rows[: hi - lo]
-            C = (window[s - lo : e - lo] @ window.T).astype(np.float64)
+            window = rows[: hi - s]
+            C = (window[: e - s] @ window.T).astype(np.float64)
             if q:
-                C -= coef[idx[s:e]] @ coef[idx[lo:hi]].T
+                C -= coef[idx[s:e]] @ coef[idx[s:hi]].T
             C /= n
-            denom = np.sqrt(np.outer(norms[s:e], norms[lo:hi]))
+            denom = np.sqrt(np.outer(norms[s:e], norms[s:hi]))
             r2 = np.where(denom > 0, (C / np.where(denom > 0, denom, 1.0)) ** 2, 0.0)
             r2_adj = r2 - (1.0 - r2) / (n - 2)
-            near = np.abs(p_c[s:e, None] - p_c[None, lo:hi]) <= window_bp
-            out[idx[s:e]] = np.sum(np.where(near, r2_adj, 0.0), axis=1)
+            near = np.abs(p_c[s:e, None] - p_c[None, s:hi]) <= window_bp
+            r2_adj = np.where(near, r2_adj, 0.0)
+            # Pairs within the block appear in both variants' rows; a pair
+            # with a later variant also counts for that variant.
+            out[idx[s:e]] += r2_adj.sum(axis=1)
+            out[idx[e:hi]] += r2_adj[:, e - s :].sum(axis=0)
     return out
 
 

@@ -174,104 +174,92 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
     return (w1 * ml + w2 * mnn) / (w1 + w2)
 
 
-def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
-    """One Gauss-Seidel sweep over a block of SNPs for every column.
+def _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+    """One Gauss-Seidel pass of column p over a block of SNPs.
 
     U (B, P): x_a' R at block start, corrected in place as SNPs move;
     beta (B, P): block coefficients, updated in place; grams (F+1, B, B):
     full and per-fold Gram matrices, ``gidx[p]`` selecting column p's;
-    D (B, P): output coefficient changes. Each SNP first moves in every
-    column, then the products of the later SNPs are corrected row by row
-    (contiguous in both U and the symmetric Gram matrix).
+    D (B, P): output coefficient changes. Each SNP moves, then the products
+    of the column's later SNPs are corrected through the contiguous Gram
+    row; with U in column order these updates vectorize (the unsigned
+    bounds spare Numba's negative-index checks, which prevented it).
     """
-    nb, ncol = U.shape
+    nb = U.shape[0]
+    u_col = U[:, p]
     for a in range(nb):
-        moved = False
-        for p in range(ncol):
-            if skip[p]:
-                D[a, p] = 0.0
-                continue
-            gjj = grams[gidx[p], a, a]
-            if gjj <= 0.0:
-                D[a, p] = 0.0
-                continue
-            b_old = beta[a, p]
-            u = U[a, p] + gjj * b_old
-            if scale[a] == 0.0:
-                # A zero genetic-variance component is a point mass at zero,
-                # including the Laplace part of an elastic-net prior.
-                b_new = 0.0
-            elif prior_type == 0:
-                b_new = _pm_mixture(u, gjj, s2e[p], prior[p, 0],
-                                    prior[p, 1] * scale[a], prior[p, 2] * scale[a])
-            else:
-                b_new = _pm_enet(u, gjj, s2e[p], prior[p, 0],
-                                 prior[p, 1] / math.sqrt(scale[a]), prior[p, 2] * scale[a])
-            d = b_new - b_old
-            D[a, p] = d
-            if d != 0.0:
-                beta[a, p] = b_new
-                moved = True
-        if moved:
-            for c in range(a + 1, nb):
-                for p in range(ncol):
-                    d = D[a, p]
-                    if d != 0.0:
-                        U[c, p] -= grams[gidx[p], a, c] * d
+        if skip[p]:
+            D[a, p] = 0.0
+            continue
+        gram = grams[gidx[p]]
+        gjj = gram[a, a]
+        if gjj <= 0.0:
+            D[a, p] = 0.0
+            continue
+        b_old = beta[a, p]
+        u = u_col[a] + gjj * b_old
+        if scale[a] == 0.0:
+            # A zero genetic-variance component is a point mass at zero,
+            # including the Laplace part of an elastic-net prior.
+            b_new = 0.0
+        elif prior_type == 0:
+            b_new = _pm_mixture(u, gjj, s2e[p], prior[p, 0],
+                                prior[p, 1] * scale[a], prior[p, 2] * scale[a])
+        else:
+            b_new = _pm_enet(u, gjj, s2e[p], prior[p, 0],
+                             prior[p, 1] / math.sqrt(scale[a]), prior[p, 2] * scale[a])
+        d = b_new - b_old
+        D[a, p] = d
+        if d != 0.0:
+            beta[a, p] = b_new
+            row = gram[a]
+            for c in range(_unsigned(a + 1), _unsigned(nb)):
+                u_col[c] -= row[c] * d
+
+
+def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+    """One Gauss-Seidel sweep over a block of SNPs for every column
+    (:func:`_sweep_column`); columns are independent."""
+    for p in range(U.shape[1]):
+        _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D)
 
 
 def _sweep_block_parallel(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
     """Independent model columns; each retains its serial SNP update order."""
-    nb, ncol = U.shape
-    for p in prange(ncol):
-        for a in range(nb):
-            if skip[p]:
-                D[a, p] = 0.0
-                continue
-            gjj = grams[gidx[p], a, a]
-            if gjj <= 0.0:
-                D[a, p] = 0.0
-                continue
-            b_old = beta[a, p]
-            u = U[a, p] + gjj * b_old
-            if scale[a] == 0.0:
-                b_new = 0.0
-            elif prior_type == 0:
-                b_new = _pm_mixture(u, gjj, s2e[p], prior[p, 0],
-                                    prior[p, 1] * scale[a], prior[p, 2] * scale[a])
-            else:
-                b_new = _pm_enet(u, gjj, s2e[p], prior[p, 0],
-                                 prior[p, 1] / math.sqrt(scale[a]), prior[p, 2] * scale[a])
-            d = b_new - b_old
-            D[a, p] = d
-            if d != 0.0:
-                beta[a, p] = b_new
-                for c in range(a + 1, nb):
-                    U[c, p] -= grams[gidx[p], a, c] * d
+    for p in prange(U.shape[1]):
+        _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D)
 
 
 if HAS_NUMBA:
-    from numba import config, get_num_threads, njit, prange, set_num_threads
+    from numba import config, get_num_threads, njit, prange, set_num_threads, uint64 as _unsigned
 
     _log_ndtr = njit(cache=True)(_log_ndtr)
     _mills = njit(cache=True)(_mills)
     _ndtr_parts = njit(cache=True)(_ndtr_parts)
     _pm_mixture = njit(cache=True)(_pm_mixture)
     _pm_enet = njit(cache=True)(_pm_enet)
+    _sweep_column = njit(inline="always", cache=True)(_sweep_column)
     _sweep_block = njit(cache=True)(_sweep_block)
     _sweep_block_parallel = njit(parallel=True, cache=True)(_sweep_block_parallel)
 else:
     prange = range
+    _unsigned = int
 
 
-def _refresh_residual(R, work, delta, mask, change):
-    """One float64 residual update; round only the next GEMM's input."""
+def _refresh_residual(R, work, delta, folds, col_fold, change):
+    """One float64 residual update; round only the next GEMM's input.
+
+    Held-out entries (sample fold == column fold) are multiplied by zero,
+    as by the fit's 0/1 mask, which is not read here: an (n, P) float64
+    mask is as large as the residual itself.
+    """
     block_change = np.zeros(R.shape[1], dtype=np.float64)
     for i in range(R.shape[0]):
+        fi = -1 if folds is None else folds[i]
         for p in range(R.shape[1]):
             d = np.float64(delta[i, p])
-            if mask is not None:
-                d *= mask[i, p]
+            if folds is not None:
+                d *= 0.0 if fi == col_fold[p] else 1.0
             R[i, p] -= d
             work[i, p] = R[i, p]
             block_change[p] += d * d
@@ -281,10 +269,10 @@ def _refresh_residual(R, work, delta, mask, change):
 if HAS_NUMBA:
     _refresh_residual = njit(cache=True)(_refresh_residual)
 else:  # NumPy fallback keeps the same float64 residual and reduction contract.
-    def _refresh_residual(R, work, delta, mask, change):
+    def _refresh_residual(R, work, delta, folds, col_fold, change):
         d = delta.astype(np.float64)
-        if mask is not None:
-            d *= mask
+        if folds is not None:
+            d *= (folds[:, None] != col_fold[None, :])
         R -= d
         work[:] = R
         change += np.einsum("ij,ij->j", d, d)
@@ -352,6 +340,7 @@ class VBEngine:
         self.gram_cache_bytes = gram_cache_bytes
         self._grams = self._coefs = None
         self._gram_folds = np.empty(0, dtype=np.int64)
+        self._layout = None  # fold-sorted samples, made on first use
 
     def _prepare_grams(self, col_fold):
         """Prepare only the row subsets used by this fit; full data is slice 0.
@@ -390,6 +379,18 @@ class VBEngine:
         cache views or decoded rows in one reused buffer."""
         return self.lg.raw_slices(self.sub_block)
 
+    def _fold_layout(self):
+        """Samples sorted by fold (stable, so each fold keeps its sample
+        order), the fold boundaries, the covariate basis in that order and
+        each fold's Q_f'Q_f: made once per engine."""
+        if self._layout is None:
+            order = np.argsort(self.folds, kind="stable")
+            bounds = np.searchsorted(self.folds[order], np.arange(self.n_folds + 1))
+            Qp = np.ascontiguousarray(self.lg.Q[order])
+            QtQ = [Qp[s:e].T @ Qp[s:e] for s, e in zip(bounds[:-1], bounds[1:])]
+            self._layout = (order, bounds, Qp, QtQ)
+        return self._layout
+
     def _gram(self, Zs: np.ndarray, idx: np.ndarray, folds: np.ndarray, used=None):
         """Gram matrices of the projected sub-block Z = z - c Q', computed in
         float64 from its unprojected rows and stored in the genotype storage
@@ -400,30 +401,59 @@ class VBEngine:
 
         Also returns S and each held-out fold's H = z_f Q_f, (folds + 1, k, q),
         which let the sweeps keep their residual unprojected (see :meth:`fit`).
+
+        When the requested folds partition the samples (cross-fitting, and
+        BOLT-LMM's cross-validation), the samples are taken in fold order, so
+        each fold is a contiguous slice rather than a masked copy, and the
+        all-sample products are the sums of the folds' own: half the
+        arithmetic and no mask scans.
         """
-        Z64 = Zs.astype(np.float64)
         c = self.lg._projection[idx]
         Q = self.lg.Q
         q = Q.shape[1]
-        G = np.empty((folds.size + 1, Z64.shape[0], Z64.shape[0]), dtype=self.lg.dtype)
-        coefs = np.empty((folds.size + 1, Z64.shape[0], q))
-        full = Z64 @ Z64.T
+        k = Zs.shape[0]
+        G = np.empty((folds.size + 1, k, k), dtype=self.lg.dtype)
+        coefs = np.empty((folds.size + 1, k, q))
+        held = [None] * folds.size
+        if folds.size > 1 and folds.size == self.n_folds:
+            order, bounds, Qp, QtQ = self._fold_layout()
+            Z64 = Zs[:, order].astype(np.float64)
+            full = np.zeros((k, k))
+            for i, f in enumerate(folds):
+                rows = slice(bounds[f], bounds[f + 1])
+                Zt = Z64[:, rows]
+                held[i] = Zt @ Zt.T
+                full += held[i]
+                if q:
+                    coefs[i + 1] = Zt @ Qp[rows]
+            if q:
+                coefs[0] = coefs[1:].sum(axis=0)
+        else:
+            Z64 = Zs.astype(np.float64)
+            full = Z64 @ Z64.T
+            if q:
+                coefs[0] = Z64 @ Q
         if q:
-            coefs[0] = Z64 @ Q
             cross = coefs[0] @ c.T
             full -= cross + cross.T - c @ c.T
         G[0] = full
         for i, f in enumerate(folds):
             if used is not None and i + 1 not in used:
                 continue
-            held = self.folds == f
-            Zt = Z64[:, held]
-            H = Zt @ Zt.T
+            H = held[i]
+            if H is None:
+                mask = self.folds == f
+                Zt = Z64[:, mask]
+                H = Zt @ Zt.T
+                Qt = Q[mask]
+                if q:
+                    coefs[i + 1] = Zt @ Qt
+                QtQ_f = Qt.T @ Qt
+            else:
+                QtQ_f = QtQ[f]
             if q:
-                Qt = Q[held]
-                coefs[i + 1] = Zt @ Qt
                 cross = coefs[i + 1] @ c.T
-                H -= cross + cross.T - c @ (Qt.T @ Qt) @ c.T
+                H -= cross + cross.T - c @ QtQ_f @ c.T
             G[i + 1] = full - H
         return G, coefs
 
@@ -464,12 +494,13 @@ class VBEngine:
             raise ValueError("column fold index exceeds the engine's folds")
         if self.folds is not None and (col_fold >= 0).any():
             mask = (self.folds[:, None] != col_fold[None, :]).astype(np.float64)
+            mask_folds = self.folds  # the residual updates test folds instead
         else:
-            mask = None
+            mask = mask_folds = None
         R = Y * mask if mask is not None else Y.copy()
         ynorm = np.maximum(np.einsum("ij,ij->j", R, R), 1e-300)
         beta = np.zeros((self.lg.m, P))
-        D = np.empty((self.sub_block, P), order="F" if parallel else "C")
+        D = np.empty((self.sub_block, P), order="F")
         it = 0
         rel = np.full(P, np.inf)
         zdt = self.lg.dtype
@@ -478,10 +509,11 @@ class VBEngine:
         # Reuse the large workspaces. The residual itself stays float64; its
         # storage-precision image is refreshed after *every* block update.
         work = R.astype(zdt)
-        # Parallel workers repeatedly update their own SNP column. These
-        # workspaces can be column-contiguous. The default GEMM workspaces
-        # remain C-order; large parallel fits add reusable F-order scratch.
-        U = np.empty((self.sub_block, P), order="F" if parallel else "C")
+        # The sweeps update one model column at a time (serially or by
+        # parallel workers), so these workspaces are column-contiguous. The
+        # default GEMM workspaces remain C-order; large parallel fits add
+        # reusable F-order scratch.
+        U = np.empty((self.sub_block, P), order="F")
         products = np.empty((self.sub_block, P), dtype=zdt)
         changes = np.empty((self.sub_block, P), dtype=zdt)
         delta = np.empty((n, P), dtype=zdt)
@@ -560,7 +592,7 @@ class VBEngine:
                         gemm.backward(Zs, changes[:idx.size], delta)
                     # Keep the sample-major residual pass contiguous and
                     # preserve its serial sample-order norm accumulation.
-                    _refresh_residual(R, work, delta, mask, change)
+                    _refresh_residual(R, work, delta, mask_folds, col_fold, change)
                     if q:
                         # The applied update z' d leaves Q'R~ by (S - H)' d and
                         # A by c' d; the masked change of the projected fit is
@@ -590,14 +622,15 @@ class VBEngine:
         """Fitted values Z' beta = z' beta - Q (c' beta), (n, P) per column."""
         out = np.zeros((self.n, beta.shape[1]))
         cb = np.zeros((self.lg.Q.shape[1], beta.shape[1]))
-        for idx, _, Z in self.lg.raw_slices():
+        buffer = np.empty(2 * 1024**2)
+        for idx, _ in self.lg.slices():
             # Tile samples, keeping the complete variant reduction in each
-            # product. Widening scratch is bounded by 16 MiB (or one row).
+            # product. Rows are decoded straight to float64, in reused tiles
+            # of at most 16 MiB (or one row).
             rows = max(1, (16 * 1024**2) // (8 * idx.size))
             bb = beta[idx]
-            for start in range(0, self.n, rows):
-                stop = min(start + rows, self.n)
-                out[start:stop] += Z[:, start:stop].T.astype(np.float64) @ bb
+            for start, stop, z in self.lg.wide_tiles(idx, rows, buffer):
+                out[start:stop] += z.T @ bb
             cb += self.lg._projection[idx].T @ bb
         if cb.shape[0]:
             out -= self.lg.Q @ cb
