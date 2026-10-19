@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Computational efficiency
 
-Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-paired`).
+Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-review`).
 Statistics are bit-identical except where noted.
 
 - Decoding variant-major int8 calls selects each standardized value by
@@ -36,9 +36,22 @@ Statistics are bit-identical except where noted.
 - BOLT-LMM's LD scores compute each pair once and credit both variants:
   about half the window products. Equal up to float32 product rounding.
 - The exact path's REML search starts Brent's method from its three known
-  bracket values (the first step is their parabola), with the same
-  1e-6 tolerance in log delta: 15% fewer Cholesky factorizations on the
-  3,000 x 44,000 panel (271 instead of 320), log10 p within 2.5e-6.
+  bracket values (the first step is their parabola): 13-15% fewer Cholesky
+  factorizations on the 3,000 x 44,000 panel at the same 1e-6 tolerance
+  in log delta, log10 p within 2.5e-6.
+- The exact path resolves log delta to 1e-5 instead of 1e-6 (EMMA's root
+  finder: 1e-6 in delta). Parabolic steps land well inside it: on the same
+  panel 13% fewer factorizations again (229 instead of 264), variance
+  ratios within 2e-6 in log of those at 1e-6 and log10 p within 2.6e-6.
+  A 1e-4 tolerance would have saved only 4% more.
+- HRATT's REML builds its 128-wide deflation basis only under strong
+  structure, where the ridge solves reuse it. With ancestry covariates it
+  kept no eigenvalue on the benchmark panels, so results are identical
+  without it (the trace probes have their own stream); it cost 6 passes
+  over 140 columns, about a seventh of a REML fit. With an
+  inversion-like LD block that the structure test did not flag, h2
+  without deflation was as close to exact REML (0.002-0.006 at n = 2,000)
+  as with it.
 
 ### Fixed
 

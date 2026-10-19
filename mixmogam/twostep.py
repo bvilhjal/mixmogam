@@ -1247,7 +1247,14 @@ def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritab
     f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
     # Under strong structure the ridge solves need a preconditioner: REML
     # computes its deflation basis explicitly so that they can share it.
+    # Without strong structure REML deflates nothing: the Lanczos quadrature
+    # resolves the bulk, and an isolated outlier (an inversion-like LD block
+    # the structure test does not flag) within its steps. The 128-wide basis
+    # would cost 6 passes over 140 columns, about a seventh of a REML fit,
+    # and with ancestry covariates it kept no eigenvalue; with nothing kept,
+    # skipping it changes no result (the trace probes have their own stream).
     basis, fit, he = None, None, None
+    deflate = {} if struct["strong"] else {"slq_deflate": 0}
     if alpha_method == "he":
         he = _he_alpha(st, f, list(alphas), he_probes, rng,
                        fit_h2=heritability_method == "he", design_weights=design_weights)
@@ -1257,14 +1264,15 @@ def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritab
             h2 = he["variance_fit"]["h2"]
         else:
             basis = _spectral_basis(st, w, random_state) if struct["strong"] else None
-            fit = fit_variance_components(st, weights=w, random_state=random_state, basis=basis)
+            fit = fit_variance_components(st, weights=w, random_state=random_state, basis=basis,
+                                          **deflate)
     elif alpha_method == "reml":
         fits = []
         for a in alphas:
             w_a = (f * (1.0 - f)) ** (1.0 + a)
             basis_a = _spectral_basis(st, w_a, random_state) if struct["strong"] else None
             fit_a = fit_variance_components(st, weights=w_a, random_state=random_state,
-                                            basis=basis_a)
+                                            basis=basis_a, **deflate)
             fits.append((fit_a.ll, a, w_a, fit_a, basis_a))
         _, alpha, w, fit, basis = max(fits, key=lambda t: t[0])
         alpha_scores = np.array([t[0] for t in fits])

@@ -76,9 +76,11 @@ proximal-contamination deflation.
   all SNPs plus one pass over group g. Each group's REML fit uses Cholesky
   factorizations of K_{-g} + delta I instead of an eigendecomposition: a
   21-point grid over log delta for the first group, a local search from
-  the previous group's optimum afterwards (about 12 factorizations, log
-  delta to an absolute 1e-6, where EMMA's root finder resolves delta to an
-  absolute 1e-6), a full grid for every group if the
+  the previous group's optimum afterwards (8-13 factorizations, log
+  delta to an absolute 1e-5, where EMMA's root finder resolves delta to an
+  absolute 1e-6; Brent's method starts from the parabola through its three
+  known points, and its parabolic steps land within 2e-6 of the optimum at
+  1e-6), a full grid for every group if the
   first profile has several maxima. SNPs are whitened by triangular
   solves; the EMMAX statistics do not depend on the square root used.
   LAPACK's symmetric eigensolvers ran on about 1.2 cores of an M2 Pro,
@@ -135,7 +137,13 @@ proximal-contamination deflation.
   with 48). The phenotype rule and trace probes share batched Lanczos
   products. The two-step caller requests variance components alone, avoiding
   unused fixed-effect solves and scan preparation; public `LMM.fit()` still
-  produces a complete fit.
+  produces a complete fit. The deflation keeps only eigenvalues at least
+  four times the median of a 128-wide randomized basis. HRATT builds that
+  basis only under strong structure, where its ridge solves share it as a
+  preconditioner: with ancestry covariates the basis kept no eigenvalue on
+  the benchmark panels (results are then identical without it), and with
+  an inversion-like LD block that the structure test did not flag, the
+  undeflated h2 was as close to exact REML (0.002-0.006) as the deflated.
 
 HRATT normally selects the frequency-weight exponent `alpha` by randomized
 single-component HE, then fits heritability by REML. Explicit

@@ -32,7 +32,8 @@ def test_optimum_matches_eigendecomposition_fit(structured, h2, method, covariat
     ref = LMM(y, X=X, K=K).fit(method=method)
     start = math.log(ref.delta) + 0.4 if local else None
     fit = CholeskyREML(K, y, X, method=method).fit(start=start)
-    # EMMA's root finder resolves delta to 1e-6; the likelihoods agree to rounding.
+    # EMMA's root finder resolves delta to 1e-6 and this search log delta to
+    # 1e-5 (in practice within ~2e-6); the likelihoods agree to rounding.
     assert fit["delta"] == pytest.approx(ref.delta, rel=1e-5)
     assert fit["ll"] == pytest.approx(ref.ll, abs=1e-8)
     assert fit["pseudo_heritability"] == pytest.approx(ref.pseudo_heritability, rel=1e-5)

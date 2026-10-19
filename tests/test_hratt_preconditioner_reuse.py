@@ -65,6 +65,41 @@ def test_hratt_strong_structure_shares_the_reml_basis(monkeypatch, count_bases, 
     np.testing.assert_allclose(fresh.f_stat, shared.f_stat, rtol=1e-5)
 
 
+@pytest.mark.parametrize("alpha_method", ["he", "reml"])
+def test_hratt_without_strong_structure_skips_the_reml_basis(monkeypatch, count_bases, alpha_method):
+    # Without strong structure REML deflates nothing and builds no basis.
+    # On a panel where the 128-wide basis keeps no eigenvalue, results are
+    # identical to the deflated fit's: the trace probes have their own stream.
+    from mixmogam import lmm
+
+    gt, y = _data(seed=13, n=150, m=240)
+    kept = []
+    original = lmm._separated_extremes
+
+    def spy(values, vectors, ratio=4.0):
+        out = original(values, vectors, ratio)
+        kept.append(out[0].size)
+        return out
+
+    monkeypatch.setattr(lmm, "_separated_extremes", spy)
+    kwargs = dict(alphas=(-1.0, 0.0), alpha_method=alpha_method, grid=[(0.0, 1.0)],
+                  he_probes=3, loco_folds=1, vb_max_iter=300, random_state=7, block=64)
+    skipped = twostep.hratt(y, gt, **kwargs)
+    assert not skipped.extra["structure"]["strong"]
+    assert count_bases == {"eigh": 0, "fresh": 0} and kept == []
+
+    def deflating(st, weights=None, random_state=0, basis=None, **slq):
+        slq.pop("slq_deflate", None)
+        return fit_variance_components(st, weights, random_state, basis, **slq)
+
+    fit_variance_components = twostep.fit_variance_components
+    monkeypatch.setattr(twostep, "fit_variance_components", deflating)
+    deflated = twostep.hratt(y, gt, **kwargs)
+    assert count_bases["eigh"] == (1 if alpha_method == "he" else 2) and set(kept) == {0}
+    assert deflated.extra["h2"] == skipped.extra["h2"]
+    np.testing.assert_array_equal(deflated.p, skipped.p)
+
+
 def test_bolt_inf_computes_one_basis(count_bases):
     gt, y = _data(seed=3)
     res = twostep.bolt_inf(y, gt, n_calibration=8, random_state=2, block=64)
