@@ -122,7 +122,10 @@ proximal-contamination deflation.
   1e9-byte budget and the rest recomputed each sweep, for the folds that
   fit uses. When the folds partition the samples (cross-fitting, BOLT-LMM's
   cross-validation), the all-sample Gram is the sum of the fold Grams,
-  taken from fold-sorted samples. Reused workspaces avoid repeatedly
+  taken from fold-sorted samples. This sums in a different order, so the
+  float32 Gram storage rounds differently; the p-values move by up to
+  1e-5 in log10 (BOLT-LMM's cross-validation), a rounding effect that the
+  iterations amplify. Reused workspaces avoid repeatedly
   widening whole genotype blocks; residual accumulation remains float64,
   and the residual update tests sample folds instead of reading an
   (n, columns) mask. The coordinate loop has an optional Numba

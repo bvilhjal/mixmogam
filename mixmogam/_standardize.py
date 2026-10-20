@@ -251,10 +251,29 @@ def _decode_samples_parallel(G, idx, lut, out, start):
         _decode_tile(G, idx, lut, out, i0, min(i0 + _TILE, stop), start)
 
 
-def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut, start):
-    """Rows r0:r1 from two-bit codes; ``lut`` is in call order (call & 3).
+def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut):
+    """Rows r0:r1 from two-bit codes; ``lut`` is in call order (call & 3)."""
+    n = out.shape[1]
+    full = n // 4
+    for r in range(r0, r1):
+        code_lut[0], code_lut[1], code_lut[2], code_lut[3] = lut[r, 2], lut[r, 3], lut[r, 1], lut[r, 0]
+        row = data[idx[r]]
+        for b in range(full):
+            byte = row[b]
+            i = 4 * b
+            out[r, i] = code_lut[byte & 3]
+            out[r, i + 1] = code_lut[(byte >> 2) & 3]
+            out[r, i + 2] = code_lut[(byte >> 4) & 3]
+            out[r, i + 3] = code_lut[byte >> 6]
+        for i in range(4 * full, n):
+            out[r, i] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
+
+
+def _decode_packed_span(data, idx, lut, out, r0, r1, code_lut, start):
+    """Rows r0:r1 of samples start:start + out.shape[1] from two-bit codes.
     Whole bytes serve four samples; a range that starts or ends inside a
-    byte decodes those samples one at a time."""
+    byte decodes those samples one at a time. (Full-width decoding uses
+    :func:`_decode_packed_rows`, which Numba compiles much tighter.)"""
     stop = start + out.shape[1]
     first = min(stop, (start + 3) // 4 * 4)  # the first sample of a whole byte
     last = max(first, stop // 4 * 4)  # and the end of the whole bytes
@@ -274,14 +293,24 @@ def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut, start):
             out[r, i - start] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
 
 
-def _decode_packed(data, idx, lut, out, start):
+def _decode_packed(data, idx, lut, out):
     """Variant-major two-bit codes: one byte serves four samples."""
-    _decode_packed_rows(data, idx, lut, out, 0, idx.size, np.empty(4, dtype=out.dtype), start)
+    _decode_packed_rows(data, idx, lut, out, 0, idx.size, np.empty(4, dtype=out.dtype))
 
 
-def _decode_packed_parallel(data, idx, lut, out, start):
+def _decode_packed_parallel(data, idx, lut, out):
     for t in prange((idx.size + _TILE - 1) // _TILE):
         _decode_packed_rows(data, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, idx.size),
+                            np.empty(4, dtype=out.dtype))
+
+
+def _decode_packed_span_all(data, idx, lut, out, start):
+    _decode_packed_span(data, idx, lut, out, 0, idx.size, np.empty(4, dtype=out.dtype), start)
+
+
+def _decode_packed_span_parallel(data, idx, lut, out, start):
+    for t in prange((idx.size + _TILE - 1) // _TILE):
+        _decode_packed_span(data, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, idx.size),
                             np.empty(4, dtype=out.dtype), start)
 
 
@@ -311,8 +340,11 @@ if HAS_NUMBA:
     _moments_packed_serial = njit(cache=True)(_moments_packed_serial)
     _moments_packed_parallel = njit(parallel=True, cache=True)(_moments_packed_parallel)
     _decode_packed_rows = njit(cache=True)(_decode_packed_rows)
+    _decode_packed_span = njit(cache=True)(_decode_packed_span)
     _decode_packed = njit(cache=True)(_decode_packed)
     _decode_packed_parallel = njit(parallel=True, cache=True)(_decode_packed_parallel)
+    _decode_packed_span_all = njit(cache=True)(_decode_packed_span_all)
+    _decode_packed_span_parallel = njit(parallel=True, cache=True)(_decode_packed_span_parallel)
     _project_rows = njit(cache=True)(_project_rows)
     _moments_columns_serial = njit(cache=True)(_moments_columns_serial)
     _moments_columns_parallel = njit(parallel=True, cache=True)(_moments_columns_parallel)
@@ -380,11 +412,18 @@ def decode_table(G, idx, lut, out, n_threads=1, compiled=True, start=0):
                 lut[first : first + codes.shape[0]], codes, axis=1)
         return out
     if isinstance(G, PackedCalls):
+        whole = start == 0 and out.shape[1] == G.shape[0]  # the tight full-width kernels
         if n_threads > 1:
             with _numba_thread_limit(min(_validate_n_threads(n_threads), max(idx.size, 1))):
-                _decode_packed_parallel(G.data, idx, lut, out, start)
+                if whole:
+                    _decode_packed_parallel(G.data, idx, lut, out)
+                else:
+                    _decode_packed_span_parallel(G.data, idx, lut, out, start)
         else:
-            _decode_packed(G.data, idx, lut, out, start)
+            if whole:
+                _decode_packed(G.data, idx, lut, out)
+            else:
+                _decode_packed_span_all(G.data, idx, lut, out, start)
         return out
     sample_major = G.strides[0] > G.strides[1]
     if n_threads > 1:

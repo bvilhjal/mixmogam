@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Computational efficiency
 
-Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-review`).
-Statistics are bit-identical except where noted.
+Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-review`
+and `20261020-efficiency-packed-fix`). Unless noted, statistics are identical to
+2.0.0.dev6 on the paired benchmark panels; each noted exception is measured below.
 
 - Decoding variant-major int8 calls selects each standardized value by
   comparisons instead of a table gather: 0.16 instead of 0.26 ns per
@@ -28,17 +29,22 @@ Statistics are bit-identical except where noted.
   (n, columns) float64 mask (BOLT-LMM's cross-validation: 90 columns).
 - Gram matrices of folds that partition the samples (HRATT's cross-fit,
   BOLT-LMM's cross-validation) come from fold-sorted samples, the
-  all-sample Gram as their sum: no all-sample GEMM and no mask scans.
-  Equal to the previous matrices up to float64 rounding.
+  all-sample Gram as their sum: no all-sample GEMM and no mask scans. The
+  summation order changes the float32 storage rounding of the Grams, which
+  moves p-values by up to 1.3e-5 in log10 for BOLT-LMM's cross-validated
+  fit and 2e-6 for HRATT-HE and HRATT-REML (verified by swapping only this
+  function back: the other changes are then identical to 2.0.0.dev6).
 - Predictions, out-of-fold LOCO scores and the retrospective and binary
   score statistics decode their float64 rows directly (with a sample
   range) instead of widening float32 copies; same values and products.
 - BOLT-LMM's LD scores compute each pair once and credit both variants:
-  about half the window products. Equal up to float32 product rounding.
+  about half the window products. No p-value changed on the benchmark
+  panels (checked with the Gram change reverted, as above).
 - The exact path's REML search starts Brent's method from its three known
   bracket values (the first step is their parabola): 13-15% fewer Cholesky
   factorizations on the 3,000 x 44,000 panel at the same 1e-6 tolerance
-  in log delta, log10 p within 2.5e-6.
+  in log delta. Against 2.0.0.dev6 the exact scan's log10 p moved by at
+  most 3.4e-6 (this and the tolerance change below, not measured apart).
 - The exact path resolves log delta to 1e-5 instead of 1e-6 (EMMA's root
   finder: 1e-6 in delta). Parabolic steps land well inside it: on the same
   panel 13% fewer factorizations again (229 instead of 264), variance
