@@ -111,7 +111,8 @@ def test_rerun_reuses_inputs_and_other_outputs_but_not_rerun_methods(tmp_path):
 
 def test_load_gate_waits_until_the_load_falls(monkeypatch):
     loads = iter([9.0, 6.0, 3.0])
-    monkeypatch.setattr(bench.os, "getloadavg", lambda: (next(loads), 0.0, 0.0))
+    # raising=False: Windows has no os.getloadavg to replace.
+    monkeypatch.setattr(bench.os, "getloadavg", lambda: (next(loads), 0.0, 0.0), raising=False)
     monkeypatch.setattr(bench.time, "sleep", lambda seconds: None)
     bench.wait_for_quiet(None)
     assert next(loads) == 9.0       # no limit: the load is not read

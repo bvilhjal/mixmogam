@@ -1,5 +1,7 @@
 """Two-bit genotype storage: a drop-in for int8 calls with identical results."""
 
+import gc
+
 import numpy as np
 import pytest
 
@@ -86,6 +88,9 @@ def test_plink_packed_and_mapped_reads_match_and_write_back(tmp_path, n):
         for suffix in ("bed", "bim", "fam"):
             assert (tmp_path / f"again.{suffix}").read_bytes() == (tmp_path / f"dense.{suffix}").read_bytes()
     assert read_plink(str(tmp_path / "dense"), max_variants=0, mmap=True).n_variants == 0
+    # Windows refuses to truncate a file that is still memory-mapped.
+    del packed
+    gc.collect()
     with open(tmp_path / "dense.bed", "r+b") as fh:
         fh.truncate(3 + 2 * ((n + 3) // 4))
     with pytest.raises(ValueError, match="truncated"):

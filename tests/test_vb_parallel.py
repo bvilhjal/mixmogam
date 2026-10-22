@@ -312,10 +312,17 @@ def test_large_gemm_dispatch_preserves_fit_and_reuses_one_pool(phensim_problem, 
     assert len(pools) == 1
     assert expected["converged"] and actual["converged"]
     assert expected["iterations"] == actual["iterations"]
-    tolerance = 2e-6 if dtype == np.float32 else 5e-12
+    # Both float32 paths sit within ~1e-7 of a float64 fit (GEMM slightly
+    # closer), so they may differ from each other by twice that; atol is set
+    # to that budget rather than to a fraction of rtol. rel_change near
+    # convergence is a ratio of rounding-scale changes in float32.
+    single = dtype == np.float32
+    tolerance = 2e-6 if single else 5e-12
+    atol = 2e-7 if single else tolerance * 0.01
     for field in ("beta", "resid", "prediction"):
-        np.testing.assert_allclose(actual[field], expected[field], rtol=tolerance, atol=tolerance * 0.01)
-    np.testing.assert_allclose(actual["rel_change"], expected["rel_change"], rtol=1e-3, atol=1e-14)
+        np.testing.assert_allclose(actual[field], expected[field], rtol=tolerance, atol=atol)
+    np.testing.assert_allclose(actual["rel_change"], expected["rel_change"],
+                               rtol=5e-2 if single else 1e-3, atol=1e-14)
     np.testing.assert_array_equal(actual["mask"], expected["mask"])
     with pytest.raises(RuntimeError, match="shutdown"):
         pools[0].submit(lambda: None)

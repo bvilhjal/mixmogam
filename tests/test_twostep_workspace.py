@@ -142,8 +142,9 @@ def test_two_step_workspace_matches_original(dtype, large_block):
     assert got["alpha"] == want["alpha"]
     np.testing.assert_array_equal(got["weights"], want["weights"])
     # Tiling preserves the reduction axis; only BLAS kernel selection can
-    # alter its rounding. HE retains storage-precision Gram arithmetic.
-    rtol = 3e-7 if dtype == np.float32 else 3e-13
+    # alter its rounding. HE retains storage-precision Gram arithmetic, and
+    # BLAS builds differ by a few float32 ulps there (4.7e-7 on numpy 1.26).
+    rtol = 1e-6 if dtype == np.float32 else 3e-13
     for key in ("scores", "h2_he"):
         np.testing.assert_allclose(got[key], want[key], rtol=rtol, atol=3e-13)
     assert log["square"]
