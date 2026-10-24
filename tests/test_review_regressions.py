@@ -358,3 +358,26 @@ def test_linear_stepwise_does_not_stop_for_zero_genetic_variance(problem):
     gt, _, y = problem
     out = mlmm(y, gt, max_steps=4, backward=False)
     assert len([s for s in out["steps"] if s["action"] == "+"]) == 4
+
+
+# --- review 2026-10-24: simulator edge cases (L3, L4) ----------------------
+
+
+def test_simulate_traits_without_qtls_is_finite_and_keeps_h2():
+    from mixmogam.simulate import simulate_genotypes, simulate_traits
+
+    G = simulate_genotypes(n=2000, m=400, seed=71)
+    sim = simulate_traits(G, h2=0.4, n_causal=0, seed=72)
+    assert np.isfinite(sim["y"]).all()
+    assert sim["causal"].size == 0
+    # purely infinitesimal: the genetic value carries the whole h2
+    np.testing.assert_allclose(np.var(sim["u"]), 0.4, rtol=1e-8)
+
+
+@pytest.mark.parametrize("maf", [0.0, 0.02, 0.95, 1.0])
+def test_simulate_genotypes_clips_frequencies_at_the_maf_boundaries(maf):
+    from mixmogam.simulate import simulate_genotypes
+
+    G = simulate_genotypes(n=50, m=300, maf=maf, seed=73)
+    assert G.shape == (300, 50)
+    assert set(np.unique(G)) <= {0, 1, 2}

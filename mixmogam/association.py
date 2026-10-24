@@ -197,7 +197,7 @@ def gwas(
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
-                         "stage1"}
+                         "stage1", "stage1_kwargs"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "

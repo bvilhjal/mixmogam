@@ -227,3 +227,24 @@ def test_interleaved_variants_give_the_same_fit():
     np.testing.assert_allclose(mixed["mse"], sorted_fit["mse"], rtol=1e-10)
     np.testing.assert_allclose(mixed["prediction"], sorted_fit["prediction"],
                                rtol=1e-8, atol=1e-8)
+
+
+@pytest.mark.external
+def test_ldpred3_lassosum2_stage1_runs_deterministically():
+    """The lassosum2 branch of the stage-1 seam (review 2026-10-24, L1)."""
+    gt, y, _ = _panel(21, n=600, m=600, h2=0.5)
+    result = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **LD_FAST)
+    assert result.extra["stage1"] == "ldpred3-lassosum2"
+    stat = np.asarray(result.f_stat)
+    assert np.all(np.isfinite(stat)) and np.all(stat >= 0)
+    assert np.isfinite(np.asarray(result.p)).all()
+    repeat = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **LD_FAST)
+    np.testing.assert_array_equal(stat, np.asarray(repeat.f_stat))
+
+
+@pytest.mark.external
+def test_ldpred3_lassosum2_takes_stage1_kwargs():
+    gt, y, _ = _panel(22, n=400, m=400, h2=0.5)
+    kwargs = dict(LD_FAST, stage1_kwargs={"block_size": 40})
+    result = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **kwargs)
+    assert np.isfinite(np.asarray(result.f_stat)).all()

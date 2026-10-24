@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `simulate_traits(..., n_causal=0)` returned an all-NaN phenotype: the QTL
+  scaling divided by the zero standard deviation of a trait with no QTLs.
+  A trait without QTLs is now purely infinitesimal and keeps the full `h2`
+  rather than `h2/2` (review 2026-10-24, L3).
+- `simulate_genotypes` clipped allele frequencies only in its structured
+  branch, so `maf` within about 0.05 of 0 or 1 raised numpy's
+  `ValueError: p < 0, p > 1 or p contains NaNs` from `rng.binomial`. Both
+  branches now clip to [0.01, 0.99] (L4).
+- `gwas(..., stage1_kwargs=...)` with a method other than `"hratt"` reported
+  `bolt() got an unexpected keyword argument 'stage1_kwargs'` instead of the
+  "options of method='hratt' only" message its sibling options give (L5).
+
+### Testing
+
+- `stage1="ldpred3-lassosum2"` is documented, offered by `mixmogam gwas
+  --stage1` and described in the changelog, but had no test at all: it was the
+  one branch of the LDpred3 stage-1 seam that no test had ever executed. Two
+  tests now cover it (determinism, finiteness, `stage1_kwargs` plumbing), and
+  CI gained an `external` job that installs ldpred3 and runs `-m external`,
+  where the whole seam's tests live (L1, L2).
+
 ### Computational efficiency
 
 Efficiency review of 19 October (evidence: `benchmarks/results/20261019-efficiency-review`

@@ -26,7 +26,9 @@ def simulate_genotypes(
     """
     rng = np.random.default_rng(seed)
     if n_pop <= 1 or pop_fst == 0.0:
-        freqs = np.full(m, maf) + rng.normal(0, 0.05, m)
+        # Clipped like the structured branch: maf within ~0.05 of 0 or 1
+        # otherwise reaches rng.binomial with p outside [0, 1].
+        freqs = np.clip(np.full(m, maf) + rng.normal(0, 0.05, m), 0.01, 0.99)
     else:
         base = np.clip(maf + rng.normal(0, 0.05, m), 0.05, 0.95)
         spread = pop_fst * base * (1 - base)
@@ -57,7 +59,9 @@ def simulate_traits(
     value, of sample variance about ``h2``, half from an infinitesimal part
     (drawn through the genotype projection, so it follows the GRM the model
     will fit) and half from ``n_causal`` QTL effects; noise of variance
-    ``1 - h2`` is added and ``y`` standardized. ``effect_dist='equal'``
+    ``1 - h2`` is added and ``y`` standardized. ``n_causal=0`` (a pure
+    calibration null) gives a purely infinitesimal trait carrying the whole
+    ``h2``, with no QTL term. ``effect_dist='equal'``
     gives every causal locus the same (absolute) effect so per-locus power
     is deterministic; ``'normal'`` draws N(0,1) effects (v1 style).
     """
@@ -77,9 +81,12 @@ def simulate_traits(
     else:
         effects = rng.normal(0, 1, causal.size)
     q = Z[causal].T @ effects
-    q *= np.sqrt(h2) / q.std()
-    # combine: half infinitesimal, half QTL (both var h2/2)
-    u = (u + q) / np.sqrt(2)
+    if causal.size and q.std() > 0:
+        q *= np.sqrt(h2) / q.std()
+        # combine: half infinitesimal, half QTL (both var h2/2)
+        u = (u + q) / np.sqrt(2)
+    # Without QTLs (n_causal=0, or all monomorphic) the infinitesimal part
+    # alone keeps the full h2 instead of h2/2.
     e = rng.standard_normal(n) * np.sqrt(1 - h2)
     y = u + e
     y = (y - y.mean()) / y.std()
