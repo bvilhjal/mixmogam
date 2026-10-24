@@ -53,7 +53,7 @@ def dataset(tmp_path_factory):
 
 
 def _api(dataset, out, *, method="auto", trait=None, weights=False, pcs=0, name="y",
-         pheno="pheno1"):
+         pheno="pheno1", stage1=None):
     gt = read_plink(dataset["prefix"])
     y = read_phenotypes(dataset[pheno]).align(gt.sample_ids, name)
     X = [read_covariates(str(dataset["tmp"] / "cov.txt"), sample_ids=gt.sample_ids).values]
@@ -66,6 +66,8 @@ def _api(dataset, out, *, method="auto", trait=None, weights=False, pcs=0, name=
         kwargs["trait"] = trait
     if w is not None:
         kwargs["sample_weights"] = w
+    if stage1 is not None:
+        kwargs["stage1"] = stage1
     result = gwas(y, gt, X=np.column_stack(X), method=method, **kwargs)
     result.write_csv(str(out))
     return out
@@ -102,6 +104,17 @@ def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
                          env=ENV, capture_output=True, text=True)
     assert ran.returncode == 0, ran.stderr
     assert sub.read_bytes() == api.read_bytes()
+
+
+@pytest.mark.external
+def test_gwas_cli_stage1_flag_matches_the_api(dataset, tmp_path):
+    out = tmp_path / "cli.csv"
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--covar", str(dataset["tmp"] / "cov.txt"),
+            "--method", "hratt", "--stage1", "ldpred3-inf"]
+    assert main([*base, "--out", str(out)]) == 0
+    api = _api(dataset, tmp_path / "api.csv", method="hratt", stage1="ldpred3-inf")
+    assert out.read_bytes() == api.read_bytes()
 
 
 def test_gwas_csv_carries_n_and_downstream_columns(dataset, tmp_path):

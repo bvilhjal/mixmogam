@@ -46,6 +46,11 @@ def _parser() -> argparse.ArgumentParser:
                            "--trait or --weights is given); default auto")
     gwas.add_argument("--trait", choices=("quantitative", "binary"),
                       help="binary needs --method hratt and 0/1 outcomes")
+    gwas.add_argument("--stage1", default="enet",
+                      choices=("enet", "ldpred3-inf", "ldpred3-lassosum2", "auto"),
+                      help="hratt stage-1 whole-genome predictor (default enet); "
+                           "ldpred3-* and auto need the separate ldpred3 package, "
+                           "quantitative traits and --stage1 implies --method hratt")
     gwas.add_argument("--random-state", type=int, default=None,
                       help="two-step method seed (default: the method's own, 0)")
     gwas.add_argument("--n-threads", type=int, default=1,
@@ -142,10 +147,10 @@ def _cmd_gwas(args) -> int:
 
     method = args.method
     if method == "auto":
-        # Resolve exactly as mixmogam.gwas does (trait= and sample_weights=
-        # are HRATT options, so they move auto to hratt).
+        # Resolve exactly as mixmogam.gwas does (trait=, sample_weights= and
+        # stage1= are HRATT options, so they move auto to hratt).
         from mixmogam.association import EXACT_N_AUTO
-        if args.trait is not None or w is not None:
+        if args.trait is not None or w is not None or args.stage1 != "enet":
             method = "hratt"
         else:
             method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
@@ -154,6 +159,8 @@ def _cmd_gwas(args) -> int:
         kwargs["random_state"] = args.random_state
     if args.trait is not None:
         kwargs["trait"] = args.trait
+    if args.stage1 != "enet":
+        kwargs["stage1"] = args.stage1
     if w is not None:
         kwargs["sample_weights"] = w
     result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,

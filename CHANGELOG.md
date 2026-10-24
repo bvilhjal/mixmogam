@@ -87,6 +87,20 @@ and `20261020-efficiency-packed-fix`). Unless noted, statistics are identical to
 
 ### Added
 
+- `hratt(stage1=...)` / CLI `--stage1`: the step-(1e) whole-genome predictor
+  is a seam (`mixmogam.stage1`) with an optional LDpred3 implementation.
+  `ldpred3-inf` and `ldpred3-lassosum2` fit cross-fitted effects from
+  covariate-adjusted marginal statistics and in-cohort LD blocks
+  (deterministic; quantitative traits and `loco_folds >= 2` only; the
+  separate `ldpred3` package is imported only when requested and stays out
+  of the install requirements); `auto` keeps whichever candidate scores
+  better on the hold-out. The default `enet` path is unchanged, down to the
+  CSV bytes. Effects are the projected standardized row units of
+  `_out_of_fold_loco`, and the LD blocks are group-pure, so the LOCO score
+  is the genome-wide fitted value less the group's own share exactly under
+  the block-independent model. `mixmogam.stage1` documents the accepted
+  consequences (blockwise LD, second-order hyperparameter leakage,
+  cohort-shared LD across folds).
 - `benchmarks/atwell_controls.py`: a prespecified positive-control check
   on the bundled RegMap panel. Seven Atwell phenotypes have a known major
   gene; a gene is found when its 50 kb window reaches 0.05/m. The 17

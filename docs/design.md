@@ -226,6 +226,54 @@ BOLT mixture p-values accompany the infinitesimal model's effects and
 standard errors, as in BOLT-LMM. Slopes against in-sample mixture residuals
 were attenuated; calibrating their p-values did not repair their effects.
 
+### Stage-1 predictor seam
+
+The whole-genome predictor of step (1e) sits behind a small contract
+(`mixmogam.stage1`): a fit returns the LOCO residuals, the hold-out errors
+and the convergence records of the elastic-net fit, and the residual
+construction (each group's score with its least-squares slope in [0, 1]) is
+shared. Effects are per unit of the covariate-projected standardized rows,
+counting the allele `Genotypes.G` encodes: exactly the rows
+`_out_of_fold_loco` multiplies, whatever the predictor.
+
+`stage1="ldpred3-inf"` and `stage1="ldpred3-lassosum2"` replace the
+variational fit with cross-fitted LDpred3 effects (the optional sibling
+package, imported only when requested). LDpred3 fits posterior-mean effects
+from standardized marginal effects and per-block LD; here the summary
+statistics are the covariate-adjusted marginal regressions of the working
+phenotype on the projected rows, one per cross-fit training set (one
+genotype pass accumulates all of them), and the LD blocks are the
+correlations of those same rows, group-pure so LOCO groups never straddle a
+block. LDpred3's own panel builder is not used: its dosage convention
+(non-negative calls, negatives as missing) cannot carry signed standardized
+rows, and these correlations are the covariate-adjusted LD the marginal
+regressions imply. `stage1="auto"` runs both candidates and keeps the one
+with the lower hold-out error.
+
+Three consequences of the block-independent model are accepted:
+
+- Cross-block LD is ignored; long-range-LD regions are fitted blockwise.
+- Shared hyperparameters (the genome-wide h2 of the infinitesimal fit; the
+  (s, lambda) lassosum2 selects per fold) leak the tested chromosome into
+  the other chromosomes' effects second-order, the same order BOLT-LMM and
+  REGENIE accept. Given the hyperparameters, block effects do not interact,
+  so a sample's fitted value less its own group's share *is* the fit without
+  that group: unlike the variational engine, no per-group refit is needed
+  under strong structure (the lambda calibration downstream still applies).
+- The LD reference is the analysis cohort and is shared across folds: a
+  held-out fold's genotypes enter its prediction through the LD, never its
+  phenotype (the usual unsupervised-preprocessing allowance).
+
+The fitters are deterministic (the infinitesimal closed form; lassosum2 with
+per-fold pseudo-validation on the fold's own rows), so the statistics carry
+no Monte Carlo noise. The LDpred3 options are quantitative-only and need
+`loco_folds >= 2`; the binary working model keeps the elastic-net stage 1.
+The expected accuracy gain over the variational fit is modest — the
+individual-level fit is not information-limited — so the case for the option
+is the near-n-independent per-fit cost after the LD is built (folds, grid
+points and traits then share one LD) and, later, predictors from external
+summary statistics.
+
 ### Case-control outcomes and sampling weights
 
 HRATT fits sampling weights w (scaled to mean one) and binary outcomes in one

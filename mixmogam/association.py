@@ -180,8 +180,10 @@ def gwas(
     kwargs : passed to the two-step method (see :mod:`mixmogam.twostep`);
         ``"exact"`` accepts only ``n_threads`` (default 1), which decodes
         genotype blocks in parallel (Numba) with unchanged values. Binary
-        (case-control) outcomes, ``trait="binary"``, and sampling weights,
-        ``sample_weights=w``, are HRATT options (``method="hratt"``).
+        (case-control) outcomes, ``trait="binary"``, sampling weights,
+        ``sample_weights=w``, and the stage-1 predictor, ``stage1=``
+        (see :mod:`mixmogam.stage1`), are HRATT options
+        (``method="hratt"``).
     """
     from mixmogam.results import _genome_build
     genome_build = _genome_build(genome_build)
@@ -194,7 +196,8 @@ def gwas(
         raise ValueError("block must be a positive integer")
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
-    hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds"}
+    hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
+                         "stage1"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "

@@ -63,6 +63,7 @@ from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _validate_n_thread
 from mixmogam.ldscore import ld_scores, ldsc_intercept
 from mixmogam.lmm import LMM, _design_matrix
 from mixmogam.results import GwasResult
+from mixmogam.stage1 import STAGE1_METHODS, ldpred3_stage1_scores, residualize_score
 
 __all__ = ["bolt_inf", "bolt", "hratt", "structure_test", "BOLT_GRID", "HRATT_GRID",
            "HRATT_ALPHAS"]
@@ -996,7 +997,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           n_calibration: int = 30, denominator: str = "constant", n_spectral="auto",
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
           cg_tol: float = 1e-6, spa_threshold: float = 2.0, spa_two_sided: str = "distance",
-          random_state: int = 0,
+          random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
@@ -1036,6 +1037,22 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     effect estimates (by about a third in simulations, with unchanged
     p-values there), and can give rare binary outcomes offsets that nearly
     separate the cases.
+
+    ``stage1`` selects the whole-genome predictor of (1e); see
+    :mod:`mixmogam.stage1` for the contract and the model notes.
+    ``"enet"`` (default) is the elastic-net variational fit above.
+    ``"ldpred3-inf"`` and ``"ldpred3-lassosum2"`` replace it with
+    cross-fitted LDpred3 effects fit from covariate-adjusted marginal
+    statistics and in-cohort LD blocks: deterministic, with per-fit cost
+    nearly independent of the sample size once the LD is built, and exact
+    LOCO under the block-independent model. ``"auto"`` runs both and keeps
+    whichever scores better on the ``cv_fraction`` hold-out. The LDpred3
+    options need the separate ``ldpred3`` package, quantitative traits and
+    ``loco_folds >= 2``; ``stage1_kwargs`` (``block_size``, lassosum2's fit
+    keywords) configure them. Variance components and prior selection still
+    use the whole trait, and the genome-wide h2 the infinitesimal fit shares
+    over its blocks leaks the tested chromosome second-order (documented in
+    :mod:`mixmogam.stage1`).
 
     ``heritability_method="he"`` reuses the selected alpha's existing HE
     products to fit the covariance ``vg K + ve (I - QQ')``, with nonnegative
@@ -1138,6 +1155,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError(f"unknown alpha_method {alpha_method!r}; use 'he' or 'reml'")
     if not isinstance(loco_folds, (int, np.integer)) or isinstance(loco_folds, bool) or loco_folds < 1:
         raise ValueError("loco_folds must be a positive integer (1: in-sample LOCO fits)")
+    if stage1 not in STAGE1_METHODS:
+        raise ValueError(f"stage1 must be one of {list(STAGE1_METHODS)}, got {stage1!r}")
+    if stage1_kwargs is not None and not isinstance(stage1_kwargs, dict):
+        raise ValueError("stage1_kwargs must be a dict of LDpred3 fit options or None")
+    if stage1 != "enet":
+        if trait != "quantitative":
+            raise ValueError(f"stage1 {stage1!r} is for quantitative traits; the binary "
+                             "working model keeps the elastic-net stage 1")
+        if loco_folds < 2:
+            raise ValueError(f"stage1 {stage1!r} needs cross-fitted scores: loco_folds >= 2")
     n_threads = _validate_n_threads(n_threads)
     if loco_folds > gt.n_samples:
         raise ValueError("loco_folds exceeds the number of samples")
@@ -1172,10 +1199,33 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     folds = None
     if loco_folds > 1:
         folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
-    scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                               keep_prediction=binary, folds=folds, refit=struct["strong"])
+    if stage1 == "auto" and h2 > 0:
+        scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
+                                   keep_prediction=binary, folds=folds, refit=struct["strong"])
+        alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
+                                    keep_prediction=binary, **(stage1_kwargs or {}))
+        enet_mse = float(np.min(scores["mse"]))
+        alt_mse = float(alt["mse"][0])
+        pick = "ldpred3-inf" if alt_mse < enet_mse else "enet"
+        if pick != "enet":
+            scores = alt
+        scores["stage1_selection"] = {"heldout_mse_enet": enet_mse,
+                                      "heldout_mse_ldpred3": alt_mse, "chosen": pick}
+        scores["stage1_name"] = pick
+    elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
+        scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
+                                   keep_prediction=binary, folds=folds, refit=struct["strong"])
+        scores["stage1_name"] = "enet"
+    else:
+        scores = ldpred3_stage1_scores(st, ys, h2, folds, held, method=stage1,
+                                       keep_prediction=binary, **(stage1_kwargs or {}))
+        scores["stage1_name"] = stage1
     if st.v is not None:  # the held-out error per unit of working weight
-        scores["mse"] = scores["mse"] * held.size / float(np.sum(st.v[held]))
+        weight_scale = held.size / float(np.sum(st.v[held]))
+        scores["mse"] = scores["mse"] * weight_scale
+        if "stage1_selection" in scores:
+            scores["stage1_selection"]["heldout_mse_enet"] *= weight_scale
+            scores["stage1_selection"]["heldout_mse_ldpred3"] *= weight_scale
     if binary and not (struct["strong"] and h2 > 0):
         rsU, U = None, None  # step 2 is logistic; no working-model statistic needed
         scores.pop("resid")
@@ -1186,11 +1236,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     extra = {"method": "hratt", "denominator": denominator, "alpha": vc["alpha"], "h2": h2,
              "alpha_method": alpha_method, "alpha_scores": vc["alpha_scores"],
              "structure": struct,
-             "cv_grid": list(grid), "cv_mse": scores["mse"], "cv_best": grid[scores["best"]],
+             "cv_grid": scores.get("cv_grid", list(grid)), "cv_mse": scores["mse"],
+             "cv_best": scores.get("cv_best", grid[scores["best"]]),
              "cv_converged": scores["cv_converged"],
              "loco_folds": int(loco_folds), "loco_refit": bool(folds is not None and struct["strong"]),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
+    if scores["stage1_name"] != "enet" or "stage1_selection" in scores:
+        extra["stage1"] = scores["stage1_name"]
+    if "stage1_selection" in scores:
+        extra["stage1_selection"] = scores["stage1_selection"]
     if "offset_slope" in scores and not binary:
         extra["offset_slope"] = scores["offset_slope"]
     if heritability_method == "he":
@@ -1389,14 +1444,10 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
                 prediction[rows, col_group[c]] = loco["prediction"][rows, c]
         else:
             prediction = _out_of_fold_loco(st.lg, loco["beta"], folds)
-        Pp = st.lg.project(prediction)  # ys is projected already
-        norm2 = np.einsum("ij,ij->j", Pp, Pp)
-        slope = np.zeros(G)
-        np.divide(Pp.T @ ys, norm2, out=slope, where=norm2 > 0)
         # Shrink an over-dispersed score, never inflate one: a slope above
         # one would undo the prior's shrinkage, and one below zero is noise.
-        np.clip(slope, 0.0, 1.0, out=slope)
-        resid = ys[:, None] - Pp * slope
+        score = residualize_score(st.lg, ys, prediction)
+        resid, slope = score["resid"], score["offset_slope"]
     # Only the LOCO residuals (and predictions) are used; the engine's Gram
     # cache and the (m, groups) effects go before the calibration solves.
     out = {"resid": resid, "best": best, "mse": mse, "cv_converged": cv_converged,
