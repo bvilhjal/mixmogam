@@ -1,0 +1,110 @@
+{
+  "method": "exact",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": null,
+    "storage": "int8",
+    "numba": true,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "ref"
+  },
+  "panel": {
+    "n": 1000,
+    "m": 10000,
+    "nchr": 8,
+    "kind": "structured",
+    "block_size": 125,
+    "n_pops": 4,
+    "fst": 0.3,
+    "seed": 20267030
+  },
+  "phenotype": {
+    "h2": 0.0,
+    "seed": 20267100,
+    "confounding": 0.0,
+    "pcs": 0,
+    "h2_qtl": 0.25,
+    "n_qtl": 10,
+    "n_background": 2000
+  },
+  "panel_seconds": 0.2833038750104606,
+  "phenotype_seconds": 7.154210470616817e-05,
+  "pc_seconds": 0.0,
+  "fit_seconds": 0.45309829083271325,
+  "has_numba": true,
+  "options": {
+    "method": "exact",
+    "n_threads": 1
+  },
+  "warnings": [],
+  "extra": {
+    "method": "exact",
+    "statistic": "F",
+    "loco": true,
+    "n": 1000,
+    "n_loco_groups": 8,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ]
+    ],
+    "pseudo_heritability": [
+      0.005601022798336059,
+      0.005799617916744823,
+      0.006697818236882074,
+      0.006260674071002191,
+      0.006467630622154796,
+      0.006230631810113541,
+      0.005880483553736423,
+      0.005987986152465026
+    ],
+    "delta": [
+      177.5388197843219,
+      171.42515185574058,
+      148.3023496059388,
+      158.72720966768404,
+      153.61612736115623,
+      159.4973669567191,
+      169.05404247149136,
+      166.00105420055758
+    ],
+    "variance_solver": "cholesky",
+    "reml_factorizations": [
+      29,
+      9,
+      10,
+      8,
+      9,
+      8,
+      8,
+      8
+    ]
+  },
+  "n": 1000,
+  "m": 10000,
+  "p_finite": 10000
+}

@@ -1,0 +1,34 @@
+{
+ "arm": "C2-cache-ladder",
+ "label": "P3b__cachefull",
+ "method": "hratt-he",
+ "config": {
+  "threads": 1,
+  "blas_threads": 1,
+  "numba_threads": 1,
+  "cache_bytes": 2000000000.0,
+  "storage": "int8",
+  "numba": true,
+  "random_state": 0,
+  "pin_threads": true,
+  "name": "cachefull"
+ },
+ "panel": {
+  "n": 5000,
+  "m": 200000,
+  "nchr": 10,
+  "kind": "blocks",
+  "block_size": 100,
+  "seed": 20261036
+ },
+ "panel_name": "P3b",
+ "phenotype": {
+  "h2": 0.5,
+  "n_qtl": 10,
+  "n_background": 10000,
+  "seed": 20261038,
+  "confounding": 0.0,
+  "pcs": 0
+ },
+ "out": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261025T135258Z-scale-study/C2-cache-ladder/P3b__cachefull"
+}

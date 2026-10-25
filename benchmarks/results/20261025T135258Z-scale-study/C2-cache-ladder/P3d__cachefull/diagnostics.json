@@ -1,0 +1,261 @@
+{
+  "method": "hratt-he",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": 2000000000.0,
+    "storage": "int8",
+    "numba": true,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "cachefull"
+  },
+  "panel": {
+    "n": 5000,
+    "m": 600000,
+    "nchr": 30,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20261037
+  },
+  "phenotype": {
+    "h2": 0.5,
+    "n_qtl": 10,
+    "n_background": 30000,
+    "seed": 20261038,
+    "confounding": 0.0,
+    "pcs": 0
+  },
+  "panel_seconds": 51.53689983300865,
+  "phenotype_seconds": 0.5620014590676874,
+  "pc_seconds": 0.0,
+  "fit_seconds": 48.79977070912719,
+  "has_numba": true,
+  "options": {
+    "method": "hratt",
+    "heritability_method": "he",
+    "n_threads": 1,
+    "gram_cache_bytes": 2000000000.0,
+    "random_state": 0
+  },
+  "warnings": [],
+  "extra": {
+    "statistic": "chi2",
+    "n": 5000,
+    "n_loco_groups": 25,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5,
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ],
+      [
+        9
+      ],
+      [
+        10
+      ],
+      [
+        11,
+        12
+      ],
+      [
+        13
+      ],
+      [
+        14
+      ],
+      [
+        15
+      ],
+      [
+        16
+      ],
+      [
+        17,
+        18
+      ],
+      [
+        19
+      ],
+      [
+        20
+      ],
+      [
+        21
+      ],
+      [
+        22
+      ],
+      [
+        23,
+        24
+      ],
+      [
+        25
+      ],
+      [
+        26
+      ],
+      [
+        27
+      ],
+      [
+        28
+      ],
+      [
+        29,
+        30
+      ]
+    ],
+    "method": "hratt",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.3992583872869021,
+    "alpha_method": "he",
+    "alpha_scores": [
+      14.512341247729433,
+      14.460269235319403,
+      14.39169342221221,
+      14.307180554525567,
+      14.207580215902562
+    ],
+    "structure": {
+      "excess": 0.004813564959947669,
+      "z": 1.7852125272266623,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.9684339538935912,
+      0.9649891862983118,
+      0.9511650316004941,
+      0.8578198390069982,
+      0.8339627293602474,
+      0.81049879891916,
+      0.7368519993132231,
+      0.7308863605553965,
+      0.7273438334853247,
+      0.9692755060798652
+    ],
+    "cv_best": [
+      0.01,
+      0.1
+    ],
+    "cv_converged": true,
+    "loco_folds": 5,
+    "loco_refit": false,
+    "loco_iterations": 5,
+    "loco_converged": true,
+    "offset_slope": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "heritability_method": "he",
+    "he_variance": {
+      "raw_vg": 0.3992265006183829,
+      "raw_ve": 0.6006936346385472,
+      "vg": 0.3992265006183829,
+      "ve": 0.6006936346385472,
+      "h2": 0.3992583872869021,
+      "status": "interior",
+      "boundary": "none",
+      "denominator": 86.8871380522869,
+      "trace_k2": 5087.887425027711,
+      "trace_k_over_df": 1.0002000487015432,
+      "projected_genetic_variance_fraction": 0.3993063653614531,
+      "probe_se": 4.434014862705259,
+      "curvature_se_ratio": 19.59559016887818,
+      "n_probes": 32
+    },
+    "vb_residual_variance": 0.6007416127130979,
+    "vb_noise_floor_applied": false,
+    "lambda": 1.0
+  },
+  "n": 5000,
+  "m": 600000,
+  "p_finite": 600000
+}

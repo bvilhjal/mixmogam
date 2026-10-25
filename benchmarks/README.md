@@ -4,6 +4,78 @@ Measured-evidence suite (family convention: run archives under
 `results/<run-id>/` with a source snapshot). Runners refuse to start on
 battery power or with macOS Low Power Mode on, like the sibling packages.
 
+[`DESIGN.md`](DESIGN.md) is the map of the suite: which question each
+family of drivers answers, what the recorded evidence can support, and
+what the suite could not measure on 25 October 2026. Read it before
+adding a driver or quoting a number.
+
+**Scale, invariance and calibration study (25 October 2026).**
+`scale_study.py` runs the study that closes the gaps the efficiency
+reviews named: no archived run had exceeded 80,000 variants, every
+archived measurement used the optional acceleration package and a
+single-threaded math library, and the recent component tables reported
+traced allocations rather than resident memory. The
+[prespecified protocol](scale_study_plan.md) was written before the
+first measurement and is hashed into the archive. Four arms:
+
+* **A** invariance: does the reported statistic depend on the Gram-cache
+  budget, the worker count, the genotype storage format or the absence
+  of the acceleration package? Every configuration is compared with a
+  reference configuration of the same method, per variant.
+* **B** calibration: type-I error under a genetic null, power over
+  large-effect variants, the attenuation of the effect estimates and the
+  effect of population structure and of an environment that differs
+  between populations, each with binomial 95% intervals.
+* **C** and **C2** scale: wall time, CPU time and operating-system peak
+  RSS of one complete fit at 5,000 samples and up to 600,000 variants,
+  with the Gram cache switched off, at its default budget and sized to
+  hold the whole panel, so that the point where the default budget runs
+  out can be read off the table.
+* **D** the default installation: what the pure NumPy fallbacks cost,
+  and whether the package warns that it is using them.
+
+```sh
+OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+VECLIB_MAXIMUM_THREADS=1 NUMBA_NUM_THREADS=1 \
+python benchmarks/scale_study.py --tier fast --max-load 5
+```
+
+`--tier smoke` runs the invariance arm alone in minutes; `--tier full`
+adds replicates to the calibration arm. The archive is written under
+`results/<run-id>-scale-study/` with the source snapshot, the
+environment manifest, the hash of the plan, every worker's log and
+measurement, and the per-variant results of every fit.
+`_harness.py` holds the shared infrastructure (power guard, thread
+environment, source snapshot, fresh-process measurement with operating
+system counters, p-value comparison); the older drivers keep their own
+copies so that their published archives stay byte-reproducible.
+
+**Matched comparison with the official LDAK-KVIK at 400,000 variants
+(25 October 2026).** `kvik_scale.py` closes the last gap of the scale
+study: the external comparison existed only at panels of at most 20,000
+variants. Under the
+[prespecified protocol](kvik_scale_plan.md) the official executable and
+mixmogam's two-step methods analyse one identical panel -- the scale
+study's 5,000 x 400,000 panel, exported to PLINK and verified
+independently, with the reference program's own input statistics checked
+against the simulated calls. No agreement threshold is imposed, because
+the two programs are different estimators; what is prespecified is that
+they analysed the same variants.
+
+```sh
+python benchmarks/kvik_scale.py --ldak ~/bin/ldak63 --out NEW_DIRECTORY
+```
+
+The archive is written under `results/<run-id>-kvik-scale/` with the
+executable's hash and banner, the export check, every command and log,
+the reference program's own outputs (compressed) and the per-variant
+p-values of all three programs. The
+[run of 25 October](results/20261025T153917Z-kvik-scale/README.md) found
+the official program as fast as mixmogam's HRATT-HE (24 s against 34 s)
+and faster than BOLT-LMM-inf (51 s), with a third of the memory; the two
+programs' p-values correlate at 0.998 under the null and detect the same
+8 of 10 causal variants.
+
 **Review correction, 2026-10-03 (`2.0.0.dev1`).** Archives through
 `20261003T122520Z` precede the current fixes. The LDAK reference run
 `20261003T083746Z-kvik-reference` used the incorrect BED writer: inbred

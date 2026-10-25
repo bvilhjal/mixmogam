@@ -1,0 +1,34 @@
+{
+ "arm": "C-scale",
+ "label": "hratt-reml__cachefull",
+ "method": "hratt-reml",
+ "config": {
+  "threads": 1,
+  "blas_threads": 1,
+  "numba_threads": 1,
+  "cache_bytes": 2000000000.0,
+  "storage": "int8",
+  "numba": true,
+  "random_state": 0,
+  "pin_threads": true,
+  "name": "cachefull"
+ },
+ "panel": {
+  "n": 5000,
+  "m": 400000,
+  "nchr": 20,
+  "kind": "blocks",
+  "block_size": 100,
+  "seed": 20261028
+ },
+ "panel_name": "P3",
+ "phenotype": {
+  "h2": 0.5,
+  "n_qtl": 10,
+  "n_background": 20000,
+  "seed": 20261032,
+  "confounding": 0.0,
+  "pcs": 0
+ },
+ "out": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261025T135258Z-scale-study/C-scale/hratt-reml__cachefull"
+}

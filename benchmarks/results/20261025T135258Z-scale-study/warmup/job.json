@@ -1,0 +1,34 @@
+{
+ "arm": "warmup",
+ "label": "warmup",
+ "method": "hratt-he",
+ "config": {
+  "threads": 1,
+  "blas_threads": 1,
+  "numba_threads": 1,
+  "cache_bytes": null,
+  "storage": "int8",
+  "numba": true,
+  "random_state": 0,
+  "pin_threads": true,
+  "name": "warmup"
+ },
+ "panel": {
+  "n": 1500,
+  "m": 20000,
+  "nchr": 8,
+  "kind": "blocks",
+  "block_size": 100,
+  "seed": 20261026
+ },
+ "panel_name": "P1",
+ "out": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261025T135258Z-scale-study/warmup",
+ "phenotype": {
+  "h2": 0.5,
+  "n_qtl": 2,
+  "n_background": 100,
+  "seed": 20261034,
+  "confounding": 0.0,
+  "pcs": 0
+ }
+}

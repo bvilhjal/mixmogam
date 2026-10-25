@@ -128,6 +128,18 @@ variance components and model selection use the whole trait. This reduced
 effect attenuation and separation in the tested scenarios; it does not
 guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
 
+Under population confounding the two heritability estimators behave
+differently, and neither is the exact reference. In a controlled panel
+where an environment differs between populations, `heritability_method="he"`
+was conservative without covariates (type-I error 0.022 at the 0.05 level)
+and anti-conservative with two principal components (lambda_GC 1.33),
+while the exact LOCO fit was mildly inflated in both (1.12 and 1.09) and
+`"reml"` matched it once the covariates were there (1.01). HRATT-HE also
+lost most of its power in that cell (0.04 and 0.13 against 0.35). The
+cross-fitted elastic-net scores absorb part of the confounding; check the
+calibration of the configuration you intend to use
+([archive](../benchmarks/results/20261025T135258Z-scale-study/README.md)).
+
 ## Larger HRATT fits
 
 Install the `fast` extra for Numba, then set thread limits **before starting

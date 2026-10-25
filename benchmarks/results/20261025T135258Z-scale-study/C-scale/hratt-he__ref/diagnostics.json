@@ -1,0 +1,240 @@
+{
+  "method": "hratt-he",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": null,
+    "storage": "int8",
+    "numba": true,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "ref"
+  },
+  "panel": {
+    "n": 5000,
+    "m": 400000,
+    "nchr": 20,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20261028
+  },
+  "phenotype": {
+    "h2": 0.5,
+    "n_qtl": 10,
+    "n_background": 20000,
+    "seed": 20261032,
+    "confounding": 0.0,
+    "pcs": 0
+  },
+  "panel_seconds": 34.86286004213616,
+  "phenotype_seconds": 0.35541887511499226,
+  "pc_seconds": 0.0,
+  "fit_seconds": 32.56661624996923,
+  "has_numba": true,
+  "options": {
+    "method": "hratt",
+    "heritability_method": "he",
+    "n_threads": 1,
+    "random_state": 0
+  },
+  "warnings": [
+    {
+      "category": "RuntimeWarning",
+      "message": "VB Gram cache holds 2518 of 3140 sub-blocks; the rest are recomputed every sweep. Increase gram_cache_bytes (currently 0.93 GiB) if memory permits."
+    }
+  ],
+  "extra": {
+    "statistic": "chi2",
+    "n": 5000,
+    "n_loco_groups": 20,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ],
+      [
+        9
+      ],
+      [
+        10
+      ],
+      [
+        11
+      ],
+      [
+        12
+      ],
+      [
+        13
+      ],
+      [
+        14
+      ],
+      [
+        15
+      ],
+      [
+        16
+      ],
+      [
+        17
+      ],
+      [
+        18
+      ],
+      [
+        19
+      ],
+      [
+        20
+      ]
+    ],
+    "method": "hratt",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.35216799179747343,
+    "alpha_method": "he",
+    "alpha_scores": [
+      14.71670561812336,
+      14.685707455471164,
+      14.651350666438676,
+      14.613680217931726,
+      14.572869902315599
+    ],
+    "structure": {
+      "excess": -0.008420929977699387,
+      "z": -3.063562486817742,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      1.0286565171997617,
+      1.0279651241167902,
+      1.0263858825944931,
+      0.9747626587548569,
+      0.9389676673246667,
+      0.9177655203079057,
+      0.8516385473602234,
+      0.848086751715772,
+      0.846413110533674,
+      1.028984800890643
+    ],
+    "cv_best": [
+      0.01,
+      0.1
+    ],
+    "cv_converged": true,
+    "loco_folds": 5,
+    "loco_refit": false,
+    "loco_iterations": 4,
+    "loco_converged": true,
+    "offset_slope": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0
+    ],
+    "heritability_method": "he",
+    "he_variance": {
+      "raw_vg": 0.3521431811446381,
+      "raw_ve": 0.6477863676689588,
+      "vg": 0.3521431811446381,
+      "ve": 0.6477863676689588,
+      "h2": 0.35216799179747343,
+      "status": "interior",
+      "boundary": "none",
+      "denominator": 113.8854366665646,
+      "trace_k2": 5114.885876996028,
+      "trace_k_over_df": 1.0002000640369468,
+      "projected_genetic_variance_fraction": 0.3522136323310412,
+      "probe_se": 5.393823273705981,
+      "curvature_se_ratio": 21.1140467322572,
+      "n_probes": 32
+    },
+    "vb_residual_variance": 0.6478320082025266,
+    "vb_noise_floor_applied": false,
+    "lambda": 1.0
+  },
+  "n": 5000,
+  "m": 400000,
+  "p_finite": 400000
+}

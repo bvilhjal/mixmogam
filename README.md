@@ -4,7 +4,9 @@ Mixed linear models for genome-wide association of quantitative traits
 and, with HRATT, case-control outcomes and sampling-weighted samples, with
 leave-one-chromosome-out (LOCO) testing by default. The core uses NumPy and
 SciPy; Numba accelerates optional kernels. Two-step methods warn when it is
-unavailable, since their Python fallbacks can be orders of magnitude slower.
+unavailable, since their Python fallbacks can be orders of magnitude slower
+(measured: 5 times for BOLT-LMM-inf, 61 times for HRATT and 163 times for
+the BOLT-LMM mixture on a 1,000 x 20,000 panel).
 
 **Development version 2.0.0.dev7**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
@@ -87,6 +89,26 @@ was slower, took 25-30 s at 0.65 GiB
 [cross-fit rerun](benchmarks/results/20261007-kvik-20k-crossfit-gemm/README.md)).
 These are different estimators on two realizations, not a calibration study.
 
+A scale study on 5,000 samples and 400,000 variants measured one fit per
+configuration in a fresh process, with peak resident memory from the
+operating system: HRATT-HE took 33 s at 3.0 GiB and BOLT-LMM 91 s at 3.2 GiB
+(one thread, int8 calls, a 2.0 GiB panel), the mixture's cross-validation
+matrix included. The default 1 GB variational Gram cache holds about 320,000
+variants, so at 400,000 variants it warns that the rest is recomputed every
+sweep: switching the cache off cost 1.7 times for HRATT-HE and 1.2 times for
+BOLT-LMM, and a budget that holds the whole panel recovered 10% and 4%
+([archive](benchmarks/results/20261025T135258Z-scale-study/README.md)).
+
+On that same panel, the official LDAK-KVIK took 24 s at 1.2 GiB against
+HRATT-HE's 34 s at 3.1 GiB and BOLT-LMM-inf's 51 s at 2.4 GiB, on the same
+day, on the same host, from the same exported files. The two programs were
+equally calibrated (lambda_GC 1.006 against 1.006 under a global null) and
+detected the same 8 of 10 causal variants; their p-values correlated at 0.998.
+Most of the memory difference is the genotype panel, which mixmogam holds
+decoded in memory and LDAK streams from disk; with `mmap=True` or two-bit
+storage that 2.0 GiB leaves the resident set
+([archive](benchmarks/results/20261025T153917Z-kvik-scale/README.md)).
+
 ## Install
 
 From this repository:
@@ -152,6 +174,16 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   such confounding.
 - Only HRATT models case-control outcomes and sampling weights; the other
   methods assume a Gaussian trait without weights.
+- HRATT's projected heritability estimator is not interchangeable with
+  REML under confounding. In a controlled panel where an environment
+  differs between populations, HRATT-HE was conservative without
+  covariates (type-I error 0.022 at the 0.05 level) and anti-conservative
+  with two principal components (lambda_GC 1.33), while the exact LOCO
+  reference was mildly inflated in both (1.12 and 1.09) and HRATT-REML
+  matched it with the covariates (1.01). HRATT-HE also lost most of its
+  power there (0.04 and 0.13 against 0.35 for the reference). The
+  cross-fitted elastic-net scores absorb part of the confounding.
+  ([archive](benchmarks/results/20261025T135258Z-scale-study/README.md))
 - BOLT mixture p-values accompany infinitesimal-model effects and standard
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
 - HRATT's weighted and binary tests take allele frequencies from the

@@ -1,0 +1,121 @@
+{
+  "method": "bolt-inf",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": null,
+    "storage": "int8",
+    "numba": false,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "nonumba"
+  },
+  "panel": {
+    "n": 1500,
+    "m": 20000,
+    "nchr": 8,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20261026
+  },
+  "phenotype": {
+    "h2": 0.5,
+    "n_qtl": 10,
+    "n_background": 4000,
+    "seed": 20261031,
+    "confounding": 0.0,
+    "pcs": 0
+  },
+  "panel_seconds": 0.4357001248281449,
+  "phenotype_seconds": 0.015471833990886807,
+  "pc_seconds": 0.0,
+  "fit_seconds": 6.819314249791205,
+  "has_numba": false,
+  "options": {
+    "method": "bolt-inf",
+    "random_state": 0
+  },
+  "warnings": [
+    {
+      "category": "RuntimeWarning",
+      "message": "two-step methods without Numba use slow Python/NumPy fallbacks; install mixmogam[fast] for production HRATT/BOLT fits"
+    }
+  ],
+  "extra": {
+    "statistic": "chi2",
+    "n": 1500,
+    "n_loco_groups": 8,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ]
+    ],
+    "method": "bolt-inf",
+    "denominator": "constant",
+    "delta": 0.7891131764568474,
+    "vg": 0.5629254473490735,
+    "ve": 0.4442118878660192,
+    "pseudo_heritability": 0.5589361328054138,
+    "calibration": 0.9689961953296123,
+    "calibration_cv": 0.022735501049971855,
+    "calibration_ratios": [
+      0.942279609360979,
+      0.9801960516950123,
+      0.9770427157743213,
+      0.9603856491046863,
+      0.9928967325444101,
+      0.9710435813636232,
+      0.9716865220725156,
+      0.9790840254438357,
+      0.9759788466982499,
+      0.9760288041875944,
+      0.9752359624399392,
+      0.9541075716655228,
+      0.9730620512629002,
+      0.9714589729862672,
+      0.981741891523054,
+      0.9683746280786717,
+      0.9914996581468446,
+      0.9970679826134984,
+      0.9682595174618588,
+      0.9784827353884424,
+      0.9804316794103564,
+      0.9849492900610589,
+      0.9813010996085382,
+      0.9641178026252464,
+      0.9746455865688062,
+      0.9797002320352179,
+      0.9081106362579058,
+      0.9168732156931344,
+      0.9090845069468464,
+      0.984758300869031
+    ],
+    "spectral_k": null,
+    "cg_iterations": 12
+  },
+  "n": 1500,
+  "m": 20000,
+  "p_finite": 20000
+}

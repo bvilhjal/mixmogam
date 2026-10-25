@@ -46,6 +46,36 @@ No statistical default or convergence threshold was changed. BOLT's
 model-selection cross-validation, float64 full Lanczos reorthogonalization,
 the SPA threshold, and the two-kinship mixture profile remain in place.
 
+### Benchmarks
+
+- `benchmarks/DESIGN.md` maps the measured-evidence suite: the four
+  layers (invariants, resources, evidence, external comparison), what
+  each layer can support, the gaps the 19 and 25 October efficiency
+  reviews exposed, and the rules every measurement now follows (a
+  fresh process, operating-system resource counters, a stated
+  configuration, a protocol written before the first measurement).
+- `benchmarks/scale_study.py` runs the study that closes those gaps,
+  under a protocol written before the first measurement and hashed into
+  the archive (`benchmarks/scale_study_plan.md`): fits at up to 600,000
+  variants with peak resident set size from the operating system, the
+  point where the default variational Gram-cache budget runs out,
+  invariance of the reported statistics under the memory budget, the
+  worker count, the storage format and the absence of the acceleration
+  package, type-I error, power and effect attenuation with binomial
+  intervals, and the cost of the pure NumPy fallbacks.
+- `benchmarks/kvik_scale.py` runs the official LDAK-KVIK and mixmogam on
+  one identical 5,000 x 400,000 panel (the scale study's panel, exported
+  to PLINK and verified independently), under its own protocol
+  (`benchmarks/kvik_scale_plan.md`). The official program was as fast as
+  mixmogam's HRATT-HE (24 s against 34 s) and faster than BOLT-LMM-inf
+  (51 s) with a third of the memory; the two programs' p-values
+  correlated at 0.998 under the null and they detected the same 8 of 10
+  causal variants.
+- `benchmarks/_harness.py` holds the shared measurement infrastructure
+  (power guard, thread environment, source snapshot, environment
+  manifest, fresh-process measurement, p-value comparison) for the new
+  drivers, and `benchmarks/index.py` indexes the archives.
+
 ## [2.0.0.dev7] - 2026-10-25
 
 ### Added

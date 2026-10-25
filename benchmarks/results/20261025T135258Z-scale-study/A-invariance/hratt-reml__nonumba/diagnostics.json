@@ -1,0 +1,173 @@
+{
+  "method": "hratt-reml",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": null,
+    "storage": "int8",
+    "numba": false,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "nonumba"
+  },
+  "panel": {
+    "n": 1500,
+    "m": 20000,
+    "nchr": 8,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20261026
+  },
+  "phenotype": {
+    "h2": 0.5,
+    "n_qtl": 10,
+    "n_background": 4000,
+    "seed": 20261031,
+    "confounding": 0.0,
+    "pcs": 0
+  },
+  "panel_seconds": 0.43389954208396375,
+  "phenotype_seconds": 0.014651583041995764,
+  "pc_seconds": 0.0,
+  "fit_seconds": 134.5637837080285,
+  "has_numba": false,
+  "options": {
+    "method": "hratt",
+    "heritability_method": "reml",
+    "n_threads": 1,
+    "random_state": 0
+  },
+  "warnings": [
+    {
+      "category": "RuntimeWarning",
+      "message": "two-step methods without Numba use slow Python/NumPy fallbacks; install mixmogam[fast] for production HRATT/BOLT fits"
+    }
+  ],
+  "extra": {
+    "statistic": "chi2",
+    "n": 1500,
+    "n_loco_groups": 8,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ]
+    ],
+    "method": "hratt",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.5589361328054138,
+    "alpha_method": "he",
+    "alpha_scores": [
+      126.28106141477171,
+      126.01860802841864,
+      125.78991975979143,
+      125.59713091766021,
+      125.43783793810535
+    ],
+    "structure": {
+      "excess": 0.0001556352162102037,
+      "z": 0.05195527994075029,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.8972580434787308,
+      0.8764750295742427,
+      0.8556886649718818,
+      0.811847162760072,
+      0.7899572917246976,
+      0.7717830439176819,
+      0.7464243850395248,
+      0.7397668295415228,
+      0.8618456745267737,
+      1.004663298629135
+    ],
+    "cv_best": [
+      0.01,
+      0.3
+    ],
+    "cv_converged": true,
+    "loco_folds": 5,
+    "loco_refit": false,
+    "loco_iterations": 28,
+    "loco_converged": true,
+    "offset_slope": [
+      0.99204359983492,
+      0.9573118395275736,
+      0.9884619276847989,
+      0.9746561014211702,
+      0.992259350516771,
+      0.9967859877733309,
+      0.9120939763743945,
+      1.0
+    ],
+    "lambda": 1.0
+  },
+  "n": 1500,
+  "m": 20000,
+  "p_finite": 20000
+}
