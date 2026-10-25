@@ -20,6 +20,10 @@ _HARD_CALL_WORK_BYTES = 8 * 1024**2
 # int8 calls copied per block when samples are selected or reordered.
 _SAMPLE_COPY_CELLS = 16 * 1024**2
 
+# QC scratch scales with calls, not a fixed number of variants. One whole
+# variant is the minimum block; packed calls are decoded only within it.
+_QC_BLOCK_CELLS = 8 * 1024**2
+
 
 def _variant_major(G) -> bool:
     """Whether each variant's calls are contiguous (PLINK order), the layout
@@ -78,41 +82,42 @@ class Genotypes:
         if isinstance(G, PackedCalls):
             self.G = G  # two-bit codes are always valid calls
         else:
-            self._validate(G)
+            self.G = self._validate(G)
             if packed:
                 self.G = PackedCalls.pack(self.G)
         self.n_samples, self.n_variants = self.G.shape
         self._metadata(sample_ids, chromosome, position, variant_ids, allele1, allele2)
 
-    def _validate(self, G):
-        self.G = np.asarray(G)
-        if self.G.ndim != 2:
+    @staticmethod
+    def _validate(G):
+        """Validate before narrowing; also used on HDF5 input slabs."""
+        G = np.asarray(G)
+        if G.ndim != 2:
             raise ValueError("G must be 2-D (n_samples, n_variants)")
         # Check before casting: int8 conversion otherwise truncates dosages
         # and wraps large integers into apparently valid hard calls.
-        kind = self.G.dtype.kind
+        kind = G.dtype.kind
         if kind not in "biuf":
             raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
-        upper = 3 if self.G.dtype == np.uint8 else 2
-        if self.G.size:
-            low, high = self.G.min().item(), self.G.max().item()
+        upper = 3 if G.dtype == np.uint8 else 2
+        if G.size:
+            low, high = G.min().item(), G.max().item()
             # Python integer scalars retain the full uint64/int64 range;
             # integer arrays need neither finiteness masks nor floor checks.
             if (low < -1 or high > upper
                     or (kind == "f" and not np.isfinite([low, high]).all())):
                 raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
             if kind == "f":
-                count = max(1, _HARD_CALL_WORK_BYTES // (self.G.dtype.itemsize + 1))
-                for g in _bounded_blocks(self.G, count):
+                count = max(1, _HARD_CALL_WORK_BYTES // (G.dtype.itemsize + 1))
+                for g in _bounded_blocks(G, count):
                     if np.any(g != np.floor(g)):
                         raise ValueError("G must contain hard calls 0/1/2 and -1 for missing")
-        if self.G.dtype == np.uint8:  # e.g. unpacked bed with 3=missing
-            g = self.G.astype(np.int8)
+        if G.dtype == np.uint8:  # e.g. unpacked bed with 3=missing
+            g = G.astype(np.int8)
             for part in _bounded_blocks(g, max(1, _HARD_CALL_WORK_BYTES)):
                 part[part == 3] = MISSING
-            self.G = g
-        elif self.G.dtype != np.int8:
-            self.G = self.G.astype(np.int8)
+            return g
+        return G.astype(np.int8, copy=False)
 
     def _metadata(self, sample_ids, chromosome, position, variant_ids, allele1, allele2):
         if sample_ids is None:
@@ -148,19 +153,23 @@ class Genotypes:
     # Summary statistics
     # ------------------------------------------------------------------
 
+    def _qc_blocks(self):
+        step = max(1, min(8192, _QC_BLOCK_CELLS // max(self.n_samples, 1)))
+        for i in range(0, self.n_variants, step):
+            s = slice(i, min(i + step, self.n_variants))
+            yield s, self.G[:, s]
+
     def allele_freqs(self, minor: bool = False) -> np.ndarray:
         """Counted-allele frequency (PLINK A1); ``minor=True`` returns MAF.
 
         Both use called chromosomes only and return NaN for all-missing.
         """
         af = np.full(self.n_variants, np.nan)
-        step = 8192
-        for i in range(0, self.n_variants, step):
-            s = slice(i, min(i + step, self.n_variants))
-            g = self.G[:, s]
-            called = g != MISSING
-            tot = called.sum(axis=0)
-            ac = np.where(called, g, 0).sum(axis=0) / 2.0
+        for s, g in self._qc_blocks():
+            tot = (g != MISSING).sum(axis=0)
+            # Each no-call contributes -1 to the sum: adding its count
+            # removes it without allocating a masked copy of the calls.
+            ac = (g.sum(axis=0) + self.n_samples - tot) / 2.0
             with np.errstate(invalid="ignore", divide="ignore"):
                 f = np.where(tot > 0, ac / np.maximum(tot, 1), np.nan)
                 af[s] = np.minimum(f, 1 - f) if minor else f
@@ -169,10 +178,8 @@ class Genotypes:
     def missing_rates(self) -> np.ndarray:
         """Fraction of no-calls per variant."""
         out = np.empty(self.n_variants)
-        step = 8192
-        for i in range(0, self.n_variants, step):
-            s = slice(i, min(i + step, self.n_variants))
-            out[s] = (self.G[:, s] == MISSING).mean(axis=0)
+        for s, g in self._qc_blocks():
+            out[s] = (g == MISSING).mean(axis=0)
         return out
 
     # ------------------------------------------------------------------
@@ -211,14 +218,10 @@ class Genotypes:
             raise ValueError("max_missing must lie in [0, 1]")
         if self.n_samples == 0:
             raise ValueError("variant filtering requires samples")
-        step = 8192
         keep = np.ones(self.n_variants, dtype=bool)
-        for i in range(0, self.n_variants, step):
-            s = slice(i, min(i + step, self.n_variants))
-            g = self.G[:, s]
-            called = g != MISSING
-            tot = called.sum(axis=0)
-            ac = np.where(called, g, 0).sum(axis=0)
+        for s, g in self._qc_blocks():
+            tot = (g != MISSING).sum(axis=0)
+            ac = g.sum(axis=0) + self.n_samples - tot
             mac = np.minimum(ac, 2 * tot - ac)
             bad = (mac < min_mac) | ((1.0 - tot / g.shape[0]) > max_missing)
             if keep_poly:
@@ -326,6 +329,31 @@ class Genotypes:
     # ------------------------------------------------------------------
     # Loader conveniences (IO modules import lazily to keep extras optional)
     # ------------------------------------------------------------------
+
+    @classmethod
+    def load(cls, path, **kwargs) -> "Genotypes":
+        """Read a standard genotype file; see :func:`mixmogam.io.read_genotypes`."""
+        from mixmogam.io import read_genotypes
+
+        return read_genotypes(path, **kwargs)
+
+    @classmethod
+    def load_vcf(cls, path, **kwargs) -> "Genotypes":
+        from mixmogam.io.vcf import read_vcf
+
+        return read_vcf(path, **kwargs)
+
+    @classmethod
+    def load_pgen(cls, prefix, **kwargs) -> "Genotypes":
+        from mixmogam.io.pgen import read_pgen
+
+        return read_pgen(prefix, **kwargs)
+
+    @classmethod
+    def load_bgen(cls, path, **kwargs) -> "Genotypes":
+        from mixmogam.io.bgen import read_bgen
+
+        return read_bgen(path, **kwargs)
 
     @classmethod
     def load_plink(cls, prefix: str, **kwargs) -> "Genotypes":

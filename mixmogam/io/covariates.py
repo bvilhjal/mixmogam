@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import csv
+import gzip
+from collections import Counter
 from dataclasses import dataclass
+from itertools import chain
 from typing import Optional, Sequence, Tuple
 
 import numpy as np
@@ -12,7 +16,7 @@ __all__ = ["Covariates", "read_covariates", "write_covariates"]
 # Spellings that identify ID columns in a header row.
 _FID_NAMES = {"fid", "family", "fam", "family_id"}
 _ID_NAMES = {"iid", "id", "sample", "sample_id", "individual", "indiv_id",
-             "ecotype_id", "accession", "phenotype_id"}
+             "ecotype", "ecotype_id", "accession", "phenotype_id"}
 _MISSING = {"", "na", "nan", "-", ".", "null", "none"}
 
 
@@ -35,35 +39,53 @@ def _parses(field: str) -> bool:
     return True
 
 
-def _value(field: str):
+def _value(field: str, *, plink=False):
     v = field.strip()
     if v.lower() in _MISSING:
         return np.nan
-    return float(v)
+    value = float(v)
+    return np.nan if plink and value == -9 else value
 
 
-def _split_rows(path: str, delimiter: Optional[str]):
-    with open(path) as fh:
-        rows = []
-        for line in fh:
-            line = line.rstrip("\n")
-            if not line.strip():
-                continue
-            if delimiter is not None:
-                fields = [f.strip() for f in line.split(delimiter)]
-            elif "\t" in line:
-                fields = [f.strip() for f in line.split("\t")]
-            elif "," in line:
-                fields = [f.strip() for f in line.split(",")]
+def _split_rows(path: str, delimiter: Optional[str], *, whitespace=None):
+    """Read a numeric sample table, retaining PLINK headers among comments."""
+    opener = gzip.open if str(path).lower().endswith(".gz") else open
+    with opener(path, "rt", newline="") as fh:
+        def lines():
+            for line in fh:
+                stripped = line.lstrip()
+                if not stripped.strip():
+                    continue
+                if stripped.startswith("#"):
+                    token = stripped.split(maxsplit=1)[0].split(",", 1)[0].lower()
+                    if token not in ("#fid", "#iid"):
+                        continue
+                yield line
+
+        source = lines()
+        first = next(source, None)
+        if first is None:
+            return []
+        if delimiter is None:
+            if "," in first and first.count(",") > first.count("\t"):
+                delimiter = ","
+            elif whitespace or (whitespace is None and first.split(maxsplit=1)[0].lower()
+                                in ("fid", "#fid", "iid", "#iid")):
+                delimiter = " "
+            elif "\t" in first:
+                delimiter = "\t"
             else:
-                fields = line.split()
-            rows.append(fields)
-    return rows
+                delimiter = " "
+        source = chain((first,), source)
+        if delimiter == " ":
+            return [line.split() for line in source]
+        return [[f.strip() for f in row] for row in csv.reader(source, delimiter=delimiter)]
 
 
 def _auto_id_columns(first: Sequence[str]) -> Optional[int]:
     """ID-column count of a header row, or None when it is not one."""
     low = [f.strip().lower() for f in first]
+    low[0] = low[0].removeprefix("#")
     if len(low) >= 2 and low[0] in _FID_NAMES and low[1] in _ID_NAMES:
         return 2
     if low[0] in _ID_NAMES:
@@ -73,10 +95,13 @@ def _auto_id_columns(first: Sequence[str]) -> Optional[int]:
 
 def read_covariates(path: str, delimiter: Optional[str] = None, *,
                     id_columns: Optional[int] = None,
-                    sample_ids: Optional[Sequence[str]] = None) -> Covariates:
+                    sample_ids: Optional[Sequence[str]] = None,
+                    format: str = "auto") -> Covariates:
     """Read numeric covariates from delimited text.
 
-    One row per sample. Either layout: PLINK 1 ``.cov``-style ``FID IID``
+    One row per sample. Plain text and ``.gz`` are supported, including
+    PLINK 2 ``#FID IID`` / ``#IID`` headers and preceding comment lines.
+    Either layout: PLINK 1 ``.cov``-style ``FID IID``
     plus covariate columns (header optional; the benchmark drivers write
     this shape), or a single sample-ID column with named covariate columns
     (as :func:`~mixmogam.io.phenofile.read_phenotypes` writes). Rows are
@@ -96,12 +121,18 @@ def read_covariates(path: str, delimiter: Optional[str] = None, *,
     .) are an error naming the samples, since every fit requires finite
     covariates.
 
+    PLINK headers and two-ID layouts treat -9 as missing. ``format="plink"``
+    applies this rule explicitly, including headerless IID-only tables;
+    ``format="wide"`` retains genuine numeric -9 and empty TSV cells.
+
     ``write_covariates`` writes the single-ID layout this reads back.
     """
+    if format not in ("auto", "wide", "plink"):
+        raise ValueError("format must be auto, wide or plink")
     if id_columns is not None and (isinstance(id_columns, (bool, np.bool_))
                                    or not isinstance(id_columns, (int, np.integer)) or id_columns < 1):
         raise ValueError("id_columns must be a positive integer")
-    rows = _split_rows(path, delimiter)
+    rows = _split_rows(path, delimiter, whitespace={"auto": None, "wide": False, "plink": True}[format])
     if not rows:
         raise ValueError(f"covariate file {path!r} is empty")
     width = len(rows[0])
@@ -113,14 +144,16 @@ def read_covariates(path: str, delimiter: Optional[str] = None, *,
 
     first = rows[0]
     header: Optional[Sequence[str]] = None
+    named = _auto_id_columns(first)
     if id_columns is not None:
         n_id = int(id_columns)
         if width - n_id < 1:
             raise ValueError(f"id_columns={n_id} leaves no covariate columns")
-        if not all(_parses(f) for f in first[n_id:]):
+        if named is not None and named != n_id:
+            raise ValueError("id_columns conflicts with the covariate header")
+        if named is not None or not all(_parses(f) for f in first[n_id:]):
             header, rows = first[n_id:], rows[1:]
     else:
-        named = _auto_id_columns(first)
         if named is not None:
             n_id = named
             header, rows = first[n_id:], rows[1:]
@@ -160,13 +193,15 @@ def read_covariates(path: str, delimiter: Optional[str] = None, *,
 
     ids = [str(r[n_id - 1]) for r in rows]
     if len(set(ids)) != len(ids):
-        dupes = sorted({i for i in ids if ids.count(i) > 1})
+        dupes = sorted(i for i, count in Counter(ids).items() if count > 1)
         raise ValueError(f"duplicate sample IDs in covariate file: {dupes[:5]} ...")
     values = np.full((len(rows), width - n_id), np.nan)
+    plink = format == "plink" or (format == "auto" and
+            (first[0].lower() in ("fid", "#fid", "iid", "#iid") or n_id == 2))
     for i, r in enumerate(rows):
         for j, f in enumerate(r[n_id:]):
             try:
-                values[i, j] = _value(f)
+                values[i, j] = _value(f, plink=plink)
             except ValueError:
                 raise ValueError(f"row {i + 1}: covariate {names[j]!r} value {f!r} is not a number") from None
     out_ids = np.array(ids)
@@ -189,7 +224,9 @@ def read_covariates(path: str, delimiter: Optional[str] = None, *,
 
 def write_covariates(path: str, sample_ids: Sequence[str], values, names: Optional[Sequence[str]] = None) -> None:
     """Write the single-ID layout: header ``sample_id NAME...``, tab-separated,
-    values at round-trip precision (readable by :func:`read_covariates`)."""
+    values at round-trip precision (readable by :func:`read_covariates`).
+    Paths ending in ``.gz`` are gzip-compressed.
+    """
     ids = np.asarray(sample_ids).astype(str)
     values = np.asarray(values, dtype=np.float64)
     if values.ndim == 1:
@@ -204,7 +241,8 @@ def write_covariates(path: str, sample_ids: Sequence[str], values, names: Option
     names = [str(h) for h in names]
     if len(names) != q or len(set(names)) != q or not all(names):
         raise ValueError("names must match the columns and be unique and non-empty")
-    with open(path, "w") as fh:
+    opener = gzip.open if str(path).lower().endswith(".gz") else open
+    with opener(path, "wt") as fh:
         fh.write("sample_id\t" + "\t".join(names) + "\n")
         for sid, row in zip(ids, values):
             fh.write(sid + "\t" + "\t".join(f"{v:.17g}" for v in row) + "\n")

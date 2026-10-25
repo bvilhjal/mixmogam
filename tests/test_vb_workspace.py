@@ -204,6 +204,25 @@ def _assert_same_fit(actual, expected):
         np.testing.assert_array_equal(actual["mask"], expected["mask"])
 
 
+@pytest.mark.parametrize("max_iter", [0, 1, 200])
+def test_effects_only_fit_skips_prediction_without_changing_fit(workspace, monkeypatch, max_iter):
+    lg, folds, Y = workspace
+    args = (Y, np.array([2, 0, -1, 2]), np.array([-1, 1, 2, 0]), PRIOR_ENET,
+            np.tile([0.3, 25.0, 0.12 / lg.m], (4, 1)), np.full(4, 0.8))
+    expected = VBEngine(lg, folds=folds).fit(*args, max_iter=max_iter, tol=1e-12)
+
+    def unexpected(*args):
+        raise AssertionError("effects-only fit made a full prediction pass")
+
+    monkeypatch.setattr(VBEngine, "predict", unexpected)
+    actual = VBEngine(lg, folds=folds).fit(*args, max_iter=max_iter, tol=1e-12,
+                                          _compute_prediction=False)
+    assert actual.keys() == expected.keys() - {"prediction", "resid"}
+    for key in actual:
+        np.testing.assert_array_equal(actual[key], expected[key])
+    assert actual["converged"] == (max_iter == 200)
+
+
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
 def test_selective_workspace_matches_dense_and_uncached(workspace, prior_type):
     lg, folds, Y = workspace

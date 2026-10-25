@@ -111,6 +111,43 @@ def test_ld_blocks_are_group_pure_unit_correlations():
         np.testing.assert_allclose(R, unit @ unit.T / st.lg.n, rtol=1e-5, atol=1e-5)
 
 
+@pytest.mark.parametrize("block_size", [0, -1, 0.5, 2.5, np.nan, np.inf])
+def test_ld_blocks_rejects_nonpositive_or_noninteger_size(block_size):
+    # Reject before reading genotypes; a zero step used to loop forever.
+    with pytest.raises(ValueError, match="block_size must be a positive integer"):
+        stage1.ld_blocks(None, [], [], block_size=block_size)
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_ld_blocks_preserve_monomorphic_rows_and_source(packed):
+    rng = np.random.default_rng(61)
+    G = rng.binomial(2, .3, size=(90, 12)).astype(np.int8)
+    G[:, :4] = 0  # one entirely monomorphic block
+    G[:, 4] = 2
+    G[:, 5] = -1
+    G[::9, 6:] = -1
+    gt = Genotypes(G, chromosome=np.repeat([1, 2, 3], 4), packed=packed)
+    st, _ = _setup_y(gt, rng.normal(size=90), rng.normal(size=(90, 2)))
+    order = np.argsort(st.lg.groups, kind="stable")
+    before = st.lg.rows(order)
+    scale = stage1.column_scale(st.lg, before.mean(axis=1))
+    blocks = stage1.ld_blocks(st.lg, order, scale, block_size=np.int64(4))
+    for R, idx in blocks:
+        # Independent dense oracle, including identity rows for variants
+        # with no variation after projection and zero cross-correlations.
+        Z = before[idx] - before[idx].mean(axis=1, keepdims=True)
+        good = scale[idx] > 0
+        unit = np.zeros_like(Z)
+        unit[good] = Z[good] / scale[idx][good, None]
+        expected = unit @ unit.T / st.lg.n
+        np.clip(expected, -1, 1, out=expected)
+        np.fill_diagonal(expected, 1)
+        np.testing.assert_allclose(R, expected, atol=1e-7)
+        np.testing.assert_array_equal(R, R.T)
+    np.testing.assert_array_equal(blocks[0][0], np.eye(4, dtype=np.float32))
+    np.testing.assert_array_equal(st.lg.rows(order), before)
+
+
 def test_effect_conversion_matches_unit_variance_predictions():
     rng = np.random.default_rng(7)
     gt, y, _ = _panel(5)

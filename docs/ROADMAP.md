@@ -1,5 +1,12 @@
 # Computational efficiency: open items
 
+The [25 October review](review-2026-10-25.md) adds bounded QC, compact
+standard-format input, permutation-tail and stage-1 LD improvements.
+The follow-up also fuses normalized `GenotypeKinship` initialization into
+one standardized pass and skips the unused full prediction in ordinary
+HRATT cross-fitting. Paired component and complete-fit measurements are
+recorded in the review; the scientific defaults are unchanged.
+
 From the 19 October efficiency review. The items that changed code are in
 the changelog; the evidence is in
 `benchmarks/results/20261019-efficiency-review`. Times are one M2 Pro

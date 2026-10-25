@@ -81,3 +81,80 @@ def test_operator_rejects_exact_solver(problem):
     lmm = LMM(y, K=GenotypeKinship(gt))
     with pytest.raises(RuntimeError):
         lmm.fit(solver="exact")
+
+
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("cache_bytes", [0, 10**8])
+@pytest.mark.parametrize("first", ["diagonal", "matmul"])
+def test_normalization_shares_first_pass(monkeypatch, packed, dtype, cache_bytes, first):
+    """Missing/constant SNPs and weights agree with a direct dense oracle."""
+    from mixmogam import kinship
+
+    rng = np.random.default_rng(762)
+    calls = rng.integers(-1, 3, (19, 31), dtype=np.int8)
+    calls[:, :3] = [-1, 0, 2]
+    weights = rng.uniform(0.1, 2, calls.shape[1])
+    weights[3] = 0
+    gt = Genotypes(calls, packed=packed)
+    X = rng.normal(size=(gt.n_samples, 3))
+    # Independent called-only standardization, followed by dense EMMAX scaling.
+    Z = np.zeros(calls.shape)
+    for j in range(calls.shape[1]):
+        called = calls[:, j] >= 0
+        mean = calls[called, j].mean() if called.any() else 0
+        var = np.mean((calls[called, j] - mean) ** 2) if called.any() else 0
+        if var > 0:
+            Z[called, j] = (calls[called, j] - mean) / np.sqrt(var)
+    K = (Z * weights) @ Z.T / weights.sum()
+    off = (K.sum() - np.trace(K)) / (gt.n_samples * (gt.n_samples - 1))
+    K = (K - off) / (np.trace(K) / gt.n_samples - off)
+
+    traversals = []
+    visited_blocks = []
+    original = kinship._standardized_blocks
+    standardized = GenotypeKinship._standardized
+
+    def counted(*args, **kwargs):
+        traversals.append(1)
+        yield from original(*args, **kwargs)
+
+    def visited(self):
+        for Z in standardized(self):
+            visited_blocks.append(Z.shape[0])
+            yield Z
+
+    monkeypatch.setattr(kinship, "_standardized_blocks", counted)
+    monkeypatch.setattr(GenotypeKinship, "_standardized", visited)
+    op = GenotypeKinship(gt, weights=weights, block=7, dtype=dtype, cache_bytes=cache_bytes)
+    tol = 2e-6 if dtype == np.float32 else 1e-12
+    if first == "diagonal":
+        np.testing.assert_allclose(op.diagonal(), K.diagonal(), rtol=tol, atol=tol)
+    else:
+        np.testing.assert_allclose(op @ X, K @ X, rtol=tol, atol=tol)
+    assert len(traversals) == 1
+    assert sum(visited_blocks) == gt.n_variants  # also counts visits to cached blocks
+    diag = op.diagonal()
+    np.testing.assert_allclose(diag, K.diagonal(), rtol=tol, atol=tol)
+    diag[:] = -999  # callers cannot alter the cached moments
+    np.testing.assert_allclose(op.diagonal(), K.diagonal(), rtol=tol, atol=tol)
+    assert len(traversals) == 1
+    assert sum(visited_blocks) == gt.n_variants
+    np.testing.assert_allclose(op @ X[:, 0], K @ X[:, 0], rtol=tol, atol=tol)
+    assert len(traversals) == (2 if cache_bytes == 0 else 1)
+    assert sum(visited_blocks) == 2 * gt.n_variants
+
+
+@pytest.mark.parametrize("normalize", [False, True])
+def test_operator_zero_variation(normalize):
+    op = GenotypeKinship(Genotypes(np.ones((7, 11), dtype=np.int8)), normalize=normalize)
+    if normalize:
+        # A failed traversal must not leave a usable cache with invalid scaling.
+        for _ in range(2):
+            with pytest.raises(ValueError, match="no positive variation"):
+                op.diagonal()
+            with pytest.raises(ValueError, match="no positive variation"):
+                op @ np.ones(7)
+    else:
+        np.testing.assert_array_equal(op.diagonal(), np.zeros(7))
+        np.testing.assert_array_equal(op @ np.ones(7), np.zeros(7))

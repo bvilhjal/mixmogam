@@ -27,7 +27,7 @@ _CHUNK_CALLS = 1 << 24
 
 def _column_indices(key, m):
     if isinstance(key, slice):
-        return np.arange(m)[key]
+        return np.arange(*key.indices(m), dtype=np.int64)
     idx = np.asarray(key)
     if idx.dtype == bool:
         if idx.shape != (m,):

@@ -40,6 +40,54 @@ def panel():
 FAST = dict(alphas=(-0.25,), he_probes=16, heritability_method="he", random_state=3)
 
 
+@pytest.mark.parametrize("mode", ["crossfit", "refit", "in_sample", "zero_h2"])
+@pytest.mark.parametrize("binary, weighted", [(False, False), (False, True),
+                                              (True, False), (True, True)])
+@pytest.mark.parametrize("packed", [False, True])
+def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binary, weighted, packed):
+    rng = np.random.default_rng(528)
+    n, m = 90, 72
+    calls = rng.binomial(2, rng.uniform(0.1, 0.5, m), size=(n, m)).astype(np.int8)
+    y = 0.6 * calls[:, 0] + rng.normal(size=n)
+    calls[rng.random(calls.shape) < 0.02] = -1
+    gt = Genotypes(calls, chromosome=np.repeat(np.arange(3), m // 3), packed=packed)
+    if binary:
+        y = (y > np.median(y)).astype(float)
+    weights = np.exp(rng.normal(0, 0.3, n)) if weighted else None
+    st = twostep._setup(y, gt, rng.normal(size=(n, 2)), 25, 32,
+                        sample_weights=weights, trait="binary" if binary else "quantitative")
+    if binary or weighted:
+        assert np.ptp(st.s) > 1e-3  # exercise nonuniform working/sample weights
+    ys = st.y_p / np.sqrt(np.sum(st.y_p**2) / st.n_eff)
+    held = twostep._holdout(n, 0.2, rng, strata=y if binary else None)
+    folds = None if mode == "in_sample" else twostep._crossfit_folds(n, 3, rng)
+    h2j = np.full(m, 0.0 if mode == "zero_h2" else 0.5 / m)
+    kwargs = dict(keep_prediction=binary, folds=folds, refit=mode == "refit")
+    args = (st, ys, h2j, 0.5, [(0.1, 0.3), (0.5, 0.5)], held, 1, 200, 1e-9)
+    predictions = []
+    predict, fit = VBEngine.predict, VBEngine.fit
+
+    def counted(self, beta):
+        predictions.append(beta.shape[1])
+        return predict(self, beta)
+
+    monkeypatch.setattr(VBEngine, "predict", counted)
+    actual = twostep._hratt_fit_scores(*args, **kwargs)
+    assert len(predictions) == (2 if mode in ("refit", "in_sample") else 1)
+    predictions.clear()
+
+    def full_fit(self, *args, **kwargs):
+        # The original path always materialized the full prediction/residual.
+        return fit(self, *args, **{**kwargs, "_compute_prediction": True})
+
+    monkeypatch.setattr(VBEngine, "fit", full_fit)
+    expected = twostep._hratt_fit_scores(*args, **kwargs)
+    assert len(predictions) == (1 if mode == "zero_h2" else 2)
+    assert actual.keys() == expected.keys()
+    for key in actual:
+        np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+
+
 def test_folds_are_balanced_within_strata_and_ignore_the_labels():
     strata = np.r_[np.ones(23), np.zeros(477)]
     folds = twostep._crossfit_folds(500, 5, np.random.default_rng(1), strata=strata)

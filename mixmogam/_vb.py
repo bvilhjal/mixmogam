@@ -468,6 +468,8 @@ class VBEngine:
         snp_scale: Optional[np.ndarray] = None,
         max_iter: int = 100,
         tol: float = 1e-6,
+        *,
+        _compute_prediction: bool = True,
     ) -> dict:
         """Fit every column; returns ``{"beta", "resid", "iterations", ...}``.
 
@@ -480,6 +482,8 @@ class VBEngine:
         squared changes in fitted values summed over a sweep's block
         updates, relative to the squared norm of the column's (masked)
         targets, fall below ``tol``.
+        Internally, ``_compute_prediction=False`` omits both ``prediction``
+        and ``resid`` when the caller needs only effects and convergence.
         """
         Y = np.asarray(Y, dtype=np.float64)
         n, P = Y.shape
@@ -610,13 +614,16 @@ class VBEngine:
                 rel = change / ynorm
                 if rel.max() < tol:
                     break
-        # exact residual from the final effects (one pass, float64)
-        prediction = self.predict(beta)
-        R = Y - prediction
-        if mask is not None:
-            R *= mask
-        return {"beta": beta, "resid": R, "prediction": prediction, "iterations": it,
-                "converged": bool(rel.max() < tol), "rel_change": rel, "mask": mask}
+        out = {"beta": beta, "iterations": it, "converged": bool(rel.max() < tol),
+               "rel_change": rel, "mask": mask}
+        if _compute_prediction:
+            # Exact residual from the final effects (one pass, float64).
+            prediction = self.predict(beta)
+            R = Y - prediction
+            if mask is not None:
+                R *= mask
+            out.update(resid=R, prediction=prediction)
+        return out
 
     def predict(self, beta: np.ndarray) -> np.ndarray:
         """Fitted values Z' beta = z' beta - Q (c' beta), (n, P) per column."""

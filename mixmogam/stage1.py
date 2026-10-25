@@ -223,6 +223,8 @@ def ld_blocks(lg, order: np.ndarray, scale: np.ndarray, block_size: int = 500) -
     projected rows are the covariate-adjusted LD the marginal regressions
     imply.
     """
+    if not isinstance(block_size, (int, np.integer)) or block_size <= 0:
+        raise ValueError("block_size must be a positive integer")
     order = np.asarray(order, dtype=np.int64)
     scale = np.asarray(scale, dtype=np.float64)[order]
     groups = lg.groups[order]  # non-decreasing: blocks stop at group changes
@@ -233,13 +235,15 @@ def ld_blocks(lg, order: np.ndarray, scale: np.ndarray, block_size: int = 500) -
         stop = min(stop, int(np.searchsorted(groups, groups[start], side="right")))
         idx = np.arange(start, stop)
         Z = lg.rows(order[idx])  # (b, n) projected standardized rows
-        Zc = Z - Z.mean(axis=1, keepdims=True)
+        # rows() owns its float64 buffer: center and scale it in place.
+        # Selecting all polymorphic rows twice for the GEMM otherwise
+        # keeps several additional (block_size, n) arrays alive.
+        Z -= Z.mean(axis=1, keepdims=True)
         good = scale[idx] > 0
+        unit = Z if np.all(good) else Z[good]
+        unit /= scale[idx][good, None]
         R = np.zeros((idx.size, idx.size))
-        if np.any(good):
-            unit = np.zeros_like(Zc)
-            unit[good] = Zc[good] / scale[idx][good, None]
-            R[np.ix_(good, good)] = (unit[good] @ unit[good].T) / lg.n
+        R[np.ix_(good, good)] = (unit @ unit.T) / lg.n
         np.clip(R, -1.0, 1.0, out=R)
         R = (R + R.T) / 2.0
         np.fill_diagonal(R, 1.0)

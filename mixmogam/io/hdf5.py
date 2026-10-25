@@ -8,6 +8,8 @@ from mixmogam.genotypes import Genotypes, MISSING
 
 __all__ = ["write_hdf5", "read_hdf5", "read_hdf5_v1"]
 
+_IO_WORK_BYTES = 8 * 1024**2
+
 
 def write_hdf5(gt: Genotypes, path: str, chunk: int = 4096, compression="lzf") -> None:
     """Write the v2 layout: sample-major int8 with -1 missing.
@@ -18,9 +20,17 @@ def write_hdf5(gt: Genotypes, path: str, chunk: int = 4096, compression="lzf") -
     """
     import h5py
 
+    if isinstance(chunk, bool) or not isinstance(chunk, (int, np.integer)) or chunk < 1:
+        raise ValueError("chunk must be a positive integer")
     with h5py.File(path, "w") as fh:
         fh.attrs["format"] = "mixmogam-v2"
-        fh.create_dataset("genotypes", data=gt.G, chunks=(min(gt.n_samples, 1024), min(gt.n_variants, chunk)), compression=compression)
+        n, m = gt.n_samples, gt.n_variants
+        options = dict(chunks=(min(n, 1024), min(m, chunk)), compression=compression) if n and m else {}
+        data = fh.create_dataset("genotypes", shape=(n, m), dtype=np.int8, **options)
+        # Passing PackedCalls as data= would decode the entire panel first.
+        step = max(1, _IO_WORK_BYTES // max(n, 1))
+        for start in range(0, m, step):
+            data[:, start:start + step] = gt.G[:, start:start + step]
         fh.create_dataset("samples", data=np.asarray(gt.sample_ids, dtype=h5py.string_dtype()))
         v = fh.create_group("variants")
         chrom = gt.chromosome
@@ -49,11 +59,11 @@ def read_hdf5(path: str) -> Genotypes:
         data = fh["genotypes"]
         n, m = data.shape
         G = np.empty((n, m), dtype=np.int8, order="F")
-        width = data.chunks[1] if data.chunks else m
-        step = max(1, (64 * 1024**2) // max(n, 1))
+        width = data.chunks[1] if data.chunks else max(m, 1)
+        step = max(1, _IO_WORK_BYTES // max(n * data.dtype.itemsize, 1))
         step = max(width, step - step % width) if step >= width else step
         for start in range(0, m, step):
-            G[:, start : start + step] = data[:, start : start + step]
+            G[:, start : start + step] = Genotypes._validate(data[:, start : start + step])
         samples = fh["samples"][:].astype(str)
         chrom = fh["variants/chromosome"][:]
         if chrom.dtype.kind in "SO":

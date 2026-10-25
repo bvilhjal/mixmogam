@@ -209,6 +209,34 @@ def test_permutations_match_sequential_whitened(setup):
         assert out["min_ps"][b] == pytest.approx(np.nanmin(ref["ps"]), rel=1e-6)
 
 
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("scheme", ["whitened", "projected", "raw"])
+def test_permutation_tail_is_evaluated_only_at_each_maximum(dtype, scheme, monkeypatch):
+    from mixmogam import scan
+
+    rng = np.random.default_rng(151)
+    G = rng.binomial(2, .3, size=(80, 19)).astype(np.int8)
+    G[:, 0] = 0
+    G[:, 1] = -1
+    G[::7, 2:] = -1
+    gt = Genotypes(G)
+    model = LMM(rng.normal(size=80), X=rng.normal(size=(80, 2)))
+    model.fit()
+    sf = stats.f.sf
+    calls = []
+
+    def counted_sf(f, *args, **kwargs):
+        calls.append(np.size(f))
+        return sf(f, *args, **kwargs)
+
+    monkeypatch.setattr(scan.stats.f, "sf", counted_sf)
+    out = permutation_min_p(model, gt, n_perm=7, block=4, dtype=dtype,
+                            seed=18, scheme=scheme)
+    assert calls == [7]  # O(permutations) tail evaluations, independent of SNP count
+    np.testing.assert_array_equal(out["min_ps"], sf(out["max_fs"], 1, model.n - model.q - 1))
+    assert out["threshold_05"] == np.quantile(out["min_ps"], .05)
+
+
 @pytest.mark.slow
 def test_whitened_permutations_control_fwer_under_structure():
     """FWER of the permutation threshold under the fitted null model.

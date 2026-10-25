@@ -7,8 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0.dev7] - 2026-10-25
+
+### Added
+
+- Standard genotype input through `Genotypes.load` and CLI `--geno-format`:
+  VCF/gzip VCF, BCF, PLINK 2 PGEN, and explicit probability-threshold BGEN
+  hard calling, alongside BED, TPED, EIGENSTRAT and HDF5. Calls retain their
+  counted allele and sample order; unsupported ploidy/multiallelic records
+  fail explicitly. Optional binary readers are in the `formats` and `bgen` extras.
+- PLINK phenotype headers, whitespace tables and gzip, explicit headerless
+  ID columns, PLINK2 covariate headers, CSV/TSV/gzip result files, and CLI
+  `--binary-coding 1/2`. Fractional-dosage inference remains unsupported.
+- CLI `--packed` and `--mmap` expose compact genotype storage; BED mapping
+  is recommended for repeated hard-call analyses. Format contracts and the
+  measured 25 October review are in `docs/formats.md` and
+  `docs/review-2026-10-25.md`.
+
 ### Fixed
 
+- Genotype QC bounds temporary blocks by call count and avoids a masked
+  genotype copy. A packed slice no longer builds a genome-wide index.
+- CLI complete-case filtering now subsets supplied covariates before
+  appending PCs. HDF5 validates hard calls before narrowing, streams packed
+  exports, and handles empty dimensions. EIGENSTRAT streams genotype rows
+  and rejects malformed calls and inconsistent variant counts.
+- Explicit wide TSV input preserves empty cells even under an `IID`
+  header; PLINK covariates recognize -9 as missing, with an explicit
+  numeric override; PSAM preamble comments are not parsed as samples.
+  Uncompressed BGEN is rejected before a known upstream native crash.
+- Permutation scans evaluate one F tail per permutation after finding the
+  maximum statistic. The optional LDpred3 stage-1 LD builder reuses its
+  owned float buffer; invalid block sizes fail instead of looping forever.
+  Paired numerical results were identical; timings are in the review.
+- Normalized `GenotypeKinship` collects scaling and diagonal moments in
+  its first traversal, eliminating two standardized passes and retaining
+  only one extra sample-length vector. Ordinary HRATT cross-fitting skips
+  a full prediction/residual that its LOCO scoring does not use; CV,
+  chromosome-refitted and in-sample fits retain their predictions.
 - `simulate_traits(..., n_causal=0)` returned an all-NaN phenotype: the QTL
   scaling divided by the zero standard deviation of a trait with no QTLs.
   A trait without QTLs is now purely infinitesimal and keeps the full `h2`

@@ -1436,7 +1436,8 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
         P = col_fold.size
         loco = eng.fit(np.repeat(ys[:, None], P, axis=1), col_fold, col_group,
                        PRIOR_ENET, np.tile(prior_row(*grid[best]), (P, 1)), np.full(P, s2e),
-                       snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
+                       snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol,
+                       _compute_prediction=refit)  # ordinary cross-fit uses only beta below
         if refit:
             prediction = np.empty((n, G))
             for c in range(P):

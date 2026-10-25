@@ -172,3 +172,84 @@ def test_cli_errors_and_version(dataset, tmp_path):
                          capture_output=True, text=True)
     assert ran.returncode == 0
     assert ran.stdout.strip() == f"mixmogam {__version__}"
+
+
+def test_missing_phenotypes_subset_covariates_before_appending_pcs(dataset, tmp_path):
+    from mixmogam.results import GwasResult
+
+    gt = read_plink(dataset["prefix"])
+    y = read_phenotypes(dataset["pheno1"]).align(gt.sample_ids, "y")
+    complete = np.ones(y.size, dtype=bool)
+    complete[[1, 9, 31]] = False
+    pheno = tmp_path / "missing.tsv"
+    pheno.write_text("sample_id\ty\n" + "".join(
+        f"{sid}\t{value if keep else 'NA'}\n"
+        for sid, value, keep in zip(gt.sample_ids, y, complete)))
+    out = tmp_path / "cli.csv"
+    assert main(["gwas", "--geno", dataset["prefix"], "--mmap", "--pheno", str(pheno),
+                 "--covar", str(dataset["tmp"] / "cov.txt"), "--pcs", "2", "--out", str(out)]) == 0
+    subset = gt.filter_samples(complete)
+    cov = read_covariates(dataset["tmp"] / "cov.txt", sample_ids=gt.sample_ids).values[complete]
+    X = np.column_stack([cov, principal_components(subset, k=2)])
+    expected = gwas(y[complete], subset, X=X)
+    actual = GwasResult.read_csv(out)
+    np.testing.assert_allclose(actual.p, expected.p, rtol=1e-10)
+    np.testing.assert_allclose(actual.beta, expected.beta, rtol=1e-10, atol=1e-12)
+    assert actual.n == int(complete.sum())
+
+
+def test_plink_binary_coding_is_explicit(dataset, tmp_path, monkeypatch):
+    """The CLI aligns IDs, drops missing outcomes, then converts controls/cases."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+
+    gt = read_plink(dataset["prefix"])
+    path = tmp_path / "binary.txt"
+    coding = np.resize([0, 1, 2, -9, 2], gt.n_samples)
+    path.write_text("#FID IID case\n" + "".join(
+        f"0 {sid} {value}\n" for sid, value in reversed(list(zip(gt.sample_ids, coding)))))
+    def scan(y, subset, **kwargs):
+        keep = (coding == 1) | (coding == 2)
+        np.testing.assert_array_equal(y, coding[keep] - 1)
+        np.testing.assert_array_equal(subset.sample_ids, gt.sample_ids[keep])
+        assert kwargs["trait"] == "binary"
+        assert kwargs["method"] == "hratt"
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    args = ["gwas", "--geno", dataset["prefix"], "--pheno", str(path),
+            "--binary-coding", "1/2", "--out", str(tmp_path / "out.csv")]
+    assert main(args) == 2
+    assert main([*args, "--trait", "binary"]) == 0
+
+
+def test_gzipped_vcf_plink_phenotypes_and_tsv_result_match_api(tmp_path):
+    import gzip
+    from mixmogam.results import GwasResult
+
+    rng = np.random.default_rng(2510)
+    calls = rng.binomial(2, 0.4, size=(36, 40)).astype(np.int8)
+    calls[0, 0] = -1
+    gt = Genotypes(calls, sample_ids=[f"id{i}" for i in range(36)],
+                   chromosome=np.repeat([1, 2], 20), position=np.arange(1, 41),
+                   allele1=["T"] * 40, allele2=["C"] * 40)
+    vcf = tmp_path / "calls.vcf.gz"
+    with gzip.open(vcf, "wt") as stream:
+        stream.write("##fileformat=VCFv4.3\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
+                     + "\t".join(gt.sample_ids) + "\n")
+        for j in range(gt.n_variants):
+            genotypes = ["./." if x == -1 else ("0/0", "0/1", "1/1")[x] for x in calls[:, j]]
+            stream.write(f"{gt.chromosome[j]}\t{gt.position[j]}\t{gt.variant_ids[j]}\tC\tT\t.\tPASS\t.\tGT\t"
+                         + "\t".join(genotypes) + "\n")
+    y = rng.normal(size=36)
+    pheno = tmp_path / "trait.tsv.gz"
+    with gzip.open(pheno, "wt") as stream:
+        stream.write("#FID IID height\n" + "".join(
+            f"0 {sid} {value}\n" for sid, value in reversed(list(zip(gt.sample_ids, y)))))
+    out = tmp_path / "result.tsv.gz"
+    assert main(["gwas", "--geno", str(vcf), "--packed", "--pheno", str(pheno),
+                 "--pheno-name", "height", "--out", str(out)]) == 0
+    actual, expected = GwasResult.read_csv(out), gwas(y, gt)
+    np.testing.assert_allclose(actual.p, expected.p, rtol=1e-11, atol=1e-12)
+    np.testing.assert_allclose(actual.beta, expected.beta, rtol=1e-11, atol=1e-12)
+    np.testing.assert_array_equal(actual.effect_allele, gt.allele1)
+    np.testing.assert_array_equal(actual.af, expected.af)

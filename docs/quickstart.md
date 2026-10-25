@@ -5,10 +5,11 @@
 ```python
 from mixmogam import Genotypes
 
-gt = Genotypes.load_plink("data/cohort")     # .bed/.bim/.fam
+gt = Genotypes.load_plink("data/cohort", mmap=True)  # .bed/.bim/.fam, two-bit mapped calls
 # or: Genotypes.load_eigenstrat("data/prefix")
 # or: from mixmogam.io.regmap import read_regmap (v1 CSV formats)
-# or: from mixmogam.io.hdf5 import read_hdf5 (v2 layout, reads v1 too)
+# or: Genotypes.load("data/cohort.pgen", packed=True)
+# or: Genotypes.load("data/cohort.vcf.gz", packed=True)
 
 gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```
@@ -18,7 +19,7 @@ gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```python
 from mixmogam.io.phenofile import read_phenotypes
 
-pheno = read_phenotypes("phenotypes.csv")    # both v1 layouts
+pheno = read_phenotypes("phenotypes.csv")    # wide, long, or PLINK; .gz also accepted
 samples, y = pheno.complete("FT")
 gt, _ = gt.align_samples(list(samples))
 ```
@@ -229,6 +230,13 @@ dropped with a line saying how many. `--pcs K` appends the built-in PCs
 (`mixmogam pca` writes them for other settings); `--trait` and `--weights`
 select the HRATT weighted/binary path.
 
+The same commands accept PGEN and VCF/BCF through `--geno`; `--packed`
+retains two-bit calls and `--mmap` maps BED directly. BGEN requires explicit
+`--hard-call-threshold`. PLINK phenotype tables use `--pheno-format plink`;
+for 1=control, 2=case add `--trait binary --binary-coding 1/2`.
+An output ending in `.tsv.gz` is a compressed tab-separated result.
+See [file formats](formats.md) for dependencies and input limits.
+
 ## Input and inference contracts
 
 - Align phenotype and covariate rows by sample ID before scanning. Duplicate
@@ -236,7 +244,7 @@ select the HRATT weighted/binary path.
   replicates explicitly; the loader no longer silently keeps the last row.
 - Refitting an `LMM` supersedes its previous `LMFit`. Keep the new fit for
   scanning or prediction; operations on a superseded fit now raise an error.
-- Calls are diploid hard calls in 0/1/2, with -1 missing. PLINK loads count
+- Calls are diploid hard calls in 0/1/2, with -1 missing. PLINK 1 loads count
   BIM A1 and preserve A1/A2. Recode haploid inbred 0/1 calls to 0/2 before
   interpreting diploid MAC or allele frequency. `allele_freqs()` returns the
   counted-allele frequency; `allele_freqs(minor=True)` returns MAF.
@@ -253,8 +261,8 @@ select the HRATT weighted/binary path.
   variance in squared phenotype-units per counted allele. This uses a normal
   approximation from `beta` and `se`, and is not a fine-mapping probability.
   Binary one-step effects are excluded.
-- CSV preserves variant columns and full float precision. `af` is the
-  frequency of `effect_allele` (BIM A1), not MAF. `n` is the analysed
+- CSV/TSV preserves variant columns and full float precision. `af` is the
+  frequency of `effect_allele` (BIM A1 or VCF/PGEN ALT), not MAF. `n` is the analysed
   headcount and is omitted for binary and sampling-weighted scores:
   downstream readers often alias it to effective sample size, which these
   tests do not determine. The headcount remains in `result.n`. An explicitly

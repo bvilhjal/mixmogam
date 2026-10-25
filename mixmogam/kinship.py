@@ -275,34 +275,45 @@ class GenotypeKinship:
         self.shape = (self.n, self.n)
         self.n_variants = gt.n_variants
         self._norm = None  # (c, d) lazy scale_k constants
+        self._diag = None  # raw diagonal collected with the first normalized pass
         self._Z_cache = None  # standardized blocks, built once
 
     def _scaling(self):
         """scale_k constants (mean off-diagonal c, diagonal divisor d)."""
         if self._norm is None:
-            diag = self._raw_diagonal()
-            total = self._grand_sum()
-            n = self.n
-            tr = float(diag.sum())
-            c = (total - tr) / (n * (n - 1))
-            d = tr / n - c
-            if not np.isfinite(d) or d <= 0:
-                raise ValueError("kinship has no positive variation to scale")
-            self._norm = (c, d)
+            for _ in self._standardized():
+                pass
         return self._norm
 
-    def _standardized(self):
-        """Weighted blocks, cached only within the configured memory budget."""
-        if self._Z_cache is not None:
-            yield from self._Z_cache
-            return
-        cache = self.n * self.n_variants * np.dtype(self.dtype).itemsize <= self.cache_bytes
-        blocks = [] if cache else None
+    def _weighted_blocks(self):
         for Z, w in _standardized_blocks(self.gt, self.block, self.dtype, self.weights):
             Z *= np.sqrt(w)[:, None]
+            yield Z
+
+    def _standardized(self):
+        """Weighted blocks; collect normalization during the first traversal."""
+        cache = (self._Z_cache is None and
+                 self.n * self.n_variants * np.dtype(self.dtype).itemsize <= self.cache_bytes)
+        blocks = [] if cache else None
+        diag = np.zeros(self.n) if self.normalize and self._norm is None else None
+        total = 0.0
+        source = self._weighted_blocks() if self._Z_cache is None else self._Z_cache
+        for Z in source:
+            if diag is not None:
+                diag += np.einsum("ij,ij->j", Z, Z, dtype=np.float64)
+                sums = Z.sum(axis=1, dtype=np.float64)
+                total += float(sums @ sums)
             if cache:
                 blocks.append(Z)
             yield Z
+        if diag is not None:
+            diag /= self._weight_total
+            tr = float(diag.sum())
+            c = (total / self._weight_total - tr) / (self.n * (self.n - 1))
+            d = tr / self.n - c
+            if not np.isfinite(d) or d <= 0:
+                raise ValueError("kinship has no positive variation to scale")
+            self._diag, self._norm = diag, (c, d)
         if cache:
             self._Z_cache = blocks
 
@@ -329,6 +340,9 @@ class GenotypeKinship:
     __matmul__ = matmul
 
     def _raw_diagonal(self) -> np.ndarray:
+        if self.normalize:
+            self._scaling()
+            return self._diag.copy()
         out = np.zeros(self.n)
         for Z in self._standardized():
             Zd = Z.T.astype(np.float64)
@@ -342,11 +356,3 @@ class GenotypeKinship:
             c, d = self._scaling()
             return (diag - c) / d
         return diag
-
-    def _grand_sum(self) -> float:
-        """sum(K) = |Z' 1|^2 / m in one streaming pass."""
-        total = 0.0
-        for Z in self._standardized():
-            sums = Z.sum(axis=1, dtype=np.float64)
-            total += float(sums @ sums)
-        return total / self._weight_total

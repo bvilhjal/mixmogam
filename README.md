@@ -5,7 +5,7 @@ and, with HRATT, case-control outcomes and sampling-weighted samples, with
 leave-one-chromosome-out (LOCO) testing by default. The core uses NumPy and
 SciPy; Numba accelerates optional kernels.
 
-**Development version 2.0.0.dev6**; changes are in the
+**Development version 2.0.0.dev7**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads through 50,000 samples and 20,000 variants, and historical evidence,
@@ -89,11 +89,12 @@ These are different estimators on two realizations, not a calibration study.
 From this repository:
 
 ```sh
-python -m pip install -e ".[fast,plot,hdf5,test,lint]"
+python -m pip install -e ".[fast,formats,plot,test,lint]"
 ```
 
-Python >= 3.10. Extras: `fast` adds Numba and threadpoolctl, `plot` adds matplotlib,
-`hdf5` adds h5py, and `dataframe` adds pandas for `to_dataframe()`.
+Python >= 3.10. Extras: `fast` adds Numba and threadpoolctl, `formats` adds
+PGEN/BCF readers, `bgen` adds BGEN probability input, `plot` adds matplotlib, `hdf5` adds h5py for legacy
+storage, and `dataframe` adds pandas for `to_dataframe()`.
 
 ## Quickstart
 
@@ -101,7 +102,7 @@ Python >= 3.10. Extras: `fast` adds Numba and threadpoolctl, `plot` adds matplot
 from mixmogam import Genotypes, gwas
 from mixmogam.io.phenofile import read_phenotypes
 
-gt = Genotypes.load_plink("data/cohort")
+gt = Genotypes.load_plink("data/cohort", mmap=True)
 pheno = read_phenotypes("phenotypes.csv")
 samples, y = pheno.complete("trait")
 gt, _ = gt.align_samples(samples)
@@ -110,14 +111,20 @@ result = gwas(y, gt)
 result.write_csv("gwas.csv")
 ```
 
-PLINK dosages count BIM allele A1, recorded as `result.effect_allele`.
+PLINK 1 calls count BIM allele A1, recorded as `result.effect_allele`.
 The CSV's `af` is the frequency of that effect allele, which may exceed
 0.5. Declare the coordinate assembly with `gwas(..., genome_build="GRCh38")`
 or `mixmogam gwas --genome-build GRCh38`; the label is preserved in the CSV
 without converting coordinates. Use the actual assembly, such as TAIR10
 for a matching Arabidopsis panel, rather than guessing from positions.
 Genotype calls must be integral 0/1/2, with -1 for missing; fractional
-imputed dosages are currently unsupported. LOCO needs at least two
+imputed dosages are currently unsupported. VCF/BCF and PGEN hard calls are
+also accepted through `Genotypes.load(path)` and the CLI. BGEN requires an
+explicit probability threshold to convert probabilities to hard calls.
+See the [format contracts](docs/formats.md) for alleles, ploidy and sample IDs.
+For repeated hard-call analyses, prefer PLINK BED with `mmap=True` (CLI
+`--mmap`): two-bit calls are read directly from the file. HDF5 remains
+available for compatibility. LOCO needs at least two
 chromosomes. All phenotype and covariate rows must follow the genotype
 sample order.
 
@@ -127,7 +134,7 @@ mixmogam`), with rows aligned by sample ID and ancestry PCs built in:
 ```sh
 mixmogam pca  --geno data/cohort --k 10 --out pcs.txt
 mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
-              --covar pcs.txt --out gwas.csv
+              --mmap --covar pcs.txt --out gwas.tsv.gz
 ```
 
 ## Interpretation and scope
@@ -157,4 +164,6 @@ permutations, two-kinship fits, and Manhattan/QQ plots. Start with the
 [quickstart](docs/quickstart.md); use [design notes](docs/design.md) for
 implementation details. The [research report](report/README.md) gives the
 statistical argument, evidence boundaries, and reproduction commands.
+The [25 October review](docs/review-2026-10-25.md) records the latest
+efficiency measurements, format additions, and remaining limitations.
 The Python-2-era package remains under the `v1.0-legacy` Git tag.

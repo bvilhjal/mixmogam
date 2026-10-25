@@ -1,5 +1,7 @@
 """Covariate file parsing: layouts, alignment, rejection of bad rows."""
 
+import gzip
+
 import numpy as np
 import pytest
 
@@ -102,3 +104,55 @@ def test_write_read_round_trip_is_bitwise(tmp_path):
     np.testing.assert_array_equal(cov.sample_ids, ids[::-1])
     np.testing.assert_array_equal(cov.values, values[::-1])
     assert cov.names == ("PC1", "PC2", "PC3")
+
+
+@pytest.mark.parametrize("header,rows", [
+    ("#FID IID PC1 PC2", "f1 001 -8 2\nf2 002 0.5 3\n"),
+    ("#IID\tPC1\tPC2", "001 -8\t2\n002\t0.5 3\n"),
+])
+def test_plink2_header_comments_and_gzip(tmp_path, header, rows):
+    path = tmp_path / "pcs.eigenvec.gz"
+    with gzip.open(path, "wt") as fh:
+        fh.write("## analysis metadata\n# a comment\n" + header + "\n" + rows)
+    cov = read_covariates(path, sample_ids=["002", "001"])
+    assert cov.names == ("PC1", "PC2")
+    np.testing.assert_array_equal(cov.sample_ids, ["002", "001"])
+    np.testing.assert_equal(cov.values, [[0.5, 3], [-8, 2]])
+
+
+def test_plink_negative_nine_is_missing_with_explicit_numeric_override(tmp_path):
+    path = tmp_path / "cov.txt"
+    path.write_text("#FID IID age\nf A 40\nf B -9\n")
+    with pytest.raises(ValueError, match="missing.*B"):
+        read_covariates(path)
+    np.testing.assert_array_equal(read_covariates(path, format="wide").values[:, 0], [40, -9])
+    path.write_text("sample_id\tage\nA\t40\nB\t-9\n")
+    np.testing.assert_array_equal(read_covariates(path).values[:, 0], [40, -9])
+    with pytest.raises(ValueError, match="missing.*B"):
+        read_covariates(path, format="plink")
+
+
+def test_gzip_covariate_writer_roundtrip(tmp_path):
+    path = tmp_path / "pcs.txt.gz"
+    values = np.array([[0.12345678901234567, -1.25], [2, 3.125]])
+    write_covariates(path, ["001", "002"], values, ["PC1", "PC2"])
+    assert path.read_bytes()[:2] == b"\x1f\x8b"
+    back = read_covariates(path)
+    np.testing.assert_array_equal(back.sample_ids, ["001", "002"])
+    np.testing.assert_array_equal(back.values, values)
+
+
+def test_plink2_iids_must_be_unique_across_families(tmp_path):
+    path = tmp_path / "pcs.txt"
+    path.write_text("#FID IID PC1\nf1 same 1\nf2 same 2\n")
+    with pytest.raises(ValueError, match="duplicate sample IDs"):
+        read_covariates(path)
+
+
+def test_explicit_ids_preserve_numeric_covariate_names(tmp_path):
+    path = tmp_path / "cov.txt"
+    path.write_text("#IID 1 2\n001 3 4\n")
+    cov = read_covariates(path, id_columns=1)
+    assert cov.names == ("1", "2")
+    np.testing.assert_array_equal(cov.sample_ids, ["001"])
+    np.testing.assert_equal(cov.values, [[3, 4]])

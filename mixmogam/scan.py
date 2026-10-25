@@ -286,7 +286,6 @@ def permutation_min_p(
               else lmm._apply_inv_sqrt(lmm.y[perms], fac["delta"], dtype, sample_space=True))
         Rp -= Q @ (Q.T @ Rp)
     rss0_p = np.einsum("ij,ij->j", Rp, Rp)  # (B,)
-    min_ps = np.ones(n_perm)
     max_fs = np.zeros(n_perm)
     for S in gt.iter_snp_blocks(block=block, dtype=dtype, impute="mean"):
         G = lmm._apply_inv_sqrt(S.T.astype(dtype), fac["delta"], dtype, sample_space=True)
@@ -298,9 +297,11 @@ def permutation_min_p(
         rss = np.maximum(rss0_p[None, :] - t2, 0.0)
         with np.errstate(divide="ignore", invalid="ignore"):
             f = t2 / rss * df
-        p = stats.f.sf(f, 1, df)
-        min_ps = np.minimum(min_ps, np.nanmin(p, axis=0))
         max_fs = np.maximum(max_fs, np.nanmax(f, axis=0))
+    # Every SNP has the same degrees of freedom: the smallest tail
+    # probability is the tail of the largest F statistic. Evaluate one
+    # tail per permutation, rather than one per SNP and permutation.
+    min_ps = stats.f.sf(max_fs, 1, df)
     return {
         "min_ps": min_ps,
         "max_fs": max_fs,

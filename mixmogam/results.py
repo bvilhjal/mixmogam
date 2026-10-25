@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import gzip
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -321,8 +322,11 @@ class GwasResult:
         return (self.extra.get("effect_method") != "one-step-logistic"
                 and self.extra.get("trait") != "binary" and "kish_n" not in self.extra)
 
-    def write_csv(self, path: str) -> None:
-        """Write variant columns with round-trip precision.
+    def write_csv(self, path: str, delimiter: Optional[str] = None) -> None:
+        """Write variant columns with round-trip precision as CSV or TSV.
+
+        The delimiter defaults to tab for ``.tsv``/``.txt`` and comma
+        otherwise, ignoring a final ``.gz`` (which enables gzip compression).
 
         ``af`` is the frequency of ``effect_allele``. The headcount ``n``
         is omitted for binary and weighted scores because downstream readers
@@ -344,18 +348,37 @@ class GwasResult:
                 if self.extra.get("effect_method") == "one-step-logistic":
                     header = _SCORE_COLUMNS.get(header, header)
                 columns[header] = arr
-        with open(path, "w", newline="") as fh:
-            writer = csv.writer(fh)
+        opener = gzip.open if str(path).lower().endswith(".gz") else open
+        with opener(path, "wt", newline="") as fh:
+            writer = csv.writer(fh, delimiter=_delimiter(path, delimiter))
             writer.writerow(columns)
             writer.writerows(zip(*columns.values()))
 
     @classmethod
-    def read_csv(cls, path: str) -> "GwasResult":
-        """Read current columns and the legacy chromosome/position/p aliases."""
-        with open(path, newline="") as fh:
-            reader = csv.DictReader(fh)
-            names = reader.fieldnames or []
-            rows = list(reader)
+    def read_csv(cls, path: str, delimiter: Optional[str] = None) -> "GwasResult":
+        """Read CSV/TSV, optionally gzipped, with :meth:`write_csv` delimiter rules.
+
+        Supports current columns and the legacy chromosome/position/p aliases.
+        Only recognized columns are retained; row dictionaries are not stored.
+        """
+        opener = gzip.open if str(path).lower().endswith(".gz") else open
+        with opener(path, "rt", newline="") as fh:
+            reader = csv.reader(fh, delimiter=_delimiter(path, delimiter))
+            names = next(reader, [])
+            if len(set(names)) != len(names):
+                raise ValueError("duplicate result column names")
+            supported = (set(_CSV_OPTIONAL) | set(_SCORE_COLUMNS.values()) |
+                         {"chromosome", "chromosomes", "position", "positions", "p", "ps", "scores",
+                          "n", "n_eff", "genome_build", "f_stats", "mafs"})
+            columns = {name: [] for name in names if name in supported}
+            selected = [(i, columns[name]) for i, name in enumerate(names) if name in columns]
+            for row in reader:
+                if not row:
+                    continue
+                if len(row) != len(names):
+                    raise ValueError(f"result row {reader.line_num} has {len(row)} fields, expected {len(names)}")
+                for i, values in selected:
+                    values.append(row[i])
 
         def col(*candidates, dtype=float, required=False):
             name = next((c for c in candidates if c in names), None)
@@ -363,7 +386,7 @@ class GwasResult:
                 if required:
                     raise ValueError(f"CSV is missing {candidates[0]}")
                 return None
-            return np.array([row[name] for row in rows], dtype=dtype)
+            return np.asarray(columns[name], dtype=dtype)
 
         chrom = col("chromosome", "chromosomes", dtype=str, required=True)
         if chrom.size and all(c.lstrip("-").isdigit() for c in chrom):
@@ -404,6 +427,13 @@ _CSV_OPTIONAL = {
 }
 
 _SCORE_COLUMNS = {"beta": "beta_one_step", "se": "se_null_score"}
+
+
+def _delimiter(path, delimiter):
+    if delimiter is not None:
+        return delimiter
+    name = str(path).lower().removesuffix(".gz")
+    return "\t" if name.endswith((".tsv", ".txt")) else ","
 
 
 def _genome_build(value):

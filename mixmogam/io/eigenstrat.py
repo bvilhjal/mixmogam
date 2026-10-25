@@ -29,25 +29,33 @@ def read_eigenstrat(prefix: str) -> Genotypes:
                 raise ValueError("snp rows require four columns, or six including both alleles")
             chrom_l.append(parts[1])
             rs_l.append(parts[0])
-            pos_l.append(int(parts[3]) if parts[3].lstrip("-").isdigit() else 0)
+            pos_l.append(int(parts[3]))
             if len(parts) == 6:
                 a1.append(parts[4])
                 a2.append(parts[5])
     if a1 and len(a1) != len(rs_l):
         raise ValueError("snp allele columns must be present on every row or absent on every row")
-    rows = []
-    with open(f"{prefix}.geno") as fh:
-        for line in fh:
-            rows.append(np.frombuffer(line.strip().encode(), dtype=np.uint8))
-    m = len(rows)
+    m = len(rs_l)
     n = len(samples)
     G = np.empty((n, m), dtype=np.int8, order="F")  # variant-major, as PLINK
-    for j, row in enumerate(rows):
-        if row.size != n:
-            raise ValueError(f"geno line {j} has {row.size} chars, expected {n}")
-        g = (row - ord("0")).astype(np.int8)
-        g[g == 9] = MISSING
-        G[:, j] = g
+    # SNP metadata already gives the allocation size. Holding every text
+    # row as well would double the panel's resident memory while loading.
+    count = 0
+    with open(f"{prefix}.geno") as fh:
+        for j, line in enumerate(fh):
+            if j >= m:
+                raise ValueError("geno has more variants than snp")
+            row = np.frombuffer(line.strip().encode(), dtype=np.uint8)
+            if row.size != n:
+                raise ValueError(f"geno line {j + 1} has {row.size} chars, expected {n}")
+            if np.any((row != ord("9")) & ((row < ord("0")) | (row > ord("2")))):
+                raise ValueError(f"geno line {j + 1} must contain only 0/1/2/9")
+            g = (row - ord("0")).astype(np.int8)
+            g[g == 9] = MISSING
+            G[:, j] = g
+            count += 1
+    if count != m:
+        raise ValueError("geno has fewer variants than snp")
     chrom = _chromosomes(chrom_l)
     return Genotypes(
         G,
