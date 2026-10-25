@@ -96,6 +96,27 @@ and faster than BOLT-LMM-inf (51 s), with a third of the memory; the two
 programs' p-values correlate at 0.998 under the null and detect the same
 8 of 10 causal variants.
 
+**With and without ancestry covariates.** The same driver also runs a
+structured panel whose environment differs between populations, with and
+without the two leading principal components. At 10,000 variants the
+panel and the trait are the scale study's arm B replicate 1, so the
+official program's rows join that archive's table (the mixmogam rows
+reproduce it exactly). The
+[run of 25 October](results/20261025T193008Z-kvik-covariates-small/README.md)
+found the official program badly anti-conservative there without
+covariates (lambda_GC 4.5, a type-I error of 0.351 at the nominal 0.05)
+and only half-recovered with the covariates, while mixmogam's
+relationship-matrix methods stayed calibrated (lambda_GC 1.04 to 1.15)
+and its variational methods failed to converge. The
+[400,000-variant version](results/20261025T193054Z-kvik-covariates-large/README.md)
+shows the same pattern at scale, with the official program reaching
+calibration once the covariates are in (2.91 without, 0.82 with).
+
+```sh
+python benchmarks/kvik_scale.py --ldak ~/bin/ldak63 --structured \
+  --confounded --pcs 2 --out NEW_DIRECTORY
+```
+
 **Review correction, 2026-10-03 (`2.0.0.dev1`).** Archives through
 `20261003T122520Z` precede the current fixes. The LDAK reference run
 `20261003T083746Z-kvik-reference` used the incorrect BED writer: inbred

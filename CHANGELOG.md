@@ -70,7 +70,14 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
   mixmogam's HRATT-HE (24 s against 34 s) and faster than BOLT-LMM-inf
   (51 s) with a third of the memory; the two programs' p-values
   correlated at 0.998 under the null and they detected the same 8 of 10
-  causal variants.
+  causal variants. The same driver also runs a structured, confounded
+  panel with and without ancestry principal components, at 10,000
+  variants (the scale study's arm B panel and trait, so the rows join
+  that table) and at 400,000. Under that confounding the official
+  program is badly anti-conservative without covariates (lambda_GC 4.5,
+  a type-I error of 0.351 at the nominal 0.05) and needs the
+  covariates to come back, while mixmogam's variational methods fail to
+  converge at all.
 - `benchmarks/scaling_ladder.py` decomposes what a panel costs: the
   archived HAPNEST panel at 50,000 samples, the same panel subsampled to
   5,000 samples, and the 400,000-variant panel. Ten times fewer samples

@@ -179,16 +179,19 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   such confounding.
 - Only HRATT models case-control outcomes and sampling weights; the other
   methods assume a Gaussian trait without weights.
-- HRATT's projected heritability estimator is not interchangeable with
-  REML under confounding. In a controlled panel where an environment
-  differs between populations, HRATT-HE was conservative without
-  covariates (type-I error 0.022 at the 0.05 level) and anti-conservative
-  with two principal components (lambda_GC 1.33), while the exact LOCO
-  reference was mildly inflated in both (1.12 and 1.09) and HRATT-REML
-  matched it with the covariates (1.01). HRATT-HE also lost most of its
-  power there (0.04 and 0.13 against 0.35 for the reference). The
-  cross-fitted elastic-net scores absorb part of the confounding.
-  ([archive](benchmarks/results/20261025T135258Z-scale-study/README.md))
+- Under population confounding the variational engine fails, and the
+  methods that do not use it stay calibrated. In a panel where an
+  environment differs between populations, the exact LOCO reference and
+  BOLT-LMM-inf are mildly inflated (lambda_GC 1.12 and 1.04 without
+  covariates, 1.09 and 1.09 with two principal components), while
+  BOLT-LMM's mixture, HRATT-HE and HRATT-REML all reached the
+  100-iteration cap without converging, and HRATT-HE's variance
+  component sat at its boundary (h2 = 1). The conservative and
+  anti-conservative HRATT-HE numbers (lambda_GC 1.12 without
+  covariates, 1.33 with them) are the numbers of failed fits, not of a
+  converged estimator. The official LDAK-KVIK is worse still without
+  covariates (lambda_GC 4.5, a type-I error of 0.351 at the nominal
+  0.05) and needs the covariates to come back.
 - BOLT mixture p-values accompany infinitesimal-model effects and standard
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
 - HRATT's weighted and binary tests take allele frequencies from the

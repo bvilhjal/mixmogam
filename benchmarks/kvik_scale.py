@@ -45,6 +45,11 @@ DRIVER = Path(__file__).resolve()
 PLAN = BENCH / "kvik_scale_plan.md"
 
 PANEL = dict(n=5_000, m=400_000, nchr=20, kind="blocks", block_size=100, seed=20261028)
+# The structured panel of the scale study's calibration arm: four
+# populations with diverged frequencies and AR(1) blocks. The labels are
+# the ancestry axis a confounded environment runs along.
+STRUCTURED = dict(n=1_000, m=10_000, nchr=8, kind="structured", block_size=125,
+                  n_pops=4, fst=0.3, seed=20262030)
 CASES = [
     dict(name="mixed", h2=0.5, n_qtl=10, n_background=0.05 * PANEL["m"], seed=20261032),
     dict(name="null", h2=0.0, n_qtl=0, n_background=0, seed=20261039),
@@ -63,7 +68,21 @@ def export_panel(work, panel, calls, sample_ids):
     return variant_ids
 
 
-def run_reference(case, ldak, threads, seed):
+def ancestry_pcs(panel_directory, k):
+    """The leading genotype principal components, from the exported panel.
+
+    The package's own solver, with the whole panel and the exact SVD, so
+    that the covariates are the same ones an analyst would build.
+    """
+    from mixmogam.io.plink import read_plink
+    from mixmogam.pca import principal_components
+
+    gt = read_plink(str(panel_directory / "geno"))
+    pcs, info = principal_components(gt, k=k, solver="exact", return_info=True)
+    return np.asarray(pcs), info
+
+
+def run_reference(case, ldak, threads, seed, covariates=False):
     """The official program's two steps, each in its own process.
 
     The steps run with the case directory as their working directory, so
@@ -75,6 +94,8 @@ def run_reference(case, ldak, threads, seed):
         command = [ldak, f"--kvik-step{step}", "reference", "--bfile", "../panel/geno",
                    "--pheno", "phenotype.txt", "--max-threads", str(threads),
                    "--random-seed", str(seed)]
+        if covariates:
+            command += ["--covar", "covariates.txt"]
         measurement = measure(command, case, env=child_environment(None),
                               max_load=None, label=f"step{step}")
         rows.append(measurement)
@@ -143,13 +164,16 @@ def worker(job_path):
     case = Path(job_path).parent
     gt = read_plink(str(case.parent / "panel" / "geno"))
     y = np.loadtxt(case / "phenotype.txt", usecols=2)
+    X = None
+    if (case / "covariates.txt").exists():
+        X = np.loadtxt(case / "covariates.txt", usecols=(2, 3))
     options = {"method": "hratt", "heritability_method": "he"} if job["method"] == "hratt-he" \
         else {"method": "bolt-inf"}
     options["random_state"] = job["seed"]
     if job["method"] == "hratt-he" and job.get("n_threads", 1) > 1:
         options["n_threads"] = job["n_threads"]
     started = time.perf_counter()
-    result = gwas(y, gt, **options)
+    result = gwas(y, gt, X=X, **options)
     elapsed = time.perf_counter() - started
     np.savez_compressed(case / f"{job['method']}.npz", p=result.p,
                         variant_ids=result.variant_ids.astype(str))
@@ -180,14 +204,28 @@ def main():
     parser.add_argument("--cases", default="mixed,null")
     parser.add_argument("--n", type=int, help="override the panel's sample count (smoke test)")
     parser.add_argument("--m", type=int, help="override the panel's variant count (smoke test)")
+    parser.add_argument("--pcs", type=int, default=0,
+                        help="also analyse every case with this many ancestry principal "
+                             "components as covariates")
+    parser.add_argument("--structured", action="store_true",
+                        help="use the structured panel (four populations, F_ST 0.3)")
+    parser.add_argument("--confounded", action="store_true",
+                        help="add a case whose environment differs between populations")
+    parser.add_argument("--background-fraction", type=float, default=0.05,
+                        help="share of the variants that carry a small background effect")
     args = parser.parse_args()
     if args.worker is not None:
         worker(args.worker)
         return 0
+    panel = dict(STRUCTURED) if args.structured else dict(PANEL)
     if args.n:
-        PANEL["n"] = args.n
+        panel["n"] = args.n
     if args.m:
-        PANEL["m"] = args.m
+        panel["m"] = args.m
+    cases = list(CASES)
+    if args.confounded:
+        cases = cases + [dict(name="confounded", h2=0.5, n_qtl=10, confounding=0.5,
+                              seed=20262100)]
     if args.out is None:
         run_id = dt.datetime.now(dt.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         out = archive_dir(ROOT, run_id, "kvik-scale")
@@ -203,6 +241,7 @@ def main():
                 "methods": list(METHODS), "threads": args.threads,
                 "mixmogam_threads": args.mixmogam_threads,
                 "blas_threads": args.blas_threads,
+                "pcs": args.pcs, "background_fraction": args.background_fraction,
                 "ldak": ldak, "ldak_sha256": digest(ldak), "ldak_banner": banner,
                 "plan": str(PLAN), "plan_sha256": digest(PLAN),
                 "driver_sha256": digest(DRIVER),
@@ -230,9 +269,9 @@ def main():
     work.mkdir(parents=True, exist_ok=True)
     print("building the panel and exporting it", flush=True)
     started = time.perf_counter()
-    calls, _labels = build_calls(PANEL)
-    sample_ids = np.array([f"S{i}" for i in range(PANEL["n"])])
-    variant_ids = export_panel(work, PANEL, calls, sample_ids)
+    calls, labels = build_calls(panel)
+    sample_ids = np.array([f"S{i}" for i in range(panel["n"])])
+    variant_ids = export_panel(work, panel, calls, sample_ids)
     export_seconds = time.perf_counter() - started
     print(f"exported in {export_seconds:.0f}s", flush=True)
 
@@ -241,12 +280,12 @@ def main():
     # with the counted allele on the other side, which flips the sign of
     # every slope and leaves the p-values unchanged.
     traits = {}
-    for case_spec in CASES:
+    for case_spec in cases:
         phenotype = dict(h2=case_spec["h2"], seed=case_spec["seed"],
                          n_qtl=case_spec["n_qtl"],
-                         n_background=int(0.05 * PANEL["m"]),
-                         confounding=0.0, pcs=0)
-        traits[case_spec["name"]] = build_phenotype(calls, None, phenotype)
+                         n_background=int(args.background_fraction * panel["m"]),
+                         confounding=case_spec.get("confounding", 0.0), pcs=0)
+        traits[case_spec["name"]] = build_phenotype(calls, labels, phenotype)
 
     # The official program checks its own reading of the files. It drops
     # variants with no variance (a monomorphic marker), so the check is
@@ -264,86 +303,100 @@ def main():
     checked = [by_id[identifier] for identifier in reported]
     np.testing.assert_allclose(np.array([reported[identifier] for identifier in reported]),
                                 2 - calls.mean(axis=0)[checked], atol=5.1e-7, rtol=0)
-    if len(samples) != PANEL["n"]:
+    if len(samples) != panel["n"]:
         raise ValueError("the reference program read a different number of samples")
     save_json(out / "export_check.json", {
-        "n_samples": PANEL["n"], "n_variants": PANEL["m"],
+        "n_samples": panel["n"], "n_variants": panel["m"],
         "n_variants_reported_by_the_reference_program": len(records),
-        "n_variants_without_variance_dropped": PANEL["m"] - len(records),
+        "n_variants_without_variance_dropped": panel["m"] - len(records),
         "allele_counted_by_the_writer": "BIM A2 (G)", "allele_counted_by_analysis": "BIM A1 (A)",
         "ldak_frequencies_match": True, "export_seconds": export_seconds,
         "files": {path.name: digest(path) for path in work.glob("geno.*")}})
     del calls
 
     rows = []
-    for case_spec in CASES:
+    for case_spec in cases:
         if case_spec["name"] not in args.cases.split(","):
             continue
-        case = out / case_spec["name"]
-        case.mkdir(parents=True, exist_ok=True)
-        y = traits[case_spec["name"]]["y"]
-        qtl = traits[case_spec["name"]]["qtl"]
-        with open(case / "phenotype.txt", "w") as stream:
-            for identifier, value in zip(sample_ids, y):
-                stream.write(f"0 {identifier} {value:.17g}\n")
-        np.save(case / "qtl.npy", qtl)
-        del y
+        # Every case is analysed without covariates and, when asked for,
+        # with the leading ancestry principal components.
+        settings = [(0, "nopc")] + ([(args.pcs, f"pc{args.pcs}")] if args.pcs else [])
+        for n_pcs, setting in settings:
+            case = out / f"{case_spec['name']}-{setting}"
+            case.mkdir(parents=True, exist_ok=True)
+            y = traits[case_spec["name"]]["y"]
+            qtl = traits[case_spec["name"]]["qtl"]
+            with open(case / "phenotype.txt", "w") as stream:
+                for identifier, value in zip(sample_ids, y):
+                    stream.write(f"0 {identifier} {value:.17g}\n")
+            np.save(case / "qtl.npy", qtl)
+            del y
+            if n_pcs:
+                pcs, pc_info = ancestry_pcs(work, n_pcs)
+                with open(case / "covariates.txt", "w") as stream:
+                    for identifier, row in zip(sample_ids, pcs):
+                        stream.write(f"0 {identifier} {row[0]:.17g} {row[1]:.17g}\n")
+                save_json(case / "pcs.json",
+                          {"k": n_pcs, "explained_variance_ratio": pc_info.get(
+                              "explained_variance_ratio")})
 
-        print(f"case {case_spec['name']}: the reference program", flush=True)
-        reference_rows = run_reference(case, ldak, args.threads, 0)
-        p_reference, coverage = parse_reference_aligned(case / "reference.step2.assoc",
-                                                        variant_ids)
-        print(f"  the reference program reported {coverage['n_reported']} variants, "
-              f"{coverage['n_matched']} matched", flush=True)
-        save_json(case / "reference_coverage.json", coverage)
-        np.savez_compressed(case / "ldak-kvik.npz", p=p_reference,
-                            variant_ids=variant_ids.astype(str))
-        for path in case.glob("reference.*"):
-            import gzip
-            with open(path, "rb") as source, gzip.open(str(path) + ".gz", "wb") as target:
-                shutil.copyfileobj(source, target)
-            path.unlink()
+            print(f"case {case_spec['name']}-{setting}: the reference program", flush=True)
+            reference_rows = run_reference(case, ldak, args.threads, 0, covariates=bool(n_pcs))
+            p_reference, coverage = parse_reference_aligned(case / "reference.step2.assoc",
+                                                            variant_ids)
+            print(f"  the reference program reported {coverage['n_reported']} variants, "
+                  f"{coverage['n_matched']} matched", flush=True)
+            save_json(case / "reference_coverage.json", coverage)
+            np.savez_compressed(case / "ldak-kvik.npz", p=p_reference,
+                                variant_ids=variant_ids.astype(str))
+            for path in case.glob("reference.*"):
+                import gzip
+                with open(path, "rb") as source, gzip.open(str(path) + ".gz", "wb") as target:
+                    shutil.copyfileobj(source, target)
+                path.unlink()
 
-        for method in METHODS:
-            if method == "ldak-kvik":
-                continue
-            run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads)
-        for method in METHODS:
-            if method == "ldak-kvik":
-                p = p_reference
-                wall = sum(r["wall_seconds"] for r in reference_rows)
-                rss = max(r["peak_rss_bytes"] for r in reference_rows)
-                cpu = sum(r["user_seconds"] + r["system_seconds"] for r in reference_rows)
-            else:
+            for method in METHODS:
+                if method == "ldak-kvik":
+                    continue
+                run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads)
+            for method in METHODS:
+                if method == "ldak-kvik":
+                    p = p_reference
+                    wall = sum(r["wall_seconds"] for r in reference_rows)
+                    rss = max(r["peak_rss_bytes"] for r in reference_rows)
+                    cpu = sum(r["user_seconds"] + r["system_seconds"] for r in reference_rows)
+                else:
+                    with np.load(case / f"{method}.npz") as data:
+                        p = data["p"]
+                    measurement = json.loads((case / method / "measurement.json").read_text())
+                    wall = measurement["wall_seconds"]
+                    rss = measurement["peak_rss_bytes"]
+                    cpu = measurement["user_seconds"] + measurement["system_seconds"]
+                p = np.asarray(p, dtype=float)
+                detected = int((p[qtl] < 0.05 / panel["m"]).sum()) if qtl.size else 0
+                rows.append({"case": case_spec["name"], "setting": setting,
+                             "method": method,
+                             "wall_seconds": round(wall, 2), "cpu_seconds": round(cpu, 2),
+                             "peak_rss_gib": round(rss / 2**30, 3),
+                             "lambda_gc": round(lambda_gc(p), 4),
+                             "fpr_05": round(float((p < 0.05).mean()), 5),
+                             "n_tested": int(np.isfinite(p).sum()),
+                             "n_qtl": int(qtl.size),
+                             "qtl_detected_05m": detected,
+                             "qtl_power_05m": round(detected / qtl.size, 3) if qtl.size else None})
+            for method in METHODS:
+                if method == "ldak-kvik":
+                    continue
                 with np.load(case / f"{method}.npz") as data:
-                    p = data["p"]
-                measurement = json.loads((case / method / "measurement.json").read_text())
-                wall = measurement["wall_seconds"]
-                rss = measurement["peak_rss_bytes"]
-                cpu = measurement["user_seconds"] + measurement["system_seconds"]
-            p = np.asarray(p, dtype=float)
-            detected = int((p[qtl] < 0.05 / PANEL["m"]).sum()) if qtl.size else 0
-            rows.append({"case": case_spec["name"], "method": method,
-                         "wall_seconds": round(wall, 2), "cpu_seconds": round(cpu, 2),
-                         "peak_rss_gib": round(rss / 2**30, 3),
-                         "lambda_gc": round(lambda_gc(p), 4),
-                         "fpr_05": round(float((p < 0.05).mean()), 5),
-                         "n_tested": int(np.isfinite(p).sum()),
-                         "n_qtl": int(qtl.size),
-                         "qtl_detected_05m": detected,
-                         "qtl_power_05m": round(detected / qtl.size, 3) if qtl.size else None})
-        for method in METHODS:
-            if method == "ldak-kvik":
-                continue
-            with np.load(case / f"{method}.npz") as data:
-                p_mixmogam = data["p"]
-            comparison = compare_pvalues(p_mixmogam, p_reference)
-            rows.append({"case": case_spec["name"], "method": f"{method} vs ldak-kvik",
-                         "spearman_p": comparison.get("spearman_p"),
-                         "max_abs_log10_error": comparison.get("max_abs_log10_error"),
-                         "n_exceeding_1e-6": comparison.get("n_exceeding_1e-6"),
-                         "top100_overlap": comparison.get("top100_overlap")})
-            save_json(case / f"{method}-vs-ldak-kvik.json", comparison)
+                    p_mixmogam = data["p"]
+                comparison = compare_pvalues(p_mixmogam, p_reference)
+                rows.append({"case": case_spec["name"], "setting": setting,
+                             "method": f"{method} vs ldak-kvik",
+                             "spearman_p": comparison.get("spearman_p"),
+                             "max_abs_log10_error": comparison.get("max_abs_log10_error"),
+                             "n_exceeding_1e-6": comparison.get("n_exceeding_1e-6"),
+                             "top100_overlap": comparison.get("top100_overlap")})
+                save_json(case / f"{method}-vs-ldak-kvik.json", comparison)
     write_csv(out / "comparison.csv", rows)
     manifest["finished_utc"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     save_json(out / "manifest.json", manifest)

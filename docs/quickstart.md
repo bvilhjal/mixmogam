@@ -128,17 +128,23 @@ variance components and model selection use the whole trait. This reduced
 effect attenuation and separation in the tested scenarios; it does not
 guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
 
-Under population confounding the two heritability estimators behave
-differently, and neither is the exact reference. In a controlled panel
-where an environment differs between populations, `heritability_method="he"`
-was conservative without covariates (type-I error 0.022 at the 0.05 level)
-and anti-conservative with two principal components (lambda_GC 1.33),
-while the exact LOCO fit was mildly inflated in both (1.12 and 1.09) and
-`"reml"` matched it once the covariates were there (1.01). HRATT-HE also
-lost most of its power in that cell (0.04 and 0.13 against 0.35). The
-cross-fitted elastic-net scores absorb part of the confounding; check the
-calibration of the configuration you intend to use
-([archive](../benchmarks/results/20261025T135258Z-scale-study/README.md)).
+Under population confounding the two heritability estimators do not
+separate cleanly from the exact reference, and the variational engine is
+where the trouble starts. In a controlled panel where an environment
+differs between populations, `heritability_method="he"` gave a
+type-I error of 0.024 without covariates and a lambda_GC of 1.30 with
+two principal components, while the exact LOCO fit gave 1.15 and 1.13.
+Those numbers are the numbers of *failed* fits: in that cell HRATT-HE
+and HRATT-REML both reached the iteration cap without converging, and
+HRATT-HE's variance component sat at its boundary (h2 = 1). Check
+`extra["cv_converged"]` and `extra["loco_converged"]` before reading
+any statistic from a confounded analysis; the methods that fit the
+covariance without the variational sweep (the exact path and
+BOLT-LMM-inf) stayed calibrated in the same cell (lambda_GC 1.04 and
+1.09). The official LDAK-KVIK was anti-conservative there without
+covariates (lambda_GC 4.5, a type-I error of 0.351) and needed the
+ancestry covariates to come back
+([archive](../benchmarks/results/20261025T193008Z-kvik-covariates-small/README.md)).
 
 ## Larger HRATT fits
 
