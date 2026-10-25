@@ -93,10 +93,15 @@ A scale study on 5,000 samples and 400,000 variants measured one fit per
 configuration in a fresh process, with peak resident memory from the
 operating system: HRATT-HE took 33 s at 3.0 GiB and BOLT-LMM 91 s at 3.2 GiB
 (one thread, int8 calls, a 2.0 GiB panel), the mixture's cross-validation
-matrix included. The default 1 GB variational Gram cache holds about 320,000
-variants, so at 400,000 variants it warns that the rest is recomputed every
-sweep: switching the cache off cost 1.7 times for HRATT-HE and 1.2 times for
-BOLT-LMM, and a budget that holds the whole panel recovered 10% and 4%
+matrix included. That panel is an easy one -- ten times fewer samples than
+the HAPNEST panels above, and LD inside 100-variant blocks -- so it measures
+scale and memory, not the difficulty of a realistic genome; the
+[scaling ladder](benchmarks/results/20261025T185808Z-scaling-ladder/README.md)
+separates the sample-size, LD and iteration effects. The default 1 GB
+variational Gram cache holds about 320,000 variants, so at 400,000 variants
+it warns that the rest is recomputed every sweep: switching the cache off
+cost 1.7 times for HRATT-HE and 1.2 times for BOLT-LMM, and a budget that
+holds the whole panel recovered 10% and 4%
 ([archive](benchmarks/results/20261025T135258Z-scale-study/README.md)).
 
 On that same panel, the official LDAK-KVIK took 24 s at 1.2 GiB against

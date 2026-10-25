@@ -71,6 +71,15 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
   (51 s) with a third of the memory; the two programs' p-values
   correlated at 0.998 under the null and they detected the same 8 of 10
   causal variants.
+- `benchmarks/scaling_ladder.py` decomposes what a panel costs: the
+  archived HAPNEST panel at 50,000 samples, the same panel subsampled to
+  5,000 samples, and the 400,000-variant panel. Ten times fewer samples
+  make the reference program 7.3 times faster and mixmogam 7.1 times,
+  with the reported iteration counts falling as well, which is why a
+  panel with twenty times the variants can cost the same. The run also
+  shows that the October archives were measured on a slower host with
+  older code: the same executable on the same archived panel takes
+  19.8 s today against the archived 33.5 s.
 - `benchmarks/_harness.py` holds the shared measurement infrastructure
   (power guard, thread environment, source snapshot, environment
   manifest, fresh-process measurement, p-value comparison) for the new

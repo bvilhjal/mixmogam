@@ -50,6 +50,26 @@ environment, source snapshot, fresh-process measurement with operating
 system counters, p-value comparison); the older drivers keep their own
 copies so that their published archives stay byte-reproducible.
 
+**Why a panel costs what it costs.** `scaling_ladder.py` decomposes the
+cost of a panel into the sample size, the LD structure and the
+iteration counts the programs report, by measuring the archived HAPNEST
+panel at 50,000 samples, the same panel subsampled to 5,000 samples
+(same variants, same LD), and the scale study's 400,000-variant panel.
+It is the answer to "the new panel has twenty times the variants and
+takes the same time": ten times fewer samples make the reference
+program 7.3 times faster and mixmogam 7.1 times, and the iteration
+counts fall with them. The
+[run of 25 October](results/20261025T185808Z-scaling-ladder/README.md)
+also shows that the October archives were measured on a slower host
+with older code: the same executable on the same archived panel takes
+19.8 s today against the archived 33.5 s.
+
+```sh
+python benchmarks/scaling_ladder.py --ldak ~/bin/ldak63 \
+  --panel benchmarks/results/20261003-hapnest-kvik-n50000-m20000/rho0.8_fst0_rep01 \
+  --out NEW_DIRECTORY
+```
+
 **Matched comparison with the official LDAK-KVIK at 400,000 variants
 (25 October 2026).** `kvik_scale.py` closes the last gap of the scale
 study: the external comparison existed only at panels of at most 20,000
