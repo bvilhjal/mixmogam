@@ -87,6 +87,8 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--genome-build", help="declared coordinate assembly (e.g. GRCh38 or TAIR10); no liftover")
     gwas.add_argument("--pca-max-memory-gib", type=float, default=4.0,
                       help="working-memory budget for --pcs (default 4 GiB)")
+    gwas.add_argument("--pca-solver", choices=("exact", "randomized"), default="exact",
+                      help="PCA eigensolver for --pcs (default exact SVD)")
 
     pca = sub.add_parser("pca", help="ancestry PCs of the genotypes, as a covariate file",
                          description="Run mixmogam.pca.principal_components and write a covariate file.")
@@ -100,6 +102,8 @@ def _parser() -> argparse.ArgumentParser:
     pca.add_argument("--seed", type=int, default=0, help="thinning seed (default 0)")
     pca.add_argument("--max-memory-gib", type=float, default=4.0,
                      help="PCA working-memory budget (default 4 GiB)")
+    pca.add_argument("--solver", choices=("exact", "randomized"), default="exact",
+                     help="PCA eigensolver (default exact SVD)")
     return ap
 
 
@@ -111,7 +115,7 @@ def _cmd_pca(args) -> int:
     pcs, info = principal_components(gt, k=args.k, min_maf=args.min_maf,
                                      n_markers=args.n_markers, random_state=args.seed,
                                      max_memory_gib=args.max_memory_gib,
-                                     return_info=True)
+                                     solver=args.solver, return_info=True)
     write_covariates(args.out, gt.sample_ids, pcs,
                      names=[f"PC{j}" for j in range(1, args.k + 1)])
     print(f"wrote {args.k} principal components for {gt.n_samples} samples to {args.out} "
@@ -174,7 +178,9 @@ def _cmd_gwas(args) -> int:
     if w is not None:
         w = w[complete]
     if args.pcs:
-        columns.append(principal_components(subset, k=args.pcs, max_memory_gib=args.pca_max_memory_gib))
+        columns.append(principal_components(subset, k=args.pcs,
+                                            max_memory_gib=args.pca_max_memory_gib,
+                                            solver=args.pca_solver))
     X = np.column_stack(columns) if columns else None
 
     method = args.method

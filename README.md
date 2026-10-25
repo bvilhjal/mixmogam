@@ -3,7 +3,8 @@
 Mixed linear models for genome-wide association of quantitative traits
 and, with HRATT, case-control outcomes and sampling-weighted samples, with
 leave-one-chromosome-out (LOCO) testing by default. The core uses NumPy and
-SciPy; Numba accelerates optional kernels.
+SciPy; Numba accelerates optional kernels. Two-step methods warn when it is
+unavailable, since their Python fallbacks can be orders of magnitude slower.
 
 **Development version 2.0.0.dev7**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
@@ -73,7 +74,9 @@ count; parallel residual products can change floating-point rounding. The
 two-step methods keep no float copy of the genotypes, and calls can be
 stored two bits each, a quarter of the int8 memory, with identical results
 (`Genotypes(G, packed=True)`, or `Genotypes.load_plink(prefix, packed=True)`
-and `mmap=True` to leave them in the mapped bed file). See the
+and `mmap=True` to leave them in the mapped bed file). BOLT and HRATT expose
+`gram_cache_bytes` and warn when that cache is partial; LD-score windows
+have a separate working-memory budget. See the
 [quickstart](docs/quickstart.md#larger-hratt-fits) for a configuration.
 
 On two 50,000 × 20,000 HAPNEST panels, four-thread HRATT-HE took 29-33 s at

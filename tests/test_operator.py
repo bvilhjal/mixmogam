@@ -89,8 +89,6 @@ def test_operator_rejects_exact_solver(problem):
 @pytest.mark.parametrize("first", ["diagonal", "matmul"])
 def test_normalization_shares_first_pass(monkeypatch, packed, dtype, cache_bytes, first):
     """Missing/constant SNPs and weights agree with a direct dense oracle."""
-    from mixmogam import kinship
-
     rng = np.random.default_rng(762)
     calls = rng.integers(-1, 3, (19, 31), dtype=np.int8)
     calls[:, :3] = [-1, 0, 2]
@@ -112,7 +110,7 @@ def test_normalization_shares_first_pass(monkeypatch, packed, dtype, cache_bytes
 
     traversals = []
     visited_blocks = []
-    original = kinship._standardized_blocks
+    original = GenotypeKinship._weighted_blocks
     standardized = GenotypeKinship._standardized
 
     def counted(*args, **kwargs):
@@ -124,7 +122,7 @@ def test_normalization_shares_first_pass(monkeypatch, packed, dtype, cache_bytes
             visited_blocks.append(Z.shape[0])
             yield Z
 
-    monkeypatch.setattr(kinship, "_standardized_blocks", counted)
+    monkeypatch.setattr(GenotypeKinship, "_weighted_blocks", counted)
     monkeypatch.setattr(GenotypeKinship, "_standardized", visited)
     op = GenotypeKinship(gt, weights=weights, block=7, dtype=dtype, cache_bytes=cache_bytes)
     tol = 2e-6 if dtype == np.float32 else 1e-12

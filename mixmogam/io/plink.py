@@ -7,15 +7,11 @@ import warnings
 
 import numpy as np
 
-from mixmogam._packed import CALL_CODES, CODE_CALLS
 from mixmogam.genotypes import Genotypes, MISSING, PackedCalls
 
 __all__ = ["read_plink", "write_plink", "read_tped"]
 
 _BED_MAGIC = b"\x6c\x1b\x01"
-# PLINK's low-order bit pair: A1/A1, missing, A1/A2, A2/A2.
-_BED_TO_A1 = CODE_CALLS
-_A1_TO_BED = CALL_CODES  # -1 indexes missing
 # Bound packed input retained alongside decoded calls. One complete variant
 # is the minimum read; per-variant unpacking scratch is separate.
 _BED_READ_BYTES = 8 * 1024**2
@@ -110,13 +106,11 @@ def read_plink(prefix: str, max_variants: Optional[int] = None, packed: bool = F
             if raw.size < nbytes_row * count:
                 raise ValueError("bed file truncated")
             raw = raw.reshape(count, nbytes_row)
-            for i in range(count):
-                bits = np.unpackbits(raw[i], bitorder="little")  # 8 bits per byte
-                codes = bits[0::2] + 2 * bits[1::2]
-                G[:, start + i] = _BED_TO_A1[codes[:n]]
-            # Avoid overlapping consecutive packed reads or retaining the
-            # last chunk during Genotypes' validation of the decoded input.
-            del raw, bits, codes
+            # Decode the whole block through the same packed-call kernel as
+            # QC and the scanners, not one Python unpack per variant.
+            idx = np.arange(count, dtype=np.int64)
+            G[:, start:start + count] = PackedCalls(raw, n)._decode_columns(idx)
+            del raw
     return Genotypes(G, **meta)
 
 
@@ -143,13 +137,11 @@ def write_plink(gt: Genotypes, prefix: str) -> None:
             for start in range(0, m, rows):
                 fh.write(np.asarray(gt.G.data[start : start + rows]).tobytes())
             return
-        for j in range(m):
-            g = _A1_TO_BED[gt.G[:, j]]
-            inter = np.zeros(8 * nbytes_row, dtype=np.uint8)
-            inter[0::2][:n] = g & 1
-            inter[1::2][:n] = (g >> 1) & 1
-            packed = np.packbits(inter, bitorder="little")
-            fh.write(packed.tobytes())
+        rows = max(1, _BED_READ_BYTES // max(nbytes_row, 1))
+        for start in range(0, m, rows):
+            stop = min(start + rows, m)
+            packed = PackedCalls.pack(gt.G[:, start:stop])
+            fh.write(packed.data.tobytes())
 
 
 def read_tped(prefix: str) -> Genotypes:

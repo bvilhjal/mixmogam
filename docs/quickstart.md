@@ -32,7 +32,8 @@ from mixmogam.io.covariates import read_covariates, write_covariates
 from mixmogam.pca import principal_components
 
 cov = read_covariates("covariates.txt", sample_ids=gt.sample_ids)  # PLINK .cov or sample_id layouts
-pcs = principal_components(gt, k=10)          # SVD of a thinned marker panel
+pcs = principal_components(gt, k=10)          # exact SVD of a thinned marker panel
+# solver="randomized" computes only the leading subspace when k is small
 X = np.column_stack([cov.values, pcs])
 write_covariates("pcs.txt", gt.sample_ids, pcs, names=[f"PC{j}" for j in range(1, 11)])
 ```
@@ -148,6 +149,11 @@ print(result.extra["he_variance"])
 print(result.extra["cv_converged"], result.extra["loco_converged"])
 ```
 
+If a partial-Gram-cache warning appears and RAM permits, raise
+`gram_cache_bytes` (for example, `4 * 1024**3`). A smaller cache lowers
+retained memory but rebuilds the remaining block Gram matrices on every
+sweep; it does not change the fitted model.
+
 Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
 PCs for population/environmental confounding; the intercept is added internally.
 REML (HE with sampling weights) and one thread remain the defaults. Selecting
@@ -170,15 +176,18 @@ Genotypes are decoded on every pass; no float copy is kept. For large
 panels, store the calls two bits each: `Genotypes.load_plink(prefix,
 packed=True)` holds the bed's codes in memory (a quarter of the int8 bytes),
 `mmap=True` maps them from the file, and `Genotypes(G, packed=True)` packs an
-array. Results are identical to int8 storage. Residuals and other workspaces
-remain resident: this is not a fully out-of-core fit.
+array. Results are identical to int8 storage. QC accumulates call counts
+directly from packed bytes rather than decoding first. Residuals and other
+workspaces remain resident: this is not a fully out-of-core fit.
 
 An int8 array is decoded fastest variant-major, each variant's calls
 contiguous, as the readers return them and as `Genotypes(G.T)` gives for a
 C-ordered (variants, samples) array: about 0.16 ns per call on one thread,
 against 1 ns for a C-ordered (samples, variants) array, whose decoding is a
-transpose. Pass `np.asfortranarray(G)` (or `packed=True`) for such arrays;
-selecting or aligning samples keeps the order it is given.
+transpose. Analysis entry points call `variant_major()` and make one int8
+layout copy instead of paying that transpose on every pass; the caller's
+array is not modified. `np.asfortranarray(G)` (or `packed=True`) avoids the
+copy, and selecting or aligning samples keeps the order it is given.
 
 ## The mixed model by hand
 
@@ -208,7 +217,9 @@ fit_two_kinships(y, K_close, K_structure)     # weights including 0 and 1
 
 Two-kinship fits reject covariance components that cannot be distinguished
 after covariate adjustment. `weight=None` and zero shares mean the
-ordinary linear model won with zero genetic variance.
+ordinary linear model won with zero genetic variance. The refined mixture
+profile still performs a dense eigensolve per candidate weight; it is a
+dense, small-to-moderate-n method, not a streaming large-n approximation.
 
 ## Command line
 

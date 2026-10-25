@@ -180,12 +180,14 @@ class LMM:
         add_intercept: bool = True,
         n_eig: Union[str, int] = "auto",
         random_state: Union[int, np.random.Generator, None] = 0,
+        _validated_design: bool = False,
     ):
         self.y = _as_1d_float(y, "y")
         self.n = self.y.size
         if not np.isfinite(self.y).all():
             raise ValueError("y contains NaN or infinite values")
-        self.X = _design_matrix(X, self.n, add_intercept)
+        self.X = (_design_matrix(X, self.n, add_intercept) if not _validated_design
+                  else np.asarray(X, dtype=np.float64))
         self.q = self.X.shape[1]
         self.K = None
         self._kop = None  # duck-typed operator with .matmul(X) and .n
@@ -207,9 +209,19 @@ class LMM:
                     )
                 if not np.isfinite(K).all():
                     raise ValueError("K must be finite")
-                if not np.allclose(K, K.T, rtol=1e-7, atol=1e-10):
-                    raise ValueError("K must be symmetric")
-                self.K = 0.5 * (K + K.T)
+                # Validate and average in bounded row blocks. np.allclose on
+                # the full transpose and 0.5 * (K + K.T) otherwise create
+                # several n-by-n temporaries before fitting even starts.
+                block = max(1, min(128, self.n))
+                for start in range(0, self.n, block):
+                    stop = min(start + block, self.n)
+                    if not np.allclose(K[start:stop], K[:, start:stop].T,
+                                       rtol=1e-7, atol=1e-10):
+                        raise ValueError("K must be symmetric")
+                self.K = np.empty_like(K)
+                for start in range(0, self.n, block):
+                    stop = min(start + block, self.n)
+                    self.K[start:stop] = 0.5 * (K[start:stop] + K[:, start:stop].T)
         if n_eig == "auto":
             dense_ok = self.K is not None and self.n <= _EXACT_N_MAX
             n_eig = self.n if dense_ok else min(_DEFAULT_TOP_K, self.n - 1)

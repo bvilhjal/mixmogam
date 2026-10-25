@@ -215,6 +215,7 @@ def gwas(
         dtype = np.float32 if dtype is None else dtype
         if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise ValueError("dtype must be float32 or float64")
+        gt = gt.variant_major()
         result = _gwas_exact(y, gt, X, loco, max_loco_groups, block, dtype, n_threads=int(n_threads))
         result.genome_build = genome_build
         return result
@@ -227,6 +228,9 @@ def gwas(
     fn = {"bolt-inf": twostep.bolt_inf, "bolt": twostep.bolt, "hratt": twostep.hratt}.get(method)
     if fn is None:
         raise ValueError(f"unknown method {method!r}")
+    # One layout conversion is cheaper than striding through a sample-major
+    # array on every genotype pass; the caller's container is not mutated.
+    gt = gt.variant_major()
     result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
     result.genome_build = genome_build
     return result

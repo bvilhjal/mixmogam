@@ -10,8 +10,10 @@ from __future__ import annotations
 from typing import Optional, Sequence, Union
 
 import numpy as np
+from scipy.linalg.blas import dsyrk
 
-from mixmogam._fast import standardize_block
+from mixmogam._fast import HAS_NUMBA, standardize_block
+from mixmogam._standardize import decode_table, prepare_moments
 from mixmogam.genotypes import Genotypes, MISSING
 
 __all__ = [
@@ -63,6 +65,13 @@ def _standardized_blocks(gt: Genotypes, block: int, dtype, weights=None):
         yield Z, w
 
 
+def _mirror_upper(K: np.ndarray) -> np.ndarray:
+    """Fill the lower triangle from the upper without an n-by-n temporary."""
+    for i in range(1, K.shape[0]):
+        K[i, :i] = K[:i, i]
+    return K
+
+
 def realized_relationship(
     G: Union[Genotypes, np.ndarray],
     weights: Optional[np.ndarray] = None,
@@ -79,7 +88,7 @@ def realized_relationship(
     """
     gt = _as_genotypes(G)
     n = gt.n_samples
-    K = np.zeros((n, n), dtype=np.float64)
+    K = np.zeros((n, n), dtype=np.float64, order="F")
     w_total = 0.0
     if snp_subset is not None:
         snp_subset = np.asarray(snp_subset)
@@ -87,9 +96,14 @@ def realized_relationship(
         weights = None if weights is None else np.asarray(weights)[snp_subset]
     weights = _validate_weights(weights, gt.n_variants)
     for Z, w in _standardized_blocks(gt, block, dtype, weights):
-        ZW = Z * w[:, None]
-        K += (Z.T.astype(np.float64)) @ (ZW.T.astype(np.float64)).T
+        # One widening, one weighted operand, and half the symmetric GEMM.
+        # dsyrk writes only the upper triangle; mirror it after accumulation.
+        A = np.array(Z.T, dtype=np.float64, order="F", copy=True)
+        if weights is not None:
+            A *= np.sqrt(w, dtype=np.float64)[None, :]
+        K = dsyrk(1.0, A, beta=1.0, c=K, lower=0, overwrite_c=1)
         w_total += w.sum()
+    _mirror_upper(K)
     K /= w_total
     if scale:
         K = scale_k(K)
@@ -170,26 +184,21 @@ def loco_kinships(
     exact. Returns ``{chrom: K_loco}``.
     """
     gt = _as_genotypes(G)
-    n = gt.n_samples
     chroms, _ = chromosome_counts(gt)
     if chroms.size < 2:
         raise ValueError("LOCO needs variants on at least two chromosomes")
-    per_chrom = {c: np.zeros((n, n), dtype=np.float64) for c in chroms}
-    idx = 0
-    for Z, _ in _standardized_blocks(gt, block, dtype):
-        k = Z.shape[0]
-        Zd = Z.T.astype(np.float64)
-        chrom_block = gt.chromosome[idx : idx + k]
-        for c in np.unique(chrom_block):
-            Zc = Zd[:, chrom_block == c]
-            per_chrom[c] += Zc @ Zc.T
-        idx += k
+    # Keep the full sum and one chromosome's sum, not every chromosome's
+    # matrix at once. The second traversal is the memory/time trade already
+    # used by the exact scanner; the returned LOCO matrices remain O(g n^2).
     m = gt.n_variants
-    K = sum(per_chrom.values())
+    K = realized_relationship(gt, block=block, dtype=dtype, scale=False)
     out = {}
     for c in chroms:
-        mc = float((gt.chromosome == c).sum())
-        Kloco = (K / m - per_chrom[c] / m) * (m / (m - mc))
+        mask = gt.chromosome == c
+        mc = int(np.count_nonzero(mask))
+        Kc = realized_relationship(gt.variant_mask(mask), block=block,
+                                   dtype=dtype, scale=False)
+        Kloco = (m * K - mc * Kc) / (m - mc)
         out[c] = scale_k(Kloco) if scale else Kloco
     return out
 
@@ -223,7 +232,12 @@ def windowed_kinships(
     for wi, start in enumerate(range(0, m, jump_size)):
         stop = min(start + window_size, m)
         span = stop - start
-        local = Genotypes(gt.G[:, start:stop])
+        local = gt._from_validated(
+            gt.G.take_variants(slice(start, stop)) if gt.packed else gt.G[:, start:stop],
+            sample_ids=gt.sample_ids, chromosome=gt.chromosome[start:stop],
+            position=gt.position[start:stop], variant_ids=gt.variant_ids[start:stop],
+            allele1=None if gt.allele1 is None else gt.allele1[start:stop],
+            allele2=None if gt.allele2 is None else gt.allele2[start:stop])
         Kloc = realized_relationship(local, block=block, dtype=dtype, scale=False)
         Krest = (full_sum - span * Kloc) / (m - span)
         if scale:
@@ -252,6 +266,9 @@ class GenotypeKinship:
     weights : optional per-SNP weights (LDAK-style)
     snp_subset : optional variant subset for cheap null fits
     block : SNP-block size for streaming products
+
+    Genotypes must not be mutated after the first operator product or
+    diagonal request: standardized call values are cached at first use.
     """
 
     def __init__(self, gt, weights=None, snp_subset=None, block: int = 8192,
@@ -268,6 +285,8 @@ class GenotypeKinship:
         if not np.isfinite(cache_bytes) or cache_bytes < 0:
             raise ValueError("cache_bytes must be finite and non-negative")
         self.cache_bytes = cache_bytes
+        if not isinstance(block, (int, np.integer)) or block <= 0:
+            raise ValueError("block must be a positive integer")
         self.block = block
         self.dtype = dtype
         self.normalize = normalize
@@ -277,6 +296,7 @@ class GenotypeKinship:
         self._norm = None  # (c, d) lazy scale_k constants
         self._diag = None  # raw diagonal collected with the first normalized pass
         self._Z_cache = None  # standardized blocks, built once
+        self._lookup = None  # four standardized call values per variant
 
     def _scaling(self):
         """scale_k constants (mean off-diagonal c, diagonal divisor d)."""
@@ -285,10 +305,38 @@ class GenotypeKinship:
                 pass
         return self._norm
 
+    def _prepare_lookup(self):
+        """Prepare the three standardized hard-call values once per variant."""
+        if self._lookup is not None or not HAS_NUMBA:
+            return
+        idx = np.arange(self.n_variants, dtype=np.int64)
+        mean, sd, _, _ = prepare_moments(self.gt.G, idx, np.empty((self.n, 0)))
+        divisor = np.where(sd > 0, sd, 1.0)
+        lut = np.empty((self.n_variants, 4), dtype=self.dtype)
+        for call in range(3):
+            lut[:, call] = (call - mean) / divisor
+        lut[:, 3] = 0.0
+        self._lookup = lut
+
     def _weighted_blocks(self):
-        for Z, w in _standardized_blocks(self.gt, self.block, self.dtype, self.weights):
-            Z *= np.sqrt(w)[:, None]
-            yield Z
+        if HAS_NUMBA:
+            # Above the float-panel cache budget, later products still need
+            # one decode, not the standardizer's three passes per column.
+            self._prepare_lookup()
+            for start in range(0, self.n_variants, self.block):
+                stop = min(start + self.block, self.n_variants)
+                idx = np.arange(start, stop, dtype=np.int64)
+                lut = self._lookup[idx]
+                if self.weights is not None:
+                    w = np.asarray(self.weights[start:stop], dtype=self.dtype)
+                    lut = lut.copy()
+                    lut *= np.sqrt(w)[:, None]
+                Z = np.empty((idx.size, self.n), dtype=self.dtype)
+                yield decode_table(self.gt.G, idx, lut, Z)
+        else:
+            for Z, w in _standardized_blocks(self.gt, self.block, self.dtype, self.weights):
+                Z *= np.sqrt(w)[:, None]
+                yield Z
 
     def _standardized(self):
         """Weighted blocks; collect normalization during the first traversal."""

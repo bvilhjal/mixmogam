@@ -115,7 +115,9 @@ def lanczos_quadrature_batch(
     if np.any(norms == 0.0):
         raise ValueError("starting vector has zero norm")
     steps = max(1, min(steps, n))
-    Q = np.zeros((steps, n, r))
+    # Every basis slice is assigned before use; zeroing the whole Krylov
+    # history first only adds another full memory pass.
+    Q = np.empty((steps, n, r))
     alpha = np.zeros((steps, r))
     beta = np.zeros((max(steps - 1, 1), r))
     Q[0] = V0 / norms
@@ -123,8 +125,10 @@ def lanczos_quadrature_batch(
     active = np.ones(r, dtype=bool)
     for j in range(steps):
         cols = np.nonzero(active)[0]
-        W = np.zeros((n, r))
+        W = np.empty((n, r))
         W[:, cols] = matvec(Q[j][:, cols])
+        if cols.size < r:
+            W[:, ~active] = 0.0
         a = np.einsum("ij,ij->j", Q[j], W)
         alpha[j, cols] = a[cols]
         W -= a * Q[j]

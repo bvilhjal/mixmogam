@@ -7,6 +7,45 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `principal_components(..., solver="randomized")` provides a top-k
+  alternative to the exact full SVD (the unchanged default), with matching
+  CLI `pca --solver` and `gwas --pca-solver` options. Randomized PCs use
+  the same thinning, signs, metadata and working-memory guard.
+- BOLT and HRATT accept `gram_cache_bytes`; a partial VB Gram cache now
+  warns instead of silently recomputing the remainder every sweep.
+  `ld_scores(..., max_memory_gib=...)` bounds dense LD-window workspaces.
+- `Genotypes.variant_major()` makes the one-time layout conversion used by
+  analysis entry points for sample-major NumPy arrays.
+
+### Fixed
+
+- Packed calls have compiled general decoding and packing, direct byte-table
+  QC counts, and blockwise PLINK read/write paths. QC no longer decodes a
+  packed block merely to count called genotypes and dosages; arbitrary
+  padding bits remain ignored.
+- `realized_relationship` uses one float64 widening and symmetric rank-k
+  products. `loco_kinships` retains only the full and current-chromosome
+  intermediates rather than every chromosome at once, and
+  `GenotypeKinship` reuses four standardized call values per variant after
+  its float-panel cache is exhausted.
+- Dense `LMM` construction validates and symmetrizes K in bounded blocks,
+  avoiding about three full-matrix copies. Two-kinship profiles reuse their
+  validated design, use eigenvalues alone for the PSD gate, and avoid
+  repeated mixture temporaries.
+- LD scores chunk windows to a memory budget. Derived genotype containers
+  no longer revalidate inherited calls or synthesize new default IDs;
+  analysis makes one variant-major copy when repeated decoding would
+  otherwise stride through sample-major input.
+- Two-step methods warn when Numba is unavailable rather than silently
+  taking their slow Python fallbacks. BOLT's fold mask is boolean, and
+  batched Lanczos avoids pre-zeroing fully assigned work arrays.
+
+No statistical default or convergence threshold was changed. BOLT's
+model-selection cross-validation, float64 full Lanczos reorthogonalization,
+the SPA threshold, and the two-kinship mixture profile remain in place.
+
 ## [2.0.0.dev7] - 2026-10-25
 
 ### Added

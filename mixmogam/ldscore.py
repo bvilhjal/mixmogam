@@ -14,20 +14,26 @@ import numpy as np
 __all__ = ["ld_scores", "ldsc_intercept"]
 
 
-def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
+def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512,
+              max_memory_gib: float = 1.0) -> np.ndarray:
     """LD score of every variant from the standardized genotypes in ``lg``.
 
-    l_j = sum over variants k on the same chromosome within ``window_bp``
-    of the bias-adjusted r^2_jk - (1 - r^2_jk) / (n - 2), the variant
-    itself included, for the covariate-projected genotypes of a
-    :class:`mixmogam._loco.LocoGenotypes`. Each chromosome streams through
-    a sliding window of decoded, unprojected rows: covariates leave the
-    products through the prepared coefficients, Z_j Z_k' = z_j z_k' - c_j c_k'
-    (exact up to the storage rounding of z), and the norms are the prepared
-    squared norms of Z. Each pair's r^2 is computed once, in the window
-    ahead of the earlier variant's block, and credited to both variants.
-    Memory is the widest such window times n.
+    l_j is the sum of bias-adjusted r^2 for same-chromosome variants within
+    ``window_bp``. Covariates leave products through the prepared
+    coefficients, and each pair is credited once to both variants. Windows
+    wider than the working-memory budget are decoded and multiplied in
+    column chunks. ``max_memory_gib`` bounds the target block, decoded
+    window, and their correlation workspaces conservatively; as elsewhere,
+    one target block and one complete window row are the minimum allocation.
+    Chunking changes neither the window definition nor the genotype values.
     """
+    if (not isinstance(block, (int, np.integer)) or isinstance(block, (bool, np.bool_))
+            or block < 1):
+        raise ValueError("block must be a positive integer")
+    if (not isinstance(max_memory_gib, (int, float, np.integer, np.floating))
+            or isinstance(max_memory_gib, (bool, np.bool_))
+            or not np.isfinite(max_memory_gib) or max_memory_gib <= 0):
+        raise ValueError("max_memory_gib must be positive and finite")
     gt = lg.gt
     n = lg.n
     chrom = np.asarray(gt.chromosome)
@@ -35,43 +41,46 @@ def ld_scores(lg, window_bp: int = 1_000_000, block: int = 512) -> np.ndarray:
     coef = lg._projection
     q = coef.shape[1]
     out = np.zeros(lg.m)
+    budget = int(max_memory_gib * 1024**3)
+    row_bytes = max(n * lg.dtype.itemsize, 1)
+    # Reserve about a quarter of the budget for the target rows. Correlation
+    # tiles below conservatively charge 64 float64 bytes per target variant.
+    work_block = max(1, min(block, budget // (4 * row_bytes)))
     for c in np.unique(chrom):
         idx = np.flatnonzero(chrom == c)
         idx = idx[np.argsort(pos[idx], kind="stable")]
         p_c = pos[idx]
         norms = lg.zz[idx] / n
-        starts = np.arange(0, idx.size, block)
-        stops = np.minimum(starts + block, idx.size)
+        starts = np.arange(0, idx.size, work_block)
+        stops = np.minimum(starts + work_block, idx.size)
         highs = np.searchsorted(p_c, p_c[stops - 1] + window_bp, side="right")
-        rows = np.empty((int(np.max(highs - starts)), n), dtype=lg.dtype)
-        held_lo = held_hi = 0  # rows holds idx[held_lo:held_hi]
+        widest = int(np.max(highs - starts)) if starts.size else 0
+        target_bytes = min(work_block, max(idx.size, 1)) * row_bytes
+        tile_rows = min(work_block, max(idx.size, 1))
+        bytes_per_window_row = row_bytes + 64 * tile_rows
+        capacity = max(1, (budget - target_bytes) // max(bytes_per_window_row, 1))
+        rows = np.empty((min(max(widest, 1), capacity), n), dtype=lg.dtype)
         for s, e, hi in zip(starts, stops, highs):
-            if s > held_lo:
-                # Move the kept rows to the front in chunks no longer than the
-                # shift: overlapping slices would make NumPy copy via a fresh
-                # temporary the size of the window.
-                shift, kept = s - held_lo, max(held_hi - s, 0)
-                for start in range(0, kept, shift):
-                    stop = min(start + shift, kept)
-                    rows[start:stop] = rows[start + shift : stop + shift]
-                held_lo, held_hi = s, max(held_hi, s)
-            if hi > held_hi:
-                lg._decode(idx[held_hi:hi], out=rows[held_hi - held_lo : hi - held_lo])
-                held_hi = hi
-            window = rows[: hi - s]
-            C = (window[: e - s] @ window.T).astype(np.float64)
-            if q:
-                C -= coef[idx[s:e]] @ coef[idx[s:hi]].T
-            C /= n
-            denom = np.sqrt(np.outer(norms[s:e], norms[s:hi]))
-            r2 = np.where(denom > 0, (C / np.where(denom > 0, denom, 1.0)) ** 2, 0.0)
-            r2_adj = r2 - (1.0 - r2) / (n - 2)
-            near = np.abs(p_c[s:e, None] - p_c[None, s:hi]) <= window_bp
-            r2_adj = np.where(near, r2_adj, 0.0)
-            # Pairs within the block appear in both variants' rows; a pair
-            # with a later variant also counts for that variant.
-            out[idx[s:e]] += r2_adj.sum(axis=1)
-            out[idx[e:hi]] += r2_adj[:, e - s :].sum(axis=0)
+            target = lg._decode(idx[s:e])
+            for a in range(s, hi, capacity):
+                b = min(a + capacity, hi)
+                window = rows[: b - a]
+                lg._decode(idx[a:b], out=window)
+                C = (target @ window.T).astype(np.float64)
+                if q:
+                    C -= coef[idx[s:e]] @ coef[idx[a:b]].T
+                C /= n
+                denom = np.sqrt(np.outer(norms[s:e], norms[a:b]))
+                r2 = np.where(denom > 0, (C / np.where(denom > 0, denom, 1.0)) ** 2, 0.0)
+                r2_adj = r2 - (1.0 - r2) / (n - 2)
+                near = np.abs(p_c[s:e, None] - p_c[None, a:b]) <= window_bp
+                r2_adj = np.where(near, r2_adj, 0.0)
+                out[idx[s:e]] += r2_adj.sum(axis=1)
+                # Pairs inside the target block already occur in both target
+                # rows. Credit only columns beyond it to the later variants.
+                later = max(a, e)
+                if b > later:
+                    out[idx[later:b]] += r2_adj[:, later - a :].sum(axis=0)
     return out
 
 

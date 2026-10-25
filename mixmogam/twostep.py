@@ -57,6 +57,7 @@ from scipy import linalg, stats
 
 from mixmogam._binary import null_logistic
 from mixmogam._cg import SpectralPreconditioner, batched_pcg
+from mixmogam._fast import HAS_NUMBA
 from mixmogam._loco import LocoGenotypes, loco_groups
 from mixmogam._slq import randomized_eigh_op
 from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _validate_n_threads
@@ -127,6 +128,10 @@ def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None
         raise ValueError("y contains NaN or infinite values")
     if y.size != gt.n_samples:
         raise ValueError("y and genotypes disagree on the sample count")
+    if not HAS_NUMBA:
+        warnings.warn("two-step methods without Numba use slow Python/NumPy fallbacks; "
+                      "install mixmogam[fast] for production HRATT/BOLT fits",
+                      RuntimeWarning, stacklevel=3)
     Xd = _design_matrix(X, y.size, add_intercept=True)
     w = _normalize_weights(sample_weights, y.size)
     clipped = 0
@@ -723,7 +728,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
          denominator: str = "constant", n_spectral="auto",
          grid=BOLT_GRID, n_folds: int = 5, min_cv_gain: float = 0.01,
          ld_window_bp: int = 1_000_000, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-         cg_tol: float = 1e-6, random_state: int = 0,
+         gram_cache_bytes: float = 1e9, cg_tol: float = 1e-6, random_state: int = 0,
          block: int = 4096) -> GwasResult:
     """BOLT-LMM: Gaussian-mixture (non-infinitesimal) association with LOCO.
 
@@ -738,6 +743,8 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     statistic is calibrated by matching LD Score regression intercepts to
     BOLT-LMM-inf. Effects and standard errors come from that infinitesimal
     fit even when the mixture supplies the p-values, as in BOLT-LMM.
+    ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
+    cache warns because the remaining matrices are rebuilt every sweep.
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     mixture statistic) multiplies each SNP's mixture statistic by the
@@ -757,7 +764,8 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
 
     # Step 2a: cross-validated choice of (f2, p)
     folds = rng.permutation(n) % n_folds
-    eng = VBEngine(st.lg, folds=folds)
+    eng = VBEngine(st.lg, folds=folds, gram_cache_bytes=gram_cache_bytes,
+                   _warn_on_partial=True)
     P = len(grid) * n_folds
     col_fold = np.tile(np.arange(n_folds), len(grid))
     prior = np.array([prior_row(*grid[c // n_folds]) for c in range(P)])
@@ -998,7 +1006,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
           cg_tol: float = 1e-6, spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
-          block: int = 4096, n_threads: int = 1) -> GwasResult:
+          block: int = 4096, n_threads: int = 1,
+          gram_cache_bytes: float = 1e9) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1067,6 +1076,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     the unit-variance scale still applies, and is reported for HE fits.
     LDAK optionally revises its HE estimate by Monte
     Carlo REML (by default for smaller samples or strong structure).
+
+    ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
+    cache warns because the remaining matrices are rebuilt every sweep.
 
     ``n_threads`` controls optional parallel genotype preparation and Numba
     coordinate sweeps across independent candidate models and LOCO fits.
@@ -1201,7 +1213,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
     if stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"])
+                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   gram_cache_bytes=gram_cache_bytes)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
                                     keep_prediction=binary, **(stage1_kwargs or {}))
         enet_mse = float(np.min(scores["mse"]))
@@ -1214,7 +1227,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         scores["stage1_name"] = pick
     elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"])
+                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   gram_cache_bytes=gram_cache_bytes)
         scores["stage1_name"] = "enet"
     else:
         scores = ldpred3_stage1_scores(st, ys, h2, folds, held, method=stage1,
@@ -1372,7 +1386,8 @@ def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
 
 def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, grid, held,
                       n_threads: int, vb_max_iter: int, vb_tol: float,
-                      keep_prediction: bool = False, folds=None, refit: bool = False) -> dict:
+                      keep_prediction: bool = False, folds=None, refit: bool = False,
+                      gram_cache_bytes: float = 1e9) -> dict:
     """(1d)-(1e) Hold-out choice of the elastic-net prior, then the LOCO fits.
 
     Returns the LOCO residuals (``resid``), the chosen grid index ``best``
@@ -1406,7 +1421,8 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
 
     cv_folds = np.ones(n, dtype=np.int64)
     cv_folds[held] = 0  # fold 0 is held out; fold 1 is never held out
-    eng = VBEngine(st.lg, folds=cv_folds, n_threads=n_threads)
+    eng = VBEngine(st.lg, folds=cv_folds, n_threads=n_threads,
+                   gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
     Pn = len(grid)
     prior = np.array([prior_row(*g_) for g_ in grid])
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
@@ -1430,7 +1446,8 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     else:
         del eng  # the cross-fit has its own folds and Gram cache
         k = int(folds.max()) + 1
-        eng = VBEngine(st.lg, folds=folds, n_threads=n_threads)
+        eng = VBEngine(st.lg, folds=folds, n_threads=n_threads,
+                       gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
         col_fold = np.repeat(np.arange(k), G) if refit else np.arange(k)
         col_group = np.tile(np.arange(G), k) if refit else np.full(k, -1)
         P = col_fold.size

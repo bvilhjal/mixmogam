@@ -14,6 +14,11 @@ from __future__ import annotations
 
 import numpy as np
 
+from mixmogam._fast import HAS_NUMBA
+
+if HAS_NUMBA:
+    from numba import njit
+
 __all__ = ["PackedCalls"]
 
 # Call of each two-bit code, and the code of each call indexed by call & 3
@@ -21,8 +26,76 @@ __all__ = ["PackedCalls"]
 CODE_CALLS = np.array([2, -1, 1, 0], dtype=np.int8)
 CALL_CODES = np.array([3, 2, 0, 1], dtype=np.uint8)
 _SHIFTS = np.array([0, 2, 4, 6], dtype=np.uint8)
+# Called count and dosage sum of each byte, for 1..4 valid samples. The
+# explicit valid-slot row ignores arbitrary bits beyond n_samples.
+_BYTE_CALLED = np.zeros((5, 256), dtype=np.int64)
+_BYTE_SUM = np.zeros((5, 256), dtype=np.int64)
+for _valid in range(1, 5):
+    for _byte in range(256):
+        for _slot in range(_valid):
+            _call = CODE_CALLS[(_byte >> (2 * _slot)) & 3]
+            if _call >= 0:
+                _BYTE_CALLED[_valid, _byte] += 1
+                _BYTE_SUM[_valid, _byte] += _call
 # Decoded or packed calls per NumPy chunk.
 _CHUNK_CALLS = 1 << 24
+
+
+def _decode_columns_compiled(data, idx, n_samples, out):
+    """Decode packed rows directly, without a four-byte-per-call scratch."""
+    for r in range(idx.size):
+        source = data[idx[r]]
+        for i in range(n_samples):
+            code = (source[i // 4] >> (2 * (i % 4))) & 3
+            out[r, i] = CODE_CALLS[code]
+
+
+def _pack_compiled(G, data, sample_major):
+    """Pack validated int8 calls, assigning each output byte once."""
+    n, m = G.shape
+    nb = data.shape[1]
+    if sample_major:
+        for b in range(nb):
+            i = 4 * b
+            for j in range(m):
+                byte = CALL_CODES[G[i, j] & 3]
+                if i + 1 < n:
+                    byte |= CALL_CODES[G[i + 1, j] & 3] << 2
+                if i + 2 < n:
+                    byte |= CALL_CODES[G[i + 2, j] & 3] << 4
+                if i + 3 < n:
+                    byte |= CALL_CODES[G[i + 3, j] & 3] << 6
+                data[j, b] = byte
+    else:
+        for j in range(m):
+            for b in range(nb):
+                i = 4 * b
+                byte = CALL_CODES[G[i, j] & 3]
+                if i + 1 < n:
+                    byte |= CALL_CODES[G[i + 1, j] & 3] << 2
+                if i + 2 < n:
+                    byte |= CALL_CODES[G[i + 2, j] & 3] << 4
+                if i + 3 < n:
+                    byte |= CALL_CODES[G[i + 3, j] & 3] << 6
+                data[j, b] = byte
+
+
+def _qc_compiled(data, idx, n_samples, called, twice_ac):
+    """Called count and summed dosage from one lookup per packed byte."""
+    valid = (n_samples - 1) % 4 + 1
+    for r in range(idx.size):
+        source = data[idx[r]]
+        for b in range(source.size - 1):
+            called[r] += _BYTE_CALLED[4, source[b]]
+            twice_ac[r] += _BYTE_SUM[4, source[b]]
+        called[r] += _BYTE_CALLED[valid, source[source.size - 1]]
+        twice_ac[r] += _BYTE_SUM[valid, source[source.size - 1]]
+
+
+if HAS_NUMBA:
+    _decode_columns_compiled = njit(cache=True)(_decode_columns_compiled)
+    _pack_compiled = njit(cache=True)(_pack_compiled)
+    _qc_compiled = njit(cache=True)(_qc_compiled)
 
 
 def _column_indices(key, m):
@@ -71,6 +144,11 @@ class PackedCalls:
         G = np.asarray(G)
         n, m = G.shape
         nb = (n + 3) // 4
+        if HAS_NUMBA and G.dtype == np.int8:
+            data = np.empty((m, nb), dtype=np.uint8)
+            sample_major = G.strides[0] > G.strides[1]
+            _pack_compiled(G, data, sample_major)
+            return cls(data, n)
         data = np.empty((m, nb), dtype=np.uint8)
         step = max(1, _CHUNK_CALLS // max(4 * nb, 1))
         for start in range(0, m, step):
@@ -94,12 +172,27 @@ class PackedCalls:
         """int8 calls (n, k) of variants ``idx``, decoded in bounded chunks."""
         n = self.shape[0]
         out = np.empty((idx.size, n), dtype=np.int8)
+        if HAS_NUMBA and idx.size and n:
+            _decode_columns_compiled(self.data, idx, n, out)
+            return out.T
         step = max(1, _CHUNK_CALLS // max(4 * self.data.shape[1], 1))
         for start in range(0, idx.size, step):
             rows = np.asarray(self.data[idx[start : start + step]])
             codes = (rows[:, :, None] >> _SHIFTS) & 3
             out[start : start + rows.shape[0]] = CODE_CALLS[codes.reshape(rows.shape[0], -1)[:, :n]]
         return out.T
+
+    def _qc_columns(self, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+        """Called-sample count and summed dosage of variants ``idx``."""
+        called = np.zeros(idx.size, dtype=np.int64)
+        twice_ac = np.zeros(idx.size, dtype=np.int64)
+        if HAS_NUMBA and idx.size and self.shape[0]:
+            _qc_compiled(self.data, idx, self.shape[0], called, twice_ac)
+        elif idx.size:
+            calls = self._decode_columns(idx)
+            called[:] = (calls != -1).sum(axis=0)
+            twice_ac[:] = calls.sum(axis=0) + self.shape[0] - called
+        return called, twice_ac
 
     def __getitem__(self, key):
         rows, cols = key if isinstance(key, tuple) else (key, slice(None))

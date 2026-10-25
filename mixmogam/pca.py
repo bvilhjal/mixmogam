@@ -20,6 +20,7 @@ def principal_components(
     random_state=0,
     block: int = 2048,
     max_memory_gib: float = 4.0,
+    solver: str = "exact",
     return_info: bool = False,
 ):
     """Leading ancestry principal components for use as covariates.
@@ -34,10 +35,13 @@ def principal_components(
     standardized to mean zero and standard deviation one (no-calls are
     mean-imputed first), and the result is the leading left singular
     vectors of that standardized thinned panel: the columns are
-    ``numpy.linalg.svd``'s U factors (unit norm), so the output matches the
-    SVD of the panel selected in ``info["variants"]``. Column signs are
-    fixed (the largest-magnitude entry of each is positive, the first such
-    entry on ties) so the values are reproducible across platforms and
+    ``numpy.linalg.svd``'s U factors (unit norm) with ``solver="exact"``,
+    so that output matches the SVD of the panel selected in
+    ``info["variants"]``. ``solver="randomized"`` instead uses the package's
+    randomized top-k eigensolver and is much cheaper when k is small; its
+    PCs are approximate and do not promise exact-SVD equality. Column signs
+    are fixed (the largest-magnitude entry of each is positive, the first
+    such entry on ties) so the values are reproducible across platforms and
     independent of allele coding. As covariates their scale is irrelevant
     (regression refits the coefficients); multiply by ``sqrt(n)`` for
     unit-variance scores.
@@ -70,6 +74,8 @@ def principal_components(
     if n_markers is not None and (isinstance(n_markers, (bool, np.bool_))
                                   or not isinstance(n_markers, (int, np.integer)) or n_markers < 1):
         raise ValueError("n_markers must be a positive integer or None")
+    if solver not in ("exact", "randomized"):
+        raise ValueError("solver must be 'exact' or 'randomized'")
     if not isinstance(block, (int, np.integer)) or isinstance(block, (bool, np.bool_)) or block < 1:
         raise ValueError("block must be a positive integer")
     if (isinstance(max_memory_gib, (bool, np.bool_))
@@ -83,15 +89,22 @@ def principal_components(
     # Panel + its LAPACK copy + U, Vt, divide-and-conquer workspace,
     # and the last decoded block, which remains live at the SVD call.
     svd_bytes = 8 * (2 * n * m + n * rank + rank * m + 4 * rank**2 + n * min(block, m))
+    ell = min(k + 12, n)
+    randomized_bytes = 8 * (n * m + 2 * (n + m) * ell + 4 * ell**2
+                            + n * min(block, m))
+    solver_bytes = svd_bytes if solver == "exact" else randomized_bytes
     # allele_freqs uses blocks of 8192 int8 calls, a mask and a masked copy.
     frequency_bytes = 3 * n * min(8192, G.n_variants) + 24 * G.n_variants
-    estimated_bytes = max(svd_bytes, frequency_bytes)
+    estimated_bytes = max(solver_bytes, frequency_bytes)
     if estimated_bytes > max_memory_gib * 1024**3:
         raise ValueError(f"PCA working-memory estimate {estimated_bytes / 1024**3:.2f} GiB "
                          f"exceeds max_memory_gib={max_memory_gib:g} for {n} samples and "
                          f"up to {m} markers; lower n_markers, use external PCs, or "
                          "explicitly increase max_memory_gib")
 
+    # Only after the guard: variant-major conversion may itself allocate a
+    # full int8 panel and must not precede the working-memory rejection.
+    G = G.variant_major()
     maf = G.allele_freqs(minor=True)
     common = np.flatnonzero(maf >= min_maf)  # NaN MAF (all-missing) never passes
     if common.size == 0:
@@ -106,6 +119,8 @@ def principal_components(
     if k > min(n, take.size):
         raise ValueError(f"k={k} exceeds the {min(n, take.size)} components available "
                          f"from {take.size} thinned variants and {n} samples")
+    if solver == "randomized" and k >= n:
+        raise ValueError("the randomized PCA solver requires k < n_samples; use solver='exact'")
 
     Z = np.empty((n, take.size), dtype=np.float64)
     at = 0
@@ -118,16 +133,25 @@ def principal_components(
         raise ValueError("the thinned panel contains monomorphic variants; filter them or raise min_maf")
     Z -= mean
     Z /= sd
-    U, s, _ = np.linalg.svd(Z, full_matrices=False)
-    pcs = U[:, :k]
+    if solver == "exact":
+        U, s, _ = np.linalg.svd(Z, full_matrices=False)
+        pcs = U[:, :k]
+        total = float(s @ s)
+        s = s[:k]
+    else:
+        from mixmogam._slq import randomized_eigh_op
+
+        values, pcs = randomized_eigh_op(lambda X: Z @ (Z.T @ X), n, k,
+                                         n_iter=8, random_state=random_state)
+        s = np.sqrt(np.maximum(values, 0.0))
+        total = float(np.einsum("ij,ij->", Z, Z))
     pivot = np.argmax(np.abs(pcs), axis=0)
     signs = np.sign(pcs[pivot, np.arange(pcs.shape[1])])
     signs[signs == 0] = 1.0
     pcs = pcs * signs
     if not return_info:
         return pcs
-    total = float(s @ s)
-    info = {"variants": take,
-            "singular_values": s[:k],
-            "explained_variance_ratio": (s[:k] ** 2) / total if total > 0 else np.zeros(k)}
+    info = {"variants": take, "solver": solver,
+            "singular_values": s,
+            "explained_variance_ratio": (s**2) / total if total > 0 else np.zeros(k)}
     return pcs, info

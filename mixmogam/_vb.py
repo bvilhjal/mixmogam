@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, ExitStack
 import math
 from typing import Optional
+import warnings
 
 import numpy as np
 
@@ -330,8 +331,11 @@ class VBEngine:
     """
 
     def __init__(self, lg, folds: Optional[np.ndarray] = None, sub_block: int = 128,
-                 gram_cache_bytes: float = 1e9, n_threads: int = 1):
+                 gram_cache_bytes: float = 1e9, n_threads: int = 1,
+                 _warn_on_partial: bool = False):
         self.n_threads = _validate_n_threads(n_threads)
+        if not np.isfinite(gram_cache_bytes) or gram_cache_bytes < 0:
+            raise ValueError("gram_cache_bytes must be finite and non-negative")
         self.lg = lg
         self.n = lg.n
         self.sub_block = int(sub_block)
@@ -341,6 +345,8 @@ class VBEngine:
         self._grams = self._coefs = None
         self._gram_folds = np.empty(0, dtype=np.int64)
         self._layout = None  # fold-sorted samples, made on first use
+        self._warn_on_partial = _warn_on_partial
+        self._cache_warned = False
 
     def _prepare_grams(self, col_fold):
         """Prepare only the row subsets used by this fit; full data is slice 0.
@@ -367,6 +373,15 @@ class VBEngine:
                 coefs.append(C)
             if grams:
                 self._grams, self._coefs = grams, coefs
+            total = sum(1 for _ in self.lg.slices(self.sub_block))
+            if (self._warn_on_partial and not self._cache_warned
+                    and self.gram_cache_bytes > 0 and len(grams) < total):
+                warnings.warn(
+                    f"VB Gram cache holds {len(grams)} of {total} sub-blocks; "
+                    "the rest are recomputed every sweep. Increase "
+                    f"gram_cache_bytes (currently {self.gram_cache_bytes / 1024**3:.2f} GiB) "
+                    "if memory permits.", RuntimeWarning, stacklevel=3)
+                self._cache_warned = True
         # Without cached Grams use only this fit's folds, including none for LOCO.
         active = self._gram_folds if self._grams is not None else needed
         gidx = np.zeros(col_fold.size, dtype=np.int64)
@@ -497,7 +512,9 @@ class VBEngine:
         if (col_fold >= self.n_folds).any():
             raise ValueError("column fold index exceeds the engine's folds")
         if self.folds is not None and (col_fold >= 0).any():
-            mask = (self.folds[:, None] != col_fold[None, :]).astype(np.float64)
+            # Boolean is sufficient for initial/final masking and avoids an
+            # (n, 90) float64 array during BOLT's cross-validation.
+            mask = self.folds[:, None] != col_fold[None, :]
             mask_folds = self.folds  # the residual updates test folds instead
         else:
             mask = mask_folds = None

@@ -342,10 +342,14 @@ def fit_two_kinships(
             or not isinstance(refine_rounds, (int, np.integer)) or refine_rounds < 0):
         raise ValueError("n_mixtures must be >= 3 and refine_rounds >= 0")
     K1, K2 = scale_k(K1), scale_k(K2)
-    # Validate the covariance models before profiling, including their PSD.
+    Xd = _design_matrix(X, y.size, True)
+    # Eigenvalues are sufficient for the PSD gate; do not build and retain
+    # two eigenvector matrices merely to discard them before the profile.
     for K in (K1, K2):
-        LMM(y, X=X, K=K).eigen()
-    Q = linalg.qr(_design_matrix(X, y.size, True), mode="economic")[0]
+        values = linalg.eigvalsh(K, check_finite=False)
+        if values[0] < -1e-7 * max(float(np.max(np.abs(values))), 1.0):
+            raise ValueError("K must be positive semidefinite")
+    Q = linalg.qr(Xd, mode="economic")[0]
     projected = []
     for K in (K1, K2):
         P = K - Q @ (Q.T @ K)
@@ -361,11 +365,15 @@ def fit_two_kinships(
     del projected, A, B, P
     lower, upper = 0.0, 1.0
     best = None
+    difference = K1 - K2
+    K_mix = np.empty_like(K2)
     for _ in range(refine_rounds + 1):
         weights = np.linspace(lower, upper, n_mixtures)
         for a in weights:
-            K_mix = a * K1 + (1.0 - a) * K2
-            lmm = LMM(y, X=X, K=K_mix)
+            np.multiply(difference, a, out=K_mix)
+            K_mix += K2
+            lmm = LMM(y, X=Xd, K=K_mix, add_intercept=False,
+                      _validated_design=True)
             try:
                 f = lmm.fit(method=method, recompute=True)
             except np.linalg.LinAlgError:
@@ -379,7 +387,8 @@ def fit_two_kinships(
         lower, upper = max(0.0, best[1] - span), min(1.0, best[1] + span)
     ll, a, fit = best
     h2_split = fit.pseudo_heritability
-    noise = LMM(y, X=X).fit(method=method)
+    noise = LMM(y, X=Xd, add_intercept=False,
+                _validated_design=True).fit(method=method)
     if noise.ll >= ll:
         ll, a, fit, h2_split = noise.ll, None, noise, 0.0
     return {

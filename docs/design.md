@@ -120,7 +120,9 @@ proximal-contamination deflation.
   requested fold matrices are prepared. They are computed in float64 and
   stored in the genotype precision; blocks are cached in order up to a
   1e9-byte budget and the rest recomputed each sweep, for the folds that
-  fit uses. When the folds partition the samples (cross-fitting, BOLT-LMM's
+  fit uses. BOLT and HRATT expose that budget as `gram_cache_bytes`, and a
+  partial cache warns rather than making the production-density cliff
+  silent. When the folds partition the samples (cross-fitting, BOLT-LMM's
   cross-validation), the all-sample Gram is the sum of the fold Grams,
   taken from fold-sorted samples. This sums in a different order, so the
   float32 Gram storage rounds differently; the p-values move by up to
@@ -375,13 +377,18 @@ per genotype from variant-major (PLINK order) int8, by comparisons that
 vectorize rather than a table gather, 0.2 ns from two-bit storage and
 1 ns from sample-major int8 arrays, a transpose. The readers produce
 variant-major calls, and selecting or aligning samples keeps that order.
+Analysis entry points make one variant-major copy of sample-major int8
+input rather than decoding through its slow stride on every pass. General
+packed indexing has a direct compiled decoder, and packed QC counts calls
+through 256-entry byte tables without a decoded temporary.
 One-pass consumers decode 16 MiB slices
 (at least 256 variants, at most 512 MiB) into reused buffers; those that
 need float64 rows (predictions, out-of-fold scores, test statistics)
 decode straight into float64 tiles. BOLT-LMM's
-in-sample LD scores stream each chromosome through a sliding position
-window, holding the widest window rather than the genotype matrix, and
-compute each pair once, crediting both variants. The
+in-sample LD scores stream each chromosome in position order and compute
+each pair once, crediting both variants. Target and window column chunks
+keep the decoded rows and correlation tiles within `max_memory_gib` rather
+than allocating the densest window without a budget. The
 stored calls (int8 or two-bit), Gram matrices, residuals and workspaces are
 separate allocations.
 PLINK input decoding and genotype validation also use bounded tiles. None of
@@ -463,7 +470,13 @@ about 7% overall inflation under strong simulated structure.
   them: O(n m q) per step instead of O(n^2 m). Forward scans default to
   float32; cofactor tests and likelihoods stay float64.
 - **Kinships**: GRM (called-only standardization), IBS, exact LOCO by
-  subtraction, windowed local/global pairs, LDAK-style weights.
+  subtraction, windowed local/global pairs, LDAK-style weights. Dense GRM
+  blocks use one float64 widening and symmetric rank-k products. Exact
+  LOCO retains the full sum and recomputes one chromosome at a time rather
+  than holding all chromosome matrices beside the returned LOCO matrices.
+  The streaming operator retains four standardized call values per variant,
+  so exhausting its float-panel cache does not restore per-product
+  standardization.
 
 ## Truncated spectrum (not a default path)
 

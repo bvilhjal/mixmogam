@@ -88,6 +88,19 @@ class Genotypes:
         self.n_samples, self.n_variants = self.G.shape
         self._metadata(sample_ids, chromosome, position, variant_ids, allele1, allele2)
 
+    @classmethod
+    def _from_validated(cls, G, **metadata):
+        """Internal rewrap of calls and metadata already checked by a parent.
+
+        Derived containers must not scan every call again or mint another set
+        of synthetic IDs. Public constructors still perform full validation.
+        """
+        self = object.__new__(cls)
+        self.G = G
+        self.n_samples, self.n_variants = G.shape
+        self._metadata(_validated=True, **metadata)
+        return self
+
     @staticmethod
     def _validate(G):
         """Validate before narrowing; also used on HDF5 input slabs."""
@@ -119,13 +132,14 @@ class Genotypes:
             return g
         return G.astype(np.int8, copy=False)
 
-    def _metadata(self, sample_ids, chromosome, position, variant_ids, allele1, allele2):
+    def _metadata(self, sample_ids, chromosome, position, variant_ids, allele1, allele2,
+                  _validated=False):
         if sample_ids is None:
             sample_ids = [f"S{i}" for i in range(self.n_samples)]
         self.sample_ids = np.asarray(sample_ids)
         if self.sample_ids.shape != (self.n_samples,):
             raise ValueError("sample_ids length mismatch")
-        if np.unique(self.sample_ids).size != self.n_samples:
+        if not _validated and np.unique(self.sample_ids).size != self.n_samples:
             raise ValueError("sample_ids must be unique; resolve duplicate IDs before alignment")
         self.chromosome = (
             np.asarray(chromosome)
@@ -149,15 +163,40 @@ class Genotypes:
             if arr is not None and arr.shape != (self.n_variants,):
                 raise ValueError(f"{name} must have one entry per variant")
 
+    def variant_major(self) -> "Genotypes":
+        """Return calls in the layout used by repeated variant-wise scans.
+
+        Packed and already variant-major containers are returned unchanged.
+        Otherwise one int8 copy replaces the slow sample-major striding of
+        every later decode. Metadata and the caller's original array are left
+        untouched; the copy is made only when an analysis requests it.
+        """
+        if self.packed or _variant_major(self.G):
+            return self
+        return self._from_validated(
+            np.asfortranarray(self.G), sample_ids=self.sample_ids,
+            chromosome=self.chromosome, position=self.position,
+            variant_ids=self.variant_ids, allele1=self.allele1, allele2=self.allele2)
+
     # ------------------------------------------------------------------
     # Summary statistics
     # ------------------------------------------------------------------
 
-    def _qc_blocks(self):
+    def _qc_counts(self):
+        """Yield (slice, called count, summed dosage) without packed decode."""
         step = max(1, min(8192, _QC_BLOCK_CELLS // max(self.n_samples, 1)))
         for i in range(0, self.n_variants, step):
             s = slice(i, min(i + step, self.n_variants))
-            yield s, self.G[:, s]
+            if self.packed:
+                idx = np.arange(i, s.stop, dtype=np.int64)
+                called, twice_ac = self.G._qc_columns(idx)
+            else:
+                g = self.G[:, s]
+                called = (g != MISSING).sum(axis=0)
+                # Each no-call contributes -1 to the sum: adding its count
+                # corrects the total without allocating a masked call copy.
+                twice_ac = g.sum(axis=0) + self.n_samples - called
+            yield s, called, twice_ac
 
     def allele_freqs(self, minor: bool = False) -> np.ndarray:
         """Counted-allele frequency (PLINK A1); ``minor=True`` returns MAF.
@@ -165,21 +204,17 @@ class Genotypes:
         Both use called chromosomes only and return NaN for all-missing.
         """
         af = np.full(self.n_variants, np.nan)
-        for s, g in self._qc_blocks():
-            tot = (g != MISSING).sum(axis=0)
-            # Each no-call contributes -1 to the sum: adding its count
-            # removes it without allocating a masked copy of the calls.
-            ac = (g.sum(axis=0) + self.n_samples - tot) / 2.0
+        for s, called, twice_ac in self._qc_counts():
             with np.errstate(invalid="ignore", divide="ignore"):
-                f = np.where(tot > 0, ac / np.maximum(tot, 1), np.nan)
+                f = np.where(called > 0, twice_ac / (2.0 * np.maximum(called, 1)), np.nan)
                 af[s] = np.minimum(f, 1 - f) if minor else f
         return af
 
     def missing_rates(self) -> np.ndarray:
         """Fraction of no-calls per variant."""
         out = np.empty(self.n_variants)
-        for s, g in self._qc_blocks():
-            out[s] = (g == MISSING).mean(axis=0)
+        for s, called, _ in self._qc_counts():
+            out[s] = 1.0 - called / self.n_samples
         return out
 
     # ------------------------------------------------------------------
@@ -195,7 +230,7 @@ class Genotypes:
         """New genotypes holding only the selected variants (indices or a
         boolean mask), with their metadata; packed calls stay packed."""
         idx = np.asarray(variant_indices)
-        return Genotypes(
+        return self._from_validated(
             self.G.take_variants(idx) if self.packed else self.G[:, idx],
             sample_ids=self.sample_ids,
             chromosome=self.chromosome[idx],
@@ -219,11 +254,9 @@ class Genotypes:
         if self.n_samples == 0:
             raise ValueError("variant filtering requires samples")
         keep = np.ones(self.n_variants, dtype=bool)
-        for s, g in self._qc_blocks():
-            tot = (g != MISSING).sum(axis=0)
-            ac = g.sum(axis=0) + self.n_samples - tot
-            mac = np.minimum(ac, 2 * tot - ac)
-            bad = (mac < min_mac) | ((1.0 - tot / g.shape[0]) > max_missing)
+        for s, called, twice_ac in self._qc_counts():
+            mac = np.minimum(twice_ac, 2 * called - twice_ac)
+            bad = (mac < min_mac) | ((1.0 - called / self.n_samples) > max_missing)
             if keep_poly:
                 bad |= mac == 0
             keep[s] = ~bad
@@ -233,6 +266,9 @@ class Genotypes:
         """New genotypes holding only the selected samples (indices or a
         boolean mask), in that order; packed calls stay packed."""
         idx = np.asarray(sample_indices)
+        sample_ids = self.sample_ids[idx]
+        if np.unique(sample_ids).size != sample_ids.size:
+            raise ValueError("sample_ids must be unique; resolve duplicate IDs before alignment")
         if self.packed:
             calls = self.G.take_samples(idx)
         else:
@@ -241,9 +277,9 @@ class Genotypes:
             k = np.arange(self.n_samples)[idx].size
             order = "F" if _variant_major(self.G) else "C"
             calls = _copy_samples(self.G, idx, np.empty((k, self.n_variants), dtype=np.int8, order=order))
-        return Genotypes(
+        return self._from_validated(
             calls,
-            sample_ids=self.sample_ids[idx],
+            sample_ids=sample_ids,
             chromosome=self.chromosome,
             position=self.position,
             variant_ids=self.variant_ids,
@@ -278,9 +314,9 @@ class Genotypes:
             order = "F" if _variant_major(self.G) else "C"
             calls = np.full((wanted.size, self.n_variants), MISSING, dtype=np.int8, order=order)
             _copy_samples(self.G, np.asarray(cols, dtype=np.int64)[found], calls, found)
-        out = Genotypes(calls, sample_ids=wanted, chromosome=self.chromosome,
-                        position=self.position, variant_ids=self.variant_ids,
-                        allele1=self.allele1, allele2=self.allele2)
+        out = self._from_validated(calls, sample_ids=wanted, chromosome=self.chromosome,
+                                   position=self.position, variant_ids=self.variant_ids,
+                                   allele1=self.allele1, allele2=self.allele2)
         return out, found
 
     # ------------------------------------------------------------------
