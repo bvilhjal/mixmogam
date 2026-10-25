@@ -74,6 +74,28 @@ memory is closer to 1.1 GiB against LDAK's 1.2 GiB.
   variants and the background's small effects barely move the median
   chi-square. A panel size changes what lambda_GC can show.
 
+## Four cores, same panel, same day
+
+A follow-up ran the same two programs on the same panel with four cores,
+in two flavours: four package workers with the native libraries pinned
+to one thread, and one worker with the native libraries at four
+threads. The official program was asked for four threads in both.
+
+| Program | 1 thread | 4 package workers | 4 BLAS threads | Best speed-up |
+|---|---:|---:|---:|---:|
+| LDAK-KVIK (steps 1+2) | 23.7 | 23.6 | 25.0 | 1.00× |
+| mixmogam HRATT-HE | 33.8 | 32.5 | 34.4 | 1.04× |
+| mixmogam BOLT-LMM-inf | 51.0 | 51.0 | 41.8 | 1.22× |
+
+The official program does not use the extra cores (its work is
+sequential passes over the genotype data), HRATT's worker pool gains
+almost nothing, and BOLT-LMM-inf gains 1.22× from threaded native
+libraries. The single-threaded gap is therefore not a threading
+artefact. The p-values are unchanged to eight or nine digits in every
+configuration; only the last digits of the Spearman correlation move
+(0.9982290688 against 0.9982290690). See
+[`20261025T182534Z-kvik-scale-workers4`](../20261025T182534Z-kvik-scale-workers4/README.md).
+
 ## What this run cannot show
 
 - One panel, one host, one executable build. The reference program was

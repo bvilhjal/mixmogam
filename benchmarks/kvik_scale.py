@@ -83,14 +83,21 @@ def run_reference(case, ldak, threads, seed):
     return rows
 
 
-def run_mixmogam(case, method, seed):
-    """One mixmogam method on the exported panel, in its own process."""
-    config = {"method": method, "seed": seed}
+def run_mixmogam(case, method, seed, mixmogam_threads=1, blas_threads=1):
+    """One mixmogam method on the exported panel, in its own process.
+
+    ``mixmogam_threads`` is the package's own worker count (HRATT has
+    one; the other methods have none), and ``blas_threads`` the limit on
+    the native math libraries. The two are kept apart so that a worker
+    pool does not nest native threads inside itself.
+    """
+    config = {"method": method, "seed": seed, "n_threads": mixmogam_threads}
     job = case / f"{method}.job.json"
     job.write_text(json.dumps(config, indent=1))
     command = [sys.executable, str(DRIVER), "--worker", str(job)]
-    measurement = measure(command, case / method, env=child_environment(1),
-                          label="measurement")
+    env = child_environment(mixmogam_threads, blas_threads=blas_threads,
+                             numba_threads=mixmogam_threads)
+    measurement = measure(command, case / method, env=env, label="measurement")
     print(f"  {method}: {measurement['wall_seconds']:.1f}s "
           f"RSS {measurement['peak_rss_bytes'] / 2**30:.2f} GiB", flush=True)
     return measurement
@@ -139,6 +146,8 @@ def worker(job_path):
     options = {"method": "hratt", "heritability_method": "he"} if job["method"] == "hratt-he" \
         else {"method": "bolt-inf"}
     options["random_state"] = job["seed"]
+    if job["method"] == "hratt-he" and job.get("n_threads", 1) > 1:
+        options["n_threads"] = job["n_threads"]
     started = time.perf_counter()
     result = gwas(y, gt, **options)
     elapsed = time.perf_counter() - started
@@ -161,7 +170,12 @@ def main():
     parser.add_argument("--worker", type=Path, help=argparse.SUPPRESS)
     parser.add_argument("--ldak", default=str(Path.home() / "bin" / "ldak63"))
     parser.add_argument("--out", type=Path)
-    parser.add_argument("--threads", type=int, default=1)
+    parser.add_argument("--threads", type=int, default=1,
+                        help="threads requested from the official program")
+    parser.add_argument("--mixmogam-threads", type=int, default=1,
+                        help="workers inside mixmogam (HRATT has one; the others have none)")
+    parser.add_argument("--blas-threads", type=int, default=1,
+                        help="limit on the native math libraries of mixmogam")
     parser.add_argument("--max-load", type=float)
     parser.add_argument("--cases", default="mixed,null")
     parser.add_argument("--n", type=int, help="override the panel's sample count (smoke test)")
@@ -187,6 +201,8 @@ def main():
     manifest = {"started_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "command": sys.argv, "panel": PANEL, "cases": CASES,
                 "methods": list(METHODS), "threads": args.threads,
+                "mixmogam_threads": args.mixmogam_threads,
+                "blas_threads": args.blas_threads,
                 "ldak": ldak, "ldak_sha256": digest(ldak), "ldak_banner": banner,
                 "plan": str(PLAN), "plan_sha256": digest(PLAN),
                 "driver_sha256": digest(DRIVER),
@@ -291,7 +307,7 @@ def main():
         for method in METHODS:
             if method == "ldak-kvik":
                 continue
-            run_mixmogam(case, method, 0)
+            run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads)
         for method in METHODS:
             if method == "ldak-kvik":
                 p = p_reference
