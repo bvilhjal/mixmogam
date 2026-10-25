@@ -1,0 +1,60 @@
+{
+  "started_utc": "2026-10-25T19:22:05Z",
+  "command": [
+    "benchmarks/scaling_ladder.py",
+    "--ldak",
+    "/Users/au507860/bin/ldak63",
+    "--panel",
+    "benchmarks/results/20261003-hapnest-kvik-n50000-m20000/rho0.8_fst0_rep01",
+    "--threads",
+    "4",
+    "--mixmogam-threads",
+    "1",
+    "--blas-threads",
+    "4",
+    "--out",
+    "benchmarks/results/20261025T192205Z-scaling-ladder-t4"
+  ],
+  "ldak": "/Users/au507860/bin/ldak63",
+  "ldak_sha256": "8e6fd8469dead25e0e4ffc3fbf4b5ed7e50c8088b444ff7c1e7734ba12b2b6ef",
+  "archived_panel": "benchmarks/results/20261003-hapnest-kvik-n50000-m20000/rho0.8_fst0_rep01",
+  "panel_spec": {
+    "n": 5000,
+    "m": 400000,
+    "nchr": 20,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20261028
+  },
+  "threads": 4,
+  "mixmogam_threads": 1,
+  "blas_threads": 4,
+  "driver_sha256": "9ef10ed562de1a83af6a8a2f43fc71087d69f0825ef71151e840c030bb6caeb2",
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "4",
+      "OMP_NUM_THREADS": "4",
+      "MKL_NUM_THREADS": "4",
+      "VECLIB_MAXIMUM_THREADS": "4",
+      "NUMBA_NUM_THREADS": "4"
+    },
+    "load_average": [
+      1.64990234375,
+      1.75146484375,
+      1.9921875
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 4,
+    "mixmogam": "2.0.0.dev7",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev8",
+    "phensim_path": "/Users/au507860/REPOS/phensim/phensim/__init__.py",
+    "phensim_git": null
+  }
+}

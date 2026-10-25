@@ -84,15 +84,15 @@ def run_reference(directory, ldak, bfile, pheno, threads, seed):
     return rows
 
 
-def run_mixmogam(directory, method, panel, phenotype, seed):
+def run_mixmogam(directory, method, panel, phenotype, seed, workers=1, blas_threads=1):
     """One mixmogam method on one panel, in its own process."""
     job = {"method": method, "seed": seed, "panel": str(panel),
-           "phenotype": str(phenotype)}
+           "phenotype": str(phenotype), "n_threads": workers}
     job_path = directory / f"{method}.job.json"
     job_path.write_text(json.dumps(job, indent=1))
     command = [sys.executable, str(DRIVER), "--worker", str(job_path)]
-    measurement = measure(command, directory / method, env=child_environment(1),
-                          label="measurement")
+    env = child_environment(workers, blas_threads=blas_threads, numba_threads=workers)
+    measurement = measure(command, directory / method, env=env, label="measurement")
     return measurement
 
 
@@ -107,6 +107,8 @@ def worker(job_path):
     options = {"method": "hratt", "heritability_method": "he"} if job["method"] == "hratt-he" \
         else {"method": "bolt-inf"}
     options["random_state"] = job["seed"]
+    if job["method"] == "hratt-he" and job.get("n_threads", 1) > 1:
+        options["n_threads"] = job["n_threads"]
     started = time.perf_counter()
     result = gwas(y, gt, **options)
     elapsed = time.perf_counter() - started
@@ -121,6 +123,12 @@ def main():
     parser.add_argument("--panel", type=Path, required=False,
                         help="the archived HAPNEST panel directory")
     parser.add_argument("--out", type=Path)
+    parser.add_argument("--threads", type=int, default=1,
+                        help="threads requested from the official program")
+    parser.add_argument("--mixmogam-threads", type=int, default=1,
+                        help="workers inside mixmogam (HRATT has one; the others have none)")
+    parser.add_argument("--blas-threads", type=int, default=1,
+                        help="limit on the native math libraries of mixmogam")
     args = parser.parse_args()
     if args.worker is not None:
         worker(args.worker)
@@ -136,6 +144,8 @@ def main():
     manifest = {"started_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "command": sys.argv, "ldak": ldak, "ldak_sha256": digest(ldak),
                 "archived_panel": str(args.panel), "panel_spec": PANEL_SPEC,
+                "threads": args.threads, "mixmogam_threads": args.mixmogam_threads,
+                "blas_threads": args.blas_threads,
                 "driver_sha256": digest(DRIVER),
                 "environment": environment_manifest()}
     save_json(out / "manifest.json", manifest)
@@ -195,7 +205,8 @@ def main():
     for cell in cells:
         directory = cell["directory"]
         print(f"cell {cell['cell']}: the reference program", flush=True)
-        reference_rows = run_reference(directory, ldak, "geno", "phenotype.txt", 1, 0)
+        reference_rows = run_reference(directory, ldak, "geno", "phenotype.txt",
+                                      args.threads, 0)
         wall = sum(row["wall_seconds"] for row in reference_rows)
         cpu = sum(row["user_seconds"] + row["system_seconds"] for row in reference_rows)
         rss = max(row["peak_rss_bytes"] for row in reference_rows)
@@ -219,7 +230,8 @@ def main():
         print(f"  ldak-kvik: {wall:.1f}s RSS {rss / 2**30:.2f} GiB {iterations}", flush=True)
         for method in ("hratt-he", "bolt-inf"):
             measurement = run_mixmogam(directory, method, directory / "geno",
-                                       directory / "phenotype.txt", 0)
+                                       directory / "phenotype.txt", 0,
+                                       args.mixmogam_threads, args.blas_threads)
             diagnostics = json.loads((directory / f"{method}.diagnostics.json").read_text())
             shutil.copy2(directory / f"{method}.diagnostics.json",
                          evidence / f"{method}.diagnostics.json")
