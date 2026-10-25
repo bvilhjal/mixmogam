@@ -128,23 +128,21 @@ variance components and model selection use the whole trait. This reduced
 effect attenuation and separation in the tested scenarios; it does not
 guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
 
-Under population confounding the two heritability estimators do not
-separate cleanly from the exact reference, and the variational engine is
-where the trouble starts. In a controlled panel where an environment
-differs between populations, `heritability_method="he"` gave a
-type-I error of 0.024 without covariates and a lambda_GC of 1.30 with
-two principal components, while the exact LOCO fit gave 1.15 and 1.13.
-Those numbers are the numbers of *failed* fits: in that cell HRATT-HE
-and HRATT-REML both reached the iteration cap without converging, and
-HRATT-HE's variance component sat at its boundary (h2 = 1). Check
-`extra["cv_converged"]` and `extra["loco_converged"]` before reading
-any statistic from a confounded analysis; the methods that fit the
-covariance without the variational sweep (the exact path and
-BOLT-LMM-inf) stayed calibrated in the same cell (lambda_GC 1.04 and
-1.09). The official LDAK-KVIK was anti-conservative there without
-covariates (lambda_GC 4.5, a type-I error of 0.351) and needed the
-ancestry covariates to come back
-([archive](../benchmarks/results/20261025T193008Z-kvik-covariates-small/README.md)).
+Under population confounding, give the model covariates that span the
+ancestry structure (with K populations, at least K - 1 principal
+components; `principal_components(..., return_info=True)` reports the
+`explained_variance_ratio` where they drop off), and check
+`extra["cv_converged"]` and `extra["loco_converged"]` before reading any
+statistic; the package warns when they are false. In a controlled panel
+of four populations whose environment differs between them, three
+components made every method converge and agree with each other and with
+the official LDAK-KVIK (lambda_GC 1.06-1.10 on the null variants). Two
+components left 58% of the environment in the trait: BOLT-LMM's mixture,
+HRATT-HE and HRATT-REML then reached the iteration cap without
+converging, HRATT-HE with its variance component at h2 = 1, and their
+statistics are those of failed fits. The exact path and BOLT-LMM-inf,
+which do not use the variational sweep, converged in every setting
+([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 
 ## Larger HRATT fits
 

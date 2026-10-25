@@ -15,6 +15,10 @@ match, and only then are its results read.
 Usage::
 
     python benchmarks/kvik_scale.py --ldak ~/bin/ldak63 --out NEW_DIRECTORY
+
+The covariate arm (``--structured --confounded --pcs 2,3``) runs a
+structured panel whose environment differs between populations without
+covariates and with each number of leading principal components.
 """
 
 from __future__ import annotations
@@ -22,6 +26,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import re
 import shutil
 import subprocess
 import sys
@@ -55,6 +60,17 @@ CASES = [
     dict(name="null", h2=0.0, n_qtl=0, n_background=0, seed=20261039),
 ]
 METHODS = ("ldak-kvik", "hratt-he", "bolt-inf")
+# The official program is run twice with covariates: with its default,
+# which adjusts only the most significant predictors for the covariates,
+# and with every predictor adjusted.
+REFERENCE_METHODS = {"ldak-kvik": "reference", "ldak-kvik-adj": "adjusted"}
+MIXMOGAM_OPTIONS = {
+    "exact": {"method": "exact"},
+    "bolt-inf": {"method": "bolt-inf"},
+    "bolt": {"method": "bolt"},
+    "hratt-he": {"method": "hratt", "heritability_method": "he"},
+    "hratt-reml": {"method": "hratt", "heritability_method": "reml"},
+}
 
 
 def export_panel(work, panel, calls, sample_ids):
@@ -71,8 +87,9 @@ def export_panel(work, panel, calls, sample_ids):
 def ancestry_pcs(panel_directory, k):
     """The leading genotype principal components, from the exported panel.
 
-    The package's own solver, with the whole panel and the exact SVD, so
-    that the covariates are the same ones an analyst would build.
+    The package's own solver with its defaults (an exact SVD of a random
+    2,000-variant thinning), so that the covariates are the ones an
+    analyst would build.
     """
     from mixmogam.io.plink import read_plink
     from mixmogam.pca import principal_components
@@ -82,24 +99,29 @@ def ancestry_pcs(panel_directory, k):
     return np.asarray(pcs), info
 
 
-def run_reference(case, ldak, threads, seed, covariates=False):
+def run_reference(case, ldak, threads, seed, covariates=False, prefix="reference"):
     """The official program's two steps, each in its own process.
 
     The steps run with the case directory as their working directory, so
     the exported panel is found at ``../panel/geno`` and the phenotype at
-    ``phenotype.txt``, exactly as in the earlier matched comparison.
+    ``phenotype.txt``, exactly as in the earlier matched comparison. The
+    prefix ``adjusted`` asks step 2 to adjust every predictor for the
+    covariates instead of only the most significant ones.
     """
     rows = []
+    label = "" if prefix == "reference" else f"{prefix}-"
     for step in (1, 2):
-        command = [ldak, f"--kvik-step{step}", "reference", "--bfile", "../panel/geno",
+        command = [ldak, f"--kvik-step{step}", prefix, "--bfile", "../panel/geno",
                    "--pheno", "phenotype.txt", "--max-threads", str(threads),
                    "--random-seed", str(seed)]
         if covariates:
             command += ["--covar", "covariates.txt"]
+        if step == 2 and prefix == "adjusted":
+            command += ["--adjust-predictors", "YES"]
         measurement = measure(command, case, env=child_environment(None),
-                              max_load=None, label=f"step{step}")
+                              max_load=None, label=f"{label}step{step}")
         rows.append(measurement)
-        print(f"  ldak step {step}: {measurement['wall_seconds']:.1f}s "
+        print(f"  ldak {prefix} step {step}: {measurement['wall_seconds']:.1f}s "
               f"RSS {measurement['peak_rss_bytes'] / 2**30:.2f} GiB", flush=True)
     return rows
 
@@ -122,6 +144,50 @@ def run_mixmogam(case, method, seed, mixmogam_threads=1, blas_threads=1):
     print(f"  {method}: {measurement['wall_seconds']:.1f}s "
           f"RSS {measurement['peak_rss_bytes'] / 2**30:.2f} GiB", flush=True)
     return measurement
+
+
+def reference_status(log_path):
+    """What the official program's step 1 says about its own fit.
+
+    Under strong structure the program can exclude every chunk from its
+    heritability regression, clamp a negative estimate to 0.01 and call
+    its test-statistic scaling factor very imprecise; those are the
+    official program's equivalent of a failed fit.
+    """
+    text = Path(log_path).read_text()
+
+    def last(pattern):
+        found = re.findall(pattern, text)
+        return found[-1] if found else None
+
+    excluded, total = last(r"In total, (\d+) chunks were excluded"), last(r"Calculating traces for Chunk 1 of (\d+)")
+    status = {"structure_inflation": last(r"maximum average inflation of test statistics is (-?[\d.]+)"),
+              "chunks_excluded": int(excluded) if excluded else 0,
+              "chunks": int(total) if total else None,
+              "heritability_initial": last(r"estimated heritability is (-?[\d.]+)"),
+              "heritability_clamped": "has been increased to" in text,
+              "heritability_final": last(r"Constructing final PRS \(heritability ([\d.]+)"),
+              "scaling_factor": last(r"scaling factor is ([\d.]+)"),
+              "scaling_imprecise": "very imprecise" in text}
+    problems = []
+    if status["heritability_clamped"]:
+        problems.append(f"h2 {status['heritability_initial']} clamped "
+                        f"({status['chunks_excluded']}/{status['chunks']} chunks excluded)")
+    if status["scaling_imprecise"]:
+        problems.append("scaling factor very imprecise")
+    status["fit_status"] = "; ".join(problems) or "ok"
+    return status
+
+
+def mixmogam_status(extra):
+    """Whether a mixmogam fit converged, from its own diagnostics."""
+    problems = []
+    if extra.get("cv_converged") is False or extra.get("loco_converged") is False:
+        problems.append(f"not converged ({extra.get('loco_iterations')} iterations)")
+    he = extra.get("he_variance")
+    if isinstance(he, dict) and he.get("status") == "boundary":
+        problems.append(f"h2 at boundary ({he.get('boundary')})")
+    return "; ".join(problems) or "ok"
 
 
 def parse_reference_aligned(path, variant_ids):
@@ -166,11 +232,13 @@ def worker(job_path):
     y = np.loadtxt(case / "phenotype.txt", usecols=2)
     X = None
     if (case / "covariates.txt").exists():
-        X = np.loadtxt(case / "covariates.txt", usecols=(2, 3))
-    options = {"method": "hratt", "heritability_method": "he"} if job["method"] == "hratt-he" \
-        else {"method": "bolt-inf"}
-    options["random_state"] = job["seed"]
-    if job["method"] == "hratt-he" and job.get("n_threads", 1) > 1:
+        with open(case / "covariates.txt") as stream:
+            width = len(stream.readline().split())
+        X = np.loadtxt(case / "covariates.txt", usecols=range(2, width), ndmin=2)
+    options = dict(MIXMOGAM_OPTIONS[job["method"]])
+    if job["method"] != "exact":
+        options["random_state"] = job["seed"]
+    if job["method"] in ("exact", "hratt-he", "hratt-reml") and job.get("n_threads", 1) > 1:
         options["n_threads"] = job["n_threads"]
     started = time.perf_counter()
     result = gwas(y, gt, X=X, **options)
@@ -204,9 +272,12 @@ def main():
     parser.add_argument("--cases", default="mixed,null")
     parser.add_argument("--n", type=int, help="override the panel's sample count (smoke test)")
     parser.add_argument("--m", type=int, help="override the panel's variant count (smoke test)")
-    parser.add_argument("--pcs", type=int, default=0,
-                        help="also analyse every case with this many ancestry principal "
-                             "components as covariates")
+    parser.add_argument("--pcs", default="",
+                        help="also analyse every case with these numbers of ancestry principal "
+                             "components as covariates (comma-separated, e.g. 2,3)")
+    parser.add_argument("--methods", default=",".join(METHODS),
+                        help="methods to run: ldak-kvik, ldak-kvik-adj (with covariates only), "
+                             + ", ".join(MIXMOGAM_OPTIONS))
     parser.add_argument("--structured", action="store_true",
                         help="use the structured panel (four populations, F_ST 0.3)")
     parser.add_argument("--confounded", action="store_true",
@@ -217,6 +288,11 @@ def main():
     if args.worker is not None:
         worker(args.worker)
         return 0
+    pc_counts = sorted({int(k) for k in args.pcs.split(",") if k.strip()} - {0})
+    methods = [m.strip() for m in args.methods.split(",") if m.strip()]
+    unknown = set(methods) - set(REFERENCE_METHODS) - set(MIXMOGAM_OPTIONS)
+    if unknown or "ldak-kvik" not in methods:
+        raise SystemExit(f"--methods must include ldak-kvik; unknown: {sorted(unknown)}")
     panel = dict(STRUCTURED) if args.structured else dict(PANEL)
     if args.n:
         panel["n"] = args.n
@@ -237,11 +313,11 @@ def main():
     power_state()
 
     manifest = {"started_utc": dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                "command": sys.argv, "panel": PANEL, "cases": CASES,
-                "methods": list(METHODS), "threads": args.threads,
+                "command": sys.argv, "panel": panel, "cases": cases,
+                "methods": methods, "threads": args.threads,
                 "mixmogam_threads": args.mixmogam_threads,
                 "blas_threads": args.blas_threads,
-                "pcs": args.pcs, "background_fraction": args.background_fraction,
+                "pcs": pc_counts, "background_fraction": args.background_fraction,
                 "ldak": ldak, "ldak_sha256": digest(ldak), "ldak_banner": banner,
                 "plan": str(PLAN), "plan_sha256": digest(PLAN),
                 "driver_sha256": digest(DRIVER),
@@ -314,89 +390,119 @@ def main():
         "files": {path.name: digest(path) for path in work.glob("geno.*")}})
     del calls
 
+    # One set of components serves every setting: the first k columns of
+    # the largest request. The environment of the confounded case is the
+    # standardized population label, so its share explained by the
+    # components says how much of the confounding they can remove.
+    pcs = pc_info = None
+    if pc_counts:
+        pcs, pc_info = ancestry_pcs(work, max(pc_counts))
+        if labels is not None:
+            environment = (labels - labels.mean()) / labels.std()
+            pc_info["environment_r2"] = {}
+            for k in pc_counts:
+                design = np.column_stack([np.ones(len(environment)), pcs[:, :k]])
+                fitted = design @ np.linalg.lstsq(design, environment, rcond=None)[0]
+                pc_info["environment_r2"][k] = float(1 - np.var(environment - fitted))
+
     rows = []
     for case_spec in cases:
         if case_spec["name"] not in args.cases.split(","):
             continue
         # Every case is analysed without covariates and, when asked for,
         # with the leading ancestry principal components.
-        settings = [(0, "nopc")] + ([(args.pcs, f"pc{args.pcs}")] if args.pcs else [])
+        settings = [(0, "nopc")] + [(k, f"pc{k}") for k in pc_counts]
         for n_pcs, setting in settings:
             case = out / f"{case_spec['name']}-{setting}"
             case.mkdir(parents=True, exist_ok=True)
             y = traits[case_spec["name"]]["y"]
             qtl = traits[case_spec["name"]]["qtl"]
+            null = traits[case_spec["name"]]["null"]
             with open(case / "phenotype.txt", "w") as stream:
                 for identifier, value in zip(sample_ids, y):
                     stream.write(f"0 {identifier} {value:.17g}\n")
             np.save(case / "qtl.npy", qtl)
+            np.save(case / "null.npy", null)
             del y
             if n_pcs:
-                pcs, pc_info = ancestry_pcs(work, n_pcs)
                 with open(case / "covariates.txt", "w") as stream:
-                    for identifier, row in zip(sample_ids, pcs):
-                        stream.write(f"0 {identifier} {row[0]:.17g} {row[1]:.17g}\n")
+                    for identifier, row in zip(sample_ids, pcs[:, :n_pcs]):
+                        stream.write(f"0 {identifier} " + " ".join(f"{v:.17g}" for v in row) + "\n")
                 save_json(case / "pcs.json",
-                          {"k": n_pcs, "explained_variance_ratio": pc_info.get(
-                              "explained_variance_ratio")})
+                          {"k": n_pcs, "explained_variance_ratio": [float(v) for v in np.asarray(
+                              pc_info.get("explained_variance_ratio"))[:n_pcs]],
+                           "environment_r2": (pc_info.get("environment_r2") or {}).get(n_pcs)})
 
-            print(f"case {case_spec['name']}-{setting}: the reference program", flush=True)
-            reference_rows = run_reference(case, ldak, args.threads, 0, covariates=bool(n_pcs))
-            p_reference, coverage = parse_reference_aligned(case / "reference.step2.assoc",
-                                                            variant_ids)
-            print(f"  the reference program reported {coverage['n_reported']} variants, "
-                  f"{coverage['n_matched']} matched", flush=True)
-            save_json(case / "reference_coverage.json", coverage)
-            np.savez_compressed(case / "ldak-kvik.npz", p=p_reference,
-                                variant_ids=variant_ids.astype(str))
-            for path in case.glob("reference.*"):
-                import gzip
-                with open(path, "rb") as source, gzip.open(str(path) + ".gz", "wb") as target:
-                    shutil.copyfileobj(source, target)
-                path.unlink()
+            # ldak-kvik-adj differs from ldak-kvik only with covariates.
+            run_here = [m for m in methods if m != "ldak-kvik-adj" or n_pcs]
+            references, statuses, p_by_method = {}, {}, {}
+            for method in [m for m in run_here if m in REFERENCE_METHODS]:
+                prefix = REFERENCE_METHODS[method]
+                print(f"case {case_spec['name']}-{setting}: {method}", flush=True)
+                references[method] = run_reference(case, ldak, args.threads, 0,
+                                                   covariates=bool(n_pcs), prefix=prefix)
+                p_reference, coverage = parse_reference_aligned(case / f"{prefix}.step2.assoc",
+                                                                variant_ids)
+                print(f"  the reference program reported {coverage['n_reported']} variants, "
+                      f"{coverage['n_matched']} matched", flush=True)
+                save_json(case / f"{method}_coverage.json", coverage)
+                status = reference_status(
+                    case / f"{'' if prefix == 'reference' else prefix + '-'}step1.log")
+                save_json(case / f"{method}.status.json", status)
+                statuses[method] = status["fit_status"]
+                p_by_method[method] = p_reference
+                np.savez_compressed(case / f"{method}.npz", p=p_reference,
+                                    variant_ids=variant_ids.astype(str))
+                for path in case.glob(f"{prefix}.*"):
+                    import gzip
+                    with open(path, "rb") as source, gzip.open(str(path) + ".gz", "wb") as target:
+                        shutil.copyfileobj(source, target)
+                    path.unlink()
 
-            for method in METHODS:
-                if method == "ldak-kvik":
-                    continue
+            for method in [m for m in run_here if m in MIXMOGAM_OPTIONS]:
                 run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads)
-            for method in METHODS:
-                if method == "ldak-kvik":
-                    p = p_reference
+                with np.load(case / f"{method}.npz") as data:
+                    p_by_method[method] = data["p"]
+                extra = json.loads((case / f"{method}.diagnostics.json").read_text())["result"]
+                statuses[method] = mixmogam_status(extra)
+            for method in run_here:
+                if method in REFERENCE_METHODS:
+                    reference_rows = references[method]
                     wall = sum(r["wall_seconds"] for r in reference_rows)
                     rss = max(r["peak_rss_bytes"] for r in reference_rows)
                     cpu = sum(r["user_seconds"] + r["system_seconds"] for r in reference_rows)
                 else:
-                    with np.load(case / f"{method}.npz") as data:
-                        p = data["p"]
                     measurement = json.loads((case / method / "measurement.json").read_text())
                     wall = measurement["wall_seconds"]
                     rss = measurement["peak_rss_bytes"]
                     cpu = measurement["user_seconds"] + measurement["system_seconds"]
-                p = np.asarray(p, dtype=float)
+                p = np.asarray(p_by_method[method], dtype=float)
+                tested_null = null & np.isfinite(p)
                 detected = int((p[qtl] < 0.05 / panel["m"]).sum()) if qtl.size else 0
                 rows.append({"case": case_spec["name"], "setting": setting,
-                             "method": method,
+                             "method": method, "fit_status": statuses[method],
                              "wall_seconds": round(wall, 2), "cpu_seconds": round(cpu, 2),
                              "peak_rss_gib": round(rss / 2**30, 3),
                              "lambda_gc": round(lambda_gc(p), 4),
-                             "fpr_05": round(float((p < 0.05).mean()), 5),
+                             "lambda_gc_null": round(lambda_gc(p[tested_null]), 4),
+                             # The type-I error is over the variants with no
+                             # effect, not over every variant.
+                             "fpr_05": round(float((p[tested_null] < 0.05).mean()), 5),
+                             "n_null": int(tested_null.sum()),
                              "n_tested": int(np.isfinite(p).sum()),
                              "n_qtl": int(qtl.size),
                              "qtl_detected_05m": detected,
                              "qtl_power_05m": round(detected / qtl.size, 3) if qtl.size else None})
-            for method in METHODS:
-                if method == "ldak-kvik":
-                    continue
-                with np.load(case / f"{method}.npz") as data:
-                    p_mixmogam = data["p"]
-                comparison = compare_pvalues(p_mixmogam, p_reference)
-                rows.append({"case": case_spec["name"], "setting": setting,
-                             "method": f"{method} vs ldak-kvik",
-                             "spearman_p": comparison.get("spearman_p"),
-                             "max_abs_log10_error": comparison.get("max_abs_log10_error"),
-                             "n_exceeding_1e-6": comparison.get("n_exceeding_1e-6"),
-                             "top100_overlap": comparison.get("top100_overlap")})
-                save_json(case / f"{method}-vs-ldak-kvik.json", comparison)
+            for reference in [m for m in run_here if m in REFERENCE_METHODS]:
+                for method in [m for m in run_here if m in MIXMOGAM_OPTIONS]:
+                    comparison = compare_pvalues(p_by_method[method], p_by_method[reference])
+                    rows.append({"case": case_spec["name"], "setting": setting,
+                                 "method": f"{method} vs {reference}",
+                                 "spearman_p": comparison.get("spearman_p"),
+                                 "max_abs_log10_error": comparison.get("max_abs_log10_error"),
+                                 "n_exceeding_1e-6": comparison.get("n_exceeding_1e-6"),
+                                 "top100_overlap": comparison.get("top100_overlap")})
+                    save_json(case / f"{method}-vs-{reference}.json", comparison)
     write_csv(out / "comparison.csv", rows)
     manifest["finished_utc"] = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     save_json(out / "manifest.json", manifest)

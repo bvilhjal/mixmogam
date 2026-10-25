@@ -97,24 +97,30 @@ programs' p-values correlate at 0.998 under the null and detect the same
 8 of 10 causal variants.
 
 **With and without ancestry covariates.** The same driver also runs a
-structured panel whose environment differs between populations, with and
-without the two leading principal components. At 10,000 variants the
-panel and the trait are the scale study's arm B replicate 1, so the
-official program's rows join that archive's table (the mixmogam rows
-reproduce it exactly). The
-[run of 25 October](results/20261025T193008Z-kvik-covariates-small/README.md)
-found the official program badly anti-conservative there without
-covariates (lambda_GC 4.5, a type-I error of 0.351 at the nominal 0.05)
-and only half-recovered with the covariates, while mixmogam's
-relationship-matrix methods stayed calibrated (lambda_GC 1.04 to 1.15)
-and its variational methods failed to converge. The
-[400,000-variant version](results/20261025T193054Z-kvik-covariates-large/README.md)
-shows the same pattern at scale, with the official program reaching
-calibration once the covariates are in (2.91 without, 0.82 with).
+structured panel of four populations whose environment differs between
+them, without covariates and with two and three principal components
+(four populations span three ancestry dimensions, so two is a
+deliberately incomplete set). At 1,000 x 10,000 the panel and trait are
+the scale study's arm B replicate 1. The
+[run of 25 October](results/20261025T201718Z-kvik-covariates-small/README.md)
+found that with three components every method converges and they agree,
+the official program included once every predictor is adjusted for the
+covariates (lambda_GC 1.06-1.10 on the null variants); its default
+adjusts only the most significant predictors and is conservative (0.66).
+Without covariates, or with two components that left 58% of the
+environment in the trait, the official program's step 1 failed by its
+own diagnostics and its statistics were inflated (4.4 and 2.4), and
+mixmogam's variational methods did not converge, while the exact path
+and BOLT-LMM-inf did. The
+[400,000-variant run](results/20261025T201847Z-kvik-covariates-large/README.md)
+agrees: with three components the official program, BOLT-LMM-inf and
+HRATT-HE all give lambda_GC 1.01 and a type-I error of 0.051.
 
 ```sh
 python benchmarks/kvik_scale.py --ldak ~/bin/ldak63 --structured \
-  --confounded --pcs 2 --out NEW_DIRECTORY
+  --confounded --cases confounded --background-fraction 0.2 --pcs 2,3 \
+  --methods ldak-kvik,ldak-kvik-adj,exact,bolt-inf,bolt,hratt-he,hratt-reml \
+  --out NEW_DIRECTORY
 ```
 
 **Review correction, 2026-10-03 (`2.0.0.dev1`).** Archives through

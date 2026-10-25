@@ -179,19 +179,16 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   such confounding.
 - Only HRATT models case-control outcomes and sampling weights; the other
   methods assume a Gaussian trait without weights.
-- Under population confounding the variational engine fails, and the
-  methods that do not use it stay calibrated. In a panel where an
-  environment differs between populations, the exact LOCO reference and
-  BOLT-LMM-inf are mildly inflated (lambda_GC 1.12 and 1.04 without
-  covariates, 1.09 and 1.09 with two principal components), while
-  BOLT-LMM's mixture, HRATT-HE and HRATT-REML all reached the
-  100-iteration cap without converging, and HRATT-HE's variance
-  component sat at its boundary (h2 = 1). The conservative and
-  anti-conservative HRATT-HE numbers (lambda_GC 1.12 without
-  covariates, 1.33 with them) are the numbers of failed fits, not of a
-  converged estimator. The official LDAK-KVIK is worse still without
-  covariates (lambda_GC 4.5, a type-I error of 0.351 at the nominal
-  0.05) and needs the covariates to come back.
+- Under population confounding, use covariates that span the ancestry
+  structure and check convergence. In a panel of four populations whose
+  environment differs between them, three principal components made
+  every method converge and agree with the official LDAK-KVIK (lambda_GC
+  1.06-1.10 on the null variants). With none, or with two that left 58%
+  of the environment in the trait, BOLT-LMM's mixture, HRATT-HE and
+  HRATT-REML did not converge, the official program's own heritability
+  step failed and its statistics were inflated (lambda_GC 4.4 and 2.4),
+  and the exact path and BOLT-LMM-inf stayed near calibration
+  ([archive](benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 - BOLT mixture p-values accompany infinitesimal-model effects and standard
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
 - HRATT's weighted and binary tests take allele frequencies from the

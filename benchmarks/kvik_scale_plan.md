@@ -72,6 +72,38 @@ peaks, as in the earlier matched comparison.
    the type-I error at 0.05 for each program, with the binomial 95%
    interval.
 
+## Amendment, 25 October 2026: the covariate arm
+
+Written after the first covariate runs (archived in commit `973023c5`)
+and before the runs that replace them. Those runs used two principal
+components on a four-population panel, counted causal variants in the
+type-I error, and did not record the official program's own warnings;
+this amendment fixes all three.
+
+* **Panel and trait.** With `--structured --confounded`, the scale
+  study's structured panel (four populations, F_ST 0.3) and a trait with
+  h2 = 0.5 whose liability is half an environment that is a linear
+  function of the population label. At 1,000 x 10,000 with
+  `--background-fraction 0.2` this is the scale study's arm B
+  replicate 1.
+* **Settings.** Every method runs without covariates and with each
+  number of leading principal components in `--pcs` (here 2 and 3). Four
+  populations span three ancestry dimensions, so three components is the
+  complete set and two is a deliberately incomplete one. The archive
+  records how much of the environment the components explain.
+* **Methods.** The official program runs twice with covariates: with its
+  default, which adjusts only the most significant predictors for the
+  covariates, and with `--adjust-predictors YES` (`ldak-kvik-adj`).
+* **Type-I error** is over the variants with no effect (neither a
+  large-effect nor a background variant). lambda_GC is reported over
+  every tested variant, as in the scale study, and over the null
+  variants alone.
+* **Fit status.** A fit counts as failed if mixmogam reports
+  `cv_converged` or `loco_converged` false, or if the official program
+  clamps its step-1 heritability estimate or calls its scaling factor
+  very imprecise. A failed fit's statistics are reported but not read as
+  the method's calibration.
+
 ## Provenance
 
 * The executable is identified by its SHA256 and its version banner.
