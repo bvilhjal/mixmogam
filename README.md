@@ -114,6 +114,12 @@ Most of the memory difference is the genotype panel, which mixmogam holds
 decoded in memory and LDAK streams from disk; with `mmap=True` or two-bit
 storage that 2.0 GiB leaves the resident set
 ([archive](benchmarks/results/20261025T153917Z-kvik-scale/README.md)).
+After the October speed branch, rerun on the same panel, seeds and threads,
+HRATT-HE takes 29 s at 2.6 GiB (22 s at 2.8 GiB under the null trait) and
+BOLT-LMM-inf 35 s at 2.1 GiB, with every statistic identical to the digits
+above: HRATT-HE is level with the reference program on the mixed trait and
+faster on the null trait, and at four BLAS threads all three are level
+([rerun](benchmarks/results/20261026T143800Z-kvik-scale/README.md)).
 
 ## Install
 

@@ -1,0 +1,105 @@
+{
+  "started_utc": "2026-10-26T14:14:59Z",
+  "command": [
+    "benchmarks/kvik_scale.py",
+    "--ldak",
+    "/Users/au507860/bin/ldak63",
+    "--structured",
+    "--n",
+    "5000",
+    "--m",
+    "400000",
+    "--confounded",
+    "--pcs",
+    "2,3",
+    "--cases",
+    "confounded",
+    "--background-fraction",
+    "0.05",
+    "--methods",
+    "ldak-kvik,ldak-kvik-adj,bolt-inf,hratt-he",
+    "--out",
+    "benchmarks/results/20261026T152400Z-kvik-covariates-large"
+  ],
+  "panel": {
+    "n": 5000,
+    "m": 400000,
+    "nchr": 8,
+    "kind": "structured",
+    "block_size": 125,
+    "n_pops": 4,
+    "fst": 0.3,
+    "seed": 20262030
+  },
+  "cases": [
+    {
+      "name": "mixed",
+      "h2": 0.5,
+      "n_qtl": 10,
+      "n_background": 20000.0,
+      "seed": 20261032
+    },
+    {
+      "name": "null",
+      "h2": 0.0,
+      "n_qtl": 0,
+      "n_background": 0,
+      "seed": 20261039
+    },
+    {
+      "name": "confounded",
+      "h2": 0.5,
+      "n_qtl": 10,
+      "confounding": 0.5,
+      "seed": 20262100
+    }
+  ],
+  "methods": [
+    "ldak-kvik",
+    "ldak-kvik-adj",
+    "bolt-inf",
+    "hratt-he"
+  ],
+  "threads": 1,
+  "mixmogam_threads": 1,
+  "blas_threads": 1,
+  "pcs": [
+    2,
+    3
+  ],
+  "background_fraction": 0.05,
+  "ldak": "/Users/au507860/bin/ldak63",
+  "ldak_sha256": "8e6fd8469dead25e0e4ffc3fbf4b5ed7e50c8088b444ff7c1e7734ba12b2b6ef",
+  "ldak_banner": "Please note that this version is not compiled with MKL, which will result in longer runtimes\n\nPlease note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings\n\n-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\nLDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More\nVersion 6 - Help pages at www.dougspeed.com\n-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --\n\nEach command requires a main argument; here is a list of main arguments\n\nClassical association testing:\n\n--linear <output> - perform standard linear regression\n--logistic <output> - perform standard logistic regression\n\n--cut-genes <folder> - cut predictors into genes (or fixed-length chunks)\n--calc-genes-reml <folder> - test the genes (or chunks) for association\n--join-genes-reml <folder> - compute final p-values\n\nMixed-model association testing:\n\n--kvik-step1 <output> - perform LDAK-KVIK Step 1 (construct LOCO PRS)\n--kvik-step2 <output> - perform LDAK-KVIK Step 2 (single-SNP testing)\n--kvik-step3 <output> - perform LDAK-KVIK Step 3 (gene-based testing)\n\nHeritability analysis using individual-level data:\n\n--calc-kins-direct <output> - construct a kinship matrix (GRM)\n--reml <output> - regress phenotype on one or more kinship matrices\n--fast-reml <output> - same as --reml, except much faster\n--calc-blups <output> - get BLUP effect size estimates (using results from --reml or --fast-reml)\n--he <output> - perform Haseman-Elston Regression (an alternative to --reml or --fast-reml)\n--pcgc <output> - perform PCGC Regression (alternative to --he for binary traits)\n--fast-he <output> - perform fast (but approximate) Haseman-Elston Regression\n--fast-pcgc <output> - perform fast (but approximate) PCGC Regression\n\n--quant-her <output> - estimate family heritability for quantitative phenotypes\n--tetra-her <output> - estimate family heritability for binary phenotypes\n\nHeritability analysis using summary statistics:\n\n--calc-tagging <output> - calculate tagging file for use with --sum-hers or --sum-cors\n--sum-hers <output> - estimate heritabilities from summary statistics\n--sum-cors <output> - estimate genetic correlations from summary statistics\n--find-gaussian <output> - estimate the parameter alpha (using results from --sum-hers)\n\nPrediction:\n\n--ridge <output> - construct a ridge regression PRS\n--bolt <output> - construct a Bolt PRS\n--bayesr <output> -  construct a BayesR PRS\n--elastic <output> -  construct an elastic net PRS\n\n--calc-cors <output> - calculate predictor-predictor correlations for use with --mega-prs\n--mega-prs <output> - construct a prediction model from summary statistics using self-computed correlations\n--giga-prs <output> - construct a prediction model from summary statistics using pre-computed correlations\n\nOther features:\n\n--thin <output> - prune predictors based on pairwise correlations\n--thin-tops <output> - prune highly-associated predictors based on pairwise correlations\n\n--filter <output> - filter samples based on relatedness\n--add-grm <output> - combine kinship matrices\n--sub-grm <output> - compute the differences between two or more kinship matrices\n\n--pca <output> - compute the principal component axes of a kinship matrix\n--calc-pca-loads <output> - calculate predictor loadings (using results from --pca)\n--decompose <output> - eigen-decompose a kinship matrix\n--adjust-grm <output> - adjust a kinship matrix for covariates\n--gxemm-iid / --gxemm-free <output> - calculate environmental kinship matrices\n\n--calc-stats <output> - calculate allele frequencies, call-rates and info scores\n--calc-scores <output> - calculate one or more polygenic risk scores\n--make-phenos <output> - simulate phenotypes\n--make-snps <output> - simulate SNP data\n--jackknife <output> - measure prediction accuracy, obtaining SD via block jackknifing\n\n--make-bed / --make-sp / --make-sped / --make-speed / --make-gen <outfile> - convert to bed / sp / sped / speed / gen format\n--condense-bed / condense-sp / condense-sped / condense-speed <outfile> - condense to bed / sp / sped / speed format\n--calc-sim-data <outfile> - calculate concordance between two datasets\n\n",
+  "plan": "/Users/au507860/REPOS/mixmogam/benchmarks/kvik_scale_plan.md",
+  "plan_sha256": "2342957667859e12b90218c8dbd5fabdec19bde3b3f6f3f6cc735a96261f2e33",
+  "driver_sha256": "4d32af3547230cccf39fab0a15f44704a884a0f258f055a9157ef2a57cde64e5",
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "load_average": [
+      3.1943359375,
+      3.57666015625,
+      3.6337890625
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 1,
+    "mixmogam": "2.0.0.dev7",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev8",
+    "phensim_path": "/Users/au507860/REPOS/phensim/phensim/__init__.py",
+    "phensim_git": null
+  },
+  "finished_utc": "2026-10-26T14:33:19Z"
+}

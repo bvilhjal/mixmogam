@@ -173,6 +173,22 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
 
 ### Benchmarks
 
+- Every LDAK-KVIK benchmark was rerun after the speed branch (26
+  October, master `6a63f215`) on the same panels, seeds, traits and
+  threads. Statistics reproduce everywhere (lambda_GC to four decimals,
+  the same detected causal variants, agreement rows moving only in the
+  eighth decimal of Spearman); on the unstructured 5,000 x 400,000 panel
+  HRATT-HE goes 34 -> 29 s (22 s under the null, now faster than the
+  reference program) and BOLT-LMM-inf 51 -> 35 s at one thread, with
+  peak RSS down about 0.4 GiB; at four BLAS threads all three programs
+  are level. Archives `20261026T143800Z-kvik-scale`,
+  `20261026T144700Z-kvik-scale-blas4`,
+  `20261026T145400Z-kvik-covariates-small`,
+  `20261026T150200Z-kvik-covariates-large`,
+  `20261026T152200Z-kvik-covariates-small` and
+  `20261026T152400Z-kvik-covariates-large`, each with its before/after
+  table and the reference program's own day-to-day drift recorded as the
+  noise floor for cross-day ratios.
 - `benchmarks/DESIGN.md` maps the measured-evidence suite: the four
   layers (invariants, resources, evidence, external comparison), what
   each layer can support, the gaps the 19 and 25 October efficiency

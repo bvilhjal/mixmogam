@@ -96,6 +96,26 @@ and faster than BOLT-LMM-inf (51 s), with a third of the memory; the two
 programs' p-values correlate at 0.998 under the null and detect the same
 8 of 10 causal variants.
 
+**Reruns after the speed branch (26 October 2026).** Every LDAK-KVIK
+benchmark above was rerun on master `6a63f215` (the nine-change speed
+branch of 26 October, reviewed in
+[`20261026-hratt-speed-review`](results/20261026-hratt-speed-review/README.md))
+with the same panels, seeds, traits and thread settings. Statistics
+reproduce everywhere -- lambda_GC to four decimals, the same detected
+causal variants, agreement rows moving only in the eighth decimal of
+Spearman. Resources: on the unstructured 5,000 x 400,000 panel HRATT-HE
+goes 34 -> 29 s (22 s under the null, now faster than the reference
+program) and BOLT-LMM-inf 51 -> 35 s at one thread, with peak RSS down
+about 0.4 GiB from the packed-triangle Gram cache; at four BLAS threads
+all three programs are level
+([1 thread](results/20261026T143800Z-kvik-scale/README.md),
+[4 threads](results/20261026T144700Z-kvik-scale-blas4/README.md)).
+The covariates pair reruns under the same statement
+([small](results/20261026T152200Z-kvik-covariates-small/README.md),
+[genome scale](results/20261026T152400Z-kvik-covariates-large/README.md)),
+including the reference program's own slowness drift as the honest noise
+floor for cross-day ratios.
+
 **With and without ancestry covariates.** The same driver also runs a
 structured panel of four populations whose environment differs between
 them, without covariates and with two and three principal components

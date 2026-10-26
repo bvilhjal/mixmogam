@@ -1,0 +1,133 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 6 pairs of arguments:
+--kvik-step1 adjusted
+--bfile ../panel/geno
+--pheno phenotype.txt
+--max-threads 1
+--random-seed 0
+--covar covariates.txt
+
+Note that "--kvik-step1 adjusted" is equivalent to using "--elastic adjusted.step1" with "--LOCO YES"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Constructing LOCO elastic net PRS
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+LDAK will only save selected files (to save all files, use "--verbose YES")
+
+The random number generator seed is set to 0
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 1000 samples from ../panel/geno.fam
+
+Checking responses for 1000 samples from phenotype.txt
+
+Reading details for 10000 predictors from ../panel/geno.bim
+Warning, Predictor sim_1_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_2_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_3_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_4_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_5_0 has a non-positive basepair (0) and will be ignored
+In total, 8 predictors have non-positive basepairs
+
+Data contain 1000 samples and 10000 predictors (will be using 1000 and 9992)
+
+Reading phenotypes for 1000 samples from phenotype.txt
+
+Reading 2 covariates for 1000 samples from covariates.txt
+
+When performing cross-validation, will use 900 training samples and 100 test samples
+
+Warning, the number of comparison predictors has been reduced to 9992 (the total number of predictors)
+
+Testing for structure using 512 pedigree predictors
+
+Will decide there is high structure if the estimated maximum average inflation is above 0.1000, and the corresponding p-value is below 1.0000e-03 (change these values using "--MAI-threshold" and "--MAI-significance")
+
+Average cross-chromosome squared correlation is 1.8671e-02 (chi-squared test statistic 17882436.4867; p-value 0.0000e+00); estimated maximum average inflation of test statistics is 17.6700
+
+This is relatively high structure, so will estimate the test statistic scaling factor (instead of setting it to one)
+
+Estimating per-predictor heritabilities using Randomized Haseman-Elston Regression with 10 random vectors
+
+Will divide the predictors into 20 partitions (change this using "--num-divides")
+Will exclude chunks containing a predictor with estimated variance explained greater than 0.1000 (change this using "--max-cor")
+
+Calculating traces for Chunk 1 of 40
+
+Best power is -1.0000 and estimated heritability is 0.2338 (SD 0.0138)
+
+Time check: have so far spent 0.00 hours
+
+Constructing 10 PRS using training samples
+Will also make 33 MCMC REML models (using all samples)
+
+Scan 1: estimating training effect sizes for Chunk 1 of 40
+Average number of iterations per chunk: 2.88
+
+Scan 2: estimating training effect sizes for Chunk 1 of 40
+Average number of iterations per chunk: 2.02
+
+Scan 3: estimating training effect sizes for Chunk 1 of 40
+Average number of iterations per chunk: 2.02
+
+The revised estimate of heritability is 0.0100
+
+Measuring accuracy of each model
+Model 1: heritability 0.0100, p 0.0000, f2 1.0000, mean squared error 0.9600
+Model 2: heritability 0.0100, p 0.5000, f2 0.5000, mean squared error 0.9485
+Model 3: heritability 0.0100, p 0.5000, f2 0.3000, mean squared error 0.9303
+Model 4: heritability 0.0100, p 0.5000, f2 0.1000, mean squared error 0.9066
+Model 5: heritability 0.0100, p 0.1000, f2 0.5000, mean squared error 0.8683
+Model 6: heritability 0.0100, p 0.1000, f2 0.3000, mean squared error 0.8623
+Model 7: heritability 0.0100, p 0.1000, f2 0.1000, mean squared error 0.8578
+Model 8: heritability 0.0100, p 0.0100, f2 0.5000, mean squared error 0.8356
+Model 9: heritability 0.0100, p 0.0100, f2 0.3000, mean squared error 0.8345
+Model 10: heritability 0.0100, p 0.0100, f2 0.1000, mean squared error 0.8370
+
+Time check: have so far spent 0.00 hours
+
+Constructing final PRS (heritability 0.0100, p 0.0100, f2 0.3000) using all samples
+Will also make 16 LOCO PRS, and 20 calibration models
+
+Scan 1: estimating final effect sizes for Chunk 1 of 40
+Average number of iterations per chunk: 1.98
+
+Scan 2: estimating final effect sizes for Chunk 1 of 39
+Average number of iterations per chunk: 1.54
+
+Scan 3: estimating final effect sizes for Chunk 1 of 21
+Average number of iterations per chunk: 1.00
+
+The ridge regression test statistic scaling factor is 1.0865 (SE 0.0217)
+
+Comparing test statistics for 9992 predictors
+Computing test statistics for Chunk 1 of 40
+
+The revised test statistic scaling factor is 0.8771 (SE 0.0193)
+The effect size calibration is 1.0373 (SE 0.0000)
+
+Best-fitting model saved in adjusted.step1.effects
+
+LOCO results saved in adjusted.step1.loco.prs and adjusted.step1.loco.details
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Mon Oct 26 15:12:18 2026 and ended at Mon Oct 26 15:12:19 2026
+The elapsed time was 0.00 hours
+Given the command used one thread, this means the CPU time was also 0.00 hours
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+

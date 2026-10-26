@@ -1,0 +1,100 @@
+Please note that this version is not compiled with MKL, which will result in longer runtimes
+
+Please note that this version is not compiled with QSOPT, so is unable to calculate LDAK weightings
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+LDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinships and Loads More
+Version 6 - Help pages at www.dougspeed.com
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+There are 5 pairs of arguments:
+--kvik-step2 reference
+--bfile ../panel/geno
+--pheno phenotype.txt
+--max-threads 4
+--random-seed 0
+
+Note that "--kvik-step2 reference" is equivalent to using either "--linear reference.step2" or "--logistic reference.step2" with "--PRS reference.step1"
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Performing linear regression including LOCO PRS as an offset for one phenotype
+
+Will compute standard test statistics; use "--spa-test YES" to switch to a saddlepoint approximation, 
+
+To perform quality control of predictors use "--min-maf", "--max-maf", "--min-var" and/or "--min-obs"
+
+The random number generator seed is set to 0
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+Reading IDs for 5000 samples from ../panel/geno.fam
+
+Checking responses for 5000 samples from phenotype.txt
+
+Reading details for 400000 predictors from ../panel/geno.bim
+Warning, Predictor sim_1_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_2_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_3_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_4_0 has a non-positive basepair (0) and will be ignored
+Warning, Predictor sim_5_0 has a non-positive basepair (0) and will be ignored
+In total, 20 predictors have non-positive basepairs
+
+Data contain 5000 samples and 400000 predictors (will be using 5000 and 399980)
+
+Reading phenotypes for 5000 samples from phenotype.txt
+
+Reading LOCO PRS for 5000 samples from reference.step1.loco.prs
+Performing linear regression for Chunk 1 of 400 (Chromosome 1)
+Performing linear regression for Chunk 11 of 400 (Chromosome 1)
+Performing linear regression for Chunk 21 of 400 (Chromosome 2)
+Performing linear regression for Chunk 31 of 400 (Chromosome 2)
+Performing linear regression for Chunk 41 of 400 (Chromosome 3)
+Performing linear regression for Chunk 51 of 400 (Chromosome 3)
+Performing linear regression for Chunk 61 of 400 (Chromosome 4)
+Performing linear regression for Chunk 71 of 400 (Chromosome 4)
+Performing linear regression for Chunk 81 of 400 (Chromosome 5)
+Performing linear regression for Chunk 91 of 400 (Chromosome 5)
+Performing linear regression for Chunk 101 of 400 (Chromosome 6)
+Performing linear regression for Chunk 111 of 400 (Chromosome 6)
+Performing linear regression for Chunk 121 of 400 (Chromosome 7)
+Performing linear regression for Chunk 131 of 400 (Chromosome 7)
+Performing linear regression for Chunk 141 of 400 (Chromosome 8)
+Performing linear regression for Chunk 151 of 400 (Chromosome 8)
+Performing linear regression for Chunk 161 of 400 (Chromosome 9)
+Performing linear regression for Chunk 171 of 400 (Chromosome 9)
+Performing linear regression for Chunk 181 of 400 (Chromosome 10)
+Performing linear regression for Chunk 191 of 400 (Chromosome 10)
+Performing linear regression for Chunk 201 of 400 (Chromosome 11)
+Performing linear regression for Chunk 211 of 400 (Chromosome 11)
+Performing linear regression for Chunk 221 of 400 (Chromosome 12)
+Performing linear regression for Chunk 231 of 400 (Chromosome 12)
+Performing linear regression for Chunk 241 of 400 (Chromosome 13)
+Performing linear regression for Chunk 251 of 400 (Chromosome 13)
+Performing linear regression for Chunk 261 of 400 (Chromosome 14)
+Performing linear regression for Chunk 271 of 400 (Chromosome 14)
+Performing linear regression for Chunk 281 of 400 (Chromosome 15)
+Performing linear regression for Chunk 291 of 400 (Chromosome 15)
+Performing linear regression for Chunk 301 of 400 (Chromosome 16)
+Performing linear regression for Chunk 311 of 400 (Chromosome 16)
+Performing linear regression for Chunk 321 of 400 (Chromosome 17)
+Performing linear regression for Chunk 331 of 400 (Chromosome 17)
+Performing linear regression for Chunk 341 of 400 (Chromosome 18)
+Performing linear regression for Chunk 351 of 400 (Chromosome 18)
+Performing linear regression for Chunk 361 of 400 (Chromosome 19)
+Performing linear regression for Chunk 371 of 400 (Chromosome 19)
+Performing linear regression for Chunk 381 of 400 (Chromosome 20)
+Performing linear regression for Chunk 391 of 400 (Chromosome 20)
+
+Main results saved in reference.step2.assoc, with a summary version in reference.step2.summaries and p-values in reference.step2.pvalues
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
+This command started at Mon Oct 26 14:49:21 2026 and ended at Mon Oct 26 14:49:27 2026
+The elapsed time was 0.00 hours
+Given the command used 4 threads, this means the CPU time was 0.01 hours
+
+Mission completed. All your basepair are belong to us :)
+
+-- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- -- --
+
