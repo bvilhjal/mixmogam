@@ -1035,7 +1035,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           grid=HRATT_GRID, cv_fraction: float = 0.1, loco_folds: int = 5,
           n_calibration: int = 30, denominator: str = "constant", n_spectral="auto",
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-          cg_tol: float = 1e-6, slq_tol: float = 1e-6,
+          cv_tol: Optional[float] = None, cg_tol: float = 1e-6, slq_tol: float = 1e-6,
           spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
@@ -1111,6 +1111,19 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     Each REML fit's Lanczos run stops once h2 has converged to ``slq_tol``
     (at least 8 and at most 24 passes over the genotypes; ``slq_tol=0``
     runs all 24; :meth:`mixmogam.lmm.LMM.fit`).
+
+    ``vb_tol`` stops each variational fit (at most ``vb_max_iter`` sweeps).
+    ``cv_tol`` (default None: ``vb_tol``) replaces it for the hold-out grid
+    fit of (1d) alone, and ``extra["cv_converged"]`` then refers to it.
+    ``cv_tol=1e-4`` roughly halves that fit's sweeps but changes the
+    estimator: on 5,000 x 40,000 panels it changed the chosen grid model in
+    4 of 32 runs, each time away from the converged choice (near ties;
+    log10 p moved by up to 1.45 and at most one call at 0.05/m changed),
+    and where the hold-out fit does not converge at ``vb_tol`` (strong
+    structure without principal components) it changed 37-48 calls at
+    0.05/m in 2 of 3 runs; on 20,000 x 10,000 panels it changed no choice
+    in 32 runs. With ``stage1="auto"`` this fit also gives the hold-out
+    error compared with LDpred3's.
 
     ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
     cache warns because the remaining matrices are rebuilt every sweep.
@@ -1259,7 +1272,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=struct["strong"],
-                                   gram_cache_bytes=gram_cache_bytes)
+                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
                                     keep_prediction=binary, **(stage1_kwargs or {}))
         enet_mse = float(np.min(scores["mse"]))
@@ -1273,7 +1286,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=struct["strong"],
-                                   gram_cache_bytes=gram_cache_bytes)
+                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         scores["stage1_name"] = "enet"
     else:
         scores = ldpred3_stage1_scores(st, ys, h2, folds, held, method=stage1,
@@ -1433,14 +1446,15 @@ def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
 def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, grid, held,
                       n_threads: int, vb_max_iter: int, vb_tol: float,
                       keep_prediction: bool = False, folds=None, refit: bool = False,
-                      gram_cache_bytes: float = 1e9) -> dict:
+                      gram_cache_bytes: float = 1e9, cv_tol: Optional[float] = None) -> dict:
     """(1d)-(1e) Hold-out choice of the elastic-net prior, then the LOCO fits.
 
     Returns the LOCO residuals (``resid``), the chosen grid index ``best``
     with the held-out ``mse``, and convergence records; with
-    ``keep_prediction`` also the LOCO predictions. The cross-validation
-    effects are released before the LOCO fit, and the LOCO effects and the
-    engine's Gram cache before returning. Cross-fitted scores prepare both
+    ``keep_prediction`` also the LOCO predictions. The hold-out fit stops
+    at ``cv_tol`` (None: ``vb_tol``), the LOCO fits at ``vb_tol``. The
+    cross-validation effects are released before the LOCO fit, and the LOCO
+    effects and the engine's Gram cache before returning. Cross-fitted scores prepare both
     fits' Gram caches in one pass before the hold-out fit, within one
     ``gram_cache_bytes`` (:func:`mixmogam._vb._prepare_crossfit_grams`);
     the hold-out fit's cache is released before the cross-fit.
@@ -1482,7 +1496,8 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     prior = np.array([prior_row(*g_) for g_ in grid])
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
                  np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
-                 max_iter=vb_max_iter, tol=vb_tol, _compute_prediction=False)
+                 max_iter=vb_max_iter, tol=vb_tol if cv_tol is None else cv_tol,
+                 _compute_prediction=False)
     # Only the held-out fitted values are needed: decode just those samples.
     mse = np.mean((ys[held, None] - eng.predict(cv["beta"], rows=held)) ** 2, axis=0)
     best = int(np.argmin(mse))

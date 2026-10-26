@@ -18,6 +18,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `ld_scores(..., max_memory_gib=...)` bounds dense LD-window workspaces.
 - `Genotypes.variant_major()` makes the one-time layout conversion used by
   analysis entry points for sample-major NumPy arrays.
+- HRATT's `cv_tol` stops the hold-out fit of the elastic-net grid at its
+  own tolerance, and `extra["cv_converged"]` follows it. The default
+  (None: `vb_tol`) changes nothing (bit-identical p-values in all 16
+  checked configurations). `cv_tol=1e-4` is a speed option that changes the
+  estimator: about half the hold-out sweeps, and whole one-thread runs
+  1.18-1.23x faster on 5,000 x 40,000, 1.04-1.10x on 20,000 x 10,000 and
+  1.45x on the strong-structure refit panel. On 5,000 x 40,000 it changed
+  the chosen grid model in 4 of 32 runs, each time away from the converged
+  choice (log10 p moved by up to 1.45, at most one call at 0.05/m), and 37-48
+  calls in 2 of 3 strong-structure runs whose hold-out fit had not
+  converged; on 20,000 x 10,000 it changed no choice in 32 runs.
 
 ### Changed
 
