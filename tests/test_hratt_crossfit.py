@@ -7,6 +7,8 @@ outcomes do not get offsets that nearly separate the cases. Whole-trait
 variance estimation and model selection still see every phenotype.
 """
 
+import sys
+
 import numpy as np
 import pytest
 
@@ -64,28 +66,42 @@ def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binar
     h2j = np.full(m, 0.0 if mode == "zero_h2" else 0.5 / m)
     kwargs = dict(keep_prediction=binary, folds=folds, refit=mode == "refit")
     args = (st, ys, h2j, 0.5, [(0.1, 0.3), (0.5, 0.5)], held, 1, 200, 1e-9)
-    predictions = []
+    passes = []
     predict, fit = VBEngine.predict, VBEngine.fit
 
-    def counted(self, beta):
-        predictions.append(beta.shape[1])
-        return predict(self, beta)
+    def counted(self, beta, rows=None):
+        passes.append("all" if rows is None else "held")
+        return predict(self, beta, rows=rows)
 
     monkeypatch.setattr(VBEngine, "predict", counted)
     actual = twostep._hratt_fit_scores(*args, **kwargs)
-    assert len(predictions) == (2 if mode in ("refit", "in_sample") else 1)
-    predictions.clear()
+    # The hold-out error decodes only the held-out samples; full predictions
+    # remain where their values are used (in-sample and refitted scores).
+    assert passes == ["held"] + (["all"] if mode in ("refit", "in_sample") else [])
+    passes.clear()
 
     def full_fit(self, *args, **kwargs):
-        # The original path always materialized the full prediction/residual.
+        # The original path always materialized the full prediction/residual
         return fit(self, *args, **{**kwargs, "_compute_prediction": True})
 
+    def full_predict(self, beta, rows=None):
+        # and took the held-out rows of the full prediction.
+        passes.append("all")
+        full = predict(self, beta)
+        return full if rows is None else full[rows]
+
     monkeypatch.setattr(VBEngine, "fit", full_fit)
+    monkeypatch.setattr(VBEngine, "predict", full_predict)
     expected = twostep._hratt_fit_scores(*args, **kwargs)
-    assert len(predictions) == (1 if mode == "zero_h2" else 2)
+    assert len(passes) == (2 if mode == "zero_h2" else 3)
     assert actual.keys() == expected.keys()
     for key in actual:
-        np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+        if key == "mse" and sys.platform != "darwin":
+            # Accelerate rounds each GEMM row apart from the others; other
+            # BLAS builds may round a row by its place in the product.
+            np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12, err_msg=key)
+        else:
+            np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
 
 
 def test_folds_are_balanced_within_strata_and_ignore_the_labels():

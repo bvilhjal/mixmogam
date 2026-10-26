@@ -642,20 +642,55 @@ class VBEngine:
             out.update(resid=R, prediction=prediction)
         return out
 
-    def predict(self, beta: np.ndarray) -> np.ndarray:
-        """Fitted values Z' beta = z' beta - Q (c' beta), (n, P) per column."""
-        out = np.zeros((self.n, beta.shape[1]))
+    def predict(self, beta: np.ndarray, rows: Optional[np.ndarray] = None) -> np.ndarray:
+        """Fitted values Z' beta = z' beta - Q (c' beta), (n, P) per column.
+
+        With ``rows`` (sample indices), only those samples' values,
+        (rows.size, P) in that order, from their calls alone
+        (:meth:`LocoGenotypes.gathered_tiles`): the values of
+        ``predict(beta)[rows]`` when the BLAS rounds each GEMM row apart from
+        the others, as Accelerate does. NumPy sends one-row and one-column
+        products through GEMV, which rounds otherwise, so one row or one
+        column takes the full prediction, and a sample alone in the full
+        prediction's last tile is multiplied alone here too.
+        """
+        if rows is not None:
+            rows = np.asarray(rows)
+            if rows.ndim != 1 or (rows.size and (rows.dtype.kind not in "iu" or rows.min() < 0
+                                                 or rows.max() >= self.n)):
+                raise IndexError("rows must be a one-dimensional array of sample indices")
+            rows = rows.astype(np.int64, copy=False)
+            if rows.size == 1 or beta.shape[1] == 1:
+                return self.predict(beta)[rows]
+            # Gathered in sample order, which reads the calls in order;
+            # the requested order is restored at the end.
+            order = np.argsort(rows, kind="stable")
+            rows = rows[order]
+            last = np.flatnonzero(rows == self.n - 1)
+        out = np.zeros((self.n if rows is None else rows.size, beta.shape[1]))
         cb = np.zeros((self.lg.Q.shape[1], beta.shape[1]))
         buffer = np.empty(2 * 1024**2)
         for idx, _ in self.lg.slices():
             # Tile samples, keeping the complete variant reduction in each
             # product. Rows are decoded straight to float64, in reused tiles
             # of at most 16 MiB (or one row).
-            rows = max(1, (16 * 1024**2) // (8 * idx.size))
+            samples = max(1, (16 * 1024**2) // (8 * idx.size))
             bb = beta[idx]
-            for start, stop, z in self.lg.wide_tiles(idx, rows, buffer):
-                out[start:stop] += z.T @ bb
+            if rows is None:
+                for start, stop, z in self.lg.wide_tiles(idx, samples, buffer):
+                    out[start:stop] += z.T @ bb
+            else:
+                lone = self.n % samples == 1  # the full prediction's last tile is one sample
+                for start, stop, z in self.lg.gathered_tiles(idx, rows, samples, buffer):
+                    part = z.T @ bb
+                    if lone:
+                        for p in last[(last >= start) & (last < stop)] - start:
+                            part[p] = np.ascontiguousarray(z[:, p]) @ bb
+                    out[start:stop] += part
             cb += self.lg._projection[idx].T @ bb
         if cb.shape[0]:
-            out -= self.lg.Q @ cb
+            # Formed for every sample either way: Q's rows alone could round apart.
+            out -= self.lg.Q @ cb if rows is None else (self.lg.Q @ cb)[rows]
+        if rows is not None:
+            out[order] = out.copy()
         return out

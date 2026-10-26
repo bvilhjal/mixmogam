@@ -309,6 +309,32 @@ class LocoGenotypes:
             z = buffer[: idx.size * (stop - start)].reshape(idx.size, stop - start)
             yield start, stop, self._decode(idx, out=z, start=start, stop=stop)
 
+    def gathered_tiles(self, idx: np.ndarray, rows: np.ndarray, samples: int,
+                       buffer: Optional[np.ndarray] = None):
+        """:meth:`wide_tiles` for the samples ``rows`` (int64 sample indices,
+        in that order): yield ``(start, stop, z)``, the float64 rows (k,
+        stop - start) of variants ``idx`` for samples rows[start:stop],
+        gathered from those samples' calls alone. Each value is the one
+        :meth:`wide_tiles` gives the same sample. Tiles hold at most
+        ``samples`` samples and differ in size by at most one, so with
+        ``samples`` >= 4 a tile has one sample only if ``rows`` has (NumPy
+        sends one-row products through GEMV, which rounds apart from GEMM)."""
+        from mixmogam._standardize import gather_table
+
+        self._check_source()
+        tiles = max(1, -(-rows.size // max(1, int(samples))))
+        bounds = (rows.size * np.arange(tiles + 1) // tiles).tolist()
+        width = -(-rows.size // tiles)
+        if buffer is None or buffer.size < idx.size * width:
+            buffer = np.empty(idx.size * width)
+        lut = self._lut[idx]
+        for start, stop in zip(bounds[:-1], bounds[1:]):
+            take = rows[start:stop]
+            z = buffer[: idx.size * (stop - start)].reshape(idx.size, stop - start)
+            scale = None if self.row_scale is None else self._scale_store[take]
+            yield start, stop, gather_table(self.gt.G, idx, lut, take, z, scale,
+                                            compiled=self._compiled)
+
     def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray) -> np.ndarray:
         """out = z - c Q' for the rows of ``idx``: float64 arithmetic, one
         storage rounding (``out`` may be ``z``).

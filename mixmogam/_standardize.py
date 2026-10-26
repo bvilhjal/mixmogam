@@ -314,6 +314,45 @@ def _decode_packed_span_parallel(data, idx, lut, out, start):
                             np.empty(4, dtype=out.dtype), start)
 
 
+def _gather_variants(G, idx, lut, rows, scale, out):
+    """Variant-major storage: samples ``rows`` (in that order) of each
+    variant's contiguous calls into the columns of ``out``. A non-empty
+    ``scale`` (one value per requested sample) multiplies each value in
+    the lookup table's precision."""
+    scaled = scale.size > 0
+    for r in range(idx.size):
+        j = idx[r]
+        l0, l1, l2, missing = lut[r, 0], lut[r, 1], lut[r, 2], lut[r, 3]
+        for h in range(rows.size):
+            value = _select_call(G[rows[h], j], l0, l1, l2, missing)
+            out[r, h] = value * scale[h] if scaled else value
+
+
+def _gather_samples(G, idx, lut, rows, scale, out):
+    """Sample-major storage: each requested sample's calls are read along
+    its own row."""
+    scaled = scale.size > 0
+    for h in range(rows.size):
+        i = rows[h]
+        for r in range(idx.size):
+            value = lut[r, G[i, idx[r]] & 3]
+            out[r, h] = value * scale[h] if scaled else value
+
+
+def _gather_packed(data, idx, lut, rows, scale, out):
+    """Two-bit codes (variant-major rows): each requested sample's code is
+    read from its byte."""
+    scaled = scale.size > 0
+    code_lut = np.empty(4, dtype=lut.dtype)
+    for r in range(idx.size):
+        code_lut[0], code_lut[1], code_lut[2], code_lut[3] = lut[r, 2], lut[r, 3], lut[r, 1], lut[r, 0]
+        row = data[idx[r]]
+        for h in range(rows.size):
+            i = rows[h]
+            value = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
+            out[r, h] = value * scale[h] if scaled else value
+
+
 def _project_rows(z, coefficients, Qt, out):
     """out = z - c Q' row by row, the q-term correction summed in a fixed
     order (c_0 Q_0, then + c_k Q_k) along the samples, so a row's values do
@@ -355,6 +394,9 @@ if HAS_NUMBA:
     _decode_tile = njit(cache=True)(_decode_tile)
     _decode_samples = njit(cache=True)(_decode_samples)
     _decode_samples_parallel = njit(parallel=True, cache=True)(_decode_samples_parallel)
+    _gather_variants = njit(cache=True)(_gather_variants)
+    _gather_samples = njit(cache=True)(_gather_samples)
+    _gather_packed = njit(cache=True)(_gather_packed)
 
 
 def prepare_moments(G, idx, Q, n_threads=1, sq_weights=None):
@@ -434,4 +476,46 @@ def decode_table(G, idx, lut, out, n_threads=1, compiled=True, start=0):
             kernel(G, idx, lut, out, start)
     else:
         (_decode_samples if sample_major else _decode_variants)(G, idx, lut, out, start)
+    return out
+
+
+def gather_table(G, idx, lut, rows, out, scale=None, compiled=True):
+    """:func:`decode_table` for the samples ``rows`` (int64, any order):
+    column h of ``out`` receives the value decode_table gives sample
+    rows[h] of each variant ``idx``.
+
+    A ``scale`` (one value per requested sample) multiplies each value in
+    the storage precision before ``out`` receives it, as LocoGenotypes
+    scales decoded rows. The compiled kernels read only the requested
+    samples' calls, serially: a gather of a tenth of the samples costs
+    less than a parallel decode of all of them. Without Numba (or with
+    ``compiled=False``) NumPy gathers the calls of bounded variant chunks.
+    """
+    if scale is not None:
+        scale = np.ascontiguousarray(scale, dtype=lut.dtype)
+    if not (HAS_NUMBA and compiled):
+        low, high = (int(rows.min()), int(rows.max()) + 1) if rows.size else (0, 0)
+        step = max(1, _NUMPY_DECODE_CELLS // max(high - low, rows.size, 1))
+        array = isinstance(G, np.ndarray)
+        for first in range(0, idx.size, step):
+            take = idx[first : first + step]
+            if not array:  # other storage reads the samples' span, then picks
+                codes = np.asarray(G[low:high, take])[rows - low].T
+            elif G.strides[0] > G.strides[1]:  # sample-major: along each sample
+                codes = G[np.ix_(rows, take)].T
+            else:  # variant-major: along each variant
+                codes = G.T[np.ix_(take, rows)]
+            values = np.take_along_axis(lut[first : first + take.size],
+                                        codes.astype(np.intp) & 3, axis=1)
+            if scale is not None:
+                values *= scale
+            out[first : first + take.size] = values
+        return out
+    factors = np.empty(0, dtype=lut.dtype) if scale is None else scale  # empty: unscaled
+    if isinstance(G, PackedCalls):
+        _gather_packed(G.data, idx, lut, rows, factors, out)
+    elif G.strides[0] > G.strides[1]:
+        _gather_samples(G, idx, lut, rows, factors, out)
+    else:
+        _gather_variants(G, idx, lut, rows, factors, out)
     return out

@@ -1462,11 +1462,12 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     prior = np.array([prior_row(*g_) for g_ in grid])
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
                  np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
-                 max_iter=vb_max_iter, tol=vb_tol)
-    mse = np.mean((ys[held, None] - cv["prediction"][held]) ** 2, axis=0)
+                 max_iter=vb_max_iter, tol=vb_tol, _compute_prediction=False)
+    # Only the held-out fitted values are needed: decode just those samples.
+    mse = np.mean((ys[held, None] - eng.predict(cv["beta"], rows=held)) ** 2, axis=0)
     best = int(np.argmin(mse))
     cv_converged = cv["converged"]
-    del cv  # the (m, grid) effects and (n, grid) arrays are not needed again
+    del cv  # the (m, grid) effects and (n, grid) mask are not needed again
 
     # (1e) LOCO elastic-net scores
     if folds is None:

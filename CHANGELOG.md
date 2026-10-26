@@ -44,6 +44,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   log10 (3.7e-5 on the strong-structure refit) and h2 by up to 3e-6, against
   a Monte Carlo SD of 2-6e-3, and no call at 0.05/m changed in 16 checked
   configurations. `slq_tol=0` restores the fixed 24 steps bit for bit.
+- HRATT's cross-validation hold-out error predicts only the held-out tenth
+  of the samples, from their calls alone (`VBEngine.predict(beta,
+  rows=...)`: compiled gathers for int8 in either order and two-bit calls,
+  NumPy otherwise), instead of predicting every sample. The step takes
+  19 ms instead of 82 ms on a 5,000 x 40,000 panel and 18 ms instead of
+  87 ms on 20,000 x 10,000 (one thread; 6.5-9x with two-bit calls or
+  sampling weights); whole HE and REML fits are 1.3-2.1% faster. Results
+  are bit-identical with Accelerate (p-values in all 16 checked
+  configurations); other BLAS builds may differ at rounding level.
 
 ### Fixed
 
