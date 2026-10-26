@@ -179,6 +179,156 @@ def test_parallel_failure_restores_callers_thread_mask(phensim_problem, monkeypa
         assert numba.get_num_threads() == 2
 
 
+def test_spinning_workers_never_shorten_blocktime_and_respect_user_settings(monkeypatch):
+    pytest.importorskip("numba")
+    monkeypatch.delenv("KMP_BLOCKTIME", raising=False)
+    monkeypatch.delenv("OMP_WAIT_POLICY", raising=False)
+    state, calls = {"ms": 0}, []
+
+    def put(ms):
+        calls.append(ms)
+        state["ms"] = ms
+
+    monkeypatch.setattr(_vb, "_blocktime", (lambda: state["ms"], put))
+    for previous, during, sets in ((0, 1, [1, 0]), (1, 1, []), (200, 200, []), (2**31 - 1, 2**31 - 1, [])):
+        calls.clear()
+        state["ms"] = previous
+        with _vb._spinning_workers():
+            assert state["ms"] == during
+        assert state["ms"] == previous and calls == sets
+    state["ms"] = 0
+    with pytest.raises(RuntimeError, match="interrupted"):
+        with _vb._spinning_workers():
+            assert state["ms"] == 1
+            raise RuntimeError("interrupted")
+    assert state["ms"] == 0
+    for variable, value in (("KMP_BLOCKTIME", "0"), ("OMP_WAIT_POLICY", "passive")):
+        calls.clear()
+        with monkeypatch.context() as context:
+            context.setenv(variable, value)
+            with _vb._spinning_workers():
+                pass
+        assert not calls
+
+
+def test_blocktime_handle_retries_until_the_layer_is_known(monkeypatch):
+    pytest.importorskip("numba")
+    import ctypes
+
+    def uninitialized():
+        raise ValueError("Threading layer is not initialized.")
+
+    monkeypatch.setattr(_vb, "_blocktime", None)
+    monkeypatch.setattr(_vb, "threading_layer", uninitialized)
+    assert _vb._omp_blocktime() is None and _vb._blocktime is None  # asked again next fit
+    for layer in ("workqueue", "tbb"):
+        monkeypatch.setattr(_vb, "_blocktime", None)
+        monkeypatch.setattr(_vb, "threading_layer", lambda: layer)
+        assert _vb._omp_blocktime() is None and _vb._blocktime is False
+    monkeypatch.setattr(_vb, "threading_layer", lambda: "omp")
+    assert _vb._omp_blocktime() is None  # the answer is kept
+    with _vb._spinning_workers():
+        pass
+    monkeypatch.setattr(_vb, "_blocktime", None)
+    monkeypatch.setattr(ctypes, "CDLL", lambda path: object())  # a runtime without the symbol
+    assert _vb._omp_blocktime() is None and _vb._blocktime is False
+
+
+def _real_blocktime(numba, monkeypatch):
+    monkeypatch.delenv("KMP_BLOCKTIME", raising=False)
+    monkeypatch.delenv("OMP_WAIT_POLICY", raising=False)
+    numba.get_num_threads()  # starts the threading layer
+    handle = _vb._omp_blocktime()
+    if handle is None:
+        pytest.skip("Numba's threading layer has no OpenMP blocktime control")
+    return handle
+
+
+def _record_blocktime(monkeypatch, get):
+    seen = []
+
+    def recorded(sweep):
+        def run(*args):
+            seen.append(get())
+            return sweep(*args)
+        return run
+
+    monkeypatch.setattr(_vb, "_sweep_block", recorded(_vb._sweep_block))
+    monkeypatch.setattr(_vb, "_sweep_block_parallel", recorded(_vb._sweep_block_parallel))
+    return seen
+
+
+@pytest.mark.parametrize("previous", [0, 5])
+def test_parallel_fits_spin_openmp_workers_with_identical_results(phensim_problem, monkeypatch, previous):
+    numba = _require_threads(2)
+    get, put = _real_blocktime(numba, monkeypatch)
+    gt, groups, Q, folds, Y = phensim_problem
+    lg = LocoGenotypes(gt, groups, Q, block=173)
+    col_fold, col_group = np.array([2, 0, -1, 2]), np.array([-1, 1, 2, 0])
+    seen = _record_blocktime(monkeypatch, get)
+    original = get()
+    put(previous)
+    try:
+        serial = _fit_engine(_vb.VBEngine(lg, folds=folds), Y, col_fold, col_group, _vb.PRIOR_ENET)
+        assert set(seen) == {previous}
+        seen.clear()
+        engine = _vb.VBEngine(lg, folds=folds, n_threads=2)
+        spinning = _fit_engine(engine, Y, col_fold, col_group, _vb.PRIOR_ENET)
+        assert set(seen) == {max(previous, 1)} and get() == previous
+        seen.clear()
+        with monkeypatch.context() as context:
+            context.setenv("OMP_WAIT_POLICY", "passive")
+            sleeping = _fit_engine(engine, Y, col_fold, col_group, _vb.PRIOR_ENET)
+        assert set(seen) == {previous}
+        seen.clear()
+        _fit_engine(_vb.VBEngine(lg, n_threads=2), Y[:, :1], np.array([-1]), np.array([-1]), _vb.PRIOR_ENET)
+        assert set(seen) == {previous}  # one column: serial sweeps, no spinning
+    finally:
+        put(original)
+    _assert_fit_equal(spinning, serial)
+    _assert_fit_equal(sleeping, serial)
+
+
+def test_spinning_is_scoped_to_the_fitting_thread_and_restored_on_failure(phensim_problem, monkeypatch):
+    import threading
+    numba = _require_threads(2)
+    get, put = _real_blocktime(numba, monkeypatch)
+    gt, groups, Q, _, Y = phensim_problem
+    lg = LocoGenotypes(gt, groups, Q, block=173)
+    expected = _fit_engine(_vb.VBEngine(lg), Y, np.full(4, -1), np.full(4, -1), _vb.PRIOR_ENET)
+    seen = _record_blocktime(monkeypatch, get)
+    original = get()
+    put(3)  # the caller's own value, distinct from any default
+    try:
+        result = {}
+
+        def fit_elsewhere():
+            result["before"] = get()
+            result["fit"] = _fit_engine(_vb.VBEngine(lg, n_threads=2), Y, np.full(4, -1),
+                                        np.full(4, -1), _vb.PRIOR_ENET)
+            result["after"] = get()
+
+        worker = threading.Thread(target=fit_elsewhere)
+        worker.start()
+        worker.join()
+        assert set(seen) == {max(result["before"], 1)} and result["after"] == result["before"]
+        assert get() == 3
+        _assert_fit_equal(result["fit"], expected)
+
+        def interrupted(*args):
+            assert get() == 1
+            raise RuntimeError("interrupted residual update")
+
+        monkeypatch.setattr(_vb, "_refresh_residual", interrupted)
+        monkeypatch.setattr(_vb, "_refresh_columns", interrupted)
+        put(0)
+        with pytest.raises(RuntimeError, match="interrupted residual update"):
+            _fit_engine(_vb.VBEngine(lg, n_threads=2), Y, np.full(4, -1), np.full(4, -1), _vb.PRIOR_ENET)
+        assert get() == 0
+    finally:
+        put(original)
+
+
 def test_single_column_retains_serial_kernels(phensim_problem, monkeypatch):
     numba = _require_threads(2)
     gt, groups, Q, _, Y = phensim_problem

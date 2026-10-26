@@ -1128,6 +1128,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     products over sample rows, temporarily limiting detected BLAS pools to
     one thread. Apple Accelerate is not detected by threadpoolctl; set
     VECLIB_MAXIMUM_THREADS=1 before Python starts to avoid nested threading.
+    During the parallel model sweeps, Numba's OpenMP workers spin between
+    launches where the runtime would put them to sleep at once (as on Apple
+    silicon): 1.1-1.25x faster at four threads on a wide panel (less with
+    many samples), for 1.5-2x the process CPU time. Setting KMP_BLOCKTIME or
+    OMP_WAIT_POLICY keeps the runtime's own policy.
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     elastic-net statistic): with strong structure, U and T are multiplied by

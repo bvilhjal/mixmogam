@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Parallel VB fits (`n_threads` above one, several model columns) let
+  Numba's OpenMP workers spin for 1 ms between launches instead of
+  sleeping at once (LLVM's default on hybrid CPUs such as Apple silicon),
+  which cost 26-35 us per launch at four threads, twice per 128-SNP
+  sub-block; runtimes that already spin longer are left alone. With four
+  threads whole HRATT runs are 1.12-1.24x faster on 5,000 x 40,000 (sweeps
+  1.3x), 1.55x on 1,000 x 10,000 (strong-structure refit) and 1.01-1.03x
+  on 20,000 x 10,000, for 1.5-2x the process CPU time; two threads gain
+  1.06x, one thread is unchanged. The fit's own
+  thread restores its blocktime on exit; nothing changes under Numba's
+  other threading layers or when `KMP_BLOCKTIME` or `OMP_WAIT_POLICY` is
+  set. Bit-identical (p-values in all 16 checked configurations at one and
+  four threads).
 - Genotype preparation (each variant's call counts, mean, SD, covariate
   coefficients and projected norm) counts calls in one contiguous pass
   (integer sums of int8 calls, per-byte code counts of two-bit calls) and

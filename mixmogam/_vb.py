@@ -26,6 +26,7 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, ExitStack
 from itertools import islice
 import math
+import os
 from typing import Optional
 import warnings
 
@@ -325,7 +326,7 @@ def _pack_difference(A, B, out):
 
 
 if HAS_NUMBA:
-    from numba import config, get_num_threads, njit, prange, set_num_threads, uint64 as _unsigned
+    from numba import config, get_num_threads, njit, prange, set_num_threads, threading_layer, uint64 as _unsigned
 
     _log_ndtr = njit(cache=True)(_log_ndtr)
     _mills = njit(cache=True)(_mills)
@@ -549,6 +550,62 @@ def _numba_thread_limit(n_threads):
         set_num_threads(previous)
 
 
+# Numba's OpenMP workers (LLVM libomp: blocktime 0 by default on hybrid CPUs
+# such as Apple silicon, else 200 ms) then sleep as soon as a parallel region
+# ends: an empty launch takes 26-35 us at four threads (eight: 70-90 us),
+# against 2-3 us (4-7 us) while they still spin. A parallel fit launches two
+# short regions per sub-block (decode and sweep, 100-200 us of work), so it
+# lets them spin 1 ms between launches: its sweeps run 1.3x faster at four
+# threads, whole HRATT fits 1.1-1.25x on a wide panel (1.5x on a small one,
+# 1.01-1.03x on a tall one; 1.06x at two threads), for 1.5-2x the CPU time.
+# (get, set) once found, False if unavailable (another layer or runtime),
+# None until known.
+_blocktime = None
+
+
+def _omp_blocktime():
+    """``kmp_get_blocktime`` and ``kmp_set_blocktime`` of Numba's OpenMP runtime, or None."""
+    global _blocktime
+    if _blocktime is None:
+        try:
+            if threading_layer() != "omp":
+                _blocktime = False
+            else:
+                import ctypes
+                from numba.np.ufunc import omppool
+                lib = ctypes.CDLL(omppool.__file__)
+                get, put = lib.kmp_get_blocktime, lib.kmp_set_blocktime
+                get.argtypes, get.restype = [], ctypes.c_int
+                put.argtypes, put.restype = [ctypes.c_int], None
+                _blocktime = get, put
+        except ValueError:
+            return None  # no parallel launch yet: ask again on the next fit
+        except (ImportError, OSError, AttributeError):
+            _blocktime = False
+    return _blocktime or None
+
+
+@contextmanager
+def _spinning_workers():
+    """Keep this thread's OpenMP workers spinning at least 1 ms between
+    parallel regions, restoring its blocktime on exit. Does nothing under
+    the workqueue or TBB layers, without the symbol, or when the user set
+    KMP_BLOCKTIME or OMP_WAIT_POLICY."""
+    handle = None
+    if "KMP_BLOCKTIME" not in os.environ and "OMP_WAIT_POLICY" not in os.environ:
+        handle = _omp_blocktime()
+    previous = None if handle is None else handle[0]()  # per calling thread, as is the setting
+    if previous is None or previous >= 1:  # never shorter (200 ms default elsewhere)
+        yield
+        return
+    put = handle[1]
+    put(1)
+    try:
+        yield
+    finally:
+        put(previous)
+
+
 class VBEngine:
     """Many Bayesian linear regressions on the same genotype blocks.
 
@@ -576,7 +633,11 @@ class VBEngine:
         four workers by sample (and, above 32 model columns, reuse a bounded
         forward GEMM workspace). When threadpoolctl is available, detected
         BLAS libraries use one thread within that context; otherwise GEMMs
-        retain the serial path. Thread controls are restored after each fit.
+        retain the serial path. Under Numba's OpenMP layer, the workers spin
+        at least 1 ms between a parallel fit's launches instead of sleeping
+        at once (1.3x faster sweeps at four threads on Apple silicon, for
+        1.5-2x the process CPU time), unless KMP_BLOCKTIME or
+        OMP_WAIT_POLICY is set. Thread controls are restored after each fit.
     """
 
     def __init__(self, lg, folds: Optional[np.ndarray] = None, sub_block: int = 128,
@@ -912,6 +973,7 @@ class VBEngine:
             stack.callback(self._scratch.clear)  # rebuild buffers end with the fit
             if parallel:
                 stack.enter_context(_numba_thread_limit(min(self.n_threads, P)))
+                stack.enter_context(_spinning_workers())
             gemm = None
             if (parallel and n >= _GEMM_MIN_SAMPLES
                     and zdt in (np.dtype(np.float32), np.dtype(np.float64))):

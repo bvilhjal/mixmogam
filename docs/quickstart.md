@@ -186,7 +186,11 @@ rounding.
 Detected BLAS pools are limited internally for the parallel matrix products;
 Apple Accelerate needs the `VECLIB_MAXIMUM_THREADS` setting above. The requested
 count cannot exceed Numba's configured limit. Initial Numba compilation adds
-latency to the first use of a kernel.
+latency to the first use of a kernel. During the parallel model sweeps the
+workers spin between launches where the OpenMP runtime would put them to
+sleep at once (as on Apple silicon): 1.1-1.25x faster at four threads on a
+wide panel, for 1.5-2x the CPU time. Set `KMP_BLOCKTIME` or
+`OMP_WAIT_POLICY` to keep the runtime's own policy.
 
 Genotypes are decoded on every pass; no float copy is kept. For large
 panels, store the calls two bits each: `Genotypes.load_plink(prefix,
