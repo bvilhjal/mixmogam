@@ -19,6 +19,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Genotypes.variant_major()` makes the one-time layout conversion used by
   analysis entry points for sample-major NumPy arrays.
 
+### Changed
+
+- HRATT's HE alpha selection computes the backward products of all
+  candidate alphas as one GEMM per sample tile instead of one per alpha.
+  The step takes 0.23 s instead of 0.29 s on a 5,000 x 40,000 panel and
+  0.33 s instead of 0.40 s on 20,000 x 10,000 (one thread); whole HE and
+  REML fits are 0.6-1.1% faster. Results are bit-identical with Accelerate
+  (p-values in all 16 checked configurations); other BLAS builds may differ
+  at rounding level. No sample tile is a single row, whose GEMV product
+  would round differently.
+
 ### Fixed
 
 - Packed calls have compiled general decoding and packing, direct byte-table

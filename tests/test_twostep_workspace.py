@@ -1,10 +1,13 @@
 """Small-workspace retrospective and HE paths versus their original formulas."""
 
+import sys
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
+from mixmogam import twostep
+from mixmogam.genotypes import Genotypes
 from mixmogam.twostep import _he_alpha, _retro_stats
 
 
@@ -151,3 +154,84 @@ def test_two_step_workspace_matches_original(dtype, large_block):
     assert max(log["square"]) <= 16 * 1024**2
     if large_block:
         assert len(log["square"]) > 1
+
+
+def _per_alpha_products(lg, P32, Wt):
+    # The backward products before the alphas were stacked: one n x (c + q)
+    # GEMM per alpha and slice.
+    n, A = lg.n, Wt.shape[1]
+    q, c = lg.Q.shape[1], P32.shape[1]
+    KP, cross = np.zeros((A, n, c)), np.zeros((A, n, q))
+    for idx, _, Z in lg.raw_slices():
+        T = np.empty((idx.size, c + q), dtype=lg.dtype)
+        np.matmul(Z, P32, out=T[:, :c])
+        T[:, c:] = lg._projection[idx]
+        wb = Wt[idx].astype(lg.dtype)
+        for a in range(A):
+            prod = Z.T @ (T * wb[:, a, None])
+            KP[a] += prod[:, :c]
+            cross[a] += prod[:, c:]
+    return KP, cross
+
+
+def _assert_same(got, want):
+    # Accelerate (macOS) computes each column of the stacked GEMM as the
+    # per-alpha GEMM does; other BLAS builds may round float32 sums apart.
+    if sys.platform == "darwin":
+        np.testing.assert_array_equal(got, want)
+    else:
+        np.testing.assert_allclose(got, want, rtol=1e-5, atol=1e-5 * np.max(np.abs(want), initial=0.0))
+
+
+# n = 96 and 21 leave n % 5 == 1: n // 5 sample tiles would end in a one-row
+# product (GEMV), and so would ceil(21 / 5) = 5 without the guard. GEMV
+# rounds apart from GEMM only for deep slices and wide products: 128
+# variants and 33 columns (HRATT's default probes) here.
+@pytest.mark.parametrize("n, packed, weighted, trait", [
+    (96, False, False, "quantitative"), (96, True, True, "quantitative"),
+    (96, False, False, "binary"), (98, False, True, "quantitative"),
+    (21, False, False, "quantitative")])
+def test_he_products_stack_alphas_like_per_alpha_products(n, packed, weighted, trait, monkeypatch):
+    rng = np.random.default_rng(1207 + n)
+    m = 600
+    G = rng.binomial(2, rng.uniform(0.05, 0.5, m), size=(n, m)).astype(np.int8)
+    G[rng.random(G.shape) < 0.03] = -1  # missing calls
+    gt = Genotypes(G, chromosome=np.repeat([1, 2, 3], m // 3), packed=packed)
+    X = rng.normal(size=(n, 2))
+    y = G[:, :12].clip(0).sum(axis=1) + rng.normal(size=n)
+    if trait == "binary":
+        y = (y > np.median(y)).astype(float)
+    w = np.exp(rng.normal(0.0, 0.5, n)) if weighted else None
+    st = twostep._setup(y, gt, X, 25, 128, trait=trait, sample_weights=w)
+    f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+    alphas = list(twostep.HRATT_ALPHAS)
+    Wt = np.column_stack([(f * (1.0 - f)) ** (1.0 + a) for a in alphas])
+    P32 = st.lg.project(rng.normal(size=(n, 33))).astype(st.lg.dtype)
+    KP, cross, _, _ = twostep._he_products(st.lg, P32, Wt)
+    want_KP, want_cross = _per_alpha_products(st.lg, P32, Wt)
+    _assert_same(KP, want_KP)
+    _assert_same(cross, want_cross)
+
+    # KP and X are strided views of one accumulator; _he_alpha must give
+    # the same answer from them as from contiguous per-alpha arrays.
+    stacked = twostep._he_products
+
+    def per_alpha(lg, P32, Wt):
+        return _per_alpha_products(lg, P32, Wt) + stacked(lg, P32, Wt)[2:]
+
+    def run():
+        return twostep._he_alpha(st, f, alphas, 32, np.random.default_rng(1208), fit_h2=True,
+                                 design_weights=st.w)
+
+    got = run()
+    monkeypatch.setattr(twostep, "_he_products", per_alpha)
+    want = run()
+    assert got["alpha"] == want["alpha"]
+    for key in ("scores", "h2_he"):
+        _assert_same(got[key], want[key])
+    for key, value in want["variance_fit"].items():
+        if isinstance(value, str):
+            assert got["variance_fit"][key] == value
+        else:
+            _assert_same(np.asarray(got["variance_fit"][key], dtype=float),
+                         np.asarray(value, dtype=float))

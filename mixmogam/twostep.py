@@ -874,6 +874,67 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
             "n_snps": int(sel.size)}
 
 
+def _he_products(lg: LocoGenotypes, P32: np.ndarray, Wt: np.ndarray):
+    """One pass over the genotypes for :func:`_he_alpha`, shared by all alphas.
+
+    For each column W of ``Wt``, unprojected: KP = z' W z P32 (A, n, c),
+    X = z' W C (A, n, q) with C the covariate coefficients, S = C' W C
+    (A, q, q) and the diagonal of z' W z (n, A). The backward products of
+    all alphas are one GEMM per sample tile into one (n, A, c + q)
+    accumulator; KP and X are views of it. Each column sums over variants
+    as a per-alpha product would (the same bits on Accelerate; other BLAS
+    builds may round differently).
+    """
+    n, A = lg.n, Wt.shape[1]
+    q, c = lg.Q.shape[1], P32.shape[1]
+    cols = c + q
+    acc = np.zeros((n, A, cols))
+    KP = acc[:, :, :c].transpose(1, 0, 2)
+    # The diagonal of Z' W Z from unprojected rows: with Z_j = z_j - c_j Q',
+    # sum_j w_j Z_ij^2 = sum_j w_j z_ij^2 - 2 Q_i . X_i + Q_i S Q_i', where
+    # X = z' W C rides along the product GEMM and S = C' W C is q x q.
+    cross = acc[:, :, c:].transpose(1, 0, 2)
+    S = np.zeros((A, q, q))
+    diag = np.zeros((n, A))
+    # Sample tiles of ceil(n / A) rows keep the product buffer at one
+    # alpha's n x (c + q). No tile is a single row unless n is: NumPy
+    # sends one-row products through GEMV, which sums in another order.
+    stile = -(-n // A)
+    while stile < n and (n - 1) % stile == 0:
+        stile += 1
+    # Per-slice buffers, reused (grown to the largest slice): the products
+    # with appended coefficients, their weighted copies for every alpha, the
+    # tile product and the squared sample tiles.
+    prod = np.empty((stile, A * cols), dtype=lg.dtype)
+    T = None
+    for idx, _, Z in lg.raw_slices():
+        k = idx.size
+        if T is None or T.shape[0] < k:
+            T = np.empty((k, cols), dtype=lg.dtype)
+            Tw = np.empty((k, A, cols), dtype=lg.dtype)
+            tile = max(1, (16 * 1024**2) // max(k * T.itemsize, 1))
+            square = np.empty((k, min(tile, n)), dtype=lg.dtype)
+        coef = lg._projection[idx]
+        np.matmul(Z, P32, out=T[:k, :c])
+        T[:k, c:] = coef
+        wb = Wt[idx].astype(lg.dtype)
+        np.multiply(T[:k, None, :], wb[:, :, None], out=Tw[:k])
+        Twk = Tw[:k].reshape(k, A * cols)
+        for start in range(0, n, stile):
+            width = min(stile, n - start)
+            np.matmul(Z[:, start : start + width].T, Twk, out=prod[:width])
+            acc[start : start + width] += prod[:width].reshape(width, A, cols)
+        for a in range(A):
+            S[a] += (coef.T * Wt[idx, a]) @ coef
+        # Square bounded sample tiles; each product reduces the whole slice.
+        for start in range(0, n, tile):
+            width = min(tile, n - start)
+            Zs = np.multiply(Z[:, start : start + width], Z[:, start : start + width],
+                             out=square[:k, :width])
+            diag[start : start + width] += Zs.T @ wb
+    return KP, cross, S, diag
+
+
 def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=False,
               design_weights=None) -> dict:
     """Pick the LDAK-Thin power by randomized Haseman-Elston regression.
@@ -906,42 +967,8 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
     # Z P = z (I - QQ') P and sum Z' t = (I - QQ') sum z' t: the probes and
     # the accumulated products are projected once, never the genotypes.
     P32 = lg.project(P).astype(lg.dtype)
-    q, c = lg.Q.shape[1], P.shape[1]
-    KP = np.zeros((A, n, c))
-    # The diagonal of Z' W Z from unprojected rows: with Z_j = z_j - c_j Q',
-    # sum_j w_j Z_ij^2 = sum_j w_j z_ij^2 - 2 Q_i . X_i + Q_i S Q_i', where
-    # X = z' W C rides along the product GEMM and S = C' W C is q x q.
-    cross = np.zeros((A, n, q))
-    S = np.zeros((A, q, q))
-    diag = np.zeros((n, A))
-    # Per-slice buffers, reused (grown to the largest slice): the products
-    # with appended coefficients, their weighted copy, the n-row product and
-    # the squared sample tiles.
-    prod = np.empty((n, c + q), dtype=lg.dtype)
-    T = None
-    for idx, _, Z in lg.raw_slices():
-        k = idx.size
-        if T is None or T.shape[0] < k:
-            T = np.empty((k, c + q), dtype=lg.dtype)
-            Tw = np.empty_like(T)
-            tile = max(1, (16 * 1024**2) // max(k * T.itemsize, 1))
-            square = np.empty((k, min(tile, n)), dtype=lg.dtype)
-        coef = lg._projection[idx]
-        np.matmul(Z, P32, out=T[:k, :c])
-        T[:k, c:] = coef
-        wb = Wt[idx].astype(lg.dtype)
-        for a in range(A):
-            np.multiply(T[:k], wb[:, a, None], out=Tw[:k])
-            np.matmul(Z.T, Tw[:k], out=prod)
-            KP[a] += prod[:, :c]
-            cross[a] += prod[:, c:]
-            S[a] += (coef.T * Wt[idx, a]) @ coef
-        # Square bounded sample tiles; each product reduces the whole slice.
-        for start in range(0, n, tile):
-            width = min(tile, n - start)
-            Zs = np.multiply(Z[:, start : start + width], Z[:, start : start + width],
-                             out=square[:k, :width])
-            diag[start : start + width] += Zs.T @ wb
+    q = lg.Q.shape[1]
+    KP, cross, S, diag = _he_products(lg, P32, Wt)
     tot = Wt.sum(axis=0)
     for a in range(A):
         KP[a] = lg.project(KP[a])
