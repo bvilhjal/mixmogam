@@ -1,0 +1,77 @@
+........................................................................ [  5%]
+........................................................................ [ 10%]
+........................................................................ [ 15%]
+........................................................................ [ 21%]
+........................................................................ [ 26%]
+...............................................................ss.ss.... [ 31%]
+...........................................................ss........... [ 36%]
+........................................................................ [ 42%]
+........................................................................ [ 47%]
+........................................................................ [ 52%]
+........................................................................ [ 58%]
+........................................................................ [ 63%]
+........................................................................ [ 68%]
+........................................................................ [ 73%]
+........................................................................ [ 79%]
+........................................................................ [ 84%]
+........................................................................ [ 89%]
+........................................................................ [ 95%]
+....................................................................     [100%]
+=============================== warnings summary ===============================
+tests/test_hratt_binary.py::test_weighted_binary_ancestry_null_through_public_api
+  /private/tmp/hratt-speed/wt/mixmogam/association.py:234: RuntimeWarning: strong population structure remains after the covariates; the tests of weighted and binary traits model allele frequencies by the covariates, so include ancestry principal components among them
+    result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
+
+tests/test_io.py::test_tped_reader
+  /private/tmp/hratt-speed/wt/tests/test_io.py:58: UserWarning: reading legacy mixmogam dosage rows, not PLINK TPED allele pairs
+    back = read_tped(prefix)
+
+tests/test_lmm.py::test_topk_scan_close_on_structured_k
+  /private/tmp/hratt-speed/wt/tests/test_lmm.py:133: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    r_topk = topk.scan(G, dtype=np.float64)
+
+tests/test_operator.py::test_operator_lmm_matches_dense_topk
+  /private/tmp/hratt-speed/wt/tests/test_operator.py:55: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    rg_d = dense_g.scan(gt, dtype=np.float64)
+
+tests/test_operator.py::test_operator_lmm_matches_dense_topk
+  /private/tmp/hratt-speed/wt/tests/test_operator.py:56: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    rg_o = op_g.scan(gt, dtype=np.float64)
+
+tests/test_operator.py::test_operator_auto_routes_to_slq
+  /private/tmp/hratt-speed/wt/tests/test_operator.py:72: UserWarning: scan with a truncated spectrum is approximate and was anti-conservative in simulations (lambda_GC 1.30 at n=10k, k=1024); use mixmogam.gwas(..., method='bolt-inf') for large-n association
+    r_op = lmm.scan(gt, dtype=np.float32)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+============================= slowest 25 durations =============================
+16.83s setup    tests/test_integration_at.py::test_at_exact_recovers_known_major_gene[32-1-4144572-4147911]
+9.71s call     tests/test_hratt_binary.py::test_weighted_binary_ancestry_null_through_public_api
+8.29s call     tests/test_scan_extras.py::test_whitened_permutations_control_fwer_under_structure
+6.42s call     tests/test_hratt_crossfit.py::test_strong_structure_refits_each_group[12]
+4.12s call     tests/test_hratt_crossfit.py::test_strong_structure_refits_each_group[11]
+3.28s call     tests/test_twostep.py::test_bolt_mixture_gains_on_sparse_trait
+2.70s call     tests/test_results.py::test_csv_n_column_and_read_aliases
+2.44s setup    tests/test_integration_at.py::test_at_emmax_end_to_end
+1.56s call     tests/test_slq_defaults.py::test_default_probes_shrink_the_monte_carlo_spread
+1.54s call     tests/test_cli.py::test_gwas_cli_equals_api_bitwise_weighted_binary_pcs
+1.49s call     tests/test_cli.py::test_gwas_cli_equals_api_bitwise
+1.12s call     tests/test_results.py::test_plots
+1.11s call     tests/test_vb_column_layout.py::test_numpy_fallback_column_major_fit_matches_sample_major
+1.03s call     tests/test_hratt_weights.py::test_outcome_dependent_weights_keep_low_frequency_tails_calibrated
+1.02s call     tests/test_operator.py::test_operator_lmm_matches_dense_topk
+1.01s call     tests/test_hratt_weights.py::test_ancestry_dependent_weights_use_covariate_specific_genotype_variances
+1.01s call     tests/test_scan_extras.py::test_gxe_polygenic_interaction_component
+0.92s call     tests/test_twostep.py::test_hratt_runs_and_detects_structure
+0.91s call     tests/test_hratt_crossfit.py::test_scores_do_not_depend_on_the_shared_gram_budget
+0.79s call     tests/test_twostep.py::test_spectral_denominator_fixes_structure_gradient
+0.72s call     tests/test_hratt_crossfit.py::test_scores_are_out_of_fold_and_enter_with_their_least_squares_slope
+0.70s call     tests/test_twostep.py::test_bolt_inf_matches_exact_loco
+0.62s call     tests/test_vb_covariate_corrections.py::test_numpy_fallback_keeps_the_column_set_products
+0.55s call     tests/test_vb_workspace.py::test_numpy_fallback_matches_original_fit_loop[float32-1]
+0.54s call     tests/test_spa.py::test_two_sided_tails_match_enumeration_with_real_coefficients_and_no_calls
+=========================== short test summary info ============================
+SKIPPED [2] tests/test_io_bgen.py:185: could not import 'bgen_reader': No module named 'bgen_reader'
+SKIPPED [2] tests/test_io_bgen.py:170: could not import 'zstandard': No module named 'zstandard'
+SKIPPED [2] tests/test_io_vcf.py:117: could not import 'pysam': No module named 'pysam'
+1358 passed, 6 skipped, 6 warnings in 106.11s (0:01:46)
+exit=0
