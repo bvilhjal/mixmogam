@@ -59,3 +59,26 @@ remain open by design: `slq_tol` is a numerical default change with an
 exact opt-out, and the spinning-workers setting costs 1.5-2x process
 CPU time during parallel fits (documented in the quickstart, honoured by
 the OpenMP runtime where it already spins).
+
+## Errata (27 October 2026)
+
+An independent audit of the documentation against the code and the archives
+found the following, corrected in the documentation:
+
+- The contracts verdict that the README, design notes and quickstart "match the
+  code" was too generous: the design notes said the speed-ups changed no
+  defaults or convergence criteria (the `slq_tol` default had changed), did not
+  describe `cv_tol` or the hold-out grid fit, and the quickstart omitted both.
+- The numerics verdict says the genomic control lambda agrees "to six decimals
+  everywhere"; four configurations differ by 1-2e-6. The last line of
+  `numerics/matrix_t1.jsonl` reports 6 cases and 1 identical, but it has 16 rows
+  and 5 identical (every HE-only fit without covariates or weights).
+- The nine commits are `dba1ce8d..63c2afb6`; the `f2b993b0..63c2afb6` range above
+  leaves out the first.
+- `performance/` ratios at four threads match the one-thread ones for the tall
+  panel (1.61 and 1.56) but not the wide one (1.61 and 1.33).
+- The per-change figures quoted in the CHANGELOG (component timings, ns per
+  genotype, megabytes, the 4 of 32 `cv_tol` flips) are not archived here; this
+  archive holds the whole-branch matrix, the A/B pairs, the test log and, since
+  this erratum, the proposals and verdicts (`proposals/`) and the before and after
+  profiles (`profiles/`).

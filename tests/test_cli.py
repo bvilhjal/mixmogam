@@ -87,6 +87,17 @@ def test_gwas_cli_equals_api_bitwise(dataset, tmp_path):
     assert sub.read_bytes() == api.read_bytes()
 
 
+@pytest.mark.parametrize("method", ["bolt-inf", "bolt"])
+def test_gwas_cli_runs_methods_without_a_thread_option(dataset, tmp_path, method):
+    """bolt-inf and bolt take no n_threads: the CLI must not pass it."""
+    out = tmp_path / "cli.csv"
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--covar", str(dataset["tmp"] / "cov.txt"), "--method", method, "--out", str(out)]
+    assert main(base) == 0
+    assert out.read_bytes() == _api(dataset, tmp_path / "api.csv", method=method).read_bytes()
+    assert main([*base, "--n-threads", "2"]) == 2  # an explicit request is refused, not ignored
+
+
 def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
     out = tmp_path / "cli.csv"
     base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno2"],

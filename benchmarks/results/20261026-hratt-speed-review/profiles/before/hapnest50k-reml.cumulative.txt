@@ -1,0 +1,53 @@
+         288933 function calls in 43.813 seconds
+
+   Ordered by: cumulative time
+   List reduced from 306 to 45 due to restriction <45>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.000    0.000   43.813   43.813 /Users/au507860/REPOS/mixmogam/mixmogam/association.py:155(gwas)
+        1    0.005    0.005   43.813   43.813 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:1000(hratt)
+        1    0.002    0.002   21.289   21.289 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:1307(_hratt_variance)
+        1    0.004    0.004   20.353   20.353 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:1387(_hratt_fit_scores)
+        2   11.769    5.884   19.937    9.968 /Users/au507860/REPOS/mixmogam/mixmogam/_vb.py:475(fit)
+        1    0.000    0.000   19.120   19.120 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:199(fit_variance_components)
+        1    0.000    0.000   19.120   19.120 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:736(_fit_variance_components)
+        1    0.004    0.004   19.078   19.078 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:498(_slq_pack)
+        1    0.597    0.597   19.051   19.051 /Users/au507860/REPOS/mixmogam/mixmogam/_slq.py:97(lanczos_quadrature_batch)
+       24    0.105    0.004   17.863    0.744 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:533(op_defl)
+       24    0.293    0.012   17.759    0.740 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:428(mv)
+       24    0.000    0.000   17.465    0.728 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:265(_kdot)
+       24    0.000    0.000   17.465    0.728 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:195(matmul)
+       24    0.020    0.001   17.465    0.728 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:412(matmul)
+       24   13.417    0.559   17.444    0.727 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:374(_products)
+     7169    0.047    0.000    7.897    0.001 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:236(_decode)
+     7169    7.836    0.001    7.838    0.001 /Users/au507860/REPOS/mixmogam/mixmogam/_standardize.py:395(decode_table)
+     5617    0.012    0.000    7.258    0.001 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:274(raw_slices)
+        2    0.113    0.057    4.606    2.303 /Users/au507860/REPOS/mixmogam/mixmogam/_vb.py:351(_prepare_grams)
+      320    3.048    0.010    4.183    0.013 /Users/au507860/REPOS/mixmogam/mixmogam/_vb.py:409(_gram)
+        1    1.975    1.975    2.167    2.167 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:877(_he_alpha)
+        1    0.000    0.000    1.771    1.771 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:114(_setup)
+        1    0.000    0.000    1.770    1.770 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:115(__init__)
+       12    0.000    0.000    1.769    0.147 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:194(_prepare)
+       24    1.769    0.074    1.769    0.074 /Users/au507860/REPOS/mixmogam/mixmogam/_standardize.py:360(prepare_moments)
+     5607    1.164    0.000    1.164    0.000 {method 'astype' of 'numpy.ndarray' objects}
+    16722    0.004    0.000    0.579    0.000 /Users/au507860/anaconda3/envs/ldpred3-accelerate/lib/python3.14/site-packages/numpy/_core/einsumfunc.py:1244(einsum)
+    16722    0.575    0.000    0.575    0.000 {built-in method numpy._core._multiarray_umath.c_einsum}
+     1260    0.002    0.000    0.453    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:296(wide_tiles)
+        1    0.218    0.218    0.445    0.445 /Users/au507860/REPOS/mixmogam/mixmogam/_vb.py:645(predict)
+        1    0.182    0.182    0.409    0.409 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:1481(_out_of_fold_loco)
+       56    0.299    0.005    0.299    0.005 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:433(project)
+        1    0.075    0.075    0.273    0.273 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:298(_retro_stats)
+      491    0.001    0.000    0.198    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:285(wide_slices)
+        1    0.045    0.045    0.111    0.111 /Users/au507860/REPOS/mixmogam/mixmogam/twostep.py:842(structure_test)
+       26    0.034    0.001    0.052    0.002 /Users/au507860/anaconda3/envs/ldpred3-accelerate/lib/python3.14/site-packages/numpy/linalg/_linalg.py:2599(norm)
+        1    0.015    0.015    0.049    0.049 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:354(rows)
+      209    0.001    0.000    0.039    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:557(_tr_sum)
+    10349    0.008    0.000    0.038    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/_slq.py:192(apply)
+    11087    0.032    0.000    0.032    0.000 {method 'reduce' of 'numpy.ufunc' objects}
+       13    0.024    0.002    0.024    0.002 /Users/au507860/REPOS/mixmogam/mixmogam/_loco.py:312(_project_into)
+    10393    0.004    0.000    0.022    0.000 /Users/au507860/anaconda3/envs/ldpred3-accelerate/lib/python3.14/site-packages/numpy/_core/fromnumeric.py:2304(sum)
+        1    0.011    0.011    0.021    0.021 /Users/au507860/REPOS/mixmogam/mixmogam/_slq.py:162(rademacher_probes)
+      107    0.000    0.000    0.021    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:627(dll_at)
+      107    0.000    0.000    0.020    0.000 /Users/au507860/REPOS/mixmogam/mixmogam/lmm.py:565(trInvR_at)
+
+

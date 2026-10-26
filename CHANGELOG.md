@@ -167,20 +167,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   taking their slow Python fallbacks. BOLT's fold mask is boolean, and
   batched Lanczos avoids pre-zeroing fully assigned work arrays.
 
-No statistical default or convergence threshold was changed. BOLT's
+No statistical default or convergence threshold was changed in that review (the
+later `slq_tol` entry above is the one exception). BOLT's
 model-selection cross-validation, float64 full Lanczos reorthogonalization,
 the SPA threshold, and the two-kinship mixture profile remain in place.
 
 ### Benchmarks
 
-- Every LDAK-KVIK benchmark was rerun after the speed branch (26
+- The 400,000-variant, covariate and four-BLAS-thread LDAK-KVIK benchmarks were
+  rerun after the speed branch (26
   October, master `6a63f215`) on the same panels, seeds, traits and
   threads. Statistics reproduce everywhere (lambda_GC to four decimals,
-  the same detected causal variants, agreement rows moving only in the
-  eighth decimal of Spearman); on the unstructured 5,000 x 400,000 panel
+  the same detected causal variants, agreement rows moving in the
+  eighth decimal of Spearman at 400,000 variants and by up to 4e-5 in log10 p on
+  the 1,000 x 10,000 structured panel); on the unstructured 5,000 x 400,000 panel
   HRATT-HE goes 34 -> 29 s (22 s under the null, now faster than the
   reference program) and BOLT-LMM-inf 51 -> 35 s at one thread, with
-  peak RSS down about 0.4 GiB; at four BLAS threads all three programs
+  HRATT-HE's peak RSS down about 0.5 GiB (the packed Gram cache) and
+  BOLT-LMM-inf's about 0.2 GiB; at four BLAS threads all three programs
   are level. Archives `20261026T143800Z-kvik-scale`,
   `20261026T144700Z-kvik-scale-blas4`,
   `20261026T145400Z-kvik-covariates-small`,
@@ -192,8 +196,8 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
 - A sample-size ladder (fixed m = 20,000, n = 1,000 to 50,000, one
   thread, archive `20261026T161500Z-kvik-sample-scaling`) measures how
   each method scales in samples: LDAK-KVIK and both HRATT paths are
-  linear (local exponents 0.81-0.96 over n = 20,000 to 50,000, their
-  iteration counts flat in n), BOLT-LMM-inf is superlinear (1.21, its
+  linear (local exponents 0.80-0.97 over n = 20,000 to 50,000, their
+  sweep counts bounded, falling from 10-13 to 5), BOLT-LMM-inf is superlinear (1.21, its
   conjugate-gradient count growing from 10 to 22), and `exact` is cubic
   and stops at n = 2,500. HRATT-HE is the fastest method from
   n = 10,000 up. Peak memory is linear in n for every streaming method.
@@ -218,7 +222,7 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
   (`benchmarks/kvik_scale_plan.md`). The official program was as fast as
   mixmogam's HRATT-HE (24 s against 34 s) and faster than BOLT-LMM-inf
   (51 s) with a third of the memory; the two programs' p-values
-  correlated at 0.998 under the null and they detected the same 8 of 10
+  correlated at 0.9991 under the null (0.998 on the mixed trait) and they detected the same 8 of 10
   causal variants. The same driver also runs a structured, confounded
   panel of four populations without covariates and with two and three
   ancestry principal components, at 10,000 variants (the scale study's
@@ -235,12 +239,12 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
 - `benchmarks/scaling_ladder.py` decomposes what a panel costs: the
   archived HAPNEST panel at 50,000 samples, the same panel subsampled to
   5,000 samples, and the 400,000-variant panel. Ten times fewer samples
-  make the reference program 7.3 times faster and mixmogam 7.1 times,
+  make the reference program 7.1 times faster and HRATT-HE 7.0 times,
   with the reported iteration counts falling as well, which is why a
   panel with twenty times the variants can cost the same. The run also
   shows that the October archives were measured on a slower host with
   older code: the same executable on the same archived panel takes
-  19.8 s today against the archived 33.5 s.
+  20.1 s today against the archived 33.5 s.
 - `benchmarks/_harness.py` holds the shared measurement infrastructure
   (power guard, thread environment, source snapshot, environment
   manifest, fresh-process measurement, p-value comparison) for the new

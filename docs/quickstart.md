@@ -14,6 +14,13 @@ gt = Genotypes.load_plink("data/cohort", mmap=True)  # .bed/.bim/.fam, two-bit m
 gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```
 
+`mmap=True` keeps the calls in the mapped file only while the loaded object goes to
+`gwas` untouched: `align_samples`, `filter_samples` and `filter_variants` copy the
+calls into memory, packed (a quarter of the int8 bytes). Filter variants after
+aligning samples, because `min_mac` and `max_missing` count the samples present;
+`mixmogam gwas` does not filter variants, so filter first. No-calls are replaced by
+the variant's mean.
+
 ## Load phenotypes and align
 
 ```python
@@ -40,8 +47,26 @@ write_covariates("pcs.txt", gt.sample_ids, pcs, names=[f"PC{j}" for j in range(1
 
 Rows are matched by the sample ID column (the PLINK IID); missing values
 are rejected naming the samples. Include the PCs among the covariates
-whenever weights or case fractions vary with ancestry; as covariates
-their scale is irrelevant.
+whenever weights or case fractions vary with ancestry or the environment
+tracks it; as covariates their scale is irrelevant.
+
+How many? Enough to span the ancestry structure: with K discrete
+populations, K - 1. In a simulated panel of four populations whose
+environment differed between them, two components left 58% of the
+environment in the trait and three left 0.3%. With three, every method
+converged and agreed, including the official LDAK-KVIK. With two, BOLT-LMM's
+mixture, HRATT-HE and HRATT-REML reached their iteration caps without
+converging and their statistics were those of failed fits, while the exact
+path and BOLT-LMM-inf converged
+([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
+`principal_components(..., return_info=True)` reports the
+`explained_variance_ratio` where the spectrum drops off. Check
+`extra["cv_converged"]` and `extra["loco_converged"]` before reading any
+HRATT or BOLT-LMM statistic: `hratt` always reports both, `bolt` reports
+`cv_converged` and `loco_converged` only when the mixture is used
+(`extra["use_mixture"]`), and `exact` and `bolt-inf` have no flag (a failed solve
+raises). The package also emits a `RuntimeWarning`, which Python shows once per
+session by default, so when looping over traits test the flags yourself.
 
 The float64 SVD has a default working-memory budget of 4 GiB, checked
 before allele-frequency scanning and panel allocation. The estimate
@@ -100,7 +125,8 @@ result.extra["prevalence"]     # binary: (weighted) case fraction
 result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 ```
 
-Weights must be finite and positive (drop samples with zero weight); they
+Without `trait="binary"`, a 0/1 phenotype is fitted as a Gaussian trait, with no
+warning. Weights must be finite and positive (drop samples with zero weight); they
 are rescaled to mean one. With weights, heritability is fitted by HE
 (`heritability_method="auto"`); REML is unavailable because the weights
 define no likelihood. Binary `beta` is a one-step log odds approximation per
@@ -120,29 +146,18 @@ allele frequency and assumes conditional Hardy-Weinberg equilibrium;
 an intercept-only design uses empirical genotype frequencies. Calibration
 depends on these assumptions. HRATT warns when strong structure remains
 after the covariates. `gwas` raises TypeError for `trait`,
-`sample_weights`, `spa_threshold`, `spa_two_sided` and `loco_folds` with
-other methods.
+`sample_weights`, `spa_threshold`, `spa_two_sided`, `loco_folds`, `stage1` and
+`stage1_kwargs` with any other method, `auto` included (pass `method="hratt"`;
+only the command line moves `auto` to HRATT when `--trait`, `--weights` or `--stage1`
+is given). Method-specific keywords raise the same way: `n_threads` belongs to
+`exact` and `hratt`; `gram_cache_bytes`, `vb_tol` and `vb_max_iter` to `bolt` and
+`hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
+`cv_fraction` to `hratt` alone.
 
 HRATT's LOCO predictors are trained on other folds (`loco_folds=5`), while
 variance components and model selection use the whole trait. This reduced
 effect attenuation and separation in the tested scenarios; it does not
 guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
-
-Under population confounding, give the model covariates that span the
-ancestry structure (with K populations, at least K - 1 principal
-components; `principal_components(..., return_info=True)` reports the
-`explained_variance_ratio` where they drop off), and check
-`extra["cv_converged"]` and `extra["loco_converged"]` before reading any
-statistic; the package warns when they are false. In a controlled panel
-of four populations whose environment differs between them, three
-components made every method converge and agree with each other and with
-the official LDAK-KVIK (lambda_GC 1.06-1.10 on the null variants). Two
-components left 58% of the environment in the trait: BOLT-LMM's mixture,
-HRATT-HE and HRATT-REML then reached the iteration cap without
-converging, HRATT-HE with its variance component at h2 = 1, and their
-statistics are those of failed fits. The exact path and BOLT-LMM-inf,
-which do not use the variational sweep, converged in every setting
-([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 
 ## Larger HRATT fits
 
@@ -165,19 +180,37 @@ print(result.extra["he_variance"])
 print(result.extra["cv_converged"], result.extra["loco_converged"])
 ```
 
-If a partial-Gram-cache warning appears and RAM permits, raise
-`gram_cache_bytes` (for example, `4 * 1024**3`). A smaller cache lowers
-retained memory but rebuilds the remaining block Gram matrices on every
-sweep; it does not change the fitted model.
+`gram_cache_bytes` (default 1e9) budgets the Gram matrices of the
+128-variant blocks, one budget shared by HRATT's hold-out and cross-fitted
+fits. A block takes about 200 KB plus 8 KB per covariate column (the
+intercept counts), so 1 GB holds about 620,000 variants with an intercept
+only and about 440,000 with ten principal components. If a partial-cache
+warning appears and RAM permits, raise it (for example, `4 * 1024**3`). A
+smaller cache lowers retained memory but rebuilds the uncached blocks on
+every sweep, with the same arithmetic as the cached ones, so it never
+changes the fitted model.
 
 Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
 PCs for population/environmental confounding; the intercept is added internally.
-REML (HE with sampling weights) and one thread remain the defaults. Selecting
+REML (HE with sampling weights) and one thread remain the defaults.
+`random_state` (default 0) fixes the trace probes, the hold-out and the fold
+assignment: a fixed seed and thread setup reproduces p-values exactly, different
+seeds change them (by more at small n), so report the seed; `exact` is
+deterministic and takes none. Selecting
 `heritability_method="he"` changes the variance estimator to projected
 single-component randomized HE, distinct from official LDAK's partitioned HE
 workflow; it requires the default `alpha_method="he"`. Inspect HE boundary and
 precision diagnostics and CV/LOCO convergence before interpreting a fit.
 Trace-probe uncertainty is not a heritability confidence interval.
+
+Two settings trade accuracy for time. `slq_tol` (default 1e-6) lets the
+Lanczos REML run stop once h2 has converged, after 8 to 24 passes over the
+genotypes; `slq_tol=0` always runs 24, as before the October 2026 speed-ups,
+and the default moved log10 p by at most 4e-5 in tests. `cv_tol` (default:
+`vb_tol`, which changes nothing) sets a looser tolerance for HRATT's hold-out
+grid fit alone; `cv_tol=1e-4` halves that fit's sweeps but can change the
+selected prior, so it changes results (see the
+[design notes](design.md#order-of-steps-prior-selection-and-convergence)).
 
 `n_threads=4` parallelizes preparation and independent model updates while
 preserving SNP order within each model. Preparation gives the same values at
@@ -230,7 +263,7 @@ from mixmogam.scan import scan_gxe, permutation_min_p, fit_two_kinships
 out = mlmm(y, gt, K=K, max_steps=10)         # forward-backward; float32 scans
 out["selected"]["ebic"], out["selected"]["mbonf"]
 scan_gxe(LMM(y, X=E, K=K).fit(), gt, E)      # interaction given the main effect
-scan_gxe(fit, gt, E, polygenic_gxe=True)     # + polygenic K*(EE') component
+scan_gxe(LMM(y, X=E, K=K).fit(), gt, E, polygenic_gxe=True)  # + polygenic K*(EE')
 permutation_min_p(fit, gt, n_perm=1000)      # whitened-residual permutations
 fit_two_kinships(y, K_close, K_structure)     # weights including 0 and 1
 ```
@@ -259,7 +292,9 @@ Phenotype and covariate rows are aligned to the genotype sample IDs, and
 samples without a phenotype value or with a non-positive weight are
 dropped with a line saying how many. `--pcs K` appends the built-in PCs
 (`mixmogam pca` writes them for other settings); `--trait` and `--weights`
-select the HRATT weighted/binary path.
+select the HRATT weighted/binary path. `--weights FILE` is a sample ID (or
+FID IID) followed by one weight column, read like a covariate file, and
+`--n-threads` applies to `exact` and `hratt` only.
 
 The same commands accept PGEN and VCF/BCF through `--geno`; `--packed`
 retains two-bit calls and `--mmap` maps BED directly. BGEN requires explicit

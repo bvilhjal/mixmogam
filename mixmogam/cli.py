@@ -62,7 +62,8 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--covar", help="covariate file (see read_covariates)")
     gwas.add_argument("--covar-format", choices=("auto", "wide", "plink"), default="auto",
                       help="covariate missing-value policy; wide retains genuine numeric -9")
-    gwas.add_argument("--weights", help="one-column file of sampling weights (inverse probabilities)")
+    gwas.add_argument("--weights", help="sample ID (or FID IID) then one column of sampling weights (inverse probabilities), "
+                              "read like a covariate file")
     gwas.add_argument("--pcs", type=int, default=0, metavar="K",
                       help="append K built-in ancestry PCs to the covariates (min_maf 0.05, "
                            "2000 markers, seed 0; use the pca command for other settings)")
@@ -81,7 +82,8 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--random-state", type=int, default=None,
                       help="two-step method seed (default: the method's own, 0)")
     gwas.add_argument("--n-threads", type=int, default=1,
-                      help="parallel genotype preparation (values are identical at every count)")
+                      help="parallel genotype preparation and sweeps for the exact and hratt methods "
+                           "(values are identical at every count, up to rounding in parallel products)")
     gwas.add_argument("--max-loco-groups", type=int, default=25)
     gwas.add_argument("--out", "-o", required=True, help="summary-statistic .csv or .tsv (optional .gz)")
     gwas.add_argument("--genome-build", help="declared coordinate assembly (e.g. GRCh38 or TAIR10); no liftover")
@@ -192,7 +194,11 @@ def _cmd_gwas(args) -> int:
             method = "hratt"
         else:
             method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
-    kwargs = {"n_threads": args.n_threads}
+    kwargs = {}
+    if method in ("exact", "hratt"):
+        kwargs["n_threads"] = args.n_threads
+    elif args.n_threads != 1:
+        raise ValueError(f"--n-threads applies to the exact and hratt methods, not {method}")
     if args.random_state is not None and method != "exact":
         kwargs["random_state"] = args.random_state
     if args.trait is not None:

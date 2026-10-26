@@ -38,7 +38,8 @@ Table 1. Association paths and calibration.
 | `bolt` | y minus the mixture-prior LOCO prediction | LDSC intercept matched to `bolt-inf` |
 | `hratt` | y minus the cross-fitted elastic-net LOCO score times its fitted coefficient (binary: the logistic score with it as a covariate) | lambda = 1, or LDAK-KVIK's rule under strong structure |
 
-`auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT, the
+The two-step methods fit their variance components once, on all variants, not per
+LOCO group as `exact` does. `auto` uses `exact` up to n = 5,000 and `bolt-inf` above. HRATT, the
 Heritability-weighted Residual Association Two-step Test, is mixmogam's
 method inspired by LDAK-KVIK (Hof & Speed 2025): it follows that design, with
 the departures listed below, and is not LDAK-KVIK.
@@ -76,7 +77,8 @@ proximal-contamination deflation.
   all SNPs plus one pass over group g. Each group's REML fit uses Cholesky
   factorizations of K_{-g} + delta I instead of an eigendecomposition: a
   21-point grid over log delta for the first group, a local search from
-  the previous group's optimum afterwards (8-13 factorizations, log
+  the previous group's optimum afterwards (typically 8-13 factorizations per group on the 3,000 x 44,000 benchmark
+  panel, log
   delta to an absolute 1e-5, where EMMA's root finder resolves delta to an
   absolute 1e-6; Brent's method starts from the parabola through its three
   known points, and its parabolic steps land within 2e-6 of the optimum at
@@ -96,8 +98,9 @@ proximal-contamination deflation.
 ## Two-step engine (K-free)
 
 - **Streaming LOCO operator** (`_loco.LocoGenotypes`): standardized,
-  covariate-projected SNP blocks, computed on demand from the stored calls,
-  that never straddle a group. One pass
+  SNP blocks, computed on demand from the stored calls, that never straddle a
+  group (`rows()` and `blocks()` return covariate-projected rows; the passes
+  below decode unprojected rows and project on the sample side). One pass
   applies every K_{-g} to its own column, so the BOLT-style G LOCO solves,
   the 30 calibration solves and the LOCO eigenbases share GEMMs.
   Called-genotype means and standard deviations are prepared once; the
@@ -128,41 +131,53 @@ proximal-contamination deflation.
   taken from fold-sorted samples. This sums in a different order, so the
   float32 Gram storage rounds differently; the p-values move by up to
   1e-5 in log10 (BOLT-LMM's cross-validation), a rounding effect that the
-  iterations amplify. HRATT prepares its hold-out and cross-fitted fits'
-  Grams in one pass: the cross-fit folds' products, their sum and one
+  iterations amplify. With cross-fitted scores (`loco_folds` of 2 or more) HRATT prepares its
+  hold-out and cross-fitted fits' Grams in one pass: the cross-fit folds' products, their sum and one
   product over the hold-out give both, within one shared budget that
   caches every hold-out Gram first, and neither stores the all-sample
-  Gram, which neither reads. Reused workspaces avoid repeatedly
+  Gram, which neither reads. With `loco_folds=1` both fits share one engine
+  and one cache, which keeps the all-sample Gram. Reused workspaces avoid repeatedly
   widening whole genotype blocks; residual accumulation remains float64,
   and the residual update tests sample folds instead of reading an
   (n, columns) mask. The coordinate loop has an optional Numba
   implementation that sweeps one model column at a time, so the in-block
   corrections run along contiguous Gram rows and vectorize; every column
-  keeps its SNP order, serially or in parallel.
+  keeps its SNP order, serially or in parallel. Fits of 2 to 32 model
+  columns keep the residual, its storage-precision image and the updates
+  column-major, (columns, samples), so each column's samples stream through
+  the genotype GEMMs and the residual pass; wider fits (BOLT-LMM's 90-column
+  cross-validation, HRATT's strong-structure refit) keep the sample-major
+  layout, which is faster there. Each block's rank-q covariate corrections
+  run in two compiled loops over all columns when covariates times columns
+  is at most 128 per held-out fold, and as NumPy products otherwise.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML
   on the operator: at most 24 Lanczos steps and 48 Rademacher probes. A pass
   over the genotypes costs about the same for 1 to 64 columns; 24 steps
   matched 96 to five digits in every tested spectrum, while 12 probes left
   h2 with an SD of 0.12 over probe seeds at n = 500 under strong structure
-  (0.02 with 48). The phenotype rule and trace probes share batched Lanczos
+  (0.02 with 48; archive `20261004-slq-defaults`). The phenotype rule and trace probes share batched Lanczos
   products. The run stops after step j >= 8 once the h2 fitted from the
   j-step rules changed by less than `slq_tol` (1e-6) at each of the last two
   steps and the last three fits each found a bracketed root; `slq_tol=0`
   runs all 24. The guard matters with more samples than variants, where
-  short rules kept h2 on the grid end (0.99995) for up to 16 steps in the
+  short rules kept h2 on the grid end (0.99995 for a true 0.5) in the
   tested panels. The two-step caller requests variance components alone,
   avoiding unused fixed-effect solves and scan preparation; public
   `LMM.fit()` still produces a complete fit. The deflation keeps only
   eigenvalues at least four times the median of a 128-wide randomized
   basis. HRATT builds that
-  basis only under strong structure, where its ridge solves share it as a
-  preconditioner: with ancestry covariates the basis kept no eigenvalue on
+  basis only under strong structure and REML heritability, where its ridge
+  solves share it as a preconditioner (otherwise they build their own
+  64-pair one): with ancestry covariates the basis kept no eigenvalue on
   the benchmark panels (results are then identical without it), and with
   an inversion-like LD block that the structure test did not flag, the
   undeflated h2 was as close to exact REML (0.002-0.006) as the deflated.
 
 HRATT normally selects the frequency-weight exponent `alpha` by randomized
-single-component HE, then fits heritability by REML. Explicit
+single-component HE, then fits heritability by REML. Alpha comes from -1, -0.75,
+-0.5, -0.25 and 0 by the HE fit score (the sum of y_i y_j K_ij over i != j,
+squared, over the sum of K_ij^2), with the second moment from `he_probes` = 32
+Rademacher probes shared by all alphas; one genotype pass serves every alpha. Explicit
 `heritability_method="he"` reuses the selected alpha's products to fit
 `vg K + ve (I - QQ')`, with nonnegative variance components in the covariate
 residual space. It avoids the REML stage **by changing the estimator**, not
@@ -171,6 +186,55 @@ unconstrained estimates, boundary status and trace-probe precision;
 unidentified or numerically invalid fits raise. The existing variational
 noise floor of 0.001 on the unit-variance phenotype scale is reported for
 HE fits. Probe precision is not sampling uncertainty in heritability.
+
+### Order of steps, prior selection and convergence
+
+HRATT's steps, as labelled in the code, are (1a) the structure test, (1b) the
+power alpha and h2, (1d) the prior, (1e) the LOCO scores and (2) the tests. The
+structure test correlates up to 512 evenly spread variants on different
+chromosomes; structure is strong when n_eff times their mean r^2, less one,
+exceeds 0.1 with a z-score above 3 (n_eff: the Kish size of the working weights,
+less the covariates).
+
+HRATT's prior on each variant's effect is elastic-net: p Laplace + (1 - p)
+N(0, F h2_j / (1 - p)), with h2_j = w_j h2 / sum(w) and
+w_j = [f_j (1 - f_j)]^(1 + alpha), the LDAK-Thin weights without LD
+thinning. (p, F) is chosen from ten points (`HRATT_GRID`, LDAK-KVIK's grid)
+by held-out error: a random `cv_fraction` (0.1) of the samples, stratified by
+case status for binary traits, is held out, all ten models are fitted to
+the remaining samples in one variational fit, and the model with the
+smallest held-out mean squared error is kept. That error is predicted from
+the held-out samples' calls alone, not from a prediction for every sample.
+The chosen model then gives the cross-fitted fits below.
+
+A variational fit stops when, in every model column, the squared change in
+fitted values over a sweep, relative to the squared norm of the column's
+(masked) targets, is below `vb_tol` (1e-5), or after `vb_max_iter` (100)
+sweeps. `extra["cv_converged"]` and `extra["loco_converged"]` report whether
+the hold-out and the LOCO fits stopped on the tolerance, and the package
+warns when either did not. Reaching the cap is not harmless. In a
+four-population panel whose environment two principal components explained
+only 42% of, the elastic-net fits reached it, and their statistics were
+those of failed fits (quickstart). `cv_tol` (default: `vb_tol`) sets the
+tolerance of the hold-out fit alone. `cv_tol=1e-4` needs about half that
+fit's sweeps but changes the estimator: at n = 5,000 it changed the chosen
+model in 4 of 32 runs, each time away from the converged choice, and where
+the hold-out fit does not converge at `vb_tol` it changed 37-48 calls at
+0.05/m in 2 of 3 runs (CHANGELOG, `hratt` docstring). It is opt-in for that
+reason.
+
+Table 1a. Stopping rules.
+
+| iteration | stops when | cap | on failure |
+|---|---|---|---|
+| Lanczos REML | h2 stable to `slq_tol` | 24 passes | none |
+| conjugate gradients (LOCO, calibration) | relative residual below `cg_tol` (1e-6) | 2,000 | `RuntimeError`, no statistics |
+| variational fit, hold-out | relative change below `cv_tol` (default `vb_tol`, 1e-5) | `vb_max_iter` (100) | `RuntimeWarning`, `cv_converged` false, results returned |
+| variational fit, cross-fit, LOCO, BOLT cross-validation | relative change below `vb_tol` | 100 | as above, `loco_converged` |
+| HRATT lambda, strong structure | fixed point to 1e-10 | 20 | none |
+
+Binary working probabilities are clipped to [1e-4, 1 - 1e-4] with a warning, and
+the no-Numba fallback and a partial Gram cache also warn.
 
 ### Cross-fitted LOCO scores
 
@@ -186,8 +250,10 @@ Each group's score then enters with its own least-squares coefficient, or
 logistic coefficient for binary traits, kept in [0, 1]. This out-of-fold
 calibration slope shrinks an over-dispersed score but never undoes the
 prior's shrinkage; with h2 near zero, an unrestricted slope reached 1,000.
-Binary scores whose coefficient exceeds one are fixed offsets. Scores that
-anti-predict, or whose null fit diverges, are dropped for their group.
+Binary scores whose fitted coefficient exceeds one, or whose fit with the score
+as a covariate diverges, enter as fixed offsets (coefficient one). A group's
+score is dropped when it anti-predicts (a non-positive coefficient), lies in
+the covariates' span, or its fixed-offset fit diverges too.
 
 An in-sample fit (`loco_folds=1`, LDAK-KVIK's design and the earlier
 default) puts part of each sample's own phenotype into its score: a
@@ -260,8 +326,8 @@ correlations of those same rows, group-pure so LOCO groups never straddle a
 block. LDpred3's own panel builder is not used: its dosage convention
 (non-negative calls, negatives as missing) cannot carry signed standardized
 rows, and these correlations are the covariate-adjusted LD the marginal
-regressions imply. `stage1="auto"` runs both candidates and keeps the one
-with the lower hold-out error.
+regressions imply. `stage1="auto"` fits the elastic net and `ldpred3-inf` and keeps the one
+with the lower hold-out error (lassosum2 is not a candidate).
 
 Three consequences of the block-independent model are accepted:
 
@@ -337,7 +403,8 @@ are not fitted logistic MLEs or likelihood-based uncertainty. Binary
 exports label them `beta_one_step` and `se_null_score`, and posterior
 probabilities reject them. lambda keeps its rule and multiplies the
 statistic. `denominator="spectral"` is unavailable with weights or binary
-traits, and `alpha_method="reml"` with weights. The validation follows
+traits, and `alpha_method="reml"` and `heritability_method="reml"` with weights;
+`heritability_method="he"` requires `alpha_method="he"`. The validation follows
 `benchmarks/hratt_weights_binary_plan.md`. Its
 [results](../benchmarks/results/20261005-hratt-weights-binary/README.md)
 showed two limits that motivated the follow-ups.
@@ -363,18 +430,26 @@ first validation required.
 genotype preparation over variants and coordinate updates over independent
 candidate models, cross-fitting folds or LOCO columns. Each model retains its sequential SNP
 order. For large fits (at least 50,000 samples), a
-bounded BLAS workspace and a pool of at most four workers distribute suitable
-residual matrix products over sample rows. Smaller products retain the
-ordinary matrix-product path. Temporary Numba and detected BLAS limits are
-restored on exit; see the [quickstart](quickstart.md#larger-hratt-fits) for
-a complete configuration, including Apple Accelerate.
+pool of at most four workers splits each residual update's matrix product over
+sample rows (above 32 model columns a bounded workspace also serves the forward
+product); it needs `threadpoolctl`, without which those products stay serial.
+Smaller products retain the ordinary matrix-product path. Temporary Numba and detected BLAS limits are
+restored on exit. Under Numba's OpenMP layer the workers also spin for 1 ms
+between a parallel fit's launches instead of sleeping at once (1.12-1.24
+times faster on a 5,000 x 40,000 panel at four threads, for 1.5-2 times the
+process CPU time; nothing changes when `KMP_BLOCKTIME` or `OMP_WAIT_POLICY`
+is set, under Numba's other threading layers, or at one thread). See the
+[quickstart](quickstart.md#larger-hratt-fits) for a complete configuration,
+including Apple Accelerate.
 
 Prepared genotypes are never stored projected. Preparation keeps, per
 variant, the three standardized call values, the covariate coefficients
 c = z Q and the squared norm of the projected values Z = z (I - QQ'). With
-Numba one compiled kernel computes them in float64 over 64-variant tiles,
-summing each variant's samples in order, so every thread count and storage
-order gives the same values. Later passes decode unprojected rows by table
+Numba one compiled kernel computes them in float64 over 64-variant tiles: one
+contiguous pass counts each variant's calls, then eight variants at a time are
+centered into 256-sample rows whose covariate sums stay in registers
+(sample-major int8 keeps a sample-at-a-time kernel). Each variant sums its
+samples in order, so every thread count and storage order gives the same values. Later passes decode unprojected rows by table
 lookup and remove the covariates elsewhere: operator products project their
 n x c operands (Z P = z (I - QQ') P, and sums of Z' t are projected once),
 variational fitting corrects each 128-SNP block's products by its
@@ -383,7 +458,7 @@ corrections to products of unprojected rows. No float copy of the
 genotypes is retained: every pass decodes them. Calls may be stored two bits
 each (`PackedCalls`, PLINK's bed layout, in memory or memory-mapped), and
 preparation computes the mean and variance from exact call counts, so int8
-and two-bit storage give identical values. One thread decodes about 0.16 ns
+and two-bit storage give identical values. One M2 Pro thread decodes about 0.16 ns
 per genotype from variant-major (PLINK order) int8, by comparisons that
 vectorize rather than a table gather, 0.2 ns from two-bit storage and
 1 ns from sample-major int8 arrays, a transpose. The readers produce
@@ -398,17 +473,28 @@ need float64 rows (predictions, out-of-fold scores, test statistics)
 decode straight into float64 tiles. BOLT-LMM's
 in-sample LD scores stream each chromosome in position order and compute
 each pair once, crediting both variants. Target and window column chunks
-keep the decoded rows and correlation tiles within `max_memory_gib` rather
+keep the decoded rows and correlation tiles within `max_memory_gib` (an `ld_scores` argument, default 1.0 GiB, that `bolt`
+does not expose) rather
 than allocating the densest window without a budget. The
 stored calls (int8 or two-bit), Gram matrices, residuals and workspaces are
 separate allocations.
 PLINK input decoding and genotype validation also use bounded tiles. None of
 these changes makes the full analysis out of core.
 
-Parallel matrix products change reduction order (preparation does not), so
-a fixed seed does not imply bitwise identity across thread counts. This is separate
-from the choice between HE and REML. Defaults, model order and convergence
-criteria have not been changed to obtain the speedups.
+Preparation never changes with the thread count. On Apple Accelerate, one and
+four threads gave identical p-values in all 16 checked configurations (the
+variational fits on a synthetic 50,000-sample panel included); with other BLAS
+builds parallel matrix products can change reduction order, so a fixed seed does
+not guarantee bitwise identity across thread counts. This is separate
+from the choice between HE and REML. The October 2026 speed-ups keep every
+SNP order and every variational convergence criterion. One default changed:
+the Lanczos REML run stops once h2 has converged (`slq_tol`, above), which
+moved log10 p by at most 4e-5 in the 16 configurations checked, and
+`slq_tol=0` runs all 24 steps as before. The other changes leave p-values
+unchanged or move them at rounding level (at most 9e-7 in log10 p, on the
+strong-structure refit; 1.2e-13 elsewhere); the CHANGELOG states each. They
+were verified with Apple Accelerate, and other BLAS builds may differ at
+float32 GEMM rounding level.
 
 ## Structure-aware denominator (mixmogam extension)
 
@@ -435,9 +521,10 @@ c'v_g\left[\left\|(L_g+\delta I)^{-1/2}U_g'z\right\|^2
 
 with c' calibrated on the same 30 SNPs. The width is adaptive: k doubles
 from 64 to at most 512 until the calibration spread falls below 3%. The
-bulk of an LD-rich kinship is not flat. In a coalescent sample without
-population structure (n = 1,500), k = 64 left a 1.07 → 0.98 gradient
-and a 7% spread; k = 256 brought it to 1.005-1.018 (2%). A full-kinship basis is not
+bulk of an LD-rich kinship is not flat. On a coalescent sample (n = 1,500) the
+constant left a 1.11 → 0.93 chi2 gradient against exact by loading quintile,
+which the spectral denominator removed at k = 256 (archive
+`20261003T120104Z-sim-study`). A full-kinship basis is not
 enough: on *A. thaliana* (5 chromosomes, long-range LD) it left a 6%
 error in the top loading quintile, because each SNP's own LD block sits
 inside the full kinship.
@@ -507,7 +594,15 @@ statistics.
 
 ## Measured resources and numerical agreement
 
-On two fixed 50,000 × 20,000 phensim HAPNEST panels, four-thread HRATT-HE took
+The 26 October speed branch lowered these costs; the CHANGELOG and the
+archives `20261026T143800Z-kvik-scale` and `20261026T161500Z-kvik-sample-scaling`
+hold the current figures. On the 5,000 x 400,000 panel one thread takes 29 s
+for HRATT-HE (22 s under a null trait) at 2.6 GiB, 35 s for BOLT-LMM-inf at
+2.1 GiB, and 26 s for official LDAK-KVIK at 1.1 GiB on the same day. At
+m = 20,000 and n = 50,000 one thread takes 13.6 s for HRATT-HE, 24.2 s for
+HRATT-REML, 20.3 s for LDAK-KVIK and 47.0 s for BOLT-LMM-inf. Before the
+branch, on two fixed 50,000 × 20,000 phensim HAPNEST panels, four-thread
+HRATT-HE took
 29.2-33.2 s with its cross-fitted LOCO scores (7 October) and 20.7-21.7 s with
 in-sample scores (`loco_folds=1`, 6 October), at 1.4 GiB peak RSS, or 0.8 GiB
 with two-bit calls and identical results; official LDAK-KVIK took 25.5-30.1 s
@@ -515,8 +610,10 @@ at 0.65 GiB on 3 October, when the host was slower. From 50,000 samples the
 variational sweep threads its genotype products for any number of model
 columns, so four threads speed the five-fold cross-fit up 1.4-1.5-fold
 (in-sample fits: 1.5-1.6); 2.0.0.dev6 required six columns, which left the
-cross-fit at 1.3-fold. One and four threads differ by rounding beyond the
-original array tolerance but agree in every significance decision.
+cross-fit at 1.3-fold. One and four threads then differed by rounding beyond the
+original array tolerance but agreed in every significance decision; since the
+speed branch they give identical p-values on Apple Accelerate in every
+configuration checked.
 Methods, ranges and caveats (swapping in the original cached runs, the
 Accelerate-linked official binary) are in the
 [archive](../benchmarks/results/20261006-kvik-20k-dev6/README.md), its

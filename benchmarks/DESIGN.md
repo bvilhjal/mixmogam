@@ -16,7 +16,7 @@ carries the source snapshot, the environment manifest, the commands, the
 logs, the raw results and, where the numbers are compared, the
 comparison itself.
 
-## 1. The four layers
+## 1. The five layers
 
 | Layer | Question | Drivers | What it can support |
 |---|---|---|---|
@@ -38,7 +38,7 @@ time.
 
 | # | Gap | How it was visible | Status |
 |---|---|---|---|
-| G1 | Nothing was measured above 80,000 variants | the 25 October efficiency review: the variational Gram cache holds about 278,000 variants at the default budget, so every archived run sat inside the cache and never measured the recompute tax; the LD-score window and the mixture model's cross-validation matrix are only large at genome scale | closed by the scale study (arms C and C2) |
+| G1 | Nothing was measured above 80,000 variants | the 25 October efficiency review: the variational Gram cache holds about 320,000 variants (620,000 since the speed branch packed the Grams) at the default budget, so every archived run sat inside the cache and never measured the recompute tax; the LD-score window and the mixture model's cross-validation matrix are only large at genome scale | closed by the scale study (arms C and C2) |
 | G2 | The default installation was never measured | every archive used the optional acceleration package and pinned the native libraries to one thread; the pure NumPy fallbacks and the unpinned default were unmeasured | closed by the scale study (arms A and D) |
 | G3 | Peak memory was traced, not resident | the component tables of the 25 October review report traced allocations, which exclude NumPy, BLAS and Numba allocations and are not RSS | closed for the two-step engine (arm C reports operating-system peak RSS) |
 | G4 | No cheap scientific check | the calibration benchmarks need the RegMap panel, the official LDAK-KVIK executable, or a long simulation; a contributor cannot check calibration in minutes | closed by the calibration arm (arm B: null type-I error, power, effect attenuation, with Monte Carlo intervals) |
@@ -105,7 +105,7 @@ until their archives are re-run under the shared code (G5).
 * Timings are host-specific and code-specific. A ratio between two
   configurations measured in the same archive is meaningful; a number
   copied between archives is not -- the reference program itself moved
-  13-33% between the 25 and 26 October runs on identical inputs, which
+  2-34% between the 25 and 26 October runs on identical inputs, which
   is the honest noise floor for any cross-day comparison.
 * Passing every benchmark establishes implementation contracts, not
   calibration. The calibration arm is a check on the null and on power

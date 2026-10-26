@@ -57,12 +57,12 @@ panel at 50,000 samples, the same panel subsampled to 5,000 samples
 (same variants, same LD), and the scale study's 400,000-variant panel.
 It is the answer to "the new panel has twenty times the variants and
 takes the same time": ten times fewer samples make the reference
-program 7.3 times faster and mixmogam 7.1 times, and the iteration
+program 7.1 times faster and HRATT-HE 7.0 times, and the iteration
 counts fall with them. The
 [run of 25 October](results/20261025T190534Z-scaling-ladder/README.md)
 also shows that the October archives were measured on a slower host
 with older code: the same executable on the same archived panel takes
-19.8 s today against the archived 33.5 s.
+20.1 s today against the archived 33.5 s.
 
 ```sh
 python benchmarks/scaling_ladder.py --ldak ~/bin/ldak63 \
@@ -93,7 +93,7 @@ p-values of all three programs. The
 [run of 25 October](results/20261025T153917Z-kvik-scale/README.md) found
 the official program as fast as mixmogam's HRATT-HE (24 s against 34 s)
 and faster than BOLT-LMM-inf (51 s), with a third of the memory; the two
-programs' p-values correlate at 0.998 under the null and detect the same
+programs' p-values correlate at 0.9991 under the null (0.998 on the mixed trait) and detect the same
 8 of 10 causal variants.
 
 **Reruns after the speed branch (26 October 2026).** Every LDAK-KVIK
@@ -119,8 +119,8 @@ floor for cross-day ratios.
 **Sample-size scaling.** The same driver at fixed m = 20,000 and n from
 1,000 to 50,000 measures how each method scales in samples
 ([ladder](results/20261026T161500Z-kvik-sample-scaling/README.md)).
-With iteration counts flat in n, LDAK-KVIK and both HRATT paths are
-linear (local exponents 0.81-0.96); BOLT-LMM-inf is the one superlinear
+With bounded iteration counts, LDAK-KVIK and both HRATT paths are
+linear (local exponents 0.80-0.97); BOLT-LMM-inf is the one superlinear
 method (1.21), because its conjugate-gradient count grows from 10 to 22
 over the ladder; `exact` is cubic and stops at n = 2,500. HRATT-HE is
 the fastest method from n = 10,000 up (13.6 s against the reference

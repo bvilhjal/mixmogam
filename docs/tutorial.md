@@ -110,10 +110,13 @@ How to read this honestly:
   (retrospective score tests versus an F test), so compare calls and
   calibration, not raw p-values across methods.
 - Both `bolt` and `hratt` raised "variational fit did not converge" on this
-  small panel (`result.extra["cv_converged"]` and `["loco_converged"]` are
+  panel (`result.extra["cv_converged"]` and `["loco_converged"]` are
   `False`), and `bolt` has the highest λ (1.14). This is the intended
-  warning: they are built for larger n and m, so inspect those flags before
-  trusting a two-step fit, and prefer `exact` at this size.
+  warning, and its cause is the five populations the model was not adjusted
+  for, not the panel's size: on a 3,000-variant version of this panel (this
+  15,000-variant run was not repeated) both converged once the covariates
+  included K - 1 = 4 principal components. Inspect those flags before
+  trusting a two-step fit, and add ancestry components.
 - 6/8 for `bolt` versus 5/8 is one SNP in one simulation, not a power result.
   The matched benchmarks live in the report.
 

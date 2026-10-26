@@ -1086,8 +1086,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     cross-fitted LDpred3 effects fit from covariate-adjusted marginal
     statistics and in-cohort LD blocks: deterministic, with per-fit cost
     nearly independent of the sample size once the LD is built, and exact
-    LOCO under the block-independent model. ``"auto"`` runs both and keeps
-    whichever scores better on the ``cv_fraction`` hold-out. The LDpred3
+    LOCO under the block-independent model. ``"auto"`` fits the elastic net and
+    ``ldpred3-inf`` and keeps whichever scores better on the ``cv_fraction``
+    hold-out (lassosum2 is not a candidate). The LDpred3
     options need the separate ``ldpred3`` package, quantitative traits and
     ``loco_folds >= 2``; ``stage1_kwargs`` (``block_size``, lassosum2's fit
     keywords) configure them. Variance components and prior selection still
