@@ -585,22 +585,29 @@ def arm_scale(out, args):
 # Arm C2: the cache cliff ladder
 # ----------------------------------------------------------------------
 def predicted_cache_coverage(m, budget, *, folds=5, block=128, itemsize=4, q=1):
-    """Share of a panel the variational Gram cache can hold.
+    """Share of a panel HRATT's cross-fitted Gram cache can hold.
 
-    The engine charges every sub-block of ``block`` variants
-    ``(folds + 1) * block * (block * itemsize + 8 q)`` bytes, so the
-    budget covers a known number of sub-blocks before the rest is
-    recomputed in every sweep. The formula is the engine's own
-    accounting, written out here so that the prediction can be compared
-    with the measured times. The engine's last sub-block of each LOCO
-    group is shorter and therefore cheaper, so its measured coverage
-    can be a little larger than this prediction.
+    Gram matrices are stored as packed triangles of
+    ``t = block (block + 1) / 2`` entries. HRATT's hold-out and
+    cross-fitted fits share the budget: first every sub-block's hold-out
+    Gram, ``t * itemsize + 2 * block * 8 q`` bytes, then the cross-fitted
+    Grams, ``folds * t * itemsize + (folds + 1) * block * 8 q`` bytes per
+    sub-block, in order with what remains; the rest is recomputed in
+    every sweep. The formula is the engine's own accounting, written out
+    here so that the prediction can be compared with the measured times.
+    The engine's last sub-block of each LOCO group is shorter and
+    therefore cheaper, so its measured coverage can be a little larger
+    than this prediction.
     """
     if not budget:
         return 0.0
-    per_block = (folds + 1) * block * (block * itemsize + 8 * q)
+    tri = block * (block + 1) // 2 * itemsize
     blocks = m // block
-    cached_blocks = min(blocks, int(budget // per_block))
+    held_out = blocks * (tri + 2 * block * 8 * q)
+    if held_out > budget:
+        return 0.0
+    per_block = folds * tri + (folds + 1) * block * 8 * q
+    cached_blocks = min(blocks, int((budget - held_out) // per_block))
     return cached_blocks * block / m
 
 

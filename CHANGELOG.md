@@ -53,6 +53,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   sampling weights); whole HE and REML fits are 1.3-2.1% faster. Results
   are bit-identical with Accelerate (p-values in all 16 checked
   configurations); other BLAS builds may differ at rounding level.
+- HRATT prepares the Gram matrices of its hold-out and cross-fitted fits in
+  one pass: each sub-block is decoded once and gathered in cross-fit fold
+  order by a compiled kernel into a reused float64 buffer, and the fold
+  products, their sum and one product over the hold-out give both caches
+  (before: two decodes, two NumPy gathers and an extra all-sample product).
+  VB Grams are stored as packed upper triangles, the only part the sweeps
+  read, and HRATT's two caches omit the all-sample Gram, which neither fit
+  reads. `gram_cache_bytes` is now one budget shared by both caches,
+  filled with the hold-out Grams first. Both are held during the hold-out
+  fit: at 5,000 x 400,000 about 0.65 GB, 0.22 GB more than that fit held,
+  but below the 1 GB the cross-fit's budget-bound cache took. 1 GB holds
+  about 620,000 variants instead of 320,000, for BOLT too. Gram preparation
+  takes 0.38 s instead of 0.79 s on a 5,000 x 40,000 panel and 0.37 s
+  instead of 0.86 s on 20,000 x 10,000; whole HE and REML fits take 8-16%
+  less time (one thread), 18% with `gram_cache_bytes=1e8`, which leaves a
+  fifth of the cross-fit uncached as the default did at 400,000 variants,
+  and peak memory is up to 89 MB lower. Rounding-level: the cross-fitted
+  Grams are unchanged bit for bit, but the hold-out fit's training Gram
+  sums its products in another order, which moves the hold-out errors by
+  up to 2e-8 relative (with covariates; 1e-15 without) and could flip a
+  near-tie in the choice of prior. p-values were bit-identical in all 16
+  checked configurations, with four threads, with binding budgets and for
+  BOLT. Grams rebuilt outside the budget use the cached arithmetic, so the
+  budget still changes no result.
 
 ### Fixed
 

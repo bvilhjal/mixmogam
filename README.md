@@ -98,10 +98,11 @@ the HAPNEST panels above, and LD inside 100-variant blocks -- so it measures
 scale and memory, not the difficulty of a realistic genome; the
 [scaling ladder](benchmarks/results/20261025T185808Z-scaling-ladder/README.md)
 separates the sample-size, LD and iteration effects. The default 1 GB
-variational Gram cache holds about 320,000 variants, so at 400,000 variants
-it warns that the rest is recomputed every sweep: switching the cache off
+variational Gram cache then held about 320,000 variants (about 620,000
+since Grams are stored as packed triangles), so at 400,000 variants it
+warned that the rest was recomputed every sweep: switching the cache off
 cost 1.7 times for HRATT-HE and 1.2 times for BOLT-LMM, and a budget that
-holds the whole panel recovered 10% and 4%
+held the whole panel recovered 10% and 4%
 ([archive](benchmarks/results/20261025T135258Z-scale-study/README.md)).
 
 On that same panel, the official LDAK-KVIK took 24 s at 1.2 GiB against

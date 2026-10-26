@@ -47,6 +47,12 @@ def _projected_gram(lg, idx, z, folds):
     return grams.astype(lg.dtype)
 
 
+def _packed(grams):
+    """Upper triangles, row by row: the engine's storage of (S, k, k) Grams."""
+    rows, cols = np.triu_indices(grams.shape[-1])
+    return np.ascontiguousarray(grams[:, rows, cols])
+
+
 def _projected_coefs(lg, idx, z, folds):
     """z Q and each fold's held-out z_f Q_f, as the production Grams form them."""
     Z64, Q = z.astype(np.float64), lg.Q
@@ -98,7 +104,7 @@ class _DenseWorkspaceOracle(VBEngine):
         changes = np.empty((self.sub_block, p))
         gidx = col_fold + 1
         blocks = [(idx, g, z.copy()) for idx, g, z in self._subblocks()]
-        cache = ([_projected_gram(self.lg, idx, z, self.folds) for idx, _, z in blocks]
+        cache = ([_packed(_projected_gram(self.lg, idx, z, self.folds)) for idx, _, z in blocks]
                  if self.gram_cache_bytes > 0 else None)
         Q = self.lg.Q
         q = Q.shape[1]
@@ -117,7 +123,7 @@ class _DenseWorkspaceOracle(VBEngine):
             change = np.zeros(p)
             s_proj = Q.T @ residual
             for b, (idx, group, Z) in enumerate(blocks):
-                grams = cache[b] if cache is not None else _projected_gram(self.lg, idx, Z, self.folds)
+                grams = cache[b] if cache is not None else _packed(_projected_gram(self.lg, idx, Z, self.folds))
                 coefs = _projected_coefs(self.lg, idx, Z, self.folds)
                 coef = self.lg._projection[idx]
                 r32 = residual.astype(self.lg.dtype)
@@ -239,7 +245,7 @@ def test_selective_workspace_matches_dense_and_uncached(workspace, prior_type):
     assert any(idx.size < 128 for idx, _, _ in cached._subblocks())
     assert any(idx.size == 128 for idx, _, _ in cached._subblocks())
     for (idx, _, Z), gram in zip(cached._subblocks(), cached._grams):
-        np.testing.assert_array_equal(gram, _projected_gram(lg, idx, Z, folds)[[0, 1, 3]])
+        np.testing.assert_array_equal(gram, _packed(_projected_gram(lg, idx, Z, folds)[[0, 1, 3]]))
         assert gram.dtype == lg.dtype
     for c, (f, g) in enumerate(zip(selected_folds, selected_groups)):
         if f >= 0:
@@ -256,7 +262,7 @@ def test_partial_gram_cache_matches_full_and_skips_unused_folds(workspace, monke
     expected = _fit(VBEngine(lg, folds=folds), Y, col_fold, col_group)
     sizes = [idx.size for idx, _, _ in VBEngine(lg, folds=folds)._subblocks()]
     q, item = lg.Q.shape[1], lg.dtype.itemsize
-    two = sum(3 * k * (k * item + q * 8) for k in sizes[:2])
+    two = sum(3 * (k * (k + 1) // 2 * item + k * q * 8) for k in sizes[:2])
     eng = VBEngine(lg, folds=folds, gram_cache_bytes=two)
     _assert_same_fit(_fit(eng, Y, col_fold, col_group), expected)
     assert len(eng._grams) == len(eng._coefs) == 2 < len(sizes)
@@ -284,7 +290,7 @@ def test_partitioned_folds_sum_the_fold_grams(workspace):
     eng = VBEngine(lg, folds=folds)
     for idx, _, Z in eng._subblocks():
         grams, coefs = eng._gram(Z, idx, all_folds)
-        expected = _projected_gram(lg, idx, Z, folds)
+        expected = _packed(_projected_gram(lg, idx, Z, folds))
         eps = np.finfo(lg.dtype).eps
         np.testing.assert_allclose(grams, expected, rtol=0, atol=64 * eps * np.abs(expected).max())
         expected = _projected_coefs(lg, idx, Z, folds)

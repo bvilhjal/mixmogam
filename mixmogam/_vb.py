@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager, ExitStack
+from itertools import islice
 import math
 from typing import Optional
 import warnings
@@ -175,16 +176,17 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
     return (w1 * ml + w2 * mnn) / (w1 + w2)
 
 
-def _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+def _sweep_column(p, U, beta, grams, slot, skip, prior_type, prior, scale, s2e, D):
     """One Gauss-Seidel pass of column p over a block of SNPs.
 
     U (B, P): x_a' R at block start, corrected in place as SNPs move;
-    beta (B, P): block coefficients, updated in place; grams (F+1, B, B):
-    full and per-fold Gram matrices, ``gidx[p]`` selecting column p's;
-    D (B, P): output coefficient changes. Each SNP moves, then the products
-    of the column's later SNPs are corrected through the contiguous Gram
-    row; with U in column order these updates vectorize (the unsigned
-    bounds spare Numba's negative-index checks, which prevented it).
+    beta (B, P): block coefficients, updated in place; grams (S, B(B+1)/2):
+    Gram matrices as packed upper triangles (row a holds columns a..B-1;
+    nothing else is read), ``slot[p]`` selecting column p's; D (B, P):
+    output coefficient changes. Each SNP moves, then the products of the
+    column's later SNPs are corrected through the contiguous Gram row; with
+    U in column order these updates vectorize (the unsigned bounds spare
+    Numba's negative-index checks, which prevented it).
     """
     nb = U.shape[0]
     u_col = U[:, p]
@@ -192,8 +194,9 @@ def _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, 
         if skip[p]:
             D[a, p] = 0.0
             continue
-        gram = grams[gidx[p]]
-        gjj = gram[a, a]
+        gram = grams[slot[p]]
+        o = a * (2 * nb - a + 1) // 2  # (a, a) in the packed triangle
+        gjj = gram[o]
         if gjj <= 0.0:
             D[a, p] = 0.0
             continue
@@ -213,22 +216,52 @@ def _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, 
         D[a, p] = d
         if d != 0.0:
             beta[a, p] = b_new
-            row = gram[a]
+            row = gram[o - a:o - a + nb]  # row a, indexed by column
             for c in range(_unsigned(a + 1), _unsigned(nb)):
                 u_col[c] -= row[c] * d
 
 
-def _sweep_block(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+def _sweep_block(U, beta, grams, slot, skip, prior_type, prior, scale, s2e, D):
     """One Gauss-Seidel sweep over a block of SNPs for every column
     (:func:`_sweep_column`); columns are independent."""
     for p in range(U.shape[1]):
-        _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D)
+        _sweep_column(p, U, beta, grams, slot, skip, prior_type, prior, scale, s2e, D)
 
 
-def _sweep_block_parallel(U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D):
+def _sweep_block_parallel(U, beta, grams, slot, skip, prior_type, prior, scale, s2e, D):
     """Independent model columns; each retains its serial SNP update order."""
     for p in prange(U.shape[1]):
-        _sweep_column(p, U, beta, grams, gidx, skip, prior_type, prior, scale, s2e, D)
+        _sweep_column(p, U, beta, grams, slot, skip, prior_type, prior, scale, s2e, D)
+
+
+def _gather(Z, cols, out):
+    """out[:, i] = Z[:, cols[i]], widened to ``out``'s precision. One
+    sample's k values at a time, so an F-order ``out`` (the layout NumPy
+    gives ``Z[:, cols]``) is written as one contiguous stream."""
+    for i in range(cols.size):
+        j = cols[i]
+        for r in range(Z.shape[0]):
+            out[r, i] = Z[r, j]
+
+
+def _pack_upper(A, out):
+    """The upper triangle of A, row by row (row a holds columns a..k-1),
+    into ``out``, rounded to its precision."""
+    o = 0
+    for a in range(A.shape[0]):
+        for c in range(a, A.shape[0]):
+            out[o] = A[a, c]
+            o += 1
+
+
+def _pack_difference(A, B, out):
+    """:func:`_pack_upper` of A - B, each difference taken in A's precision
+    before rounding, as an array assignment of A - B would."""
+    o = 0
+    for a in range(A.shape[0]):
+        for c in range(a, A.shape[0]):
+            out[o] = A[a, c] - B[a, c]
+            o += 1
 
 
 if HAS_NUMBA:
@@ -242,9 +275,21 @@ if HAS_NUMBA:
     _sweep_column = njit(inline="always", cache=True)(_sweep_column)
     _sweep_block = njit(cache=True)(_sweep_block)
     _sweep_block_parallel = njit(parallel=True, cache=True)(_sweep_block_parallel)
+    _gather = njit(cache=True, nogil=True)(_gather)
+    _pack_upper = njit(cache=True)(_pack_upper)
+    _pack_difference = njit(cache=True)(_pack_difference)
 else:
     prange = range
     _unsigned = int
+
+    def _gather(Z, cols, out):
+        out[...] = Z[:, cols]
+
+    def _pack_upper(A, out):
+        out[:] = A[np.triu_indices(A.shape[0])]
+
+    def _pack_difference(A, B, out):
+        out[:] = (A - B)[np.triu_indices(A.shape[0])]
 
 
 def _refresh_residual(R, work, delta, folds, col_fold, change):
@@ -315,11 +360,13 @@ class VBEngine:
     folds : (n,) fold index per sample (0..F-1) for cross-validation, or None
     sub_block : SNPs per Gauss-Seidel block
     gram_cache_bytes : budget for cached per-block Gram matrices (full and
-        requested folds, in the genotype storage precision, with their
-        covariate coefficients). Sub-blocks are cached in order while they
-        fit; the rest are recomputed every sweep, for the folds that fit
-        uses. A later full-data fit reuses the Grams prepared during
-        cross-validation.
+        requested folds, as packed upper triangles in the genotype storage
+        precision, with their float64 covariate coefficients). Sub-blocks
+        are cached in order while they fit; the rest are recomputed every
+        sweep, for the folds that fit uses. A later full-data fit reuses the
+        Grams prepared during cross-validation. HRATT's hold-out and
+        cross-fitted engines share one budget instead
+        (:func:`_prepare_crossfit_grams`).
     n_threads : positive integer, default 1
         Numba workers for SNP coordinate sweeps across independent model
         columns. Residual updates and norm reductions remain serial. More
@@ -344,33 +391,48 @@ class VBEngine:
         self.gram_cache_bytes = gram_cache_bytes
         self._grams = self._coefs = None
         self._gram_folds = np.empty(0, dtype=np.int64)
+        # Whether Gram slot 0 (all samples) is stored; HRATT's joint
+        # preparation omits it, and fold f's slot is then f, not f + 1.
+        self._full_slot = True
         self._layout = None  # fold-sorted samples, made on first use
+        self._sum_layout = None  # another partition's, summing the all-sample products
+        self._fold_cache = {}  # per held-out fold: its samples, Q_f and Q_f'Q_f
+        self._scratch = {}  # float64 gather buffers, released after each pass
         self._warn_on_partial = _warn_on_partial
         self._cache_warned = False
 
     def _prepare_grams(self, col_fold):
-        """Prepare only the row subsets used by this fit; full data is slice 0.
+        """Prepare only the row subsets used by this fit; full data is slot 0.
 
         Sub-blocks are cached in order while their Grams fit the budget; the
-        remainder are recomputed in each sweep (see :meth:`fit`).
+        remainder are recomputed in each sweep (see :meth:`fit`). An engine
+        prepared without slot 0 stores it from the first fit that needs it.
         """
         needed = np.unique(col_fold[col_fold >= 0])
-        if self._grams is None or not np.isin(needed, self._gram_folds).all():
+        full = bool((col_fold < 0).any())
+        if (self._grams is None or not np.isin(needed, self._gram_folds).all()
+                or (full and not self._full_slot)):
             # Drop old storage before changing its labels or allocating a
             # replacement: an interrupted rebuild must not leave stale Grams.
             self._grams = self._coefs = None
             self._gram_folds = needed
+            self._full_slot = self._full_slot or full
             q, item = self.lg.Q.shape[1], self.lg.dtype.itemsize
+            slots = needed.size + self._full_slot
             budget = self.gram_cache_bytes
             grams, coefs = [], []
-            for idx, _, Zs in self._subblocks():
-                size = (needed.size + 1) * idx.size * (idx.size * item + q * 8)
-                if size > budget:
-                    break
-                budget -= size
-                G, C = self._gram(Zs, idx, needed)
-                grams.append(G)
-                coefs.append(C)
+            try:
+                for idx, _, Zs in self._subblocks():
+                    k = idx.size
+                    size = slots * (k * (k + 1) // 2) * item + (needed.size + 1) * k * q * 8
+                    if size > budget:
+                        break
+                    budget -= size
+                    G, C = self._gram(Zs, idx, needed)
+                    grams.append(G)
+                    coefs.append(C)
+            finally:
+                self._scratch.clear()
             if grams:
                 self._grams, self._coefs = grams, coefs
             total = sum(1 for _ in self.lg.slices(self.sub_block))
@@ -406,70 +468,127 @@ class VBEngine:
             self._layout = (order, bounds, Qp, QtQ)
         return self._layout
 
-    def _gram(self, Zs: np.ndarray, idx: np.ndarray, folds: np.ndarray, used=None):
-        """Gram matrices of the projected sub-block Z = z - c Q', computed in
-        float64 from its unprojected rows and stored in the genotype storage
-        precision: Z Z' = z z' - S c' - c S' + c (Q'Q) c' with S = z Q, for
-        all samples and for each held-out fold (only the slots in ``used``,
-        if given; the others are left unset). Only rank-q corrections are
-        added; no projected rows are formed.
+    def _fold_columns(self, f):
+        """Fold f's samples in order, their covariate rows Q_f and Q_f'Q_f:
+        made once per fold."""
+        if f not in self._fold_cache:
+            cols = np.flatnonzero(self.folds == f)
+            Qt = self.lg.Q[cols]
+            self._fold_cache[f] = (cols, Qt, Qt.T @ Qt)
+        return self._fold_cache[f]
+
+    def _buffer(self, name, rows, cols, order):
+        """A (rows, cols) float64 view of a reused scratch array, kept until
+        the preparation or fit that uses it returns."""
+        flat = self._scratch.get(name)
+        if flat is None or flat.size < rows * cols:
+            flat = self._scratch[name] = np.empty(max(rows, self.sub_block) * cols)
+        return flat[:rows * cols].reshape((rows, cols), order=order)
+
+    def _held_out(self, Zs, c, f, coef):
+        """Projected Gram (k, k) of fold f's samples, float64, with their
+        z_f Q_f written into ``coef``: gathered from the rows in sample
+        order (into NumPy's ``Z[:, mask]`` layout, so the products round as
+        a masked copy's would)."""
+        cols, Qt, QtQ = self._fold_columns(f)
+        Zt = self._buffer("fold", Zs.shape[0], cols.size, "F")
+        _gather(Zs, cols, Zt)
+        H = Zt @ Zt.T
+        if Qt.shape[1]:
+            coef[:] = Zt @ Qt
+            cross = coef @ c.T
+            H -= cross + cross.T - c @ QtQ @ c.T
+        return H
+
+    def _part_products(self, Zs, layout, coefs):
+        """Unprojected products z_f z_f' of each part of a sample partition
+        (its fold-sorted samples, :meth:`_fold_layout`) and their sum, the
+        all-sample product; z_f Q_f in coefs[1:] and their sum in coefs[0]."""
+        order, bounds, Qp, _ = layout
+        k = Zs.shape[0]
+        Z64 = self._buffer("samples", k, self.n, "F")
+        _gather(Zs, order, Z64)
+        full = np.zeros((k, k))
+        held = []
+        for f in range(bounds.size - 1):
+            rows = slice(bounds[f], bounds[f + 1])
+            Zt = Z64[:, rows]
+            held.append(Zt @ Zt.T)
+            full += held[f]
+            if coefs.shape[2]:
+                coefs[f + 1] = Zt @ Qp[rows]
+        if coefs.shape[2]:
+            coefs[0] = coefs[1:].sum(axis=0)
+        return full, held
+
+    def _products(self, Zs: np.ndarray, idx: np.ndarray, folds: np.ndarray, used=None):
+        """Float64 Gram matrices of the projected sub-block Z = z - c Q' from
+        its unprojected rows: Z Z' = z z' - S c' - c S' + c (Q'Q) c' with
+        S = z Q, for all samples (``full``) and for each held-out fold
+        (``held[i]`` for ``folds[i]``; only the slots in ``used``, if given,
+        the others None). Only rank-q corrections are added; no projected
+        rows are formed.
 
         Also returns S and each held-out fold's H = z_f Q_f, (folds + 1, k, q),
         which let the sweeps keep their residual unprojected (see :meth:`fit`).
 
         When the requested folds partition the samples (cross-fitting, and
-        BOLT-LMM's cross-validation), the samples are taken in fold order, so
-        each fold is a contiguous slice rather than a masked copy, and the
+        BOLT-LMM's cross-validation), the samples are gathered in fold order,
+        so each fold is a contiguous slice rather than a masked copy, and the
         all-sample products are the sums of the folds' own: half the
-        arithmetic and no mask scans.
+        arithmetic and no mask scans. HRATT's hold-out engine sums them over
+        the cross-fit folds instead, as its joint preparation did
+        (:func:`_prepare_crossfit_grams`), so that cached and rebuilt Grams
+        agree. Rows are widened into reused buffers laid out as NumPy's
+        gathers and copies would be.
         """
         c = self.lg._projection[idx]
         Q = self.lg.Q
         q = Q.shape[1]
         k = Zs.shape[0]
-        G = np.empty((folds.size + 1, k, k), dtype=self.lg.dtype)
         coefs = np.empty((folds.size + 1, k, q))
         held = [None] * folds.size
         if folds.size > 1 and folds.size == self.n_folds:
-            order, bounds, Qp, QtQ = self._fold_layout()
-            Z64 = Zs[:, order].astype(np.float64)
-            full = np.zeros((k, k))
-            for i, f in enumerate(folds):
-                rows = slice(bounds[f], bounds[f + 1])
-                Zt = Z64[:, rows]
-                held[i] = Zt @ Zt.T
-                full += held[i]
-                if q:
-                    coefs[i + 1] = Zt @ Qp[rows]
-            if q:
-                coefs[0] = coefs[1:].sum(axis=0)
+            full, held = self._part_products(Zs, self._fold_layout(), coefs)
+        elif self._sum_layout is not None:
+            parts = np.empty((self._sum_layout[1].size, k, q))
+            full, _ = self._part_products(Zs, self._sum_layout, parts)
+            coefs[0] = parts[0]
         else:
-            Z64 = Zs.astype(np.float64)
+            Z64 = self._buffer("samples", k, self.n, "C")
+            np.copyto(Z64, Zs)
             full = Z64 @ Z64.T
             if q:
                 coefs[0] = Z64 @ Q
         if q:
             cross = coefs[0] @ c.T
             full -= cross + cross.T - c @ c.T
-        G[0] = full
         for i, f in enumerate(folds):
             if used is not None and i + 1 not in used:
-                continue
-            H = held[i]
-            if H is None:
-                mask = self.folds == f
-                Zt = Z64[:, mask]
-                H = Zt @ Zt.T
-                Qt = Q[mask]
-                if q:
-                    coefs[i + 1] = Zt @ Qt
-                QtQ_f = Qt.T @ Qt
-            else:
-                QtQ_f = QtQ[f]
-            if q:
+                held[i] = None
+            elif held[i] is None:
+                held[i] = self._held_out(Zs, c, f, coefs[i + 1])
+            elif q:
                 cross = coefs[i + 1] @ c.T
-                H -= cross + cross.T - c @ QtQ_f @ c.T
-            G[i + 1] = full - H
+                held[i] -= cross + cross.T - c @ self._fold_layout()[3][f] @ c.T
+        return full, held, coefs
+
+    def _gram(self, Zs: np.ndarray, idx: np.ndarray, folds: np.ndarray, used=None):
+        """Gram matrices of the projected sub-block (:meth:`_products`) in
+        the genotype storage precision, as packed upper triangles (S,
+        k(k+1)/2): all samples in slot 0, unless the engine stores no such
+        slot, then the training samples of each held-out fold (only the
+        slots in ``used``, if given; the others are left unset). Also
+        returns the covariate coefficients (folds + 1, k, q)."""
+        full, held, coefs = self._products(Zs, idx, folds, used)
+        first = int(self._full_slot)
+        k = Zs.shape[0]
+        G = np.empty((folds.size + first, k * (k + 1) // 2), dtype=self.lg.dtype)
+        if first and (used is None or 0 in used):
+            _pack_upper(full, G[0])
+        for i, H in enumerate(held):
+            if H is not None:
+                _pack_difference(full, H, G[i + first])
         return G, coefs
 
     def fit(
@@ -527,6 +646,7 @@ class VBEngine:
         zdt = self.lg.dtype
         gram_folds, gidx = self._prepare_grams(col_fold)
         used_slots = set(np.unique(gidx).tolist())  # Gram slots this fit reads
+        slot = gidx if self._full_slot else gidx - 1  # their stored positions
         # Reuse the large workspaces. The residual itself stays float64; its
         # storage-precision image is refreshed after *every* block update.
         work = R.astype(zdt)
@@ -560,6 +680,7 @@ class VBEngine:
                     train[0] = np.eye(q)
         sweep = _sweep_block_parallel if parallel else _sweep_block
         with ExitStack() as stack:
+            stack.callback(self._scratch.clear)  # rebuild buffers end with the fit
             if parallel:
                 stack.enter_context(_numba_thread_limit(min(self.n_threads, P)))
             gemm = None
@@ -603,7 +724,7 @@ class VBEngine:
                     skip = col_group == g
                     bb = np.ascontiguousarray(beta[idx])
                     Db = D[: idx.size]
-                    sweep(Ub, bb, grams, gidx, skip, prior_type, prior,
+                    sweep(Ub, bb, grams, slot, skip, prior_type, prior,
                           np.ascontiguousarray(scale[idx]), s2e, Db)
                     beta[idx] = bb
                     changes[:idx.size] = Db
@@ -694,3 +815,76 @@ class VBEngine:
         if rows is not None:
             out[order] = out.copy()
         return out
+
+
+def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
+    """Prepare HRATT's hold-out and cross-fitted Gram caches in one pass.
+
+    ``cv`` holds out its fold 0, the only fold its fits read; ``crossfit``'s
+    folds partition the samples, and its fits read every fold. Each
+    sub-block is decoded and gathered in cross-fit fold order once. The
+    fold products give the cross-fitted Grams exactly as
+    :meth:`VBEngine._gram` forms them; their sum is the all-sample product,
+    and one more product over the hold-out gives the hold-out fit's
+    training Gram, full - H_cv, in place of a product over all samples in
+    their own order (a different summation order: that fit moves at
+    rounding level). Neither engine stores the all-sample Gram slot, which
+    these fits do not read; the covariate coefficients keep it.
+
+    The two caches share one ``gram_cache_bytes`` budget: first the
+    hold-out slot of every sub-block, read in every sweep of every
+    candidate prior, then cross-fit slots in order with what remains. Both
+    are held during the hold-out fit. Sub-blocks left out are recomputed
+    every sweep by the same arithmetic, and an engine left without any
+    prepares its own cache when its fit starts.
+    """
+    lg, rows = crossfit.lg, crossfit.sub_block
+    if cv.lg is not lg or cv.sub_block != rows:
+        raise ValueError("joint Gram preparation needs engines on the same genotypes and sub-blocks")
+    q, item = lg.Q.shape[1], lg.dtype.itemsize
+    every = np.arange(crossfit.n_folds)
+    for eng, folds in ((cv, np.zeros(1, dtype=np.int64)), (crossfit, every)):
+        eng._grams = eng._coefs = None
+        eng._gram_folds, eng._full_slot = folds, False
+    cv._sum_layout = crossfit._fold_layout()  # its rebuilt Grams then match the cached ones
+    sizes = np.array([idx.size for idx, _ in lg.slices(rows)], dtype=np.int64)
+    tri = sizes * (sizes + 1) // 2 * item
+    cv_bytes = np.cumsum(tri + 2 * sizes * q * 8)
+    fit_bytes = np.cumsum(every.size * tri + (every.size + 1) * sizes * q * 8)
+    budget = crossfit.gram_cache_bytes
+    n_cv = int(np.searchsorted(cv_bytes, budget, side="right"))
+    n_fit = 0
+    if n_cv == sizes.size and sizes.size:
+        n_fit = int(np.searchsorted(fit_bytes, budget - cv_bytes[-1], side="right"))
+    grams_cv, coefs_cv, grams_fit, coefs_fit = [], [], [], []
+    try:
+        for b, (idx, _, Zs) in enumerate(islice(crossfit._subblocks(), n_cv)):
+            k = idx.size
+            full, held, coefs = crossfit._products(Zs, idx, every, None if b < n_fit else ())
+            if b < n_fit:
+                G = np.empty((every.size, k * (k + 1) // 2), dtype=lg.dtype)
+                for f, H in enumerate(held):
+                    _pack_difference(full, H, G[f])
+                grams_fit.append(G)
+                coefs_fit.append(coefs)
+            C = np.empty((2, k, q))
+            C[0] = coefs[0]
+            H = cv._held_out(Zs, lg._projection[idx], 0, C[1])
+            G = np.empty((1, k * (k + 1) // 2), dtype=lg.dtype)
+            _pack_difference(full, H, G[0])
+            grams_cv.append(G)
+            coefs_cv.append(C)
+    finally:
+        cv._scratch.clear()
+        crossfit._scratch.clear()
+    if grams_cv:
+        cv._grams, cv._coefs = grams_cv, coefs_cv
+    if grams_fit:
+        crossfit._grams, crossfit._coefs = grams_fit, coefs_fit
+    if crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
+        warnings.warn(
+            f"VB Gram cache holds {n_cv} of {sizes.size} sub-blocks for the hold-out fit and "
+            f"{n_fit} for the cross-fitted fits; the rest are recomputed every sweep. Increase "
+            f"gram_cache_bytes (currently {budget / 1024**3:.2f} GiB, shared by both) "
+            "if memory permits.", RuntimeWarning, stacklevel=3)
+        cv._cache_warned = crossfit._cache_warned = True

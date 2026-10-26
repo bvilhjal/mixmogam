@@ -60,7 +60,8 @@ from mixmogam._cg import SpectralPreconditioner, batched_pcg
 from mixmogam._fast import HAS_NUMBA
 from mixmogam._loco import LocoGenotypes, loco_groups
 from mixmogam._slq import randomized_eigh_op
-from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _validate_n_threads
+from mixmogam._vb import (PRIOR_ENET, PRIOR_MIXTURE, VBEngine, _prepare_crossfit_grams,
+                           _validate_n_threads)
 from mixmogam.ldscore import ld_scores, ldsc_intercept
 from mixmogam.lmm import LMM, _design_matrix
 from mixmogam.results import GwasResult
@@ -1113,6 +1114,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
 
     ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
     cache warns because the remaining matrices are rebuilt every sweep.
+    With cross-fitted scores it is one budget shared by the hold-out and
+    cross-fitted fits, whose caches are prepared together in one pass (the
+    hold-out fit's first) and are both held during the hold-out fit: at
+    5,000 samples x 400,000 variants about 0.65 GB, of which the cross-fit
+    keeps 0.54 GB.
 
     ``n_threads`` controls optional parallel genotype preparation and Numba
     coordinate sweeps across independent candidate models and LOCO fits.
@@ -1429,7 +1435,10 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     with the held-out ``mse``, and convergence records; with
     ``keep_prediction`` also the LOCO predictions. The cross-validation
     effects are released before the LOCO fit, and the LOCO effects and the
-    engine's Gram cache before returning.
+    engine's Gram cache before returning. Cross-fitted scores prepare both
+    fits' Gram caches in one pass before the hold-out fit, within one
+    ``gram_cache_bytes`` (:func:`mixmogam._vb._prepare_crossfit_grams`);
+    the hold-out fit's cache is released before the cross-fit.
 
     With ``folds`` (labels 0..k-1, :func:`_crossfit_folds`) the LOCO scores
     are cross-fitted: as in REGENIE's level 0, k genome-wide fits,
@@ -1458,6 +1467,12 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     cv_folds[held] = 0  # fold 0 is held out; fold 1 is never held out
     eng = VBEngine(st.lg, folds=cv_folds, n_threads=n_threads,
                    gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
+    crossfit = None
+    if folds is not None and np.any(h2j > 0):
+        # Both fits' Grams from one pass over the genotypes, within one budget
+        crossfit = VBEngine(st.lg, folds=folds, n_threads=n_threads,
+                            gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
+        _prepare_crossfit_grams(eng, crossfit)
     Pn = len(grid)
     prior = np.array([prior_row(*g_) for g_ in grid])
     cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
@@ -1475,15 +1490,13 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
                        PRIOR_ENET, np.tile(prior_row(*grid[best]), (G, 1)), np.full(G, s2e),
                        snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol)
         resid, prediction, slope = loco["resid"], loco["prediction"], None
-    elif not np.any(h2j > 0):  # no polygenic variance, no scores
+    elif crossfit is None:  # no polygenic variance, no scores
         eng, loco = None, {"iterations": 0, "converged": True}
         prediction, slope = np.zeros((n, G)), np.zeros(G)
         resid = np.repeat(ys[:, None], G, axis=1)
     else:
-        del eng  # the cross-fit has its own folds and Gram cache
+        eng, crossfit = crossfit, None  # the hold-out fit's Gram cache goes first
         k = int(folds.max()) + 1
-        eng = VBEngine(st.lg, folds=folds, n_threads=n_threads,
-                       gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
         col_fold = np.repeat(np.arange(k), G) if refit else np.arange(k)
         col_group = np.tile(np.arange(G), k) if refit else np.full(k, -1)
         P = col_fold.size

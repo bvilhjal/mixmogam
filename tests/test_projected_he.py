@@ -25,7 +25,7 @@ def test_zero_genetic_scale_is_a_point_mass(prior_type):
     beta = np.array([[0.3], [-0.1]])
     before = beta.copy()
     delta = np.empty_like(beta)
-    _sweep_block(np.ones_like(beta), beta, np.eye(2)[None], np.array([0]),
+    _sweep_block(np.ones_like(beta), beta, np.array([[1.0, 0.0, 1.0]]), np.array([0]),
                  np.array([False]), prior_type, np.array([[0.5, 1.0, 1.0]]),
                  np.zeros(2), np.ones(1), delta)
     np.testing.assert_array_equal(beta, np.zeros_like(beta))

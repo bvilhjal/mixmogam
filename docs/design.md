@@ -118,16 +118,21 @@ proximal-contamination deflation.
   come from one GEMM and are corrected through the block's Gram matrix
   as earlier SNPs move. Gram matrices are shared across fits and only
   requested fold matrices are prepared. They are computed in float64 and
-  stored in the genotype precision; blocks are cached in order up to a
-  1e9-byte budget and the rest recomputed each sweep, for the folds that
-  fit uses. BOLT and HRATT expose that budget as `gram_cache_bytes`, and a
-  partial cache warns rather than making the production-density cliff
-  silent. When the folds partition the samples (cross-fitting, BOLT-LMM's
+  stored in the genotype precision as packed upper triangles, the only
+  part the sweeps read; blocks are cached in order up to a 1e9-byte budget
+  and the rest recomputed each sweep, for the folds that fit uses. BOLT
+  and HRATT expose that budget as `gram_cache_bytes`, and a partial cache
+  warns rather than making the production-density cliff silent. When the
+  folds partition the samples (cross-fitting, BOLT-LMM's
   cross-validation), the all-sample Gram is the sum of the fold Grams,
   taken from fold-sorted samples. This sums in a different order, so the
   float32 Gram storage rounds differently; the p-values move by up to
   1e-5 in log10 (BOLT-LMM's cross-validation), a rounding effect that the
-  iterations amplify. Reused workspaces avoid repeatedly
+  iterations amplify. HRATT prepares its hold-out and cross-fitted fits'
+  Grams in one pass: the cross-fit folds' products, their sum and one
+  product over the hold-out give both, within one shared budget that
+  caches every hold-out Gram first, and neither stores the all-sample
+  Gram, which neither reads. Reused workspaces avoid repeatedly
   widening whole genotype blocks; residual accumulation remains float64,
   and the residual update tests sample folds instead of reading an
   (n, columns) mask. The coordinate loop has an optional Numba

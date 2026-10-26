@@ -13,6 +13,10 @@ from pathlib import Path
 import numpy as np
 import pytest
 
+from mixmogam._loco import LocoGenotypes
+from mixmogam._vb import VBEngine, _prepare_crossfit_grams
+from mixmogam.genotypes import Genotypes
+
 BENCH = Path(__file__).resolve().parents[1] / "benchmarks"
 
 
@@ -110,20 +114,36 @@ def test_compare_pvalues_separates_agreement_from_disagreement():
 
 
 def test_predicted_cache_coverage_matches_the_engine_accounting():
-    # 128-variant sub-blocks, five folds plus the full sample, float32
-    # genotypes and one covariate column: the engine charges
-    # (folds + 1) * block * (block * itemsize + 8 q) bytes per sub-block.
-    per_block = 6 * 128 * (128 * 4 + 8)
+    # 128-variant sub-blocks, five folds, float32 genotypes and one
+    # covariate column, Grams as packed triangles: every hold-out Gram (one
+    # slot, two coefficient slots) first, then the cross-fitted ones (five
+    # slots, six coefficient slots).
+    tri = 128 * 129 // 2 * 4
+    held_out, crossfit = tri + 2 * 128 * 8, 5 * tri + 6 * 128 * 8
     blocks = 100
-    coverage = scale_study.predicted_cache_coverage(blocks * 128, per_block * blocks)
+    m = blocks * 128
+    coverage = scale_study.predicted_cache_coverage(m, (held_out + crossfit) * blocks)
     assert coverage == pytest.approx(1.0)
-    partial = scale_study.predicted_cache_coverage(blocks * 128, per_block * blocks // 2)
+    partial = scale_study.predicted_cache_coverage(m, held_out * blocks + crossfit * blocks // 2)
     assert partial == pytest.approx(0.5, abs=0.01)
-    assert scale_study.predicted_cache_coverage(blocks * 128, 0) == 0.0
-    # the default budget of the two-step engine covers about 320,000 of
-    # 400,000 variants, which is where the package starts to warn
-    default = scale_study.predicted_cache_coverage(400_000, 1e9)
-    assert 0.79 < default < 0.81
+    assert scale_study.predicted_cache_coverage(m, held_out * blocks - 1) == 0.0
+    assert scale_study.predicted_cache_coverage(m, 0) == 0.0
+    # the engine itself, on eight whole sub-blocks
+    n, m = 40, 8 * 128
+    calls = np.random.default_rng(1).integers(0, 3, (n, m)).astype(np.int8)
+    lg = LocoGenotypes(Genotypes(calls, chromosome=np.ones(m)), np.zeros(m, dtype=int),
+                       np.full((n, 1), n ** -0.5), block=m)
+    budget = held_out * 8 + crossfit * 3 + 1
+    cv = VBEngine(lg, folds=(np.arange(n) >= 4).astype(int), gram_cache_bytes=budget)
+    engine = VBEngine(lg, folds=np.arange(n) % 5, gram_cache_bytes=budget)
+    _prepare_crossfit_grams(cv, engine)
+    assert len(cv._grams) == 8
+    assert len(engine._grams) / 8 == scale_study.predicted_cache_coverage(8 * 128, budget) == 3 / 8
+    # the default budget of the two-step engine holds a 400,000-variant
+    # panel; the package warns from about 620,000 variants
+    assert scale_study.predicted_cache_coverage(400_000, 1e9) == 1.0
+    assert scale_study.predicted_cache_coverage(620_000, 1e9) == pytest.approx(1.0, abs=0.01)
+    assert scale_study.predicted_cache_coverage(700_000, 1e9) < 0.9
 
 
 def test_panel_metadata_gives_whole_ld_blocks_per_chromosome():

@@ -171,6 +171,20 @@ def test_out_of_fold_scores_drop_each_groups_own_share(panel, weighted):
                                rtol=1e-10, atol=1e-10 * np.abs(expected).max())
 
 
+def test_scores_do_not_depend_on_the_shared_gram_budget(panel):
+    # The hold-out and cross-fitted fits share gram_cache_bytes, and Grams
+    # left out of either cache are rebuilt by the cached arithmetic: a
+    # budget short of the hold-out cache, or of the cross-fit's, changes no
+    # result.
+    _, gt, y, _ = panel
+    expected = twostep.hratt(y, gt, **FAST)
+    for budget in (3e5, 2e6):
+        with pytest.warns(RuntimeWarning, match="shared by both"):
+            result = twostep.hratt(y, gt, gram_cache_bytes=budget, **FAST)
+        np.testing.assert_array_equal(result.p, expected.p)
+        np.testing.assert_array_equal(result.extra["cv_mse"], expected.extra["cv_mse"])
+
+
 def test_scores_need_polygenic_variance_and_a_positive_slope(panel, monkeypatch):
     _, gt, y, _ = panel
     st = twostep._setup(y, gt, None, 25, 4096)

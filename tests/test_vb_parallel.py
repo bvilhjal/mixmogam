@@ -51,6 +51,8 @@ def test_parallel_sweep_is_exact_with_skips_zero_scales_and_warm_effects(n_threa
         return view
 
     actual = (workspace(expected[0]), expected[1].copy(), workspace(expected[2]))
+    rows, cols = np.triu_indices(b)
+    grams = np.ascontiguousarray(grams[:, rows, cols])  # stored as packed upper triangles
     _vb._sweep_block(expected[0], expected[1], grams, gidx, skip, prior_type,
                      prior, scale, s2e, expected[2])
     with _vb._numba_thread_limit(n_threads):
