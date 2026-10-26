@@ -172,6 +172,7 @@ def test_parallel_failure_restores_callers_thread_mask(phensim_problem, monkeypa
         raise RuntimeError("interrupted residual update")
 
     monkeypatch.setattr(_vb, "_refresh_residual", interrupted)
+    monkeypatch.setattr(_vb, "_refresh_columns", interrupted)
     with _vb._numba_thread_limit(2):
         with pytest.raises(RuntimeError, match="interrupted residual update"):
             _fit_engine(engine, Y, np.full(4, -1), np.full(4, -1), _vb.PRIOR_ENET)

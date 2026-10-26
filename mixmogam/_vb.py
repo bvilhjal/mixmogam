@@ -42,23 +42,34 @@ _SQRT2 = math.sqrt(2.0)
 # Threaded genotype products speed up sweeps from 50,000 samples, by the same
 # factor for 2 to 8 model columns (benchmarks/results/20261007-kvik-20k-crossfit-gemm).
 _GEMM_MIN_SAMPLES = 50_000
+# Fits of 2 to this many model columns store the residual, its GEMM image and
+# the updates column-major, (P, n): each column's samples are contiguous, for
+# the GEMMs and the residual pass alike (HRATT's 5- and 10-column fits are
+# 1.2x faster at 20,000 samples, 1.3-1.55x at 50,000). The layouts break even
+# near 40 columns; from 48 the sample-major (n, P) one is 6-10% faster
+# (BOLT-LMM's 90-column cross-validation, HRATT's strong-structure refit).
+_COLUMN_MAJOR_MAX = 32
 
 
 def _matmul_rows(left, right, out):
-    """Worker owns output rows; the complete reduction stays inside BLAS."""
+    """Worker owns output rows (sample columns, column-major); the complete
+    reduction stays inside BLAS."""
     np.matmul(left, right, out=out)
 
 
 class _GemmWorkspace:
-    """Bounded F-order forward scratch and a shared backward GEMM pool."""
+    """A shared backward GEMM pool; for the sample-major layout, bounded
+    F-order forward scratch too."""
 
-    def __init__(self, n, n_columns, sub_block, dtype, pool, workers):
+    def __init__(self, n, n_columns, sub_block, dtype, pool, workers, columns=False):
+        self.pool, self.workers = pool, workers
+        if columns:
+            return  # the forward products stay serial NumPy GEMMs (_column_products)
         from scipy.linalg.blas import get_blas_funcs
 
         self.work = np.empty((n, n_columns), dtype=dtype, order="F")
         self.products = np.empty(sub_block * n_columns, dtype=dtype)
         self.gemm = get_blas_funcs("gemm", dtype=dtype)
-        self.pool, self.workers = pool, workers
 
     def forward(self, Z, work, out):
         # SciPy receives F-contiguous inputs, including the transpose view of
@@ -86,6 +97,45 @@ class _GemmWorkspace:
             futures.append(self.pool.submit(_matmul_rows, left[start:stop], right, out[start:stop]))
         for future in futures:
             future.result()
+
+    def backward_columns(self, changes, Z, out):
+        """Column-major ``out`` (P, n) = changes (P, k) Z, workers owning
+        sample columns: each product sums the same k terms as the serial
+        GEMM's."""
+        if Z.shape[0] < 128:
+            np.matmul(changes, Z, out=out)
+            return
+        left, right = changes.view(), Z.view()
+        left.flags.writeable = right.flags.writeable = False
+        n = out.shape[1]
+        futures = []
+        for worker in range(self.workers):
+            cols = slice(worker * n // self.workers, (worker + 1) * n // self.workers)
+            futures.append(self.pool.submit(_matmul_rows, left, right[:, cols], out[:, cols]))
+        for future in futures:
+            future.result()
+
+
+def _column_products(work, rows, k, flat):
+    """Products (k, P) of the first k decoded rows with the column-major
+    image ``work`` (P, n), as a view into ``flat`` (sub_block * P).
+
+    Every sub-block multiplies the whole (sub_block, n) decode buffer
+    ``rows``, so a tail goes through a full block's GEMM (rows past k hold
+    zeros or earlier rows, finite either way, and only fill discarded
+    columns). On Accelerate that GEMM rounds as the sample-major layout's
+    products in float32 from a few thousand to 50,000 samples; elsewhere
+    (a few hundred samples; over 16 columns in float64 or at 120,000
+    samples) the two can round apart. A single row is multiplied as that
+    layout's GEMV."""
+    P = work.shape[0]
+    if k == 1:
+        out = flat[:P].reshape(1, P)
+        np.matmul(rows[:1], np.ascontiguousarray(work.T), out=out)
+        return out
+    out = flat[:P * rows.shape[0]].reshape(P, rows.shape[0])
+    np.matmul(work, rows.T, out=out)
+    return out[:, :k].T
 
 
 def _log_ndtr(x):
@@ -312,8 +362,60 @@ def _refresh_residual(R, work, delta, folds, col_fold, change):
     change += block_change
 
 
+def _refresh_columns(R, work, delta, folds, col_fold, change):
+    """:func:`_refresh_residual` for column-major (P, n) arrays: four model
+    columns per pass over the samples, each column's squared changes still
+    summed in sample order."""
+    P, n = R.shape
+    p = 0
+    while p + 4 <= P:
+        c0, c1, c2, c3 = col_fold[p], col_fold[p + 1], col_fold[p + 2], col_fold[p + 3]
+        s0 = s1 = s2 = s3 = 0.0
+        for i in range(n):
+            d0 = np.float64(delta[p, i])
+            d1 = np.float64(delta[p + 1, i])
+            d2 = np.float64(delta[p + 2, i])
+            d3 = np.float64(delta[p + 3, i])
+            if folds is not None:
+                fi = folds[i]
+                d0 *= 0.0 if fi == c0 else 1.0
+                d1 *= 0.0 if fi == c1 else 1.0
+                d2 *= 0.0 if fi == c2 else 1.0
+                d3 *= 0.0 if fi == c3 else 1.0
+            R[p, i] -= d0
+            work[p, i] = R[p, i]
+            R[p + 1, i] -= d1
+            work[p + 1, i] = R[p + 1, i]
+            R[p + 2, i] -= d2
+            work[p + 2, i] = R[p + 2, i]
+            R[p + 3, i] -= d3
+            work[p + 3, i] = R[p + 3, i]
+            s0 += d0 * d0
+            s1 += d1 * d1
+            s2 += d2 * d2
+            s3 += d3 * d3
+        change[p] += s0
+        change[p + 1] += s1
+        change[p + 2] += s2
+        change[p + 3] += s3
+        p += 4
+    while p < P:
+        c0 = col_fold[p]
+        s0 = 0.0
+        for i in range(n):
+            d0 = np.float64(delta[p, i])
+            if folds is not None:
+                d0 *= 0.0 if folds[i] == c0 else 1.0
+            R[p, i] -= d0
+            work[p, i] = R[p, i]
+            s0 += d0 * d0
+        change[p] += s0
+        p += 1
+
+
 if HAS_NUMBA:
     _refresh_residual = njit(cache=True)(_refresh_residual)
+    _refresh_columns = njit(cache=True)(_refresh_columns)
 else:  # NumPy fallback keeps the same float64 residual and reduction contract.
     def _refresh_residual(R, work, delta, folds, col_fold, change):
         d = delta.astype(np.float64)
@@ -322,6 +424,15 @@ else:  # NumPy fallback keeps the same float64 residual and reduction contract.
         R -= d
         work[:] = R
         change += np.einsum("ij,ij->j", d, d)
+
+    def _refresh_columns(R, work, delta, folds, col_fold, change):
+        d = delta.astype(np.float64)
+        if folds is not None:
+            d *= (col_fold[:, None] != folds[None, :])
+        R -= d
+        work[:] = R
+        # Iterated as the sample-major sum above (samples outer): the same order.
+        change += np.einsum("ij,ij->j", d.T, d.T, order="F")
 
 
 def _validate_n_threads(n_threads):
@@ -371,8 +482,9 @@ class VBEngine:
         Numba workers for SNP coordinate sweeps across independent model
         columns. Residual updates and norm reductions remain serial. More
         than one requires Numba and must not exceed its configured thread
-        limit. Large fits also reuse a bounded GEMM workspace and up to four
-        workers over output rows. When threadpoolctl is available, detected
+        limit. Large fits also split each residual update's GEMM among up to
+        four workers by sample (and, above 32 model columns, reuse a bounded
+        forward GEMM workspace). When threadpoolctl is available, detected
         BLAS libraries use one thread within that context; otherwise GEMMs
         retain the serial path. Thread controls are restored after each fit.
     """
@@ -451,10 +563,13 @@ class VBEngine:
             gidx[col_fold == f] = i + 1
         return active, gidx
 
-    def _subblocks(self):
+    def _subblocks(self, out=None):
         """Unprojected sub-blocks (idx, g, z), aligned to the parent blocks:
-        cache views or decoded rows in one reused buffer."""
-        return self.lg.raw_slices(self.sub_block)
+        cache views or decoded rows in one reused buffer (the leading rows
+        of ``out``, (sub_block, n) in the storage precision, if given)."""
+        if out is None:
+            return self.lg.raw_slices(self.sub_block)
+        return self.lg.raw_slices(self.sub_block, out=out)
 
     def _fold_layout(self):
         """Samples sorted by fold (stable, so each fold keeps its sample
@@ -637,10 +752,24 @@ class VBEngine:
             mask_folds = self.folds  # the residual updates test folds instead
         else:
             mask = mask_folds = None
-        R = Y * mask if mask is not None else Y.copy()
-        ynorm = np.maximum(np.einsum("ij,ij->j", R, R), 1e-300)
+        # The residual, its image and the updates: column-major (P, n) for
+        # 2 to _COLUMN_MAJOR_MAX columns, else sample-major (n, P).
+        columns = 1 < P <= _COLUMN_MAJOR_MAX
+        if columns:
+            R = np.empty((P, n))
+            if mask is not None:
+                np.multiply(Y.T, mask.T, out=R)
+            else:
+                np.copyto(R, Y.T)
+            # Iterated as the sample-major sum below (samples outer): the same order.
+            ynorm = np.einsum("ij,ij->j", R.T, R.T, order="F")
+        else:
+            R = Y * mask if mask is not None else Y.copy()
+            ynorm = np.einsum("ij,ij->j", R, R)
+        ynorm = np.maximum(ynorm, 1e-300)
         beta = np.zeros((self.lg.m, P))
-        D = np.empty((self.sub_block, P), order="F")
+        B = self.sub_block
+        D = np.empty((B, P), order="F")
         it = 0
         rel = np.full(P, np.inf)
         zdt = self.lg.dtype
@@ -651,13 +780,17 @@ class VBEngine:
         # storage-precision image is refreshed after *every* block update.
         work = R.astype(zdt)
         # The sweeps update one model column at a time (serially or by
-        # parallel workers), so these workspaces are column-contiguous. The
-        # default GEMM workspaces remain C-order; large parallel fits add
-        # reusable F-order scratch.
-        U = np.empty((self.sub_block, P), order="F")
-        products = np.empty((self.sub_block, P), dtype=zdt)
-        changes = np.empty((self.sub_block, P), dtype=zdt)
-        delta = np.empty((n, P), dtype=zdt)
+        # parallel workers), so U and D are column-contiguous. The products
+        # and changes are flat: (k, P) C-order sample-major, (P, k)
+        # column-major. Large parallel sample-major fits add reusable
+        # F-order scratch.
+        U = np.empty((B, P), order="F")
+        products = np.empty(B * P, dtype=zdt)
+        changes = np.empty(B * P, dtype=zdt)
+        delta = np.empty(R.shape, dtype=zdt)
+        # One decode buffer for the fit; zeros, so that rows no sub-block
+        # has filled yet are finite (see _column_products).
+        decoded = np.zeros((B, n), dtype=zdt)
         # Deferred covariate projection. R holds the unprojected residual
         # image R~ = mask (Y - sum z' beta); the true residual is
         # R~ + mask (Q A) with A = sum c' beta, the covariate image of the
@@ -692,17 +825,21 @@ class VBEngine:
                     pass  # Never create nested workers without BLAS control.
                 else:
                     workers = min(self.n_threads, 4)
-                    # Load SciPy's BLAS before threadpoolctl discovers pools.
+                    # The sample-major workspace loads SciPy's BLAS before
+                    # threadpoolctl discovers pools.
                     # A library imported inside the context may escape its
                     # limit; no products are evaluated until both are ready.
-                    gemm = _GemmWorkspace(n, P, self.sub_block, zdt, None, workers)
+                    gemm = _GemmWorkspace(n, P, B, zdt, None, workers, columns)
                     stack.enter_context(threadpool_limits(limits=1, user_api="blas"))
                     gemm.pool = stack.enter_context(ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mixmogam-vb"))
             for it in range(1, max_iter + 1):
                 change = np.zeros(P)
                 if q:
-                    np.matmul(Q.T, R, out=s_proj)
-                for b, (idx, g, Zs) in enumerate(self._subblocks()):
+                    # From a sample-major copy when column-major: a product
+                    # of the transposed residual rounds apart (as a GEMV
+                    # with one covariate), here and in the sweeps after it.
+                    np.matmul(Q.T, np.ascontiguousarray(R.T) if columns else R, out=s_proj)
+                for b, (idx, g, Zs) in enumerate(self._subblocks(decoded)):
                     if self._grams is not None and b < len(self._grams):
                         grams, coefs = self._grams[b], self._coefs[b]
                     else:
@@ -710,12 +847,17 @@ class VBEngine:
                     # GEMMs in the storage precision (float32 by default): no
                     # per-sweep widening of the genotype block, and the residual
                     # is recomputed exactly below
-                    Ub = U[:idx.size]
-                    if gemm is None:
-                        np.matmul(Zs, work, out=products[:idx.size])
-                        Ub[:] = products[:idx.size]
+                    k = idx.size
+                    Ub = U[:k]
+                    if columns:
+                        Ub[:] = _column_products(work, decoded, k, products)
                     else:
-                        Ub[:] = gemm.forward(Zs, work, products[:idx.size])
+                        prod = products[:k * P].reshape(k, P)
+                        if gemm is None:
+                            np.matmul(Zs, work, out=prod)
+                            Ub[:] = prod
+                        else:
+                            Ub[:] = gemm.forward(Zs, work, prod)
                     if q:
                         coef = self.lg._projection[idx]
                         for g_val, cols in column_sets:
@@ -723,23 +865,34 @@ class VBEngine:
                             Ub[:, cols] += T @ A[:, cols] - coef @ (s_proj[:, cols] + train[g_val] @ A[:, cols])
                     skip = col_group == g
                     bb = np.ascontiguousarray(beta[idx])
-                    Db = D[: idx.size]
+                    Db = D[:k]
                     sweep(Ub, bb, grams, slot, skip, prior_type, prior,
                           np.ascontiguousarray(scale[idx]), s2e, Db)
                     beta[idx] = bb
-                    changes[:idx.size] = Db
-                    if gemm is None:
-                        np.matmul(Zs.T, changes[:idx.size], out=delta)
+                    # Either residual pass is contiguous and keeps the serial
+                    # sample-order norm accumulation.
+                    if columns:
+                        cT = changes[:P * k].reshape(P, k)
+                        cT[:] = Db.T
+                        if gemm is None:
+                            np.matmul(cT, Zs, out=delta)
+                        else:
+                            gemm.backward_columns(cT, Zs, delta)
+                        _refresh_columns(R, work, delta, mask_folds, col_fold, change)
+                        d = cT.T
                     else:
-                        gemm.backward(Zs, changes[:idx.size], delta)
-                    # Keep the sample-major residual pass contiguous and
-                    # preserve its serial sample-order norm accumulation.
-                    _refresh_residual(R, work, delta, mask_folds, col_fold, change)
+                        d = changes[:k * P].reshape(k, P)
+                        d[:] = Db
+                        if gemm is None:
+                            np.matmul(Zs.T, d, out=delta)
+                        else:
+                            gemm.backward(Zs, d, delta)
+                        _refresh_residual(R, work, delta, mask_folds, col_fold, change)
                     if q:
                         # The applied update z' d leaves Q'R~ by (S - H)' d and
                         # A by c' d; the masked change of the projected fit is
                         # |mask z'd|^2 - 2 d'(S - H) e + e'(I - Q_f'Q_f) e.
-                        d64 = changes[:idx.size].astype(np.float64)
+                        d64 = d.astype(np.float64, order="C")
                         e = coef.T @ d64
                         for g_val, cols in column_sets:
                             T = coefs[0] - coefs[g_val] if g_val else coefs[0]
@@ -752,6 +905,8 @@ class VBEngine:
                 rel = change / ynorm
                 if rel.max() < tol:
                     break
+        # The sweep workspaces, before the prediction allocates its own.
+        del R, work, delta, decoded
         out = {"beta": beta, "iterations": it, "converged": bool(rel.max() < tol),
                "rel_change": rel, "mask": mask}
         if _compute_prediction:

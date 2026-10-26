@@ -21,6 +21,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- VB fits of 2 to 32 model columns (HRATT's hold-out, cross-fitted and LOCO
+  fits; BOLT-LMM's LOCO fit) keep the residual and its updates
+  column-major, (columns, samples), so the genotype GEMMs and the residual
+  pass stream each column's samples. HRATT's two fits take 1.48 s instead
+  of 1.95 s on a 50,000 x 4,000 panel (1.55x on 50,000 x 4,096; one
+  thread, 1.13x with four), and whole HRATT runs are 2.4-7.2% faster on
+  5,000 x 40,000 and 20,000 x 10,000. Wider fits (BOLT-LMM's 90-column
+  cross-validation, HRATT's strong-structure refit) keep the sample-major
+  layout, which is faster there. Results are bit-identical with Accelerate
+  (p-values in all 16 checked configurations, and with four threads, now
+  equal to one thread at 50,000 samples too). Other BLAS builds may differ
+  at float32 GEMM rounding level, and so may Accelerate with a few hundred
+  samples, or over 16 columns in float64 storage or at 120,000 samples.
 - HRATT's HE alpha selection computes the backward products of all
   candidate alphas as one GEMM per sample tile instead of one per alpha.
   The step takes 0.23 s instead of 0.29 s on a 5,000 x 40,000 panel and

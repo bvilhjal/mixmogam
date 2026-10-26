@@ -184,6 +184,15 @@ def workspace(request):
     return lg, folds, Y
 
 
+@pytest.fixture
+def sample_major(monkeypatch):
+    """The oracle multiplies sample-major, and so does the engine here. The
+    column-major workspace (2 to 32 model columns) is pinned to this one in
+    tests/test_vb_column_layout.py: at these 63 samples its transposed
+    GEMMs round apart, even on Accelerate."""
+    monkeypatch.setattr(_vb, "_COLUMN_MAJOR_MAX", 1)
+
+
 def _fit(eng, Y, col_fold, col_group, prior_type=PRIOR_MIXTURE):
     p = Y.shape[1]
     if prior_type == PRIOR_MIXTURE:
@@ -230,7 +239,7 @@ def test_effects_only_fit_skips_prediction_without_changing_fit(workspace, monke
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
-def test_selective_workspace_matches_dense_and_uncached(workspace, prior_type):
+def test_selective_workspace_matches_dense_and_uncached(workspace, sample_major, prior_type):
     lg, folds, Y = workspace
     selected_folds = np.array([2, 0, -1, 2])
     selected_groups = np.array([-1, 1, 2, 0])
@@ -303,7 +312,7 @@ def test_partitioned_folds_sum_the_fold_grams(workspace):
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
-def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, prior_type):
+def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, sample_major, prior_type):
     lg, folds, Y = workspace
     if prior_type == PRIOR_MIXTURE:
         prior = np.array([[0.1, 0.003, 0.0002], [0.9, 0.002, 0.0005],
@@ -331,6 +340,7 @@ def test_numpy_fallback_matches_original_fit_loop(workspace, prior_type, monkeyp
         spec = importlib.util.spec_from_file_location("mixmogam._vb_workspace_fallback", _vb.__file__)
         fallback = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(fallback)
+    fallback._COLUMN_MAJOR_MAX = 1  # sample-major, as the sample_major fixture
     col_fold = np.array([2, 0, -1, 2])
     col_group = np.array([-1, 1, 2, 0])
     original = _DenseWorkspaceOracle(lg, folds=folds)
@@ -342,7 +352,7 @@ def test_numpy_fallback_matches_original_fit_loop(workspace, prior_type, monkeyp
         _assert_same_fit(result, expected)
 
 
-def test_full_data_reuse_and_new_fold_match_fresh_fit(workspace, monkeypatch):
+def test_full_data_reuse_and_new_fold_match_fresh_fit(workspace, sample_major, monkeypatch):
     lg, folds, Y = workspace
     eng = VBEngine(lg, folds=folds)
     original_gram = eng._gram

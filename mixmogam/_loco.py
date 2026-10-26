@@ -271,14 +271,16 @@ class LocoGenotypes:
             for start in range(0, idx.size, rows):
                 yield idx[start : start + rows], g
 
-    def raw_slices(self, rows: Optional[int] = None):
+    def raw_slices(self, rows: Optional[int] = None, out: Optional[np.ndarray] = None):
         """Yield ``(variant_indices, group, z)``: unprojected standardized
         rows (k, n), at most ``rows`` per slice and within one block,
-        decoded into one reused buffer valid until the next iteration."""
+        decoded into one reused buffer valid until the next iteration: the
+        leading rows of ``out``, a C-ordered (rows, n) array of the storage
+        precision, when given (its other rows are left as they were)."""
         self._check_source()
         rows = self._slice_rows() if rows is None else max(1, int(rows))
         largest = max((idx.size for idx, _ in self._blocks), default=1)
-        buffer = np.empty((min(rows, largest), self.n), dtype=self.dtype)
+        buffer = np.empty((min(rows, largest), self.n), dtype=self.dtype) if out is None else out
         for take, g in self.slices(rows):
             yield take, g, self._decode(take, out=buffer[: take.size])
 
