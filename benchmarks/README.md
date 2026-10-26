@@ -116,6 +116,16 @@ The covariates pair reruns under the same statement
 including the reference program's own slowness drift as the honest noise
 floor for cross-day ratios.
 
+**Sample-size scaling.** The same driver at fixed m = 20,000 and n from
+1,000 to 50,000 measures how each method scales in samples
+([ladder](results/20261026T161500Z-kvik-sample-scaling/README.md)).
+With iteration counts flat in n, LDAK-KVIK and both HRATT paths are
+linear (local exponents 0.81-0.96); BOLT-LMM-inf is the one superlinear
+method (1.21), because its conjugate-gradient count grows from 10 to 22
+over the ladder; `exact` is cubic and stops at n = 2,500. HRATT-HE is
+the fastest method from n = 10,000 up (13.6 s against the reference
+program's 20.3 s at 50,000).
+
 **With and without ancestry covariates.** The same driver also runs a
 structured panel of four populations whose environment differs between
 them, without covariates and with two and three principal components

@@ -189,6 +189,14 @@ the SPA threshold, and the two-kinship mixture profile remain in place.
   `20261026T152400Z-kvik-covariates-large`, each with its before/after
   table and the reference program's own day-to-day drift recorded as the
   noise floor for cross-day ratios.
+- A sample-size ladder (fixed m = 20,000, n = 1,000 to 50,000, one
+  thread, archive `20261026T161500Z-kvik-sample-scaling`) measures how
+  each method scales in samples: LDAK-KVIK and both HRATT paths are
+  linear (local exponents 0.81-0.96 over n = 20,000 to 50,000, their
+  iteration counts flat in n), BOLT-LMM-inf is superlinear (1.21, its
+  conjugate-gradient count growing from 10 to 22), and `exact` is cubic
+  and stops at n = 2,500. HRATT-HE is the fastest method from
+  n = 10,000 up. Peak memory is linear in n for every streaming method.
 - `benchmarks/DESIGN.md` maps the measured-evidence suite: the four
   layers (invariants, resources, evidence, external comparison), what
   each layer can support, the gaps the 19 and 25 October efficiency
