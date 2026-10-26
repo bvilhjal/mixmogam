@@ -21,6 +21,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- VB fits correct each sub-block's products and updates for the covariates
+  in two Numba loops over all model columns, instead of NumPy products per
+  held-out fold, wherever those calls cost more than the arithmetic
+  (covariates x columns at most 128 per held-out fold: always in HRATT's
+  cross-fit, up to 12 covariates in its hold-out fit and 5 in the
+  strong-structure refit over 22 chromosomes). HRATT's cross-fit takes 0.75 s instead of
+  0.93 s on a 5,000 x 40,000 panel, and the refit 2.7 s instead of 3.5 s
+  on a 1,000-sample panel with strong structure; whole runs at one thread
+  are 4-7% faster on 5,000 x 40,000 (HE and REML, with or without five
+  covariates), 17% on the refit and unchanged on 20,000 x 10,000. Results
+  move at rounding level: bit-identical p-values with only an intercept
+  and no sampling weights (12 of 16 checked configurations, binary traits
+  included), up to 1.2e-13 in log10 p with weights or covariates there,
+  and up to 9e-7 on the strong-structure panel with principal components or
+  covariates, where reassociating one float64 product in the NumPy
+  corrections moves p as much. No call at 0.05/m changed. Without Numba
+  the NumPy products remain.
 - VB fits of 2 to 32 model columns (HRATT's hold-out, cross-fitted and LOCO
   fits; BOLT-LMM's LOCO fit) keep the residual and its updates
   column-major, (columns, samples), so the genotype GEMMs and the residual

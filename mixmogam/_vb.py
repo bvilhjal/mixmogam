@@ -49,6 +49,16 @@ _GEMM_MIN_SAMPLES = 50_000
 # near 40 columns; from 48 the sample-major (n, P) one is 6-10% faster
 # (BOLT-LMM's 90-column cross-validation, HRATT's strong-structure refit).
 _COLUMN_MAJOR_MAX = 32
+# The rank-q covariate corrections of each sub-block (VBEngine.fit) run as
+# two compiled loops over all model columns when q x columns <= this x
+# column sets (one per held-out fold), else as NumPy products per set. The
+# loops cost about k x q per column, NumPy about 20 calls per set. Per
+# sub-block the loops are 5-19x faster for HRATT's cross-fit (a set per
+# column) and 1.07-4.5x for the other layouts within this limit; NumPy is
+# faster from q x columns / sets of about 150 (one set: HRATT's 10-column
+# hold-out fit, LOCO) to 300 (five: the strong-structure refit, BOLT-LMM's
+# cross-validation).
+_CORRECTION_LOOP_MAX = 128
 
 
 def _matmul_rows(left, right, out):
@@ -435,6 +445,86 @@ else:  # NumPy fallback keeps the same float64 residual and reduction contract.
         change += np.einsum("ij,ij->j", d.T, d.T, order="F")
 
 
+def _correct_products(U, coefs, coef, A, s_proj, train, gidx, tmp):
+    """The rank-q covariate corrections of a sub-block's products for every
+    column (see :meth:`VBEngine.fit`): U[:, p] += T A[:, p] - c (s_proj[:, p]
+    + train[g] A[:, p]), with g = gidx[p] and T = coefs[0] - coefs[g]
+    (coefs[0] for g = 0). Each sum runs over the covariates in order;
+    ``tmp`` (q,) is scratch."""
+    k, P = U.shape
+    q = coef.shape[1]
+    for p in range(P):
+        g = gidx[p]
+        for r in range(q):
+            acc = train[g, r, 0] * A[0, p]
+            for s in range(1, q):
+                acc += train[g, r, s] * A[s, p]
+            tmp[r] = s_proj[r, p] + acc
+        for j in range(k):
+            t = coefs[0, j, 0] - coefs[g, j, 0] if g else coefs[0, j, 0]
+            x1 = t * A[0, p]
+            x2 = coef[j, 0] * tmp[0]
+            for s in range(1, q):
+                t = coefs[0, j, s] - coefs[g, j, s] if g else coefs[0, j, s]
+                x1 += t * A[s, p]
+                x2 += coef[j, s] * tmp[s]
+            U[j, p] += x1 - x2
+
+
+def _correct_changes(coefs, d, e, s_proj, A, train, gidx, change, W):
+    """The covariate terms of an applied update d (k, P) for every column:
+    W = T' d[:, p], s_proj -= W, change += e'train[g] e - 2 W'e and A += e,
+    with e = c'd given and T as in :func:`_correct_products`. Four
+    covariates per pass over the sub-block's SNPs, each W summed in SNP
+    order; ``W`` (q,) is scratch."""
+    k, P = d.shape
+    q = e.shape[0]
+    for p in range(P):
+        g = gidx[p]
+        r = 0
+        while r + 4 <= q:
+            w0 = w1 = w2 = w3 = 0.0
+            for j in range(k):
+                dj = d[j, p]
+                if g:
+                    w0 += (coefs[0, j, r] - coefs[g, j, r]) * dj
+                    w1 += (coefs[0, j, r + 1] - coefs[g, j, r + 1]) * dj
+                    w2 += (coefs[0, j, r + 2] - coefs[g, j, r + 2]) * dj
+                    w3 += (coefs[0, j, r + 3] - coefs[g, j, r + 3]) * dj
+                else:
+                    w0 += coefs[0, j, r] * dj
+                    w1 += coefs[0, j, r + 1] * dj
+                    w2 += coefs[0, j, r + 2] * dj
+                    w3 += coefs[0, j, r + 3] * dj
+            W[r], W[r + 1], W[r + 2], W[r + 3] = w0, w1, w2, w3
+            r += 4
+        while r < q:
+            w0 = 0.0
+            for j in range(k):
+                t = coefs[0, j, r] - coefs[g, j, r] if g else coefs[0, j, r]
+                w0 += t * d[j, p]
+            W[r] = w0
+            r += 1
+        quad = 0.0
+        cross = 0.0
+        for r in range(q):
+            s_proj[r, p] -= W[r]
+            te = 0.0
+            for s in range(q):
+                te += train[g, r, s] * e[s, p]
+            quad += e[r, p] * te
+            cross += W[r] * e[r, p]
+        change[p] += quad - 2.0 * cross
+        for r in range(q):
+            A[r, p] += e[r, p]
+
+
+if HAS_NUMBA:
+    _correct_products = njit(cache=True)(_correct_products)
+    _correct_changes = njit(cache=True)(_correct_changes)
+# Without Numba, fit keeps NumPy's products per column set.
+
+
 def _validate_n_threads(n_threads):
     """Reject invalid requests before genotype preparation or allocation."""
     if (isinstance(n_threads, (bool, np.bool_))
@@ -802,15 +892,21 @@ class VBEngine:
         if q:
             A = np.zeros((q, P))
             s_proj = np.empty((q, P))  # Q' R~, re-anchored every sweep
-            column_sets, train = [], {}
+            column_sets = []
+            train = np.zeros((int(gidx.max()) + 1, q, q))  # I - Q_f'Q_f by Gram slot
             for g_val in np.unique(gidx):
                 cols = np.flatnonzero(gidx == g_val)
                 column_sets.append((int(g_val), slice(None) if cols.size == P else cols))
                 if g_val:
                     held = self.folds == gram_folds[g_val - 1]
-                    train[int(g_val)] = np.eye(q) - Q[held].T @ Q[held]
+                    train[g_val] = np.eye(q) - Q[held].T @ Q[held]
                 else:
                     train[0] = np.eye(q)
+            # The corrections for all columns in two compiled loops, or by
+            # NumPy per column set (see _CORRECTION_LOOP_MAX).
+            compiled = HAS_NUMBA and q * P <= _CORRECTION_LOOP_MAX * len(column_sets)
+            if compiled:
+                qtmp, e = np.empty(q), np.empty((q, P))
         sweep = _sweep_block_parallel if parallel else _sweep_block
         with ExitStack() as stack:
             stack.callback(self._scratch.clear)  # rebuild buffers end with the fit
@@ -860,9 +956,12 @@ class VBEngine:
                             Ub[:] = gemm.forward(Zs, work, prod)
                     if q:
                         coef = self.lg._projection[idx]
-                        for g_val, cols in column_sets:
-                            T = coefs[0] - coefs[g_val] if g_val else coefs[0]
-                            Ub[:, cols] += T @ A[:, cols] - coef @ (s_proj[:, cols] + train[g_val] @ A[:, cols])
+                        if compiled:
+                            _correct_products(Ub, coefs, coef, A, s_proj, train, gidx, qtmp)
+                        else:
+                            for g_val, cols in column_sets:
+                                T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                                Ub[:, cols] += T @ A[:, cols] - coef @ (s_proj[:, cols] + train[g_val] @ A[:, cols])
                     skip = col_group == g
                     bb = np.ascontiguousarray(beta[idx])
                     Db = D[:k]
@@ -893,15 +992,19 @@ class VBEngine:
                         # A by c' d; the masked change of the projected fit is
                         # |mask z'd|^2 - 2 d'(S - H) e + e'(I - Q_f'Q_f) e.
                         d64 = d.astype(np.float64, order="C")
-                        e = coef.T @ d64
-                        for g_val, cols in column_sets:
-                            T = coefs[0] - coefs[g_val] if g_val else coefs[0]
-                            W = T.T @ d64[:, cols]
-                            s_proj[:, cols] -= W
-                            ec = e[:, cols]
-                            change[cols] += (np.einsum("kp,kp->p", ec, train[g_val] @ ec)
-                                             - 2.0 * np.einsum("kp,kp->p", W, ec))
-                        A += e
+                        if compiled:
+                            np.matmul(coef.T, d64, out=e)
+                            _correct_changes(coefs, d64, e, s_proj, A, train, gidx, change, qtmp)
+                        else:
+                            e = coef.T @ d64
+                            for g_val, cols in column_sets:
+                                T = coefs[0] - coefs[g_val] if g_val else coefs[0]
+                                W = T.T @ d64[:, cols]
+                                s_proj[:, cols] -= W
+                                ec = e[:, cols]
+                                change[cols] += (np.einsum("kp,kp->p", ec, train[g_val] @ ec)
+                                                 - 2.0 * np.einsum("kp,kp->p", W, ec))
+                            A += e
                 rel = change / ynorm
                 if rel.max() < tol:
                     break

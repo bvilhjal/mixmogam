@@ -193,6 +193,14 @@ def sample_major(monkeypatch):
     monkeypatch.setattr(_vb, "_COLUMN_MAJOR_MAX", 1)
 
 
+@pytest.fixture
+def numpy_corrections(monkeypatch):
+    """The oracle corrects for the covariates column set by column set with
+    NumPy, and so does the engine here; its compiled corrections are pinned
+    to these in tests/test_vb_covariate_corrections.py."""
+    monkeypatch.setattr(_vb, "_CORRECTION_LOOP_MAX", 0)
+
+
 def _fit(eng, Y, col_fold, col_group, prior_type=PRIOR_MIXTURE):
     p = Y.shape[1]
     if prior_type == PRIOR_MIXTURE:
@@ -239,7 +247,7 @@ def test_effects_only_fit_skips_prediction_without_changing_fit(workspace, monke
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
-def test_selective_workspace_matches_dense_and_uncached(workspace, sample_major, prior_type):
+def test_selective_workspace_matches_dense_and_uncached(workspace, sample_major, numpy_corrections, prior_type):
     lg, folds, Y = workspace
     selected_folds = np.array([2, 0, -1, 2])
     selected_groups = np.array([-1, 1, 2, 0])
@@ -312,7 +320,7 @@ def test_partitioned_folds_sum_the_fold_grams(workspace):
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
-def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, sample_major, prior_type):
+def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, sample_major, numpy_corrections, prior_type):
     lg, folds, Y = workspace
     if prior_type == PRIOR_MIXTURE:
         prior = np.array([[0.1, 0.003, 0.0002], [0.9, 0.002, 0.0005],
@@ -352,7 +360,7 @@ def test_numpy_fallback_matches_original_fit_loop(workspace, prior_type, monkeyp
         _assert_same_fit(result, expected)
 
 
-def test_full_data_reuse_and_new_fold_match_fresh_fit(workspace, sample_major, monkeypatch):
+def test_full_data_reuse_and_new_fold_match_fresh_fit(workspace, sample_major, numpy_corrections, monkeypatch):
     lg, folds, Y = workspace
     eng = VBEngine(lg, folds=folds)
     original_gram = eng._gram
