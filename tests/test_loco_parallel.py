@@ -1,5 +1,7 @@
 """Compiled preparation and decoding against the independent dense formula."""
 
+import math
+
 import numpy as np
 import pytest
 
@@ -136,6 +138,101 @@ def test_preparation_and_decoding_ignore_storage_order(project):
             np.testing.assert_array_equal(getattr(lg, name), getattr(first, name))
         for actual, expected in zip(rows, first_rows, strict=True):
             np.testing.assert_array_equal(actual, expected)
+
+
+def sequential_moments(G, idx, Q, sq_weights):
+    """The preparation arithmetic one sample at a time in Python floats
+    (IEEE double, no fused multiply-add): the values the kernels promise."""
+    Q = Q.tolist()
+    q = len(Q[0]) if Q else 0
+    out = []
+    for j in idx:
+        calls = [int(v) for v in G[:, j]]
+        n0, n1, n2 = calls.count(0), calls.count(1), calls.count(2)
+        divisor = max(n0 + n1 + n2, 1)
+        mu = (n1 + 2 * n2) / divisor
+        d0, d1, d2 = 0.0 - mu, 1.0 - mu, 2.0 - mu
+        sumsq = n0 * d0 * d0 + n1 * d1 * d1 + n2 * d2 * d2
+        sigma = math.sqrt(sumsq / divisor)
+        scale = sigma if sigma > 0 else 1.0
+        sums, wsq = [0.0] * q, 0.0
+        for i, value in enumerate(calls):
+            c = value - mu if value >= 0 else 0.0
+            if sq_weights is not None:
+                wsq += float(sq_weights[i]) * c * c
+            for k in range(q):
+                sums[k] += c * Q[i][k]
+        norm = (wsq if sq_weights is not None else sumsq) / (scale * scale)
+        coefficients = []
+        for k in range(q):
+            coefficients.append(sums[k] / scale)
+            norm -= coefficients[-1] * coefficients[-1]
+        out.append((mu, sigma, coefficients, norm))
+    return out
+
+
+@pytest.mark.parametrize("n_threads", [1, 2])
+def test_preparation_sums_every_variant_in_sample_order(n_threads):
+    # Preparation centers eight variants at a time into 256-sample rows and
+    # counts calls by integer sums (variant-major int8) or per-byte code
+    # counts (two-bit calls); sample-major int8 is read a sample at a time.
+    # Every layout, covariate count (pairs and an odd one), weighting and
+    # thread count must give the sequential sums exactly: 517 samples span
+    # three passes and end inside a byte, 79 variants fill a tile and part
+    # of a second, and their order is not storage order.
+    pytest.importorskip("numba")
+    if n_threads > 1:
+        require_threads(n_threads)
+    from mixmogam._standardize import prepare_moments
+
+    rng = np.random.default_rng(517)
+    n = 517
+    G = rng.choice([-1, 0, 1, 2], p=[0.05, 0.4, 0.35, 0.2], size=(n, 90)).astype(np.int8)
+    G[:, 0], G[:, 1], G[:, 2], G[:, 3] = 0, 2, -1, 1  # monomorphic and all missing
+    G[::2, 4] = -1
+    G[1::2, 4] = 1
+    idx = rng.permutation(90)[:79]
+    layouts = {
+        "C": np.ascontiguousarray(G),
+        "F": np.asfortranarray(G),
+        "C-strided": np.repeat(G, 2, axis=0)[::2],
+        "F-strided": np.asfortranarray(np.repeat(G, 2, axis=0))[::2],
+        "packed": Genotypes(np.asfortranarray(G), packed=True).G,
+    }
+    sq_weights = rng.uniform(0.25, 4.0, n)
+    for q in (0, 1, 2, 3):
+        Q = np.ascontiguousarray(np.linalg.qr(rng.normal(size=(n, max(q, 1))))[0][:, :q])
+        for weights in (None, sq_weights):
+            expected = sequential_moments(G, idx, Q, weights)
+            for name, calls in layouts.items():
+                mean, sd, coefficients, zz = prepare_moments(calls, idx, Q, n_threads,
+                                                             sq_weights=weights)
+                assert coefficients.shape == (idx.size, q), name
+                for r, (mu, sigma, coef, norm) in enumerate(expected):
+                    assert (mean[r], sd[r], zz[r]) == (mu, sigma, norm), (name, q, r)
+                    assert coefficients[r].tolist() == coef, (name, q, r)
+
+
+def test_packed_call_counts_cross_the_field_limit():
+    # Per-byte code counts are summed in 16-bit fields over at most 8,191
+    # bytes; 70,001 identical calls overflow a field without the flush.
+    pytest.importorskip("numba")
+    from mixmogam._standardize import prepare_moments
+
+    n = 70_001
+    G = np.zeros((n, 4), dtype=np.int8, order="F")
+    G[:, 1] = 2
+    G[:, 2] = -1
+    G[::3, 3] = 1
+    G[n - 1, 0] = 1
+    packed = Genotypes(G, packed=True).G
+    idx = np.arange(4)
+    for calls in (G, packed):
+        mean, sd, _, _ = prepare_moments(calls, idx, np.empty((n, 0)))
+        np.testing.assert_array_equal(mean, [1 / n, 2.0, 0.0, (n + 2) // 3 / n])
+        assert sd[1] == sd[2] == 0.0
+    np.testing.assert_array_equal(prepare_moments(packed, idx, np.empty((n, 0)))[1],
+                                  prepare_moments(G, idx, np.empty((n, 0)))[1])
 
 
 @pytest.mark.parametrize("order", ["C", "F", "strided", "packed"])

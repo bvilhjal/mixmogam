@@ -3,13 +3,16 @@
 Preparation computes, per variant, the called-sample mean and standard
 deviation from exact call counts, the covariate coefficients c = z Q of the
 standardized values and the squared norm of the projected values z - c Q'.
-The Numba kernels take tiles of 64 variants a sample at a time, from int8
-calls or two-bit codes, so their scratch is a few float64 values per
-variant. Each variant sums its samples in order, so every thread count,
-storage layout and format gives the same values. No standardized or
-projected block is written. With per-sample squared weights (the row
-scaling of weighted HRATT), the projected norm is that of the scaled
-values, sum_i v_i z_i^2 - |c|^2, accumulated in the same sample loop.
+The Numba kernels take tiles of 64 variants, from int8 calls or two-bit
+codes: one contiguous pass counts each variant's calls, then eight
+variants at a time are centered into 256-sample float64 rows (16 KB of
+scratch) whose covariate sums stay in registers. Sample-major int8 is
+read a sample at a time instead. Each variant sums its samples in order,
+so every thread count, storage layout and format gives the same values.
+No standardized or projected block is written. With per-sample squared
+weights (the row scaling of weighted HRATT), the projected norm is that
+of the scaled values, sum_i v_i z_i^2 - |c|^2, accumulated over the same
+rows.
 
 Every later pass decodes through a per-variant table: hard calls 0/1/2 can
 only standardize to three values, computed once in float64, so decoding
@@ -40,6 +43,14 @@ _NUMPY_DECODE_CELLS = 1 << 22
 # Variants per preparation tile; samples and variants per tile of
 # sample-major decoding.
 _TILE = 64
+# Samples per centered row of preparation (eight rows per pass).
+_SPAN = 256
+# Two-bit codes 0-3 of each byte value, counted in 16-bit fields: summed
+# over at most _CODE_BYTES bytes, no field carries into the next or into
+# the sign bit.
+_BYTE_CODES = sum(np.int64(1) << (16 * ((np.arange(256, dtype=np.int64) >> shift) & 3))
+                  for shift in (0, 2, 4, 6))
+_CODE_BYTES = 8191
 
 
 def _count_moments(n0, n1, n2):
@@ -50,6 +61,136 @@ def _count_moments(n0, n1, n2):
     mu = (n1 + 2 * n2) / divisor
     d0, d1, d2 = 0.0 - mu, 1.0 - mu, 2.0 - mu
     return mu, n0 * d0 * d0 + n1 * d1 * d1 + n2 * d2 * d2, divisor
+
+
+def _count_calls(col, counts, t):
+    """Call counts of one variant's int8 calls into counts[t], from integer
+    sums that vectorize where per-call comparisons do not:
+    sum g = n1 + 2 n2 - n_miss and sum g^2 = n1 + 4 n2 + n_miss."""
+    total = 0
+    squares = 0
+    missing = 0
+    for i in range(col.size):
+        value = col[i]
+        total += value
+        squares += value * value
+        missing += value < 0
+    twos = (squares - total) // 2 - missing
+    ones = total + missing - 2 * twos
+    counts[t, 0] = col.size - missing - ones - twos
+    counts[t, 1] = ones
+    counts[t, 2] = twos
+
+
+def _count_codes(row, n, counts, t):
+    """Call counts of one variant's n two-bit codes into counts[t]: whole
+    bytes through the per-byte code counts, the last byte's samples one
+    at a time (its unused bits are ignored)."""
+    full = n // 4
+    codes = np.zeros(4, dtype=np.int64)
+    for b0 in range(0, full, _CODE_BYTES):
+        fields = 0
+        for b in range(b0, min(b0 + _CODE_BYTES, full)):
+            fields += _BYTE_CODES[row[b]]
+        for code in range(4):
+            codes[code] += (fields >> (16 * code)) & 0xFFFF
+    for i in range(4 * full, n):
+        codes[(row[i >> 2] >> (2 * (i & 3))) & 3] += 1
+    # code 0 = call 2, 1 = no-call, 2 = call 1, 3 = call 0
+    counts[t, 0], counts[t, 1], counts[t, 2] = codes[3], codes[2], codes[0]
+
+
+def _sums_one(rows, Q, k, i0, i1, projection, t0):
+    """projection[k, t0:t0 + 8] += sum_i rows[u, i - i0] Q[i, k] over
+    samples i0:i1 in order: eight independent sums held in registers."""
+    a0, a1, a2, a3 = projection[k, t0], projection[k, t0 + 1], projection[k, t0 + 2], projection[k, t0 + 3]
+    a4, a5, a6, a7 = projection[k, t0 + 4], projection[k, t0 + 5], projection[k, t0 + 6], projection[k, t0 + 7]
+    r0, r1, r2, r3, r4, r5, r6, r7 = rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7]
+    for i in range(i1 - i0):
+        qik = Q[i0 + i, k]
+        a0 += r0[i] * qik
+        a1 += r1[i] * qik
+        a2 += r2[i] * qik
+        a3 += r3[i] * qik
+        a4 += r4[i] * qik
+        a5 += r5[i] * qik
+        a6 += r6[i] * qik
+        a7 += r7[i] * qik
+    projection[k, t0], projection[k, t0 + 1], projection[k, t0 + 2], projection[k, t0 + 3] = a0, a1, a2, a3
+    projection[k, t0 + 4], projection[k, t0 + 5], projection[k, t0 + 6], projection[k, t0 + 7] = a4, a5, a6, a7
+
+
+def _sums_two(rows, Q, k, i0, i1, projection, t0):
+    """:func:`_sums_one` for covariates k and k + 1 at once: each loaded
+    value serves two sums (sixteen in registers)."""
+    a0, a1, a2, a3 = projection[k, t0], projection[k, t0 + 1], projection[k, t0 + 2], projection[k, t0 + 3]
+    a4, a5, a6, a7 = projection[k, t0 + 4], projection[k, t0 + 5], projection[k, t0 + 6], projection[k, t0 + 7]
+    b0, b1, b2, b3 = projection[k + 1, t0], projection[k + 1, t0 + 1], projection[k + 1, t0 + 2], projection[k + 1, t0 + 3]
+    b4, b5, b6, b7 = projection[k + 1, t0 + 4], projection[k + 1, t0 + 5], projection[k + 1, t0 + 6], projection[k + 1, t0 + 7]
+    r0, r1, r2, r3, r4, r5, r6, r7 = rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7]
+    for i in range(i1 - i0):
+        qa = Q[i0 + i, k]
+        qb = Q[i0 + i, k + 1]
+        c = r0[i]
+        a0 += c * qa
+        b0 += c * qb
+        c = r1[i]
+        a1 += c * qa
+        b1 += c * qb
+        c = r2[i]
+        a2 += c * qa
+        b2 += c * qb
+        c = r3[i]
+        a3 += c * qa
+        b3 += c * qb
+        c = r4[i]
+        a4 += c * qa
+        b4 += c * qb
+        c = r5[i]
+        a5 += c * qa
+        b5 += c * qb
+        c = r6[i]
+        a6 += c * qa
+        b6 += c * qb
+        c = r7[i]
+        a7 += c * qa
+        b7 += c * qb
+    projection[k, t0], projection[k, t0 + 1], projection[k, t0 + 2], projection[k, t0 + 3] = a0, a1, a2, a3
+    projection[k, t0 + 4], projection[k, t0 + 5], projection[k, t0 + 6], projection[k, t0 + 7] = a4, a5, a6, a7
+    projection[k + 1, t0], projection[k + 1, t0 + 1], projection[k + 1, t0 + 2], projection[k + 1, t0 + 3] = b0, b1, b2, b3
+    projection[k + 1, t0 + 4], projection[k + 1, t0 + 5], projection[k + 1, t0 + 6], projection[k + 1, t0 + 7] = b4, b5, b6, b7
+
+
+def _sums_weighted(rows, sqw, i0, i1, wsq, t0):
+    """wsq[t0:t0 + 8] += sum_i sqw_i rows[u, i - i0]^2 over samples i0:i1
+    in order."""
+    a0, a1, a2, a3 = wsq[t0], wsq[t0 + 1], wsq[t0 + 2], wsq[t0 + 3]
+    a4, a5, a6, a7 = wsq[t0 + 4], wsq[t0 + 5], wsq[t0 + 6], wsq[t0 + 7]
+    r0, r1, r2, r3, r4, r5, r6, r7 = rows[0], rows[1], rows[2], rows[3], rows[4], rows[5], rows[6], rows[7]
+    for i in range(i1 - i0):
+        vi = sqw[i0 + i]
+        a0 += vi * r0[i] * r0[i]
+        a1 += vi * r1[i] * r1[i]
+        a2 += vi * r2[i] * r2[i]
+        a3 += vi * r3[i] * r3[i]
+        a4 += vi * r4[i] * r4[i]
+        a5 += vi * r5[i] * r5[i]
+        a6 += vi * r6[i] * r6[i]
+        a7 += vi * r7[i] * r7[i]
+    wsq[t0], wsq[t0 + 1], wsq[t0 + 2], wsq[t0 + 3] = a0, a1, a2, a3
+    wsq[t0 + 4], wsq[t0 + 5], wsq[t0 + 6], wsq[t0 + 7] = a4, a5, a6, a7
+
+
+def _accumulate_rows(rows, Q, i0, i1, projection, sqw, wsq, t0):
+    """Add samples i0:i1 of eight centered variants t0:t0 + 8 (``rows``)
+    to their covariate sums (and weighted squares)."""
+    q = Q.shape[1]
+    for k in range(0, q - 1, 2):
+        _sums_two(rows, Q, k, i0, i1, projection, t0)
+    if q % 2:
+        _sums_one(rows, Q, q - 1, i0, i1, projection, t0)
+    if sqw.size > 0:
+        _sums_weighted(rows, sqw, i0, i1, wsq, t0)
 
 
 def _finish_tile(counts, mu, mean, sd, coefficients, zz, r0, width, projection, q,
@@ -71,18 +212,57 @@ def _finish_tile(counts, mu, mean, sd, coefficients, zz, r0, width, projection, 
         zz[j] = norm
 
 
-def _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, centered,
+def _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, rows,
                   sqw, wsq):
-    """Moments of variants r0:r1 of int8 calls, a sample at a time.
+    """Moments of variants r0:r1 of int8 calls.
 
-    The mean and variance follow from each variant's call counts; one pass
-    over the samples accumulates the covariate coefficients of the
-    standardized values, c = (sum_i (g_i - mu) Q_i) / sd, and the projected
-    squared norm is sum z^2 - |c|^2, so no standardized vector is formed.
-    Each variant sums its samples in order whatever the tile, storage
-    layout or format; no-calls contribute zero. A non-empty ``sqw`` (one
-    squared row scale per sample) also accumulates sum_i sqw_i (g_i - mu)^2.
+    The mean and variance follow from each variant's call counts; the
+    covariate coefficients of the standardized values are
+    c = (sum_i (g_i - mu) Q_i) / sd and the projected squared norm is
+    sum z^2 - |c|^2, so no standardized vector is formed. Eight variants
+    at a time are centered into ``rows`` (no-calls are 0), a span of
+    samples per pass, and every sum runs over the samples in order, so a
+    variant's values do not depend on the tile, storage layout or format.
+    A non-empty ``sqw`` (one squared row scale per sample) also accumulates
+    sum_i sqw_i (g_i - mu)^2. ``projection`` holds the tile's (q, 64)
+    sums; padding rows of a partial group are zero and their sums unused.
     """
+    n, q = Q.shape
+    width = r1 - r0
+    weighted = sqw.size > 0
+    counts = np.empty((width, 3), dtype=np.int64)
+    for t in range(width):
+        _count_calls(G[:, idx[r0 + t]], counts, t)
+    mu = np.empty(width)
+    for t in range(width):
+        mu[t] = _count_moments(counts[t, 0], counts[t, 1], counts[t, 2])[0]
+    projection[:] = 0.0
+    wsq[:] = 0.0
+    if q or weighted:
+        for t0 in range(0, width, 8):
+            for i0 in range(0, n, _SPAN):
+                i1 = min(i0 + _SPAN, n)
+                for u in range(8):
+                    out = rows[u]
+                    if t0 + u < width:
+                        col = G[i0:i1, idx[r0 + t0 + u]]
+                        m = mu[t0 + u]
+                        for i in range(i1 - i0):
+                            value = col[i]
+                            out[i] = value - m if value >= 0 else 0.0
+                    else:
+                        out[:i1 - i0] = 0.0
+                _accumulate_rows(rows, Q, i0, i1, projection, sqw, wsq, t0)
+    _finish_tile(counts, mu, mean, sd, coefficients, zz, r0, width, projection, q,
+                 wsq, weighted)
+
+
+def _moments_samples_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection,
+                          centered, sqw, wsq):
+    """:func:`_moments_tile` for sample-major int8 calls, a sample at a
+    time: column reads would stride across the samples' rows, so each
+    sample's calls are read along its row. The same counts and the same
+    per-sample arithmetic, so identical values."""
     n, q = Q.shape
     width = r1 - r0
     weighted = sqw.size > 0
@@ -97,7 +277,7 @@ def _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, cen
         mu[t] = _count_moments(counts[t, 0], counts[t, 1], counts[t, 2])[0]
     projection[:, :width] = 0.0
     wsq[:width] = 0.0
-    for i in range(n):
+    for i in range(n if q or weighted else 0):  # nothing to sum without either
         for t in range(width):
             value = G[i, idx[r0 + t]]
             centered[t] = value - mu[t] if value >= 0 else 0.0
@@ -114,26 +294,15 @@ def _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, cen
 
 
 def _moments_packed_tile(data, n, idx, Q, mean, sd, coefficients, zz, r0, r1,
-                         projection, centered, deviation, sqw, wsq):
+                         projection, rows, deviation, sqw, wsq):
     """:func:`_moments_tile` for two-bit PLINK codes (variant-major rows):
     the same counts and the same per-sample arithmetic, so identical values."""
     q = Q.shape[1]
     width = r1 - r0
     weighted = sqw.size > 0
-    full = n // 4
-    counts = np.zeros((width, 3), dtype=np.int64)
+    counts = np.empty((width, 3), dtype=np.int64)
     for t in range(width):
-        row = data[idx[r0 + t]]
-        codes = np.zeros(4, dtype=np.int64)
-        for b in range(full):
-            byte = row[b]
-            codes[byte & 3] += 1
-            codes[(byte >> 2) & 3] += 1
-            codes[(byte >> 4) & 3] += 1
-            codes[byte >> 6] += 1
-        for i in range(4 * full, n):  # the last byte's unused bits are ignored
-            codes[(row[i >> 2] >> (2 * (i & 3))) & 3] += 1
-        counts[t, 0], counts[t, 1], counts[t, 2] = codes[3], codes[2], codes[0]
+        _count_codes(data[idx[r0 + t]], n, counts, t)
     mu = np.empty(width)
     for t in range(width):
         mu[t] = _count_moments(counts[t, 0], counts[t, 1], counts[t, 2])[0]
@@ -142,31 +311,52 @@ def _moments_packed_tile(data, n, idx, Q, mean, sd, coefficients, zz, r0, r1,
         deviation[t, 1] = 0.0
         deviation[t, 2] = 1 - mu[t]
         deviation[t, 3] = 0 - mu[t]
-    projection[:, :width] = 0.0
-    wsq[:width] = 0.0
-    for i in range(n):
-        b, shift = i >> 2, 2 * (i & 3)
-        for t in range(width):
-            centered[t] = deviation[t, (data[idx[r0 + t], b] >> shift) & 3]
-        if weighted:
-            vi = sqw[i]
-            for t in range(width):
-                wsq[t] += vi * centered[t] * centered[t]
-        for k in range(q):
-            qik = Q[i, k]
-            for t in range(width):
-                projection[k, t] += centered[t] * qik
+    projection[:] = 0.0
+    wsq[:] = 0.0
+    if q or weighted:
+        for t0 in range(0, width, 8):
+            for i0 in range(0, n, _SPAN):  # _SPAN is whole bytes: i0 starts a byte
+                i1 = min(i0 + _SPAN, n)
+                for u in range(8):
+                    out = rows[u]
+                    t = t0 + u
+                    if t < width:
+                        row = data[idx[r0 + t]]
+                        d0, d1, d2, d3 = deviation[t, 0], deviation[t, 1], deviation[t, 2], deviation[t, 3]
+                        full = (i1 - i0) // 4
+                        for b in range(full):
+                            byte = row[(i0 >> 2) + b]
+                            for s in range(4):
+                                code = (byte >> (2 * s)) & 3
+                                out[4 * b + s] = (d3 if code == 3 else d2) if code >= 2 else (d1 if code == 1 else d0)
+                        for i in range(i0 + 4 * full, i1):
+                            out[i - i0] = deviation[t, (row[i >> 2] >> (2 * (i & 3))) & 3]
+                    else:
+                        out[:i1 - i0] = 0.0
+                _accumulate_rows(rows, Q, i0, i1, projection, sqw, wsq, t0)
     _finish_tile(counts, mu, mean, sd, coefficients, zz, r0, width, projection, q,
                  wsq, weighted)
 
 
+def _moments_any_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, rows,
+                      centered, sqw, wsq):
+    """The int8 tile kernel for the storage order (identical values)."""
+    if G.strides[0] > G.strides[1]:  # sample-major
+        _moments_samples_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection,
+                              centered, sqw, wsq)
+    else:
+        _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0, r1, projection, rows,
+                      sqw, wsq)
+
+
 def _moments_columns_serial(G, idx, Q, mean, sd, coefficients, zz, sqw):
     projection = np.empty((Q.shape[1], _TILE))
+    rows = np.empty((8, _SPAN))
     centered = np.empty(_TILE)
     wsq = np.empty(_TILE)
     for r0 in range(0, idx.size, _TILE):
-        _moments_tile(G, idx, Q, mean, sd, coefficients, zz, r0,
-                      min(r0 + _TILE, idx.size), projection, centered, sqw, wsq)
+        _moments_any_tile(G, idx, Q, mean, sd, coefficients, zz, r0,
+                          min(r0 + _TILE, idx.size), projection, rows, centered, sqw, wsq)
 
 
 # Separate from the serial kernel: Numba caches per function, and a parallel
@@ -174,31 +364,32 @@ def _moments_columns_serial(G, idx, Q, mean, sd, coefficients, zz, sqw):
 def _moments_columns_parallel(G, idx, Q, mean, sd, coefficients, zz, sqw):
     for t in prange((idx.size + _TILE - 1) // _TILE):
         projection = np.empty((Q.shape[1], _TILE))
+        rows = np.empty((8, _SPAN))
         centered = np.empty(_TILE)
         wsq = np.empty(_TILE)
-        _moments_tile(G, idx, Q, mean, sd, coefficients, zz, t * _TILE,
-                      min(t * _TILE + _TILE, idx.size), projection, centered, sqw, wsq)
+        _moments_any_tile(G, idx, Q, mean, sd, coefficients, zz, t * _TILE,
+                          min(t * _TILE + _TILE, idx.size), projection, rows, centered, sqw, wsq)
 
 
 def _moments_packed_serial(data, n, idx, Q, mean, sd, coefficients, zz, sqw):
     projection = np.empty((Q.shape[1], _TILE))
-    centered = np.empty(_TILE)
+    rows = np.empty((8, _SPAN))
     deviation = np.empty((_TILE, 4))
     wsq = np.empty(_TILE)
     for r0 in range(0, idx.size, _TILE):
         _moments_packed_tile(data, n, idx, Q, mean, sd, coefficients, zz, r0,
-                             min(r0 + _TILE, idx.size), projection, centered, deviation,
+                             min(r0 + _TILE, idx.size), projection, rows, deviation,
                              sqw, wsq)
 
 
 def _moments_packed_parallel(data, n, idx, Q, mean, sd, coefficients, zz, sqw):
     for t in prange((idx.size + _TILE - 1) // _TILE):
         projection = np.empty((Q.shape[1], _TILE))
-        centered = np.empty(_TILE)
+        rows = np.empty((8, _SPAN))
         deviation = np.empty((_TILE, 4))
         wsq = np.empty(_TILE)
         _moments_packed_tile(data, n, idx, Q, mean, sd, coefficients, zz, t * _TILE,
-                             min(t * _TILE + _TILE, idx.size), projection, centered, deviation,
+                             min(t * _TILE + _TILE, idx.size), projection, rows, deviation,
                              sqw, wsq)
 
 
@@ -373,8 +564,16 @@ def _project_rows(z, coefficients, Qt, out):
 
 if HAS_NUMBA:
     _count_moments = njit(cache=True)(_count_moments)
+    _count_calls = njit(cache=True)(_count_calls)
+    _count_codes = njit(cache=True)(_count_codes)
+    _sums_one = njit(cache=True)(_sums_one)
+    _sums_two = njit(cache=True)(_sums_two)
+    _sums_weighted = njit(cache=True)(_sums_weighted)
+    _accumulate_rows = njit(cache=True)(_accumulate_rows)
     _finish_tile = njit(cache=True)(_finish_tile)
     _moments_tile = njit(cache=True)(_moments_tile)
+    _moments_samples_tile = njit(cache=True)(_moments_samples_tile)
+    _moments_any_tile = njit(cache=True)(_moments_any_tile)
     _moments_packed_tile = njit(cache=True)(_moments_packed_tile)
     _moments_packed_serial = njit(cache=True)(_moments_packed_serial)
     _moments_packed_parallel = njit(parallel=True, cache=True)(_moments_packed_parallel)

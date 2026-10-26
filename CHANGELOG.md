@@ -21,6 +21,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Genotype preparation (each variant's call counts, mean, SD, covariate
+  coefficients and projected norm) counts calls in one contiguous pass
+  (integer sums of int8 calls, per-byte code counts of two-bit calls) and
+  then centers eight variants at a time into 256-sample float64 rows whose
+  covariate sums stay in registers, instead of reading 64 variants a
+  sample at a time, twice. It takes 0.64 ns per genotype instead of 1.81 on
+  a 5,000 x 40,000 panel (0.82 instead of 2.50 from two-bit calls, 1.39
+  instead of 2.38 with five covariates; one thread), and whole HRATT runs
+  take 4-10% less time on 5,000 x 40,000 and 20,000 x 10,000. Each
+  variant still sums its samples in order, so results are bit-identical
+  (p-values in all 16 checked configurations, and with four threads).
+  Sample-major int8 keeps the sample-at-a-time kernel.
 - VB fits correct each sub-block's products and updates for the covariates
   in two Numba loops over all model columns, instead of NumPy products per
   held-out fold, wherever those calls cost more than the arithmetic
