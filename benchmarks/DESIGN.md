@@ -4,7 +4,9 @@ This note is the map of the benchmark suite: which question each family of
 drivers answers, what the recorded evidence can and cannot support, and
 where the suite was blind. It was written on 25 October 2026, after the
 19 and 25 October efficiency reviews and before the scale study
-(`scale_study_plan.md`) was run.
+(`scale_study_plan.md`) was run, and updated on 26 October after the
+LDAK-KVIK comparisons at 400,000 variants, the scaling ladders and the
+speed branch's review.
 
 The suite is a *measured-evidence* suite, not a test suite. The tests
 (`tests/`) decide whether the code is correct; the benchmarks decide what
@@ -18,10 +20,11 @@ comparison itself.
 
 | Layer | Question | Drivers | What it can support |
 |---|---|---|---|
-| Invariants | do two ways of computing the same thing agree? | `run_benchmarks.py`, `slq_defaults.py`, `hratt_he_validation.py`, `efficiency_paired.py`, `hratt_efficiency.py` | that the implementation computes the intended estimator |
-| Resources | what does one fit cost in time and memory? | `run_benchmarks.py`, `hratt_thread_scaling.py`, `efficiency_paired.py`, `review_memory.py`, the 20k and 50k extensions | that the package is fast enough at the sizes measured |
-| Evidence | does the estimator behave as the theory says? | `sim_study.py`, `structure_calibration.py`, `denominator_geometry.py`, `hratt_weights_binary.py`, `hratt_followups.py` | calibration, power and effect attenuation under a known truth |
-| External | how does it compare with the reference program? | `ldak_kvik_comparison.py`, `hratt_he_comparison.py`, `atwell_controls.py` | that the package is not alone in its conclusions, on real data and on matched inputs |
+| Invariants | do two ways of computing the same thing agree? | `run_benchmarks.py`, `slq_defaults.py`, `hratt_he_validation.py`, `efficiency_paired.py`, `hratt_efficiency.py`, `scale_study.py` arm A | that the implementation computes the intended estimator |
+| Resources | what does one fit cost in time and memory? | `run_benchmarks.py`, `hratt_thread_scaling.py`, `efficiency_paired.py`, `review_memory.py`, the 20k and 50k extensions, `scale_study.py` arms C/C2, `kvik_scale.py`, `scaling_ladder.py` | that the package is fast enough at the sizes measured |
+| Evidence | does the estimator behave as the theory says? | `sim_study.py`, `structure_calibration.py`, `denominator_geometry.py`, `hratt_weights_binary.py`, `hratt_followups.py`, `scale_study.py` arm B | calibration, power and effect attenuation under a known truth |
+| External | how does it compare with the reference program? | `ldak_kvik_comparison.py`, `hratt_he_comparison.py`, `atwell_controls.py`, `kvik_scale.py`, `scaling_ladder.py` | that the package is not alone in its conclusions, on real data and on matched inputs |
+| Scaling | how does the cost grow along one axis at a time? | `scaling_ladder.py` (m and LD at fixed n), `kvik_scale.py` driven over n at fixed m | exponents in n and m, with the iteration counts that explain them |
 
 Layers 1 and 2 are about the software; layers 3 and 4 are about the
 science. The suite was much stronger in the first two layers than in the
@@ -43,6 +46,8 @@ time.
 | G6 | No single entry point and no index | there is no command that produces "the current measured state" of the package, and no way to ask which archive measured what | partly closed: `index.py` lists the archives; a suite-wide "current state" command is still open |
 | G7 | A numerical invariant lived in a benchmark | `run_benchmarks.py` asserts that the batched scan agrees with the v1 per-SNP reference; the same assertion is already in `tests/test_lmm.py`, and the benchmark repeats it at a larger size and times it | closed |
 | G8 | The external comparison stopped at 20,000 variants | the matched comparison with the official LDAK-KVIK had no archive above 50,000 samples and 20,000 variants, so the claim that mixmogam is efficient at genome scale had no external counterpart | closed by `kvik_scale.py`: the official program and mixmogam on the same 5,000 x 400,000 panel |
+| G9 | No measured scaling axis | every archived wall time was a single point; nothing said how cost grows in n or m, so a new panel size could not be extrapolated and two panels of equal cell count looked comparable | closed by the two ladders: `scaling_ladder.py` (n, m and LD at fixed host) and the sample-size ladder (`kvik_scale.py` at m = 20,000, n = 1,000 to 50,000), each with the programs' own iteration counts as the mechanism |
+| G10 | Speed changes were not verified end to end against the external program | the 26 October speed branch was reviewed by equivalence matrices and paired A/B on reduced panels, but no run confirmed the association results against LDAK-KVIK after the branch | closed by the 26 October reruns of every LDAK-KVIK benchmark on the same panels, seeds and threads |
 
 ## 3. The rethought structure
 
@@ -96,13 +101,20 @@ until their archives are re-run under the shared code (G5).
   Above a few thousand samples the two-step methods are compared with
   each other, not with an independent implementation; a matched
   comparison with the official LDAK-KVIK remains in
-  `ldak_kvik_comparison.py`.
+  `ldak_kvik_comparison.py` and `kvik_scale.py`.
 * Timings are host-specific and code-specific. A ratio between two
   configurations measured in the same archive is meaningful; a number
-  copied between archives is not.
+  copied between archives is not -- the reference program itself moved
+  13-33% between the 25 and 26 October runs on identical inputs, which
+  is the honest noise floor for any cross-day comparison.
 * Passing every benchmark establishes implementation contracts, not
   calibration. The calibration arm is a check on the null and on power
   in a controlled panel, nothing more.
+* The ladders isolate one axis at a time on one panel family: the
+  sample-size ladder holds LD inside 100-variant founder blocks, and a
+  long-range-LD panel costs more per variant than that (the
+  25 October scaling ladder shows the m/LD side). Exponents measured
+  here describe this family, not a demographic model.
 * The suite measures what exists today. A new method, a new file format
   or a new default needs its own row in the matrix, or the evidence
   stops describing the package.

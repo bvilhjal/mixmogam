@@ -96,7 +96,7 @@ operating system: HRATT-HE took 33 s at 3.0 GiB and BOLT-LMM 91 s at 3.2 GiB
 matrix included. That panel is an easy one -- ten times fewer samples than
 the HAPNEST panels above, and LD inside 100-variant blocks -- so it measures
 scale and memory, not the difficulty of a realistic genome; the
-[scaling ladder](benchmarks/results/20261025T185808Z-scaling-ladder/README.md)
+[scaling ladder](benchmarks/results/20261025T190534Z-scaling-ladder/README.md)
 separates the sample-size, LD and iteration effects. The default 1 GB
 variational Gram cache then held about 320,000 variants (about 620,000
 since Grams are stored as packed triangles), so at 400,000 variants it
@@ -120,6 +120,15 @@ BOLT-LMM-inf 35 s at 2.1 GiB, with every statistic identical to the digits
 above: HRATT-HE is level with the reference program on the mixed trait and
 faster on the null trait, and at four BLAS threads all three are level
 ([rerun](benchmarks/results/20261026T143800Z-kvik-scale/README.md)).
+Scaling in the sample count was measured on its own axis at m = 20,000,
+n = 1,000 to 50,000: LDAK-KVIK and both HRATT paths are linear in n
+(local exponents 0.81-0.96, their iteration counts flat in n),
+BOLT-LMM-inf is superlinear (1.21, its conjugate-gradient count growing
+from 10 to 22), and `exact` is cubic and stops at n = 2,500. HRATT-HE is
+the fastest method from n = 10,000 up — 13.6 s against the reference
+program's 20.3 s at 50,000 — and peak memory is linear in n for every
+streaming method
+([ladder](benchmarks/results/20261026T161500Z-kvik-sample-scaling/README.md)).
 
 ## Install
 
@@ -198,6 +207,13 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   ([archive](benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 - BOLT mixture p-values accompany infinitesimal-model effects and standard
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
+- Method cost scales differently in the sample count: `exact` is cubic in
+  n, BOLT-LMM-inf is superlinear (its conjugate-gradient iterations grow
+  with n, from 10 at n = 1,000 to 22 at 50,000 at m = 20,000), and both
+  HRATT paths and LDAK-KVIK are linear with iteration counts flat in n.
+  HRATT-HE is the cheapest association path from n = 10,000 up; BOLT-LMM-inf
+  is the cheapest at n = 1,000 and the most expensive at 50,000
+  ([ladder](benchmarks/results/20261026T161500Z-kvik-sample-scaling/README.md)).
 - HRATT's weighted and binary tests take allele frequencies from the
   covariates: when weights or case fractions vary with ancestry, include
   ancestry principal components (`mixmogam.pca`).

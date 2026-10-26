@@ -1,7 +1,12 @@
 # Research report
 
 This revision (17 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
-unreleased changes through 17 October. The abstract retains the failed
+unreleased changes through 17 October. The evidence table below also
+indexes the 25-26 October archives (genome-scale suite rework, the
+LDAK-KVIK comparisons at 400,000 variants, the covariate study, the
+speed branch and its review, and both scaling ladders) so the next
+revision can cite them; the manuscript text does not describe them yet.
+The abstract retains the failed
 weighted-effect and runtime criteria; the software contracts describe
 sample-size and assembly metadata and the PCA memory guard. Section 4.13
 adds the first real-data result: a prespecified positive-control check on
@@ -60,6 +65,13 @@ Table 1. Evidence and provenance used in the manuscript.
 | Cross-fitted scores and covariate-specific genotype distributions | `20261006-hratt-followups` | Prespecified validation on the same samples plus Fst 0.05 cells with and without 10 PCs; 660 cases |
 | Built-in-PC equivalence rerun | `20261008-hratt-followups-builtin-pcs` | The S4 cells re-run with `mixmogam.pca.principal_components`, the exact SVD of the same thinned panels, replacing the driver's randomized iteration; 130 cases, calibration matches within Monte Carlo error |
 | Known major genes on real data | `20261017-atwell-controls` | Prespecified positive controls on the bundled RegMap panel and Atwell phenotypes, four methods; A1 failed (MOT1 on raw values), A2 passed; log-scale and HRATT-convergence follow-ups are exploratory |
+| Genome-scale suite rework | `20261025T135258Z-scale-study`, map in [`benchmarks/DESIGN.md`](../benchmarks/DESIGN.md) | 308 fits under a prespecified plan: configuration invariance (bitwise), the Gram-cache budget cliff, type-I error/power/effect attenuation with intervals, and the pure NumPy fallbacks' cost; the confounded cells exposed a non-convergence the variational methods hit and the exact/BOLT-LMM-inf paths do not |
+| Matched LDAK-KVIK at 400,000 variants | `20261025T153917Z-kvik-scale`, `-workers4`, `-blas4` | Same panel, seeds and files both programs; p-values correlate at 0.998 under the null with equal calibration and the same 8/10 causal variants; the reference program as fast as HRATT-HE and faster than BOLT-LMM-inf at one thread, and indifferent to four threads |
+| Panel-cost decomposition | `20261025T190534Z-scaling-ladder`, `-t4` | Ten times fewer samples costs ~7x at fixed variants (iteration counts fall with it); short-range LD is cheaper per variant than HAPNEST's; the October archives were measured on a slower host (same executable 33.5 s then, 20.1 s on 25 October) |
+| Covariates under confounding, with the reference program | `20261025T201718Z-kvik-covariates-small`, `-large` | With three ancestry PCs every method converges and agrees, the official program included once adjusted; without them its own heritability stage fails (h2 clamped, all chunks excluded) and its statistics inflate (lambda_GC 4.4/2.9), while mixmogam's variational fits do not converge and the exact and BOLT-LMM-inf paths stay calibrated |
+| Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
+| Post-branch reruns of every LDAK-KVIK benchmark | `20261026T143800Z-kvik-scale`, `-blas4`, `-covariates-small/large`, `20261026T152200Z-`, `20261026T152400Z-` | Statistics reproduce to four decimals in lambda_GC; HRATT-HE level with the reference program on the mixed trait and faster on the null; peak RSS down ~0.4 GiB; the reference program's own 13-33% day drift recorded as the cross-day noise floor |
+| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: LDAK-KVIK and both HRATT paths linear in n (0.81-0.96) with flat iteration counts, BOLT-LMM-inf superlinear (1.21; CG iterations 10 to 22), exact cubic; HRATT-HE cheapest from n = 10,000 up |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |

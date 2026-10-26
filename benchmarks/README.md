@@ -59,7 +59,7 @@ It is the answer to "the new panel has twenty times the variants and
 takes the same time": ten times fewer samples make the reference
 program 7.3 times faster and mixmogam 7.1 times, and the iteration
 counts fall with them. The
-[run of 25 October](results/20261025T185808Z-scaling-ladder/README.md)
+[run of 25 October](results/20261025T190534Z-scaling-ladder/README.md)
 also shows that the October archives were measured on a slower host
 with older code: the same executable on the same archived panel takes
 19.8 s today against the archived 33.5 s.
