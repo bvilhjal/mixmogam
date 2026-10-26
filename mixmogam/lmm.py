@@ -39,6 +39,8 @@ _EXACT_N_MAX = 8000  # n above which the exact O(n^3) eigh is skipped
 # k / n (lambda_GC 1.02 at k/n = 0.26, 1.30 at k/n = 0.10), so truncated
 # scans are an approximation, not a default path
 _DEFAULT_TOP_K = 1024
+# fewest Lanczos steps an adaptive REML run stops at (``slq_tol``)
+_SLQ_MIN_STEPS = 8
 
 
 @dataclass(frozen=True)
@@ -146,6 +148,39 @@ def _separated_extremes(values: np.ndarray, vectors: np.ndarray,
     bulk = float(np.median(values))
     keep = int(np.sum(values >= ratio * bulk))
     return values[:keep], vectors[:, :keep]
+
+
+def _rule_nodes(rules) -> tuple[np.ndarray, np.ndarray]:
+    """(rules, nodes)-shaped clipped nodes and their masses norm2 * w,
+    zero-padded to the longest rule."""
+    width = max(r.theta.size for r in rules)
+    theta = np.zeros((len(rules), width))
+    mass = np.zeros((len(rules), width))
+    for c, r in enumerate(rules):
+        theta[c, : r.theta.size] = np.maximum(r.theta, 0.0)
+        mass[c, : r.theta.size] = r.norm2 * r.weights
+    return theta, mass
+
+
+def _reml_grid(theta, mass, deltas, p, y_top_coef, lam_d) -> tuple[np.ndarray, np.ndarray]:
+    """REML ll and dll of :meth:`LMM._slq_pack` at every delta at once.
+
+    ``theta``/``mass`` from :func:`_rule_nodes` (row 0 the phenotype rule,
+    then the trace probes). Equal to the scalar evaluators up to rounding;
+    used only to decide when a Lanczos run has converged.
+    """
+    x = deltas[:, None]
+    inv_y = 1.0 / (theta[0] + x)
+    top = y_top_coef**2 / (lam_d + x)
+    s1 = inv_y @ mass[0] + top.sum(axis=1)
+    s3 = inv_y**2 @ mass[0] + (top / (lam_d + x)).sum(axis=1)
+    t = theta[1:, None, :] + x
+    bulk = mass[1:, None, :] / (theta.shape[0] - 1)
+    d = lam_d.size
+    logdet = (bulk * np.log(t)).sum(axis=(0, 2)) + np.log(lam_d + x).sum(axis=1) - d * np.log(deltas)
+    tr_inv = (bulk / t).sum(axis=(0, 2)) + (1.0 / (lam_d + x)).sum(axis=1) - d / deltas
+    ll = 0.5 * (p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(s1)) - logdet)
+    return ll, 0.5 * (p * s3 / s1 - tr_inv)
 
 
 class LMM:
@@ -496,7 +531,9 @@ class LMM:
         return ll_at, dll_at, s1_at
 
     def _slq_pack(self, method: str, probes: int, steps: int, deflate: int,
-                  basis: Optional[tuple[np.ndarray, np.ndarray]] = None):
+                  basis: Optional[tuple[np.ndarray, np.ndarray]] = None,
+                  stop_tol: float = 0.0, deltas: Optional[np.ndarray] = None,
+                  tol: float = 1e-6):
         """Lanczos-quadrature ll/dll/s1 evaluators (no eigendecomposition).
 
         Extreme eigenvalues are deflated with a randomized top-d pass and
@@ -505,6 +542,10 @@ class LMM:
         those top eigenpairs (descending) of the REML operator S K S, e.g.
         from a covariate-projected genotype operator, for which K = S K S
         and the same basis also serves a CG preconditioner.
+
+        With ``stop_tol > 0`` a REML run stops before ``steps`` once the h2
+        that the fit on grid ``deltas`` (refinement ``tol``) would return
+        from the rules so far has converged (:meth:`_fit_variance_components`).
         """
         rng = np.random.default_rng(self.random_state)
         op = self._reml_op()
@@ -540,9 +581,40 @@ class LMM:
         # batched Lanczos run instead of 1 + probes sequential ones (same
         # probes, same rules up to rounding)
         Z = rademacher_probes(self.n, probes, rng, pre=lambda x: x - Q @ (Q.T @ x))
-        rules = lanczos_quadrature_batch(op_defl, np.column_stack([y_rest, Z]), steps)
-        y_rule, tr_rules = rules[0], rules[1:]
         p = self.n - self.q
+        stop = None
+        if method == "reml" and stop_tol > 0 and Z.shape[1] > 0:
+            # After pass j the j-step rules give the h2 a j-step run would
+            # fit (to rounding). Stop once it moved less than stop_tol twice
+            # running, and only while each of the last three fits found a
+            # bracketed root: with more samples than variants the early rules
+            # can sit on the grid end (h2 0.99995) for many passes before
+            # moving to the interior (0.5), and their changes there are
+            # exactly zero.
+            # ML is not stopped: its trace rules come from a separate run.
+            checks = []
+
+            def stop(j, rules_at):
+                if j < _SLQ_MIN_STEPS - 2:  # the first stop needs three fits
+                    return False
+                theta, mass = _rule_nodes(rules_at())
+
+                def grid(x):
+                    return _reml_grid(theta, mass, np.asarray(x, dtype=np.float64).reshape(-1),
+                                      p, y_top_coef, lam_d)
+
+                lls, dlls = grid(deltas)
+                delta, _, bracketed = self._refine_delta(
+                    deltas, lls, dlls, lambda x: float(grid(x)[0][0]),
+                    lambda x: float(grid(x)[1][0]), tol)
+                checks.append((1.0 / (1.0 + delta), bracketed))
+                if len(checks) < 3:
+                    return False
+                (h0, b0), (h1, b1), (h2, b2) = checks[-3:]
+                return b0 and b1 and b2 and abs(h2 - h1) < stop_tol and abs(h1 - h0) < stop_tol
+
+        rules = lanczos_quadrature_batch(op_defl, np.column_stack([y_rest, Z]), steps, stop)
+        y_rule, tr_rules = rules[0], rules[1:]
 
         def s1_at(delta):
             top = float(np.sum(y_top_coef**2 / (lam_d + delta))) if d else 0.0
@@ -672,6 +744,7 @@ class LMM:
         slq_probes: int = 48,
         slq_steps: int = 24,
         slq_deflate: int = 128,
+        slq_tol: float = 1e-6,
     ) -> LMFit:
         """Fit variance components on the null (covariates-only) model.
 
@@ -687,12 +760,22 @@ class LMM:
         (no structure, F_ST 0.1 with and without PCs, h2 0.95, fewer markers
         than samples); the error is Monte Carlo in the trace probes, so the
         defaults spend the columns on 48 probes rather than on steps.
+
+        For REML ``slq_steps`` is a cap: the run stops after step j >= 8
+        once the heritability fitted from the rules so far changed by less
+        than ``slq_tol`` at each of the last two steps and the last three
+        fits each found a bracketed root (not a grid end). Early stops moved
+        h2 by at most 3e-6 from the 24-step fit in every tested spectrum (a
+        late step can still add a node that shifts it by a few 1e-6),
+        against a Monte Carlo SD of 2-6e-3. ``slq_tol=0`` runs all
+        ``slq_steps``; ML always does.
         """
         variance = self._fit_variance_components(
             method=method, ngrids=ngrids, llim=llim, ulim=ulim, tol=tol,
             recompute=recompute, solver=solver, slq_probes=slq_probes,
-            slq_steps=slq_steps, slq_deflate=slq_deflate)
-        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate)
+            slq_steps=slq_steps, slq_deflate=slq_deflate, slq_tol=slq_tol)
+        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate,
+                   slq_tol)
         if self._fit is not None and self._fit_options == options and not recompute:
             return self.fit_result
         if variance.solver == "ols":
@@ -745,6 +828,7 @@ class LMM:
         slq_probes: int = 48,
         slq_steps: int = 24,
         slq_deflate: int = 128,
+        slq_tol: float = 1e-6,
         deflation_basis: Optional[tuple[np.ndarray, np.ndarray]] = None,
     ) -> _VarianceFit:
         """Optimize variances without the GLS completion needed by scans.
@@ -757,7 +841,8 @@ class LMM:
             raise ValueError(f"unknown method {method!r}; use 'reml' or 'ml'")
         if solver not in ("auto", "exact", "slq"):
             raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
-        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate)
+        options = (method, ngrids, llim, ulim, tol, solver, slq_probes, slq_steps, slq_deflate,
+                   slq_tol)
         if self._fit is not None and self._fit_options == options and not recompute:
             fit = self._fit
             return _VarianceFit(fit.method, fit.delta, fit.vg, fit.ve, fit.ll,
@@ -766,6 +851,8 @@ class LMM:
         if (not isinstance(ngrids, (int, np.integer)) or ngrids < 1
                 or not np.isfinite([llim, ulim, tol]).all() or llim >= ulim or tol <= 0):
             raise ValueError("fit requires a positive grid size, llim < ulim and positive tol")
+        if not np.isfinite(slq_tol) or slq_tol < 0:
+            raise ValueError("slq_tol must be a nonnegative number (0: run all slq_steps)")
         y0 = self._residualized_y()
         if self.K is None and self._kop is None:
             rss = float(y0 @ y0)
@@ -781,15 +868,16 @@ class LMM:
                 self.K is None or self.eigen()["full"]
             )
             solver = "exact" if can_exact else "slq"
+        deltas = np.exp(np.linspace(llim, ulim, ngrids + 1))
         if solver == "exact":
             ll_at, dll_at, s1_at = self._exact_pack(method)
         elif solver == "slq":
             ll_at, dll_at, s1_at = self._slq_pack(method, slq_probes, slq_steps,
-                                                  slq_deflate, deflation_basis)
+                                                  slq_deflate, deflation_basis,
+                                                  slq_tol, deltas, tol)
         else:
             raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
 
-        deltas = np.exp(np.linspace(llim, ulim, ngrids + 1))
         lls = np.array([ll_at(d) for d in deltas])
         dlls = np.array([dll_at(d) for d in deltas])
         opt_delta, opt_ll, used_newton = self._refine_delta(

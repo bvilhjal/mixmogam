@@ -696,7 +696,7 @@ def _fit_extra(fit) -> dict:
 
 def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              denominator: str = "constant", n_spectral="auto",
-             cg_tol: float = 1e-6, random_state: int = 0,
+             cg_tol: float = 1e-6, slq_tol: float = 1e-6, random_state: int = 0,
              block: int = 4096) -> GwasResult:
     """BOLT-LMM-inf: infinitesimal mixed-model association with LOCO.
 
@@ -705,6 +705,8 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
     group by batched conjugate gradients, the retrospective statistic for
     every SNP, and the calibration constant from exact prospective
     statistics at ``n_calibration`` random SNPs. No n x n matrix is formed.
+    The Lanczos REML run stops once h2 has converged to ``slq_tol`` (at
+    most 24 steps; 0 runs all 24; :meth:`mixmogam.lmm.LMM.fit`).
 
     ``denominator="spectral"`` (mixmogam extension, not BOLT-LMM) replaces
     the proportional denominator by a structure-aware one; see
@@ -713,7 +715,7 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block)
     basis = _spectral_basis(st, random_state=random_state)
-    fit = fit_variance_components(st, random_state=random_state, basis=basis)
+    fit = fit_variance_components(st, random_state=random_state, basis=basis, slq_tol=slq_tol)
     core = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
     extra = {"method": "bolt-inf" if denominator == "constant" else "bolt-inf-spectral",
              "denominator": denominator, **_fit_extra(fit),
@@ -728,8 +730,8 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
          denominator: str = "constant", n_spectral="auto",
          grid=BOLT_GRID, n_folds: int = 5, min_cv_gain: float = 0.01,
          ld_window_bp: int = 1_000_000, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-         gram_cache_bytes: float = 1e9, cg_tol: float = 1e-6, random_state: int = 0,
-         block: int = 4096) -> GwasResult:
+         gram_cache_bytes: float = 1e9, cg_tol: float = 1e-6, slq_tol: float = 1e-6,
+         random_state: int = 0, block: int = 4096) -> GwasResult:
     """BOLT-LMM: Gaussian-mixture (non-infinitesimal) association with LOCO.
 
     Steps 2a-2b of Loh et al. (2015) on top of :func:`bolt_inf`. The prior
@@ -745,6 +747,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     fit even when the mixture supplies the p-values, as in BOLT-LMM.
     ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
     cache warns because the remaining matrices are rebuilt every sweep.
+    ``slq_tol`` is :func:`bolt_inf`'s.
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     mixture statistic) multiplies each SNP's mixture statistic by the
@@ -754,7 +757,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block)
     basis = _spectral_basis(st, random_state=random_state)
-    fit = fit_variance_components(st, random_state=random_state, basis=basis)
+    fit = fit_variance_components(st, random_state=random_state, basis=basis, slq_tol=slq_tol)
     inf = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
     n, m, G = st.lg.n, st.lg.m, st.lg.n_groups
     s2 = fit.vg / m
@@ -1031,7 +1034,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           grid=HRATT_GRID, cv_fraction: float = 0.1, loco_folds: int = 5,
           n_calibration: int = 30, denominator: str = "constant", n_spectral="auto",
           structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-          cg_tol: float = 1e-6, spa_threshold: float = 2.0, spa_two_sided: str = "distance",
+          cg_tol: float = 1e-6, slq_tol: float = 1e-6,
+          spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
           gram_cache_bytes: float = 1e9) -> GwasResult:
@@ -1103,6 +1107,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     the unit-variance scale still applies, and is reported for HE fits.
     LDAK optionally revises its HE estimate by Monte
     Carlo REML (by default for smaller samples or strong structure).
+    Each REML fit's Lanczos run stops once h2 has converged to ``slq_tol``
+    (at least 8 and at most 24 passes over the genotypes; ``slq_tol=0``
+    runs all 24; :meth:`mixmogam.lmm.LMM.fit`).
 
     ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
     cache warns because the remaining matrices are rebuilt every sweep.
@@ -1228,7 +1235,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                       RuntimeWarning, stacklevel=2)
     design = st.w if (st.w is not None and st.v is not None) else None
     vc = _hratt_variance(st, struct, alphas, alpha_method, heritability_method, he_probes, rng,
-                         random_state, design_weights=design)
+                         random_state, design_weights=design, slq_tol=slq_tol)
     h2, w = vc["h2"], vc["w"]
     h2j = w * h2 / float(np.sum(w))
     s2e = max(1.0 - h2, 1e-3)
@@ -1332,7 +1339,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
 
 
 def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritability_method: str,
-                    he_probes: int, rng, random_state, design_weights=None) -> dict:
+                    he_probes: int, rng, random_state, design_weights=None,
+                    slq_tol: float = 1e-6) -> dict:
     """(1b) The LDAK-Thin power alpha and the variance components at it.
 
     Returns the chosen ``alpha``, its variant weights ``w``, ``h2``, the
@@ -1350,7 +1358,7 @@ def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritab
     # and with ancestry covariates it kept no eigenvalue; with nothing kept,
     # skipping it changes no result (the trace probes have their own stream).
     basis, fit, he = None, None, None
-    deflate = {} if struct["strong"] else {"slq_deflate": 0}
+    slq = {"slq_tol": slq_tol} if struct["strong"] else {"slq_deflate": 0, "slq_tol": slq_tol}
     if alpha_method == "he":
         he = _he_alpha(st, f, list(alphas), he_probes, rng,
                        fit_h2=heritability_method == "he", design_weights=design_weights)
@@ -1361,14 +1369,14 @@ def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritab
         else:
             basis = _spectral_basis(st, w, random_state) if struct["strong"] else None
             fit = fit_variance_components(st, weights=w, random_state=random_state, basis=basis,
-                                          **deflate)
+                                          **slq)
     elif alpha_method == "reml":
         fits = []
         for a in alphas:
             w_a = (f * (1.0 - f)) ** (1.0 + a)
             basis_a = _spectral_basis(st, w_a, random_state) if struct["strong"] else None
             fit_a = fit_variance_components(st, weights=w_a, random_state=random_state,
-                                            basis=basis_a, **deflate)
+                                            basis=basis_a, **slq)
             fits.append((fit_a.ll, a, w_a, fit_a, basis_a))
         _, alpha, w, fit, basis = max(fits, key=lambda t: t[0])
         alpha_scores = np.array([t[0] for t in fits])

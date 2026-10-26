@@ -135,15 +135,21 @@ proximal-contamination deflation.
   corrections run along contiguous Gram rows and vectorize; every column
   keeps its SNP order, serially or in parallel.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML
-  on the operator: 24 Lanczos steps and 48 Rademacher probes. A pass over
-  the genotypes costs about the same for 1 to 64 columns; 24 steps matched
-  96 to five digits in every tested spectrum, while 12 probes left h2 with
-  an SD of 0.12 over probe seeds at n = 500 under strong structure (0.02
-  with 48). The phenotype rule and trace probes share batched Lanczos
-  products. The two-step caller requests variance components alone, avoiding
-  unused fixed-effect solves and scan preparation; public `LMM.fit()` still
-  produces a complete fit. The deflation keeps only eigenvalues at least
-  four times the median of a 128-wide randomized basis. HRATT builds that
+  on the operator: at most 24 Lanczos steps and 48 Rademacher probes. A pass
+  over the genotypes costs about the same for 1 to 64 columns; 24 steps
+  matched 96 to five digits in every tested spectrum, while 12 probes left
+  h2 with an SD of 0.12 over probe seeds at n = 500 under strong structure
+  (0.02 with 48). The phenotype rule and trace probes share batched Lanczos
+  products. The run stops after step j >= 8 once the h2 fitted from the
+  j-step rules changed by less than `slq_tol` (1e-6) at each of the last two
+  steps and the last three fits each found a bracketed root; `slq_tol=0`
+  runs all 24. The guard matters with more samples than variants, where
+  short rules kept h2 on the grid end (0.99995) for up to 16 steps in the
+  tested panels. The two-step caller requests variance components alone,
+  avoiding unused fixed-effect solves and scan preparation; public
+  `LMM.fit()` still produces a complete fit. The deflation keeps only
+  eigenvalues at least four times the median of a 128-wide randomized
+  basis. HRATT builds that
   basis only under strong structure, where its ridge solves share it as a
   preconditioner: with ancestry covariates the basis kept no eigenvalue on
   the benchmark panels (results are then identical without it), and with

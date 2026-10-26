@@ -29,6 +29,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (p-values in all 16 checked configurations); other BLAS builds may differ
   at rounding level. No sample tile is a single row, whose GEMV product
   would round differently.
+- Stochastic Lanczos REML stops once the heritability has converged instead
+  of always running 24 steps (new `slq_tol`, default 1e-6, on `LMM.fit`,
+  `hratt`, `bolt_inf` and `bolt`). After step j >= 8 it refits h2 from the
+  j-step rules (exact truncations) and stops when h2 changed by less than
+  `slq_tol` at each of the last two steps and the last three fits each found
+  a bracketed root; 24 steps stay the cap, and ML runs all of them. Without
+  the root guard, panels with more samples than variants stopped while short
+  rules held h2 on the grid end (0.99995 for a true 0.5). HRATT REML takes
+  5.9 s instead of 7.7 s on a 5,000 x 40,000 panel (9 steps) and 5.5 s
+  instead of 7.2 s on 20,000 x 10,000 (14 steps); `alpha_method="reml"`
+  11.8 s instead of 21.2 s and BOLT-LMM-inf 9.5 s instead of 11.2 s (one
+  thread). This changes a numerical default: p-values move by up to 8e-6 in
+  log10 (3.7e-5 on the strong-structure refit) and h2 by up to 3e-6, against
+  a Monte Carlo SD of 2-6e-3, and no call at 0.05/m changed in 16 checked
+  configurations. `slq_tol=0` restores the fixed 24 steps bit for bit.
 
 ### Fixed
 

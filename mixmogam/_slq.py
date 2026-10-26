@@ -98,6 +98,7 @@ def lanczos_quadrature_batch(
     matvec: Callable[[np.ndarray], np.ndarray],
     V0: np.ndarray,
     steps: int,
+    stop: Callable[[int, Callable[[], list["QuadratureRule"]]], bool] | None = None,
 ) -> list["QuadratureRule"]:
     """:func:`lanczos_quadrature` for every column of ``V0`` at once.
 
@@ -106,6 +107,11 @@ def lanczos_quadrature_batch(
     ``matvec`` receives an (n, r) block, so a streaming operator makes one
     pass over the genotypes per step for all r runs instead of r passes.
     Column for column the rules equal the sequential ones up to rounding.
+
+    ``stop(j, rules)``, if given, is called after each pass j < ``steps``;
+    ``rules()`` builds the rules a ``j``-step run returns (the tridiagonal
+    matrices so far are exact truncations), and a true result ends the run
+    with them, so ``steps`` becomes a cap.
     """
     V0 = np.asarray(V0, dtype=np.float64)
     if V0.ndim == 1:
@@ -131,6 +137,10 @@ def lanczos_quadrature_batch(
             W[:, ~active] = 0.0
         a = np.einsum("ij,ij->j", Q[j], W)
         alpha[j, cols] = a[cols]
+        if stop is not None and j + 1 < steps and stop(
+                j + 1, lambda: _batch_rules(alpha, beta, norms, np.minimum(t_eff, j + 1))):
+            t_eff = np.minimum(t_eff, j + 1)
+            break
         W -= a * Q[j]
         if j > 0:
             W -= beta[j - 1] * Q[j - 1]
@@ -147,8 +157,13 @@ def lanczos_quadrature_batch(
             break
         beta[j] = np.where(active, b, 0.0)
         Q[j + 1] = np.where(active, W / np.where(b > 0.0, b, 1.0), 0.0)
+    return _batch_rules(alpha, beta, norms, t_eff)
+
+
+def _batch_rules(alpha, beta, norms, t_eff) -> list["QuadratureRule"]:
+    """Gauss rules of the batched run: column c from its first t_eff[c] steps."""
     rules = []
-    for c in range(r):
+    for c in range(alpha.shape[1]):
         te = int(t_eff[c])
         if te == 1:
             theta, weights = np.array([alpha[0, c]]), np.array([1.0])

@@ -23,8 +23,8 @@ def _slq(K, y, **options):
 
 def test_24_steps_reproduce_96(structured):
     K, y = structured
-    short = _slq(K, y, slq_steps=24)
-    long = _slq(K, y, slq_steps=96)
+    short = _slq(K, y, slq_steps=24, slq_tol=0)
+    long = _slq(K, y, slq_steps=96, slq_tol=0)
     assert short.pseudo_heritability == pytest.approx(long.pseudo_heritability, abs=1e-5)
     assert short.ll == pytest.approx(long.ll, abs=1e-3)
 

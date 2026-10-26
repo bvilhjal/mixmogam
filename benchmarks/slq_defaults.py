@@ -114,7 +114,7 @@ def main() -> None:
                     seed = PROBE_SEEDS + s
                     t0 = time.perf_counter()
                     fit = twostep.fit_variance_components(st, random_state=seed, slq_steps=steps,
-                                                          slq_probes=probes)
+                                                          slq_probes=probes, slq_tol=0)
                     rows.append({"case": name, "probes": probes, "steps": steps, "seed": seed,
                                  "h2": float(fit.pseudo_heritability), "exact_h2": exact,
                                  "seconds": time.perf_counter() - t0})
