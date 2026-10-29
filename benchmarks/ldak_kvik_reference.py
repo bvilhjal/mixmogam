@@ -39,7 +39,7 @@ sys.path.insert(0, str(ROOT / "benchmarks"))
 from mixmogam import __version__, gwas  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
 from mixmogam.io.plink import read_plink, write_plink  # noqa: E402
-from hratt_efficiency import power_state  # noqa: E402
+from _harness import power_state  # noqa: E402
 from structure_calibration import (  # noqa: E402
     load_dataset, simulate_phenotype, structure_loading)
 

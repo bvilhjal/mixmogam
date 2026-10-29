@@ -94,11 +94,13 @@ def _support(a, v, p):
     return lo, hi
 
 
-def _rstar(a, v, p, x):
+def _rstar(cgf, support, a, v, p, x):
     """r* of the tail at x: P(S >= x) = Phi(-r*) for x > 0 and
     P(S <= x) = Phi(r*) for x < 0. Returns +inf (or -inf) when x lies
-    beyond the support of S, nan when the root cannot be bracketed."""
-    lo_sup, hi_sup = _support(a, v, p)
+    beyond the support of S, nan when the root cannot be bracketed.
+    ``cgf`` and ``support`` are :func:`_cgf` and :func:`_support` or
+    their binomial counterparts."""
+    lo_sup, hi_sup = support(a, v, p)
     if x >= hi_sup:
         return math.inf
     if x <= lo_sup:
@@ -107,21 +109,21 @@ def _rstar(a, v, p, x):
     lo, hi = 0.0, 0.0
     if x > 0:
         hi = 1.0
-        while _cgf(hi, a, v, p)[1] < x:
+        while cgf(hi, a, v, p)[1] < x:
             lo = hi
             hi *= 2.0
             if hi > 1e8:
                 return math.nan
     else:
         lo = -1.0
-        while _cgf(lo, a, v, p)[1] > x:
+        while cgf(lo, a, v, p)[1] > x:
             hi = lo
             lo *= 2.0
             if lo < -1e8:
                 return math.nan
     t = 0.5 * (lo + hi)
     for _ in range(200):
-        k0, k1, k2 = _cgf(t, a, v, p)
+        k0, k1, k2 = cgf(t, a, v, p)
         f = k1 - x
         if f > 0:
             hi = t
@@ -135,7 +137,7 @@ def _rstar(a, v, p, x):
             t = new
             break
         t = new
-    k0, k1, k2 = _cgf(t, a, v, p)
+    k0, k1, k2 = cgf(t, a, v, p)
     inner = t * x - k0
     if inner <= 0 or k2 <= 0:
         return math.nan
@@ -210,89 +212,22 @@ def _binomial_boundary(a, af, called, x, both):
     return out
 
 
-def _binomial_rstar(a, v, p, x):
-    """r* of the tail at x: P(S >= x) = Phi(-r*) for x > 0 and
-    P(S <= x) = Phi(r*) for x < 0. Returns +inf (or -inf) when x lies
-    beyond the support of S, nan when the root cannot be bracketed."""
-    lo_sup, hi_sup = _binomial_support(a, v, p)
-    if x >= hi_sup:
-        return math.inf
-    if x <= lo_sup:
-        return -math.inf
-    # Bracket the root of K'(t) = x, then Newton steps kept inside it.
-    lo, hi = 0.0, 0.0
-    if x > 0:
-        hi = 1.0
-        while _binomial_cgf(hi, a, v, p)[1] < x:
-            lo = hi
-            hi *= 2.0
-            if hi > 1e8:
-                return math.nan
-    else:
-        lo = -1.0
-        while _binomial_cgf(lo, a, v, p)[1] > x:
-            hi = lo
-            lo *= 2.0
-            if lo < -1e8:
-                return math.nan
-    t = 0.5 * (lo + hi)
-    for _ in range(200):
-        k0, k1, k2 = _binomial_cgf(t, a, v, p)
-        f = k1 - x
-        if f > 0:
-            hi = t
-        else:
-            lo = t
-        step = f / k2 if k2 > 0 else 0.0
-        new = t - step
-        if not (lo < new < hi) or k2 <= 0:
-            new = 0.5 * (lo + hi)
-        if abs(new - t) <= 1e-14 * max(1.0, abs(t)):
-            t = new
-            break
-        t = new
-    k0, k1, k2 = _binomial_cgf(t, a, v, p)
-    inner = t * x - k0
-    if inner <= 0 or k2 <= 0:
-        return math.nan
-    w = math.copysign(math.sqrt(2.0 * inner), t)
-    return w + math.log(t * math.sqrt(k2) / w) / w
-
-
-def _binomial_rows(a, af, called, x, out_up, out_lo, both):
-    for r in range(af.shape[0]):
-        if both:
-            out_up[r] = _binomial_rstar(a, af[r], called[r], abs(x[r]))
-            out_lo[r] = _binomial_rstar(a, af[r], called[r], -abs(x[r]))
-        else:
-            out_up[r] = _binomial_rstar(a, af[r], called[r], x[r])
-
-
-def _binomial_rows_parallel(a, af, called, x, out_up, out_lo, both):
-    for r in prange(af.shape[0]):
-        if both:
-            out_up[r] = _binomial_rstar(a, af[r], called[r], abs(x[r]))
-            out_lo[r] = _binomial_rstar(a, af[r], called[r], -abs(x[r]))
-        else:
-            out_up[r] = _binomial_rstar(a, af[r], called[r], x[r])
-
-
-def _rows(a, values, freqs, x, out_up, out_lo, both):
+def _rows(cgf, support, a, values, freqs, x, out_up, out_lo, both):
     for r in range(values.shape[0]):
         if both:
-            out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
-            out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], abs(x[r]))
+            out_lo[r] = _rstar(cgf, support, a, values[r], freqs[r], -abs(x[r]))
         else:
-            out_up[r] = _rstar(a, values[r], freqs[r], x[r])
+            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], x[r])
 
 
-def _rows_parallel(a, values, freqs, x, out_up, out_lo, both):
+def _rows_parallel(cgf, support, a, values, freqs, x, out_up, out_lo, both):
     for r in prange(values.shape[0]):
         if both:
-            out_up[r] = _rstar(a, values[r], freqs[r], abs(x[r]))
-            out_lo[r] = _rstar(a, values[r], freqs[r], -abs(x[r]))
+            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], abs(x[r]))
+            out_lo[r] = _rstar(cgf, support, a, values[r], freqs[r], -abs(x[r]))
         else:
-            out_up[r] = _rstar(a, values[r], freqs[r], x[r])
+            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], x[r])
 
 
 if HAS_NUMBA:
@@ -302,9 +237,6 @@ if HAS_NUMBA:
     _binomial_support = njit(cache=True)(_binomial_support)
     _binomial_boundary = njit(cache=True)(_binomial_boundary)
     _rstar = njit(cache=True)(_rstar)
-    _binomial_rstar = njit(cache=True)(_binomial_rstar)
-    _binomial_rows = njit(cache=True)(_binomial_rows)
-    _binomial_rows_parallel = njit(parallel=True, cache=True)(_binomial_rows_parallel)
     _rows = njit(cache=True)(_rows)
     _rows_parallel = njit(parallel=True, cache=True)(_rows_parallel)
 
@@ -346,9 +278,9 @@ def _binomial_spa(u, a, af, called, missing_mean, *, var_ratio=1.0,
         if n_threads > 1 and HAS_NUMBA:
             from mixmogam._vb import _numba_thread_limit
             with _numba_thread_limit(min(n_threads, scores_good.size)):
-                _binomial_rows_parallel(a, probs, masks, scores_good, up, lo, both)
+                _rows_parallel(_binomial_cgf, _binomial_support, a, probs, masks, scores_good, up, lo, both)
         else:
-            _binomial_rows(a, probs, masks, scores_good, up, lo, both)
+            _rows(_binomial_cgf, _binomial_support, a, probs, masks, scores_good, up, lo, both)
         if both:
             log_good = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
         else:
@@ -416,9 +348,9 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
     if n_threads > 1 and HAS_NUMBA:
         from mixmogam._vb import _numba_thread_limit
         with _numba_thread_limit(min(n_threads, max(k, 1))):
-            _rows_parallel(a, values, freqs, x, up, lo, both)
+            _rows_parallel(_cgf, _support, a, values, freqs, x, up, lo, both)
     else:
-        _rows(a, values, freqs, x, up, lo, both)
+        _rows(_cgf, _support, a, values, freqs, x, up, lo, both)
     if both:
         log_p = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
     else:  # r* carries the sign of u: the tail beyond u is Phi(-|r*|)

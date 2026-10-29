@@ -1,6 +1,5 @@
 """Prepared VB workspaces preserve the dense equations across repeated fits."""
 
-import importlib.util
 from types import SimpleNamespace
 import weakref
 
@@ -9,7 +8,7 @@ import pytest
 
 from mixmogam._loco import LocoGenotypes
 from mixmogam._vb import PRIOR_ENET, PRIOR_MIXTURE, VBEngine
-from mixmogam import _fast, _vb
+from mixmogam import _vb
 from mixmogam.genotypes import Genotypes
 
 
@@ -339,15 +338,9 @@ def test_first_sweep_preserves_nonconvergence_and_varying_priors(workspace, samp
 
 
 @pytest.mark.parametrize("prior_type", [PRIOR_MIXTURE, PRIOR_ENET])
-def test_numpy_fallback_matches_original_fit_loop(workspace, prior_type, monkeypatch):
+def test_numpy_fallback_matches_original_fit_loop(workspace, prior_type, numpy_fallback):
     lg, folds, Y = workspace
-    # Import an isolated copy with JIT disabled; the process's production
-    # module and compiled dispatchers remain untouched for other tests.
-    with monkeypatch.context() as context:
-        context.setattr(_fast, "HAS_NUMBA", False)
-        spec = importlib.util.spec_from_file_location("mixmogam._vb_workspace_fallback", _vb.__file__)
-        fallback = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(fallback)
+    fallback = numpy_fallback(_vb)
     fallback._COLUMN_MAJOR_MAX = 1  # sample-major, as the sample_major fixture
     col_fold = np.array([2, 0, -1, 2])
     col_group = np.array([-1, 1, 2, 0])

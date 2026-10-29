@@ -24,99 +24,27 @@ from __future__ import annotations
 
 import argparse
 import csv
-import hashlib
+import inspect
 import json
 import math
 import os
 from pathlib import Path
 import platform
-import re
 import shutil
 import subprocess
 import sys
 import time
 
-THREAD_VARS = ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-               "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS")
-
-
-def thread_environment(threads, *, blas_threads=None, numba_threads=None):
-    """Requested native-library limits and independent Numba pool ceiling."""
-    if any(not isinstance(value, int) or isinstance(value, bool) or value < 1
-           for value in (threads, blas_threads if blas_threads is not None else threads,
-                         numba_threads if numba_threads is not None else threads)):
-        raise ValueError("thread limits must be positive integers")
-    native = threads if blas_threads is None else blas_threads
-    limits = {key: str(native) for key in THREAD_VARS}
-    limits["NUMBA_NUM_THREADS"] = str(threads if numba_threads is None else numba_threads)
-    return limits
-
-
-def digest(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as stream:
-        for block in iter(lambda: stream.read(1 << 20), b""):
-            h.update(block)
-    return h.hexdigest()
-
-
-def save_json(path, value):
-    def plain(x):
-        if isinstance(x, dict):
-            return {str(k): plain(v) for k, v in x.items()}
-        if isinstance(x, (tuple, list)):
-            return [plain(v) for v in x]
-        if hasattr(x, "tolist"):
-            return plain(x.tolist())
-        if isinstance(x, float) and not (-float("inf") < x < float("inf")):
-            return str(x)
-        if isinstance(x, Path):
-            return str(x)
-        return x
-    Path(path).write_text(json.dumps(plain(value), indent=2, allow_nan=False) + "\n")
-
-
-def power_state():
-    if sys.platform != "darwin":
-        return {"guard": "not applicable outside macOS"}
-    battery = subprocess.check_output(["pmset", "-g", "batt"], text=True)
-    settings = subprocess.check_output(["pmset", "-g", "custom"], text=True)
-    ac = re.search(r"(?ms)^AC Power:\s*\n(.*?)(?=^\S|\Z)", settings)
-    if ac is None:
-        raise RuntimeError("cannot verify AC power settings from pmset -g custom")
-    if "AC Power" not in battery or re.search(r"lowpowermode\s+1\b", ac[1]):
-        raise RuntimeError("benchmarks require AC power and Low Power Mode off")
-    return {"battery": battery, "settings": settings}
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _harness import (THREAD_VARS, digest, power_state, save_json,  # noqa: E402
+                      thread_environment, wait_for_quiet)
+from _harness import snapshot as _snapshot  # noqa: E402
 
 
 def snapshot(source, destination):
     source = source.resolve()
-    if not (source / "mixmogam" / "__init__.py").is_file():
-        raise ValueError(f"not a mixmogam source root: {source}")
-    files = sorted((source / "mixmogam").rglob("*.py"))
-    files += [source / name for name in ("pyproject.toml", "README.md")
-              if (source / name).is_file()]
-    hashes = {}
-    for path in files:
-        relative = path.relative_to(source)
-        target = destination / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(path, target)
-        hashes[str(relative)] = digest(target)
-        if hashes[str(relative)] != digest(path):
-            raise RuntimeError(f"source changed during snapshot: {path}")
-    try:
-        git_root = subprocess.check_output(
-            ["git", "-C", str(source), "rev-parse", "--show-toplevel"],
-            stderr=subprocess.DEVNULL, text=True).strip()
-        git = None if Path(git_root).resolve() != source else {
-            key: subprocess.check_output(["git", "-C", str(source), *command], text=True).strip()
-            for key, command in {"head": ["rev-parse", "HEAD"],
-                                 "status": ["status", "--porcelain"]}.items()}
-    except subprocess.CalledProcessError:
-        git = None
-    return {"original_root": str(source), "snapshot": str(destination),
-            "git": git, "sha256": hashes}
+    return _snapshot(source, destination,
+                     extra_files=[source / "pyproject.toml", source / "README.md"])
 
 
 def input_manifest(case):
@@ -188,12 +116,14 @@ def worker(args):
                        {"heritability_method": args.heritability_method})
         if args.hratt_threads is not None:
             fit_options["n_threads"] = args.hratt_threads
-        if args.cache_bytes is not None:
-            fit_options["cache_bytes"] = args.cache_bytes
         if args.loco_folds is not None:
             fit_options["loco_folds"] = args.loco_folds
         from mixmogam import twostep
         method = "hratt" if hasattr(twostep, "hratt") else "kvik"  # its name up to commit e4089d8
+        if args.cache_bytes is not None:  # cache_bytes up to commit 02a8c3a7
+            parameters = inspect.signature(getattr(twostep, method)).parameters
+            key = "gram_cache_bytes" if "gram_cache_bytes" in parameters else "cache_bytes"
+            fit_options[key] = args.cache_bytes
         result = gwas(y, gt, X=X, method=method, random_state=seed, **fit_options)
     finally:
         VBEngine.fit = original_fit
@@ -226,14 +156,6 @@ def worker(args):
         "cache_bytes": args.cache_bytes, "storage": args.storage, "fit_options": fit_options,
         "thread_environment": {key: os.environ.get(key) for key in THREAD_VARS},
         "numba_pool_ceiling": numba_limit})
-
-
-def wait_for_quiet(limit):
-    """Seconds spent waiting for the one-minute load average to fall below limit."""
-    started = time.perf_counter()
-    while limit is not None and os.getloadavg()[0] >= limit:
-        time.sleep(10)
-    return time.perf_counter() - started
 
 
 def measured(command, directory, threads, cache, *, blas_threads=None, numba_threads=None,
@@ -436,6 +358,8 @@ def main():
         storage = args.storage if label == "optimized" else args.baseline_storage
         if storage != "int8" and case is not None:
             command += ["--storage", storage]
+        if args.loco_folds is not None and case is not None:
+            command += ["--loco-folds", str(args.loco_folds)]
         if args.profile and case is not None:
             command.append("--profile")
         return measured(command, destination, args.threads, out / "jit-cache" / label,

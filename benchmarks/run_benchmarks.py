@@ -24,7 +24,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from hratt_efficiency import power_state  # noqa: E402
+from _harness import power_state  # noqa: E402
 from mixmogam import LMM  # noqa: E402
 from mixmogam.genotypes import Genotypes  # noqa: E402
 from mixmogam.kinship import realized_relationship  # noqa: E402

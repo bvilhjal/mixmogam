@@ -50,7 +50,8 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-from hratt_efficiency import digest, power_state, save_json, snapshot  # noqa: E402
+from _harness import digest, power_state, save_json  # noqa: E402
+from hratt_efficiency import snapshot  # noqa: E402
 
 PANELS = {
     "exact_n3000": dict(n=3000, m=44000, chromosomes=22, populations=1, fst=0.0,

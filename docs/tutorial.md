@@ -1,23 +1,23 @@
 # mixmogam tutorial
 
-A guided tour of what mixmogam does, on one simulated structured population.
-Every number and figure below is produced by
+One simulated structured population, analysed from start to finish. Every
+number and figure below comes from
 [`tutorial/tutorial.py`](tutorial/tutorial.py), which runs in about a minute on
-a laptop (the two mixture/elastic-net fits dominate, ~20 s each):
+a laptop (the two mixture/elastic-net fits take ~20 s each):
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python docs/tutorial/tutorial.py
 ```
 
-For the full option list see the [quickstart](quickstart.md); for the evidence
-behind each method see the [research report](../report/README.md).
+The [quickstart](quickstart.md) lists the options and the
+[research report](../report/README.md) gives the evidence for each method.
 
 ## 1. A structured population with known answers
 
 1,500 samples from 5 diverged subpopulations (Fst scale 0.35), 15,000 variants
 on 10 chromosomes, and a trait with heritability 0.6: half infinitesimal
-polygenic background, half from 8 true QTL. Structure is what makes
-association hard: ancestry shifts both genotype and trait.
+polygenic background, half from 8 true QTL. Ancestry shifts both genotype
+and trait, which is what makes association hard here.
 
 ```python
 import numpy as np
@@ -37,7 +37,7 @@ With real data you would instead use `Genotypes.load_plink(prefix)`,
 
 ## 2. Why a mixed model
 
-Per-SNP linear regression ignores relatedness. Here it is wrecked by structure:
+Per-SNP linear regression ignores relatedness, and structure wrecks it:
 
 | | λ_GC | Bonferroni hits (15,000 tests) |
 |---|---|---|
@@ -56,9 +56,9 @@ result.top_snps(5)               # a GwasResult, smallest p first
 result.write_csv("gwas.csv")
 ```
 
-Leave-one-chromosome-out is the default: each SNP is tested against a
-polygenic model built **without its own chromosome**, so the SNP cannot
-absorb itself into the kinship (proximal contamination). The top hits:
+By default each SNP is tested against a polygenic model built without its
+own chromosome (leave-one-chromosome-out), so the SNP cannot absorb itself
+into the kinship (proximal contamination). The top hits:
 
 | chr | position | p | β | se |
 |---|---|---|---|---|
@@ -77,8 +77,7 @@ plot_qq(result.p)
 ![Manhattan and QQ](tutorial/fig1_manhattan_qq.png)
 
 Five of the eight QTL clear Bonferroni. The other three have small simulated
-effects (−log10 p of 0.1–3.3); no method below finds them either. Power is a
-property of the effect sizes and n, not of the software.
+effects (−log10 p of 0.1–3.3), and no method below finds them either.
 
 ## 4. One entry point, four engines
 
@@ -98,34 +97,29 @@ for method in ["exact", "bolt-inf", "bolt", "hratt"]:
 
 ![QQ plots by method](tutorial/fig3_methods_qq.png)
 
-How to read this honestly:
-
 - `exact` is the reference at this size, and `method="auto"` picks it up to
-  5,000 samples (`bolt-inf` above). The other engines exist for scale: they
-  avoid the O(n³) factorizations and use less memory. At n = 1,500 they cost
-  more, not less.
-- `bolt` and `hratt` report larger −log10 p at the QTL than `exact` (e.g.
-  57-61 vs 43 at the strongest one). That can reflect extra power from a
-  non-infinitesimal prior, but also a different statistic and scale
-  (retrospective score tests versus an F test), so compare calls and
-  calibration, not raw p-values across methods.
-- Both `bolt` and `hratt` raised "variational fit did not converge" on this
-  panel (`result.extra["cv_converged"]` and `["loco_converged"]` are
-  `False`), and `bolt` has the highest λ (1.14). This is the intended
-  warning, and its cause is the five populations the model was not adjusted
-  for, not the panel's size: on a 3,000-variant version of this panel (this
-  15,000-variant run was not repeated) both converged once the covariates
-  included K - 1 = 4 principal components. Inspect those flags before
-  trusting a two-step fit, and add ancestry components.
-- 6/8 for `bolt` versus 5/8 is one SNP in one simulation, not a power result.
-  The matched benchmarks live in the report.
+  5,000 samples (`bolt-inf` above). The other engines avoid the O(n³)
+  factorizations and use less memory, which pays only at larger n; at
+  n = 1,500 they are slower.
+- `bolt` and `hratt` give larger −log10 p at the QTL than `exact` (57-61 vs 43
+  at the strongest one). Part of that may be power from a non-infinitesimal
+  prior, but the statistics also differ (retrospective score tests against an
+  F test), so compare calls and calibration rather than raw p-values.
+- Both `bolt` and `hratt` warned "variational fit did not converge" here
+  (`result.extra["cv_converged"]` and `["loco_converged"]` are `False`), and
+  `bolt` has the highest λ (1.14). The cause is the five populations the model
+  was not adjusted for: on a 3,000-variant version of this panel both
+  converged once the covariates included K - 1 = 4 principal components (the
+  15,000-variant run was not repeated). Check those flags before trusting a
+  two-step fit.
+- 6/8 for `bolt` against 5/8 is one SNP in one simulation; the matched
+  benchmarks are in the report.
 
 ## 5. Case-control outcomes and sampling weights
 
 Only HRATT models binary traits and weighted samples. Here the top 20% of the
-liability are "cases". Following the docs, **include ancestry PCs** when
-structure is present, because the score test models allele frequencies from
-the covariates:
+liability are cases. Under structure, include ancestry PCs, because the score
+test models allele frequencies from the covariates:
 
 ```python
 K = kinship.realized_relationship(gt)             # for MLMM and LMM below
@@ -143,12 +137,11 @@ uses them without Python.
 | Binary, 20% prevalence, with PCs | 0.99 | 4 | 0 |
 | Weighted (design effect 1.06), with PCs | 1.03 | 5 | 0 |
 
-The first attempt without PCs gave λ_GC = 1.83 for the binary trait and an
-explicit "strong population structure remains" warning, which is the
-behaviour you want: the tool tells you the assumption failed. Binary `beta`
-is a one-step log-odds approximation and is exported as `beta_one_step`;
-don't read it as a fitted logistic coefficient. These paths are still
-experimental; the validation in the README reports where they fall short.
+Without PCs the binary trait gave λ_GC = 1.83, with a "strong population
+structure remains" warning. Binary `beta` is a one-step log-odds
+approximation, exported as `beta_one_step`, not a fitted logistic
+coefficient. These paths are experimental; the README summarizes where their
+validation fell short.
 
 ## 6. From signals to independent loci: stepwise MLMM
 
@@ -164,10 +157,10 @@ out["selected"]["ebic"]     # [830, 4414, 4743, 10017, 14174]
 
 True QTL indices: 830, 4414, 4743, 4983, 8343, 10017, 11551, 14174. The
 extended-BIC and multiple-Bonferroni rules both select 5 of them with no false
-cofactors; plain BIC adds three more, of which one (11551) is a true QTL and two
-(9650, 12899) are not. Note the pseudo-heritability column in `out["steps"]` falling from 0.60
-to 0.35 as cofactors absorb variance that the kinship was carrying: that is
-the multi-locus picture the single-SNP scan cannot give.
+cofactors; plain BIC adds three more, one true (11551) and two not (9650,
+12899). The pseudo-heritability in `out["steps"]` falls from 0.60 to 0.35 as
+the cofactors take over variance the kinship was carrying, a multi-locus
+picture the single-SNP scan cannot give.
 
 ## 7. Heritability and a permutation threshold
 
@@ -180,11 +173,11 @@ from mixmogam.scan import permutation_min_p
 permutation_min_p(fit, gt, n_perm=200)["threshold_05"]   # 4.25e-06
 ```
 
-The permutation 5% threshold (4.3e-6, from only 200 permutations, so rough)
-sits near Bonferroni (3.3e-6), as expected with mostly independent SNPs. With
-dense, correlated markers the permutation threshold would be less strict than
-Bonferroni; that is when it earns its cost. The permutation scheme was
-corrected in 2.0.0 and still needs larger validation (README).
+The 5% permutation threshold (4.3e-6, rough with 200 permutations) sits near
+Bonferroni (3.3e-6), as expected with mostly independent SNPs. With dense,
+correlated markers it would be less strict than Bonferroni, which is when it
+earns its cost. The current permutation scheme has not yet had a large
+validation.
 
 ## 8. Scaling: threads and two-bit genotypes
 
@@ -193,10 +186,11 @@ Genotypes(G.T, chromosome=..., position=..., packed=True)   # 2 bits per call
 gwas(y, gt, method="hratt", n_threads=4)                    # `fast` extra, set BLAS threads to 1 first
 ```
 
-Packed storage is a quarter of the int8 memory and gives identical results;
-the tutorial checks this on the HRATT scan (maximum |Δp| = 0). On two
+Packed storage takes a quarter of the int8 memory and gives identical
+results; the script checks this on the HRATT scan (maximum |Δp| = 0). On two
 50,000 × 20,000 panels, four-thread HRATT took 29–33 s at 1.4 GiB, or 0.8 GiB
-packed (README).
+packed ([archive](../benchmarks/results/20261006-kvik-20k-dev6/README.md),
+[cross-fit rerun](../benchmarks/results/20261007-kvik-20k-crossfit-gemm/README.md)).
 
 ## Also available
 
@@ -208,9 +202,7 @@ the quickstart.
 
 ## Caveats
 
-- This is one simulation of one seed; it shows how to use the package, not how
-  the methods rank. Method comparisons belong to the benchmark suite.
-- A genome-wide λ_GC near 1 can hide miscalibration within SNP groups; look at
-  the stratified diagnostics in the report before relying on it.
-- Tests are conditional associations given the fitted polygenic covariance,
-  not evidence of causation.
+This is one simulation with one seed. It shows how to use the package, not
+how the methods rank, and a genome-wide λ_GC near 1 can still hide
+miscalibration within SNP groups (see the stratified diagnostics in the
+report).

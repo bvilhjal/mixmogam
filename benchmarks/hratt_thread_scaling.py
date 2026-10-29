@@ -33,7 +33,8 @@ import statistics
 import sys
 import time
 
-from hratt_efficiency import THREAD_VARS, compare_results, digest, input_manifest, measured, power_state, save_json, snapshot, thread_environment
+from _harness import THREAD_VARS, digest, power_state, save_json, thread_environment
+from hratt_efficiency import compare_results, input_manifest, measured, snapshot
 from hratt_he_comparison import aggregate, compare_scientific, run_reference, scientific_summary, write_csv
 
 METHODS = ("mixmogam-he", "ldak-kvik")

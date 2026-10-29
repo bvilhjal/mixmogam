@@ -376,18 +376,6 @@ class Genotypes:
         return read_genotypes(path, **kwargs)
 
     @classmethod
-    def load_vcf(cls, path, **kwargs) -> "Genotypes":
-        from mixmogam.io.vcf import read_vcf
-
-        return read_vcf(path, **kwargs)
-
-    @classmethod
-    def load_pgen(cls, prefix, **kwargs) -> "Genotypes":
-        from mixmogam.io.pgen import read_pgen
-
-        return read_pgen(prefix, **kwargs)
-
-    @classmethod
     def load_bgen(cls, path, **kwargs) -> "Genotypes":
         from mixmogam.io.bgen import read_bgen
 
@@ -400,19 +388,7 @@ class Genotypes:
         return read_plink(prefix, **kwargs)
 
     @classmethod
-    def load_tped(cls, prefix: str) -> "Genotypes":
-        from mixmogam.io.plink import read_tped
-
-        return read_tped(prefix)
-
-    @classmethod
     def load_eigenstrat(cls, prefix: str) -> "Genotypes":
         from mixmogam.io.eigenstrat import read_eigenstrat
 
         return read_eigenstrat(prefix)
-
-    @classmethod
-    def load_hdf5(cls, path: str) -> "Genotypes":
-        from mixmogam.io.hdf5 import read_hdf5
-
-        return read_hdf5(path)

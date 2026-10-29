@@ -1,20 +1,19 @@
 # Computational efficiency: open items
 
-The 26 October speed branch (nine changes, listed with their measurements in
-the CHANGELOG; reviewed in `benchmarks/results/20261026-hratt-speed-review`)
-did most of what the earlier lists left open. This file records where the
-time goes after it, what remains, and what was measured and refuted, so that
-it is not proposed again.
+Where the time goes, what remains open, and what was measured and refuted so
+that it is not proposed again. The 26 October speed changes and their
+measurements are in the CHANGELOG and
+`benchmarks/results/20261026-hratt-speed-review`.
 
 ## Where the time goes now
 
 One thread, cProfile of one fit (cProfile inflates small calls, so shares are
-indicative); seconds before, then after the branch. Profiles and the script
-that builds this table are in the review archive (`profiles/`). `5k x 400k`
+indicative); seconds before and after the speed changes. Profiles and the
+script behind the table are in the review archive (`profiles/`). `5k x 400k`
 is the founder-block panel of `20261025T153917Z-kvik-scale`; `50k x 20k` the
 HAPNEST panel of `20261003-hapnest-kvik-n50000-m20000`.
 
-| path | total | main costs after the branch |
+| path | total | main costs now |
 |---|---|---|
 | `hratt` HE, 5k x 400k | 31.0 -> 23.8 s | variational fits 12.6 s (own GEMM, sweep and refresh time 6.2 s); joint Gram preparation 5.3 s; alpha selection 2.7 s; setup moments 1.4 s |
 | `hratt` REML, 5k x 400k | 56.6 -> 28.7 s | Lanczos 26.9 -> 9.2 s (9 passes); variational fits 9.9 s; Gram preparation 4.2 s |

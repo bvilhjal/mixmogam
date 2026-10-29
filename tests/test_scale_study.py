@@ -57,6 +57,13 @@ def test_power_guard_uses_ac_profile(monkeypatch, source, ac_mode, battery_mode,
             harness.power_state()
 
 
+def test_power_guard_refuses_unreadable_settings(monkeypatch):
+    monkeypatch.setattr(harness.sys, "platform", "darwin")
+    monkeypatch.setattr(harness.subprocess, "check_output", lambda *a, **k: "System-wide power settings:\n")
+    with pytest.raises(RuntimeError, match="cannot verify"):
+        harness.power_state()
+
+
 def test_power_guard_is_not_applied_outside_macos(monkeypatch):
     monkeypatch.setattr(harness.sys, "platform", "linux")
 
@@ -67,9 +74,11 @@ def test_power_guard_is_not_applied_outside_macos(monkeypatch):
     assert "not applicable" in harness.power_state()["guard"]
 
 
-def test_the_driver_uses_the_shared_guard():
-    assert scale_study.power_state.__module__.endswith("_harness")
-    assert scale_study.power_state.__name__ == "power_state"
+@pytest.mark.parametrize("driver", ["scale_study", "hratt_efficiency", "ldak_kvik_comparison"])
+def test_the_drivers_use_the_shared_guard(driver):
+    module = scale_study if driver == "scale_study" else _load(driver)
+    assert module.power_state.__module__.endswith("_harness")
+    assert module.power_state.__name__ == "power_state"
 
 
 def test_thread_environment_pins_the_native_libraries():

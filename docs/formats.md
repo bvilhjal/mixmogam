@@ -1,18 +1,15 @@
 # File formats
 
-For repeated hard-call analyses, use PLINK BED with memory mapping. The
-file already stores four calls per byte in variant order, the layout the
-engine consumes. `Genotypes.load_plink(prefix, mmap=True)` and CLI `--mmap`
-retain this representation. Mapping defers disk reads until access; it
-does not remove the cost of scanning calls. HDF5 remains a compatibility
-format. The [25 October measurements](review-2026-10-25.md) compare them.
+For repeated hard-call analyses use PLINK BED with memory mapping
+(`Genotypes.load_plink(prefix, mmap=True)`, CLI `--mmap`). The file already
+stores four calls per byte in variant order, the layout the engine consumes;
+mapping defers reads until access but still scans the calls. HDF5 is kept for
+compatibility. The [25 October review](review-2026-10-25.md) compares them.
 
 `Genotypes.load(path, format="auto", packed=False)` and both CLI commands
-dispatch the inputs in Table 1. Auto-detection uses a filename suffix or
+dispatch the inputs below. Auto-detection uses a filename suffix or
 an unambiguous fileset prefix; use `format=` / `--geno-format` when several
 filesets share a prefix. All sample and variant rows retain their order.
-
-Table 1. Input contracts for diploid, biallelic hard-call analyses.
 
 | Input | Counted allele | Contract and dependency |
 |---|---|---|
@@ -26,21 +23,20 @@ Table 1. Input contracts for diploid, biallelic hard-call analyses.
 | mixmogam HDF5 | Stored `allele1` | v2 layout and legacy v1; `h5py`; not arbitrary HDF5 schemas |
 
 Install PGEN/BCF readers with `pip install -e ".[formats]"`; BGEN and HDF5
-use the separate `bgen` and `hdf5` extras. BGEN's upstream package adds
-additional dataframe dependencies, so it is installed only when needed.
-VCF, PGEN and BGEN readers build packed
-output directly when requested. VCF makes two sequential passes to size
-the output; PGEN/BGEN read bounded blocks. For large repeated VCF analyses,
-convert once to BED instead of repeatedly parsing genotype text.
+use the separate `bgen` and `hdf5` extras (BGEN's upstream package pulls in
+dataframe dependencies). VCF, PGEN and BGEN readers build packed output
+directly when asked. VCF makes two sequential passes to size the output and
+PGEN/BGEN read bounded blocks; for repeated VCF analyses, convert once to
+BED.
 
 The inference engine accepts integral 0/1/2 calls and -1 for missing. VCF
 and PGEN use stored GT/hard calls, never DS values. BGEN conversion is
 deliberate: `Genotypes.load_bgen(path, hard_call_threshold=0.9, packed=True)`
-calls the most probable genotype only when its probability reaches 0.9.
-Lower-confidence genotypes become missing. This loses probability
-information and is **not dosage association testing**. BGEN's ordered
-alleles do not establish reference/alternate status. Its separate variant
-identifier is retained; it is not replaced by the rsID field.
+calls the most probable genotype only when its probability reaches 0.9 and
+sets the rest missing. This discards probability information; it is not
+dosage association testing. BGEN's allele order does not establish
+reference/alternate status, and its variant identifier is kept rather than
+replaced by the rsID field.
 
 VCF/BCF multiallelic or non-diploid GTs fail explicitly. FILTER is not
 applied automatically. PGEN does not record per-call ploidy; its reader
@@ -49,8 +45,8 @@ non-human chromosome sets. Previously recoded haploid calls cannot be
 recovered. BGEN requires real embedded sample IDs or an explicit Oxford
 `.sample` file in genotype row order. Its upstream reader creates a
 metadata cache next to the input and initially scans the full file.
-Uncompressed BGEN is rejected: the tested upstream backend can crash on
-that valid encoding, so recompress it before loading.
+Uncompressed BGEN is rejected because the upstream backend can crash on it;
+recompress it first.
 All readers require unique sample IDs; PLINK uses IID, not a composite
 FID/IID key. No reader normalizes alleles or performs liftover.
 
@@ -75,10 +71,9 @@ These conventions follow the [PLINK input specification](https://www.cog-genomic
 
 `result.write_csv(path)` / `GwasResult.read_csv(path)` use tabs for
 `.tsv`/`.txt` and commas otherwise, with optional `.gz`; `delimiter=`
-overrides the suffix. Existing `.csv` output is unchanged. Effect alleles,
-effect-allele frequencies, declared genome build and effective sample size
-remain distinct. Binary one-step effects retain their special column
-names; they are not exported as fitted logistic estimates.
+overrides the suffix. Effect alleles, effect-allele frequencies, the declared
+genome build and effective sample size are separate columns, and binary
+one-step effects keep their own column names.
 
 ```sh
 mixmogam gwas --geno cohort --mmap --pheno traits.txt --pheno-format plink \

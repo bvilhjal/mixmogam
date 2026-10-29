@@ -222,11 +222,3 @@ class Phenotypes:
         rec["values"] = means[inv[keep]]
         self.sample_ids = self.sample_ids[keep]
         self.replicates = None
-
-    def incidence_matrix(self, sample_ids: Sequence[str]) -> np.ndarray:
-        """Z (n_obs, n_unique) mapping breeding values to observations."""
-        order = {s: i for i, s in enumerate(self.sample_ids)}
-        cols = [order[s] for s in sample_ids if s in order]
-        Z = np.zeros((len(cols), self.sample_ids.size))
-        Z[np.arange(len(cols)), cols] = 1.0
-        return Z

@@ -31,8 +31,8 @@ from scipy.optimize import brentq
 from scipy.special import expit
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from ldak_kvik_comparison import (ROOT, THREAD_VARS, clean_json, digest, power_state,  # noqa: E402
-                             read_table, save_json, write_csv)
+from _harness import THREAD_VARS, digest, power_state  # noqa: E402
+from ldak_kvik_comparison import ROOT, clean_json, read_table, save_json, write_csv  # noqa: E402
 
 N_CHROM = 10  # equal chromosomes; the tenth carries no direct effects
 ALPHAS = (1e-2, 1e-3, 1e-4)

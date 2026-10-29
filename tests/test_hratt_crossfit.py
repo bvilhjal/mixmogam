@@ -242,7 +242,7 @@ def test_cross_fitting_removes_the_attenuation_of_effects(panel):
 
 
 @pytest.mark.filterwarnings("ignore:variational fit did not converge")
-@pytest.mark.parametrize("seed", [11, 12])
+@pytest.mark.parametrize("seed", [11, pytest.param(12, marks=pytest.mark.slow)])
 def test_strong_structure_refits_each_group(seed, monkeypatch):
     # Three populations at Fst 0.15, a polygenic trait on chromosomes 1-5:
     # a genome-wide fit spreads the ancestry signal over every chromosome,

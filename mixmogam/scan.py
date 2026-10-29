@@ -118,7 +118,6 @@ def scan_gxe(
     gt,
     E: np.ndarray,
     block: int = 2048,
-    dtype=np.float64,
     joint: bool = False,
     polygenic_gxe: bool = False,
 ) -> dict:
@@ -138,9 +137,9 @@ def scan_gxe(
     two-kinship mixture: without it, population structure in the
     environment response inflates GxE statistics. Needs a dense K.
 
-    Algebra is float64 throughout (``dtype`` is accepted for signature
-    compatibility): the interaction reduction is a difference of nearly
-    equal quantities when g and g * E are strongly correlated.
+    Algebra is float64 throughout: the interaction reduction is a
+    difference of nearly equal quantities when g and g * E are strongly
+    correlated.
     """
     lmm = _model(lmm)
     E = np.asarray(E, dtype=np.float64).ravel()
@@ -318,7 +317,6 @@ def fit_two_kinships(
     method: str = "reml",
     n_mixtures: int = 21,
     refine_rounds: int = 2,
-    seed: int = 0,
 ) -> dict:
     """Fit vg1 K1 + vg2 K2 + ve I by mixture-weight profiling (v1
     get_estimates_3 successor).
@@ -331,8 +329,7 @@ def fit_two_kinships(
     The best grid interval is refined. Covariance components that cannot
     be distinguished after covariate adjustment raise ValueError.
     ``weight`` is None when the ordinary linear model wins (zero genetic
-    variance); ``var_share`` then contains two zeros. ``seed`` is retained
-    for compatibility; this dense profile is deterministic.
+    variance); ``var_share`` then contains two zeros.
     """
     from mixmogam.kinship import scale_k
     from mixmogam.lmm import _design_matrix

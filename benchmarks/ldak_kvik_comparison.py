@@ -17,12 +17,10 @@ from __future__ import annotations
 import argparse
 import csv
 import gzip
-import hashlib
 import json
 import os
 from pathlib import Path
 import platform
-import re
 import shutil
 import subprocess
 import sys
@@ -36,16 +34,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
 CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
-THREAD_VARS = ["OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS",
-               "VECLIB_MAXIMUM_THREADS", "NUMBA_NUM_THREADS"]
-
-
-def digest(path):
-    h = hashlib.sha256()
-    with open(path, "rb") as fh:
-        for chunk in iter(lambda: fh.read(1 << 20), b""):
-            h.update(chunk)
-    return h.hexdigest()
+sys.path.insert(0, str(ROOT / "benchmarks"))
+from _harness import THREAD_VARS, digest, power_state, wait_for_quiet  # noqa: E402
 
 
 def clean_json(x):
@@ -88,27 +78,6 @@ def decode_bed_a2(path, n, m):
     packed = np.frombuffer(data[3:], dtype=np.uint8).reshape(m, width)
     codes = ((packed[:, :, None] >> (2*np.arange(4))) & 3).reshape(m, -1)[:, :n]
     return np.array([0, -1, 1, 2], dtype=np.int8)[codes].T
-
-
-def power_state():
-    if sys.platform != "darwin":
-        return {"guard": "not applicable outside macOS"}
-    batt = subprocess.check_output(["pmset", "-g", "batt"], text=True)
-    settings = subprocess.check_output(["pmset", "-g", "custom"], text=True)
-    ac = re.search(r"(?ms)^AC Power:\s*\n(.*?)(?=^\S|\Z)", settings)
-    if ac is None:
-        raise RuntimeError("cannot verify AC power settings from pmset -g custom")
-    if "AC Power" not in batt or re.search(r"lowpowermode\s+1\b", ac[1]):
-        raise RuntimeError("benchmarks require AC power and Low Power Mode off")
-    return {"battery": batt, "settings": settings}
-
-
-def wait_for_quiet(limit):
-    """Seconds spent waiting for the one-minute load average to fall below limit."""
-    started = time.perf_counter()
-    while limit is not None and os.getloadavg()[0] >= limit:
-        time.sleep(10)
-    return time.perf_counter() - started
 
 
 def measured(command, work, name, threads, max_load=None):

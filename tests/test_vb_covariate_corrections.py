@@ -9,7 +9,6 @@ only an intercept and no sampling weights the corrections are near no-ops
 and these fits are unchanged. Without Numba, NumPy's products remain.
 """
 
-import importlib.util
 
 import numpy as np
 import pytest
@@ -249,12 +248,8 @@ def test_corrections_compile_when_numpy_calls_per_set_cost_more(panel, monkeypat
     assert bool(calls) == (0 < q * col_fold.size <= limit * sets)
 
 
-def test_numpy_fallback_keeps_the_column_set_products(panel, monkeypatch):
-    with monkeypatch.context() as context:
-        context.setattr(_fast, "HAS_NUMBA", False)
-        spec = importlib.util.spec_from_file_location("mixmogam._vb_corrections_fallback", _vb.__file__)
-        fallback = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(fallback)
+def test_numpy_fallback_keeps_the_column_set_products(panel, monkeypatch, numpy_fallback):
+    fallback = numpy_fallback(_vb)
     lg, y = _genotypes(panel, weighted=True)
     monkeypatch.setattr(fallback, "_CORRECTION_LOOP_MAX", 10**9)
     calls = _spy(monkeypatch, fallback)

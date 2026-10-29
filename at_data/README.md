@@ -1,9 +1,8 @@
 # Bundled *Arabidopsis thaliana* panel
 
-Real data used by the package's integration test and by two benchmarks. These
-are **third-party data**. The repository's MIT licence covers the software
-only; it does not relicense this directory, and nothing here is part of the
-installed package (the source distribution and wheel exclude `at_data/`).
+Third-party real data used by the integration test and two benchmarks. The
+repository's MIT licence covers the software only and does not relicense this
+directory, which the source distribution and wheel exclude.
 
 ## Contents and provenance
 
@@ -28,12 +27,12 @@ the panel uses: pass `genome_build="TAIR10"` rather than a human build.
 
 ## What reads these files
 
-- `tests/test_integration_at.py` — end-to-end EMMAX/HRATT fits on the panel.
+- `tests/test_integration_at.py`: end-to-end EMMAX/HRATT fits on the panel.
   Marked `integration`, and it skips when `at_genotypes.zip` is absent, so the
   fast suite and CI do not need this directory.
-- `benchmarks/atwell_controls.py` — the prespecified positive-control scan
+- `benchmarks/atwell_controls.py`: the prespecified positive-control scan
   against known major genes (genotypes, phenotypes and TAIR10 coordinates).
-- `benchmarks/structure_calibration.py` — structure diagnostics on the same
+- `benchmarks/structure_calibration.py`: structure diagnostics on the same
   panel.
 
 `all_chromosomes_binary.csv` is extracted on first use into the gitignored
@@ -42,12 +41,8 @@ reclaim the space; it is rebuilt from the zip.
 
 ## Accession-collection metadata
 
-An earlier revision also carried `call_method_75_info.tsv`, the RegMap
-accession-collection table: 1,307 rows with each accession's collection site,
-region, country and coordinates **and the given and family names of the people
-who collected it**. Nothing in the package, its tests, its benchmarks or its
-documentation reads that table, and the analyses here use only the latitude and
-longitude already present in the panel's own documentation, so as of 2.0.0 it is
-no longer tracked. The file remains in the repository's history; history was not
-rewritten. If you keep a local copy, treat it as personal data about named
-individuals rather than as scientific metadata, and do not redistribute it.
+`call_method_75_info.tsv`, the RegMap accession-collection table, is no longer
+tracked as of 2.0.0. Besides collection sites and coordinates it holds the
+given and family names of the collectors, and nothing here reads it. It
+remains in the repository's history (which was not rewritten). Treat any local
+copy as personal data about named individuals and do not redistribute it.

@@ -40,7 +40,8 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "benchmarks"))
 
-from hratt_efficiency import digest, save_json, snapshot  # noqa: E402
+from _harness import digest, save_json  # noqa: E402
+from hratt_efficiency import snapshot  # noqa: E402
 from mixmogam import LMM, Genotypes, __version__, gwas  # noqa: E402
 from mixmogam.io.phenofile import read_phenotypes  # noqa: E402
 from mixmogam.io.regmap import read_regmap  # noqa: E402

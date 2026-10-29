@@ -31,7 +31,8 @@ from scipy import stats
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import hratt_weights_binary as hb  # noqa: E402
-from ldak_kvik_comparison import ROOT, clean_json, digest, power_state, save_json, write_csv  # noqa: E402
+from _harness import digest, power_state  # noqa: E402
+from ldak_kvik_comparison import ROOT, clean_json, save_json, write_csv  # noqa: E402
 
 ALPHAS = hb.ALPHAS
 # (Fst, architecture, trait, prevalence, scenario, covariates)

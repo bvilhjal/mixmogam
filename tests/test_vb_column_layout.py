@@ -8,7 +8,6 @@ are identical there; other BLAS builds may round the transposed GEMMs apart.
 The dense oracle of tests/test_vb_workspace.py pins the sample-major layout.
 """
 
-import importlib.util
 import sys
 from concurrent.futures import ThreadPoolExecutor
 
@@ -20,16 +19,6 @@ from mixmogam._loco import LocoGenotypes
 from mixmogam.genotypes import Genotypes
 
 EXACT = sys.platform == "darwin"
-
-
-def _fallback(monkeypatch, name):
-    """An isolated copy of the module with JIT disabled."""
-    with monkeypatch.context() as context:
-        context.setattr(_fast, "HAS_NUMBA", False)
-        spec = importlib.util.spec_from_file_location(name, _vb.__file__)
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
-    return module
 
 
 def _sample_major(monkeypatch, *modules):
@@ -64,10 +53,10 @@ def _assert_same_fit(actual, expected, single):
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("folded", [False, True])
 @pytest.mark.parametrize("p", [1, 2, 3, 4, 5, 8, 11])
-def test_column_refresh_matches_sample_major_refresh(monkeypatch, numba, dtype, folded, p):
+def test_column_refresh_matches_sample_major_refresh(monkeypatch, numpy_fallback, numba, dtype, folded, p):
     if numba and not _fast.HAS_NUMBA:
         pytest.skip("requires Numba")
-    module = _vb if numba else _fallback(monkeypatch, "mixmogam._vb_column_refresh_fallback")
+    module = _vb if numba else numpy_fallback(_vb)
     rng = np.random.default_rng(1301 + p)
     n = 301
     R = rng.standard_normal((n, p))
@@ -231,8 +220,8 @@ def test_column_major_fit_matches_sample_major(panel, monkeypatch, columns, vari
     _assert_same_fit(actual, expected, single)
 
 
-def test_numpy_fallback_column_major_fit_matches_sample_major(panel, monkeypatch):
-    fallback = _fallback(monkeypatch, "mixmogam._vb_column_fit_fallback")
+def test_numpy_fallback_column_major_fit_matches_sample_major(panel, monkeypatch, numpy_fallback):
+    fallback = numpy_fallback(_vb)
     G, groups, Q, y, folds, _ = panel
     lg = LocoGenotypes(Genotypes(G, chromosome=groups), groups, Q)
     col_fold, col_group = COLUMNS["mixed"]

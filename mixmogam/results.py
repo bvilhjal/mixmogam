@@ -115,10 +115,6 @@ class GwasResult:
         chi2 = stats.chi2.isf(np.clip(p, 1e-300, 1.0), 1)
         return float(np.median(chi2) / _CHI2_1DF_MEDIAN)
 
-    def neg_log10_p(self) -> np.ndarray:
-        """-log10 p per variant, p capped at 1 (p = 0 gives inf)."""
-        return -np.log10(np.minimum(self.p, 1.0))
-
     def bonferroni_threshold(self, alpha: float = 0.05) -> float:
         """``alpha`` divided by the number of variants in the result."""
         return alpha / self.p.size

@@ -99,7 +99,7 @@ def ancestry_pcs(panel_directory, k):
     return np.asarray(pcs), info
 
 
-def run_reference(case, ldak, threads, seed, covariates=False, prefix="reference"):
+def run_reference(case, ldak, threads, seed, covariates=False, prefix="reference", max_load=None):
     """The official program's two steps, each in its own process.
 
     The steps run with the case directory as their working directory, so
@@ -119,14 +119,14 @@ def run_reference(case, ldak, threads, seed, covariates=False, prefix="reference
         if step == 2 and prefix == "adjusted":
             command += ["--adjust-predictors", "YES"]
         measurement = measure(command, case, env=child_environment(None),
-                              max_load=None, label=f"{label}step{step}")
+                              max_load=max_load, label=f"{label}step{step}")
         rows.append(measurement)
         print(f"  ldak {prefix} step {step}: {measurement['wall_seconds']:.1f}s "
               f"RSS {measurement['peak_rss_bytes'] / 2**30:.2f} GiB", flush=True)
     return rows
 
 
-def run_mixmogam(case, method, seed, mixmogam_threads=1, blas_threads=1):
+def run_mixmogam(case, method, seed, mixmogam_threads=1, blas_threads=1, max_load=None):
     """One mixmogam method on the exported panel, in its own process.
 
     ``mixmogam_threads`` is the package's own worker count (HRATT has
@@ -140,7 +140,7 @@ def run_mixmogam(case, method, seed, mixmogam_threads=1, blas_threads=1):
     command = [sys.executable, str(DRIVER), "--worker", str(job)]
     env = child_environment(mixmogam_threads, blas_threads=blas_threads,
                              numba_threads=mixmogam_threads)
-    measurement = measure(command, case / method, env=env, label="measurement")
+    measurement = measure(command, case / method, env=env, max_load=max_load, label="measurement")
     print(f"  {method}: {measurement['wall_seconds']:.1f}s "
           f"RSS {measurement['peak_rss_bytes'] / 2**30:.2f} GiB", flush=True)
     return measurement
@@ -440,7 +440,8 @@ def main():
                 prefix = REFERENCE_METHODS[method]
                 print(f"case {case_spec['name']}-{setting}: {method}", flush=True)
                 references[method] = run_reference(case, ldak, args.threads, 0,
-                                                   covariates=bool(n_pcs), prefix=prefix)
+                                                   covariates=bool(n_pcs), prefix=prefix,
+                                                   max_load=args.max_load)
                 p_reference, coverage = parse_reference_aligned(case / f"{prefix}.step2.assoc",
                                                                 variant_ids)
                 print(f"  the reference program reported {coverage['n_reported']} variants, "
@@ -460,7 +461,8 @@ def main():
                     path.unlink()
 
             for method in [m for m in run_here if m in MIXMOGAM_OPTIONS]:
-                run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads)
+                run_mixmogam(case, method, 0, args.mixmogam_threads, args.blas_threads,
+                             max_load=args.max_load)
                 with np.load(case / f"{method}.npz") as data:
                     p_by_method[method] = data["p"]
                 extra = json.loads((case / f"{method}.diagnostics.json").read_text())["result"]

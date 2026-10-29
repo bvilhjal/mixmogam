@@ -1,11 +1,10 @@
 """Model-column parallelism preserves the serial arithmetic and fit decisions."""
 
-import importlib.util
 
 import numpy as np
 import pytest
 
-from mixmogam import _fast, _vb, twostep
+from mixmogam import _vb, twostep
 from mixmogam._loco import LocoGenotypes
 from mixmogam.genotypes import Genotypes
 
@@ -363,12 +362,8 @@ def test_numba_thread_limit_is_validated_before_genotype_access():
     assert _vb._validate_n_threads(np.int64(1)) == 1
 
 
-def test_numpy_fallback_only_requires_numba_for_multiple_threads(monkeypatch):
-    with monkeypatch.context() as context:
-        context.setattr(_fast, "HAS_NUMBA", False)
-        spec = importlib.util.spec_from_file_location("mixmogam._vb_parallel_fallback", _vb.__file__)
-        fallback = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(fallback)
+def test_numpy_fallback_only_requires_numba_for_multiple_threads(numpy_fallback):
+    fallback = numpy_fallback(_vb)
     assert fallback._validate_n_threads(1) == 1
     with pytest.raises(ImportError, match="requires Numba"):
         fallback.VBEngine(object(), n_threads=2)

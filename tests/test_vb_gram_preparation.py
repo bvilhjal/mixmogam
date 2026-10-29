@@ -8,13 +8,12 @@ from a separate engine's only by summation order, and neither fit depends
 on the budget.
 """
 
-import importlib.util
 import warnings
 
 import numpy as np
 import pytest
 
-from mixmogam import _fast, _vb
+from mixmogam import _vb
 from mixmogam._loco import LocoGenotypes
 from mixmogam._vb import PRIOR_ENET, VBEngine
 from mixmogam.genotypes import Genotypes
@@ -298,12 +297,8 @@ def test_parallel_sweeps_read_the_packed_slots(n_threads):
             _assert_same(actual, want)
 
 
-def test_numpy_fallback_prepares_the_same_fits(monkeypatch):
-    with monkeypatch.context() as context:
-        context.setattr(_fast, "HAS_NUMBA", False)
-        spec = importlib.util.spec_from_file_location("mixmogam._vb_gram_fallback", _vb.__file__)
-        fallback = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(fallback)
+def test_numpy_fallback_prepares_the_same_fits(numpy_fallback):
+    fallback = numpy_fallback(_vb)
     lg = _problem(q=2, n=61, m=300)
     Y = np.random.default_rng(3).standard_normal((lg.n, 1))
     cv_size, _ = _sizes(lg, 4)

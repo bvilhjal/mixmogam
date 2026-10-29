@@ -1,62 +1,36 @@
 # Research report
 
-This revision (29 October) adds the dev8 package benchmark reruns and
-updates the current cache and Lanczos descriptions. Its earlier sections
-retain their original versions and measured evidence; the new results
-used `2.0.0.dev8` at commit `d550c412`. The `2.0.0` release changes the
-packaging, the provenance documentation of the bundled real-data panel and
-the version string; its estimators are those of `2.0.0.dev9`, so every
-measurement below still describes the released code. The
-[design notes](../docs/design.md) and [changelog](../CHANGELOG.md) describe
-the methods and release history.
-The abstract retains the failed
-weighted-effect and runtime criteria; the software contracts describe
-sample-size and assembly metadata and the PCA memory guard. Section 4.13
-adds the first real-data result: a prespecified positive-control check on
-the bundled RegMap panel, which found six of seven known major genes with
-every method and failed its criterion on MOT1.
-Its LDAK-KVIK comparisons, HE-versus-REML
-fits and 20,000-variant workloads were rerun with 2.0.0.dev6, and the
-20,000-variant cross-fitted fits again once their genotype products were
-threaded; older studies keep the versions they ran with.
+The [manuscript PDF](mixmogam_report.pdf) sets out the statistical argument
+behind mixmogam, the evidence for it and six research priorities; the
+[LaTeX source](mixmogam_report.tex) is the editable manuscript. The
+[design notes](../docs/design.md) describe the methods and the
+[changelog](../CHANGELOG.md) the release history.
 
-The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
-behind mixmogam, its evidence, and six research priorities. The
-[LaTeX source](mixmogam_report.tex) is the editable manuscript. This revision
-includes matched comparisons with official LDAK-KVIK, paired workloads at
-50,000 samples and a repeated 100,000-sample comparison. Historical evidence
-retains its original limitations.
-Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
-with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
-support it. Sections 2.11 and 4.10 cover the subsequent revisions, which
-stream genotypes without projecting covariates out of each marker, drop the
-float genotype cache and store calls two bits each, with their paired fits.
-The package's two-step method inspired by LDAK-KVIK is HRATT, the
-Heritability-weighted Residual Association Two-step Test; runs archived
-before the rename keep its earlier name. Section 2.12 extends HRATT to
-case-control outcomes and sampling weights, with retrospective score tests
-and a genotype saddlepoint approximation; Section 4.11 reports their
-prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
-covariate-specific genotype distributions, and Section 4.12 validates them,
-including a rerun with the package's built-in ancestry PCs.
-The earlier benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
-on the archived inputs (the 20,000-variant cross-fitted fits with the later
-revision, 7 October), each timed fit waiting for a one-minute load average
-below 5. Official LDAK-KVIK results are reused from the
-original runs of 3 October, when identical mixmogam code took 38% longer than
-a day later, so cross-program time ratios span days; same-day checks compare
-the mixmogam versions directly. Archived sources and measurements are
-preserved rather than relabelled as computations of the current version.
-
-Section 4.14 reports the 29 October reruns: HRATT-HE was faster at the
-larger sample sizes in the tested synthetic panels; the default-cache paired
-comparison did not establish a general implementation speedup. Confounded
+The evidence includes matched comparisons with official LDAK-KVIK, paired
+workloads at 50,000 samples, a repeated 100,000-sample comparison, the
+prespecified validation of HRATT's case-control and weighted tests
+(Sections 2.12, 4.11) and of cross-fitted scores and covariate-specific
+genotype distributions (2.13, 4.12), and a positive-control check on the
+bundled RegMap panel (4.13), which found six of seven known major genes with
+every method and failed its criterion on MOT1. The abstract keeps the failed
+weighted-effect and runtime criteria. Section 4.14 reports the 29 October
+reruns with `2.0.0.dev8` at commit `d550c412`: HRATT-HE was faster at the
+larger sample sizes in the synthetic panels, the default-cache paired
+comparison did not establish an implementation speedup, and the confounded
 calibration fits and four Atwell HRATT scans had non-converged stages. The
 [evidence bundle](../benchmarks/results/20261029-report-evidence/README.md)
-contains selected raw measurements, per-fit convergence diagnostics, source
-and input identities, and the limitations of the compact archive.
+holds the selected raw measurements, per-fit convergence diagnostics and
+source and input identities. The 2.0.0 release did not change the estimators
+measured there.
 
-Table 1. Evidence and provenance used in the manuscript.
+Each result keeps the package version it ran with. The earlier LDAK-KVIK,
+HE/REML and 20,000-variant results are 2.0.0.dev6 reruns on the archived
+inputs (the cross-fitted 20,000-variant fits again on 7 October, after their
+genotype products were threaded), each timed fit waiting for a one-minute load
+average below 5. Their official LDAK-KVIK results are reused from 3 October,
+when identical mixmogam code ran 38% slower than a day later, so
+cross-program time ratios span days. Runs archived before HRATT was named keep
+its earlier name.
 
 | Evidence | Archive under `benchmarks/results/` | Interpretation |
 |---|---|---|
@@ -90,14 +64,13 @@ Table 1. Evidence and provenance used in the manuscript.
 | Historical timing and large-sample checks | `20261002T200925Z`, `20261003T001500Z-sim-study-large` | Internal comparisons with workload and measurement limitations |
 | Excluded external-program comparison | `20261003T083746Z-kvik-reference` | Incorrect PLINK export encoding; no empirical claims retained |
 
-The new experiment isolates the denominator with **known covariance and exact
-leading eigenvectors**. It does not exercise production GWAS fitting, randomized
-spectral approximation, or reference programs. Three fixed genotype panels and
-2,000 independent phenotype replicates per panel support conditional results,
-not population-wide generalization. Extreme-tail probabilities are analytic;
-Monte Carlo uncertainty at 1% is calculated across phenotype replicates.
+## Reproduce the denominator experiment
 
-## Reproduce the experiment
+The known-covariance experiment isolates the denominator with exact leading
+eigenvectors, without production GWAS fitting, randomized spectral
+approximation or reference programs. It uses three fixed genotype panels with
+2,000 phenotype replicates each; extreme-tail probabilities are analytic and
+Monte Carlo uncertainty at 1% is computed across replicates.
 
 From the repository root, with NumPy and SciPy installed:
 
@@ -106,16 +79,13 @@ OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 VECLIB_MAXIMUM_THREAD
 python benchmarks/denominator_geometry.py --output /tmp/mixmogam-geometry-rerun
 ```
 
-The output directory must not already exist. The driver checks direct versus
-spectral algebra, disjoint calibration/audit sets, and simulated versus analytic
-rejection probabilities. It records seeds, versions, genotype hashes, and its
-source snapshot. On macOS it requires AC power with Low Power Mode disabled.
-The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
-The 20K archive records its timed code as `2.0.0.dev3` with uncommitted
-optimizations frozen in full; its computational modules match `2.0.0.dev4`.
-Earlier manuscript sections describe `2.0.0.dev6` and its unreleased changes;
-the new results identify the dev8 commit. The [changelog](../CHANGELOG.md)
-has the release history.
+The output directory must not already exist. The driver checks direct against
+spectral algebra, disjoint calibration/audit sets, and simulated against
+analytic rejection probabilities, and records seeds, versions, genotype hashes
+and its source snapshot. On macOS it needs AC power with Low Power Mode off.
+The archive used `2.0.0.dev1` at commit `729c8532`. (The 20K archive records
+its timed code as `2.0.0.dev3` with uncommitted optimizations frozen in full;
+its computational modules match `2.0.0.dev4`.)
 
 ## Rebuild the manuscript
 
@@ -137,23 +107,18 @@ cd ..
 python report/make_report_manifest.py
 ```
 
-This is a multi-file LaTeX project: its figures and tables must remain beside the
-source. The figure script reads the archived CSVs, excludes the invalid external
-comparison; each `make_*` script writes a `*_manifest.json` with its input
-and output hashes. The earlier
-association results use mixmogam `2.0.0.dev2` at `db232216`, with exact phensim
-extensions frozen per archive; subsequent simulation changes do not retroactively
-validate old results. At large n, input BED files stay local and are ignored by
-Git, with hashes and generating references/seeds retained. The primary matched
-case was independently regenerated and all four methods' p-values agreed exactly.
-`report_manifest.json` records hashes of the delivered PDF, its current
-manuscript inputs and the compact evidence manifest; the manifest script
-uses `pdfinfo` to count pages. The previous revision's manifest is preserved
-as `report_manifest_20261017.json`: its historical hashes describe that
-revision and need not match the current tree. `references.json` contains
-verified bibliography identities and lookup URLs. Regenerate the report
-manifest when delivering a revised PDF; its hashes do not update automatically.
+Figures and tables must stay beside the LaTeX source. The figure script reads
+the archived CSVs and excludes the invalid external comparison; each `make_*`
+script writes a `*_manifest.json` with its input and output hashes. The
+earlier association results used mixmogam `2.0.0.dev2` at `db232216`, with
+phensim extensions frozen per archive. Large-n BED inputs stay local and out
+of Git, with hashes and generating references and seeds kept; the primary
+matched case was regenerated independently and all four methods' p-values
+agreed exactly.
 
-The mathematical derivations, diagnostic limitations, and research hypotheses
-are in the manuscript. API usage belongs in the [quickstart](../docs/quickstart.md);
-implementation details belong in [design notes](../docs/design.md).
+`report_manifest.json` hashes the delivered PDF, its current inputs and the
+evidence manifest (pages are counted with `pdfinfo`). It does not update
+itself, so regenerate it whenever the PDF changes.
+`report_manifest_20261017.json` is the previous revision's manifest, kept
+as is; its hashes need not match the current tree. `references.json` holds
+the verified bibliography identities and lookup URLs.

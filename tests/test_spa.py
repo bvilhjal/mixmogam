@@ -1,7 +1,6 @@
 """Saddlepoint p-values of retrospective score statistics against exact
 distributions."""
 
-import importlib.util
 import itertools
 
 import numpy as np
@@ -336,12 +335,9 @@ def test_conditional_binomial_uses_four_point_oracle_at_support_boundary(two_sid
                     np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=1e-10, equal_nan=True)
 
 
-def test_conditional_binomial_fallback_without_numba(monkeypatch):
-    from mixmogam import _fast, _spa
-    monkeypatch.setattr(_fast, "HAS_NUMBA", False)
-    spec = importlib.util.spec_from_file_location("mixmogam._spa_without_numba", _spa.__file__)
-    fallback = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(fallback)
+def test_conditional_binomial_fallback_without_numba(numpy_fallback):
+    from mixmogam import _spa
+    fallback = numpy_fallback(_spa)
     rng = np.random.default_rng(508)
     n, k = 40, 4
     a = rng.normal(size=n)

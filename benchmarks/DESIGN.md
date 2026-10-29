@@ -1,29 +1,18 @@
 # The mixmogam benchmark suite: what it measures, and what it does not
 
-This note is the map of the benchmark suite: which question each family of
-drivers answers, what the recorded evidence can and cannot support, and
-where the suite was blind. It was written on 25 October 2026, after the
-19 and 25 October efficiency reviews and before the scale study
-(`scale_study_plan.md`) was run, and updated on 26 October after the
-LDAK-KVIK comparisons at 400,000 variants, the scaling ladders and the
-speed branch's review.
-The [29 October rerun](results/20261029-report-evidence/README.md) extends
-the sample-size ladder to 100,000, adds paired 50,000-sample fits and
-qualifies the calibration and cache-budget claims below.
+Which question each family of drivers answers, what the evidence can
+support, and where the suite is still blind. The latest measurements are in
+the [29 October evidence bundle](results/20261029-report-evidence/README.md),
+a compact copy of selected records whose manifest identifies the original
+archives.
 
-The suite is a *measured-evidence* suite, not a test suite. The tests
-(`tests/`) check specified software contracts; the benchmarks measure what
-the code costs and what it produces on data whose truth is known. An
-archive under `benchmarks/results/<run-id>/` is the unit of evidence: it
-carries the source snapshot, the environment manifest, the commands, the
-logs, the raw results and, where the numbers are compared, the
-comparison itself.
-The 29 October report-evidence bundle is a compact copy of selected
-records, not a full run archive; its manifest identifies the originals.
+The tests (`tests/`) check software contracts; the benchmarks measure what the
+code costs and what it produces on data whose truth is known. The unit of
+evidence is an archive under `benchmarks/results/<run-id>/`, carrying the
+source snapshot, environment manifest, commands, logs, raw results and any
+comparison.
 
-## 1. The five layers
-
-Table 1. Benchmark questions and their evidential roles.
+## The five layers
 
 | Layer | Question | Drivers | What it can support |
 |---|---|---|---|
@@ -33,17 +22,12 @@ Table 1. Benchmark questions and their evidential roles.
 | External | how does it compare with the reference program? | `ldak_kvik_comparison.py`, `hratt_he_comparison.py`, `atwell_controls.py`, `kvik_scale.py`, `scaling_ladder.py` | that the package is not alone in its conclusions, on real data and on matched inputs |
 | Scaling | how does the cost grow along one axis at a time? | `scaling_ladder.py` (m and LD at fixed n), `kvik_scale.py` driven over n at fixed m | exponents in n and m, with the iteration counts that explain them |
 
-Layers 1 and 2 are about the software; layers 3 and 4 are about the
-science. The suite was much stronger in the first two layers than in the
-third and fourth, and the imbalance has consequences: the efficiency
-reviews could ask for numbers the suite could not supply, while the
-scientific claims in the report rest on a handful of heavy archives that
-need an external executable, a bundled data set or hours of machine
-time.
+The first two layers are about the software, the next two about the
+science. The suite is stronger in the first two: the scientific claims in the
+report rest on a handful of heavy archives that need an external executable,
+the bundled data set or hours of machine time.
 
-## 2. The gaps this suite had on 25 October 2026
-
-Table 2. Historical gaps and their present status.
+## Gaps found on 25 October 2026
 
 | # | Gap | How it was visible | Status |
 |---|---|---|---|
@@ -58,10 +42,9 @@ Table 2. Historical gaps and their present status.
 | G9 | No measured scaling axis | every archived wall time was a single point; nothing said how cost grows in n or m, so a new panel size could not be extrapolated and two panels of equal cell count looked comparable | ladders measure sample size, marker count and LD; the 20,000-marker sample ladder now reaches 100,000, with three additional timing repetitions there on the same input |
 | G10 | Speed changes were not verified end to end against the external program | the 26 October speed branch was reviewed by equivalence matrices and paired A/B on reduced panels, but no run confirmed the association results against LDAK-KVIK after the branch | closed by the 26 October reruns of every LDAK-KVIK benchmark on the same panels, seeds and threads |
 
-## 3. The rethought structure
+## Archive layout and rules
 
-**Three tiers, one archive.** Every driver writes an archive that follows
-one layout, so that a reader (or a later tool) can compare runs:
+New drivers write one layout, so runs can be compared:
 
 ```
 benchmarks/results/<run-id>-<name>/
@@ -73,7 +56,7 @@ benchmarks/results/<run-id>-<name>/
   README.md            a human-readable summary of the same numbers
 ```
 
-**Three rules for every measurement.**
+Every measurement follows three rules.
 
 1. One measurement is one fresh process. Wall time, user and system CPU
    time and peak resident set size come from the child's own operating
@@ -86,44 +69,29 @@ benchmarks/results/<run-id>-<name>/
    configuration of the same method and reports the difference, instead
    of asserting that the configuration does not matter.
 
-**Plans before results.** The drivers that answer a scientific question
-have a protocol written before the first measurement
+Drivers that answer a scientific question have a protocol written before
+the first measurement
 (`ldak_kvik_comparison_plan.md`, `hratt_weights_binary_plan.md`,
 `hratt_followups_plan.md`, `atwell_controls_plan.md`,
 `scale_study_plan.md`). The archive keeps the plan and its hash, so a
-later reader can tell a prespecified protocol from a description written
-after the fact.
+later reader can tell a prespecified protocol from one written after the
+fact. `_harness.py` holds the shared infrastructure; older drivers keep their
+own copies until their archives are re-run under it (G5).
 
-**The shared harness.** `_harness.py` holds the power guard, the thread
-environment, the source snapshot, the environment manifest, the
-fresh-process measurement, the p-value comparison and the archive
-helpers. New drivers use it; the older drivers keep their own copies
-until their archives are re-run under the shared code (G5).
+## Limits
 
-## 4. What the suite still cannot show
-
-* One host, one simulator family, a handful of replicates. Nothing here
-  is a calibration study of a human cohort, and the mixture of a
-  simulated panel with a real-data archive is a limitation of the
-  evidence, not a design choice.
-* The dense exact reference is affordable only at the smaller sizes.
-  Above a few thousand samples the two-step methods are compared with
-  each other, not with an independent implementation; a matched
-  comparison with the official LDAK-KVIK remains in
-  `ldak_kvik_comparison.py` and `kvik_scale.py`.
-* Timings are host-specific and code-specific. A ratio between two
-  configurations measured in the same archive is meaningful; a number
-  copied between archives is not -- the reference program itself moved
-  2-34% between the 25 and 26 October runs on identical inputs, which
-  is the honest noise floor for any cross-day comparison.
-* Passing every benchmark establishes implementation contracts, not
-  calibration. The calibration arm is a check on the null and on power
-  in a controlled panel, nothing more.
-* The ladders isolate one axis at a time on one panel family: the
-  sample-size ladder holds LD inside 100-variant founder blocks, and a
-  long-range-LD panel costs more per variant than that (the
-  25 October scaling ladder shows the m/LD side). Exponents measured
-  here describe this family, not a demographic model.
-* The suite measures what exists today. A new method, a new file format
-  or a new default needs its own row in the matrix, or the evidence
-  stops describing the package.
+* One host, one simulator family, a handful of replicates and one real
+  panel. Nothing here is a calibration study of a human cohort.
+* The dense exact reference is affordable only at small sizes. Above a few
+  thousand samples the two-step methods are compared with each other and,
+  in `ldak_kvik_comparison.py` and `kvik_scale.py`, with official LDAK-KVIK.
+* Timings are host- and code-specific. Ratios within one archive are
+  meaningful; numbers copied between archives are not. The reference program
+  itself moved 2-34% between the 25 and 26 October runs on identical inputs.
+* The calibration arm checks the null and power in a controlled panel; it
+  does not establish calibration in general.
+* The ladders vary one axis at a time on one panel family. The sample-size
+  ladder holds LD inside 100-variant founder blocks, and a long-range-LD panel
+  costs more per variant (the 25 October scaling ladder shows the m/LD side).
+* A new method, file format or default needs its own row in the matrix, or
+  the evidence stops describing the package.

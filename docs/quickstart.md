@@ -14,12 +14,12 @@ gt = Genotypes.load_plink("data/cohort", mmap=True)  # .bed/.bim/.fam, two-bit m
 gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```
 
-`mmap=True` keeps the calls in the mapped file only while the loaded object goes to
-`gwas` untouched: `align_samples`, `filter_samples` and `filter_variants` copy the
-calls into memory, packed (a quarter of the int8 bytes). Filter variants after
-aligning samples, because `min_mac` and `max_missing` count the samples present;
-`mixmogam gwas` does not filter variants, so filter first. No-calls are replaced by
-the variant's mean.
+`mmap=True` leaves the calls in the mapped file only while the object goes to
+`gwas` untouched; `align_samples`, `filter_samples` and `filter_variants` copy
+them into memory, packed (a quarter of the int8 bytes). Filter variants after
+aligning samples, since `min_mac` and `max_missing` count the samples present.
+`mixmogam gwas` does not filter variants. No-calls are replaced by the
+variant's mean.
 
 ## Load phenotypes and align
 
@@ -45,35 +45,34 @@ X = np.column_stack([cov.values, pcs])
 write_covariates("pcs.txt", gt.sample_ids, pcs, names=[f"PC{j}" for j in range(1, 11)])
 ```
 
-Rows are matched by the sample ID column (the PLINK IID); missing values
-are rejected naming the samples. Include the PCs among the covariates
-whenever weights or case fractions vary with ancestry or the environment
-tracks it; as covariates their scale is irrelevant.
+Rows are matched on the sample ID column (the PLINK IID), and missing values
+are rejected with the offending samples named. Include PCs whenever weights or
+case fractions vary with ancestry or the environment tracks it; their scale
+does not matter.
 
-How many? Enough to span the ancestry structure: with K discrete
-populations, K - 1. In a simulated panel of four populations whose
-environment differed between them, two components left 58% of the
-environment in the trait and three left 0.3%. With three, every method
-converged and agreed, including the official LDAK-KVIK. With two, BOLT-LMM's
-mixture, HRATT-HE and HRATT-REML reached their iteration caps without
-converging and their statistics were those of failed fits, while the exact
-path and BOLT-LMM-inf converged
+Use enough components to span the ancestry structure, K - 1 for K discrete
+populations. In a simulated panel of four populations with
+population-specific environments, two components left 58% of the environment
+in the trait and three left 0.3%. With three, every method converged and
+agreed with official LDAK-KVIK. With two, the BOLT-LMM mixture, HRATT-HE and
+HRATT-REML hit their iteration caps and returned the statistics of failed
+fits, while the exact path and BOLT-LMM-inf converged
 ([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 `principal_components(..., return_info=True)` reports the
-`explained_variance_ratio` where the spectrum drops off. Check
-`extra["cv_converged"]` and `extra["loco_converged"]` before reading any
-HRATT or BOLT-LMM statistic: `hratt` always reports both, `bolt` reports
-`cv_converged` and `loco_converged` only when the mixture is used
-(`extra["use_mixture"]`), and `exact` and `bolt-inf` have no flag (a failed solve
-raises). The package also emits a `RuntimeWarning`, which Python shows once per
-session by default, so when looping over traits test the flags yourself.
+`explained_variance_ratio`, which shows where the spectrum drops off.
 
-The float64 SVD has a default working-memory budget of 4 GiB, checked
-before allele-frequency scanning and panel allocation. The estimate
-excludes resident input genotypes and library overhead. Lower `n_markers`
-or provide external PCs for larger cohorts; an explicit
-`max_memory_gib=8` raises the budget without changing the algorithm.
-The CLI exposes `pca --max-memory-gib` and `gwas --pca-max-memory-gib`.
+Check `extra["cv_converged"]` and `extra["loco_converged"]` before reading any
+HRATT or BOLT-LMM statistic. `hratt` always reports both; `bolt` reports them
+only when the mixture is used (`extra["use_mixture"]`); `exact` and `bolt-inf`
+have no flag because a failed solve raises. The accompanying `RuntimeWarning`
+is shown once per session by default, so test the flags yourself when looping
+over traits.
+
+The float64 SVD has a 4 GiB working-memory budget, checked before
+allele-frequency scanning and panel allocation; the estimate excludes the
+resident genotypes and library overhead. For larger cohorts lower `n_markers`
+or supply external PCs; `max_memory_gib=8` raises the budget without changing
+the algorithm (CLI: `pca --max-memory-gib`, `gwas --pca-max-memory-gib`).
 
 ## Association scan (LOCO by default)
 
@@ -101,14 +100,13 @@ own chromosome. More than 25 chromosomes are merged into 25 contiguous
 groups (`max_loco_groups`).
 
 Where reported, `calibration_cv` is the spread of the ratio between the exact
-and retrospective test denominators over the calibration SNPs (30 by default).
-A large spread flags the proportional-denominator approximation in mixmogam's
-two-step methods. The spectral option is an approximation, and its use with mixture or elastic-net
-statistics is heuristic; use the exact path when feasible and validate
-calibration in the intended population (see the [design notes](design.md)).
-For `method="bolt"`, effects and standard errors come from `bolt-inf`,
-even when the mixture supplies the p-values; `extra["effect_method"]`
-records this distinction.
+and retrospective test denominators over the calibration SNPs (30 by
+default); a large spread means the two-step methods' proportional-denominator
+approximation is poor. The spectral denominator is itself an approximation,
+heuristic with mixture or elastic-net statistics, so prefer the exact path
+when it is feasible (see the [design notes](design.md)). For `method="bolt"`,
+effects and standard errors come from `bolt-inf` even when the mixture
+supplies the p-values, as `extra["effect_method"]` records.
 
 ## Case-control outcomes and sampling weights
 
@@ -126,26 +124,23 @@ result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 ```
 
 Without `trait="binary"`, a 0/1 phenotype is fitted as a Gaussian trait, with no
-warning. Weights must be finite and positive (drop samples with zero weight); they
-are rescaled to mean one. With weights, heritability is fitted by HE
-(`heritability_method="auto"`); REML is unavailable because the weights
-define no likelihood. Binary `beta` is a one-step log odds approximation per
-counted allele, conditional on the polygenic score, and can be poor for
-large effects or sparse counts. `se` describes the null-score linearization,
-independently of the tail rule; it is not a fitted logistic-model standard
-error. Exports use `beta_one_step` and `se_null_score` to preserve that
-distinction, and `posterior_probabilities()` rejects these estimates.
-Tails above |z| = 2 come
-from a saddlepoint approximation; `spa_threshold=np.inf` turns it off, and
-`spa_two_sided="doubled"` doubles the tail beyond the observed score instead
-of adding both tails at +-|u|, putting half the level in each tail.
+warning. Weights must be finite and positive (drop samples with zero weight) and
+are rescaled to mean one. With weights, `heritability_method="auto"` fits
+heritability by HE; REML is unavailable because the weights define no
+likelihood. Binary `beta` is a one-step log-odds approximation per counted
+allele, conditional on the polygenic score, and can be poor for large effects
+or sparse counts. Its `se` is the null-score linearization, independent of the
+tail rule, not a logistic-model standard error. Exports therefore name them
+`beta_one_step` and `se_null_score`, and `posterior_probabilities()` rejects
+them. Tails above |z| = 2 come from a saddlepoint approximation;
+`spa_threshold=np.inf` turns it off, and `spa_two_sided="doubled"` doubles the
+tail beyond the observed score instead of adding both tails at +-|u|, putting
+half the level in each tail.
 
-Include suitable ancestry covariates when weights or case fractions vary
-with ancestry. The saddlepoint tail then uses each sample's predicted
-allele frequency and assumes conditional Hardy-Weinberg equilibrium;
-an intercept-only design uses empirical genotype frequencies. Calibration
-depends on these assumptions. HRATT warns when strong structure remains
-after the covariates. `gwas` raises TypeError for `trait`,
+With ancestry covariates, the saddlepoint tail uses each sample's predicted
+allele frequency and assumes conditional Hardy-Weinberg equilibrium; an
+intercept-only design uses empirical genotype frequencies. HRATT warns when
+strong structure remains after the covariates. `gwas` raises TypeError for `trait`,
 `sample_weights`, `spa_threshold`, `spa_two_sided`, `loco_folds`, `stage1` and
 `stage1_kwargs` with any other method, `auto` included (pass `method="hratt"`;
 only the command line moves `auto` to HRATT when `--trait`, `--weights` or `--stage1`
@@ -154,15 +149,15 @@ is given). Method-specific keywords raise the same way: `n_threads` belongs to
 `hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
 `cv_fraction` to `hratt` alone.
 
-HRATT's LOCO predictors are trained on other folds (`loco_folds=5`), while
-variance components and model selection use the whole trait. This reduced
-effect attenuation and separation in the tested scenarios; it does not
-guarantee unbiased effects. `loco_folds=1` restores in-sample prediction.
+HRATT's LOCO predictors are trained on the other folds (`loco_folds=5`), while
+variance components and model selection use the whole trait. In the tested
+scenarios this reduced effect attenuation and case-control separation.
+`loco_folds=1` restores in-sample prediction.
 
 ## Larger HRATT fits
 
-Install the `fast` extra for Numba, then set thread limits **before starting
-Python**. For example, launch your analysis script with:
+Install the `fast` extra for Numba and set thread limits before Python
+starts, for example:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
@@ -185,63 +180,58 @@ print(result.extra["cv_converged"], result.extra["loco_converged"])
 fits. A block takes about 200 KB plus 8 KB per covariate column (the
 intercept counts), so 1 GB holds about 620,000 variants with an intercept
 only and about 440,000 with ten principal components. If a partial-cache
-warning appears and RAM permits, raise it (for example, `4 * 1024**3`). A
-smaller cache lowers retained memory but rebuilds the uncached blocks on
-every sweep, with the same arithmetic as the cached ones. After releasing
-the hold-out cache, the cross-fit uses the freed budget to retain additional
-blocks as they are built. Neither changes the fitted model.
+warning appears and RAM permits, raise it (for example, `4 * 1024**3`).
+Uncached blocks are rebuilt on every sweep with the same arithmetic, and the
+cross-fit reuses the budget freed by the hold-out fit, so the cache size never
+changes the fitted model.
 
-Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
-PCs for population/environmental confounding; the intercept is added internally.
-REML (HE with sampling weights) and one thread remain the defaults.
-`random_state` (default 0) fixes the trace probes, the hold-out and the fold
-assignment: a fixed seed and thread setup reproduces p-values exactly, different
-seeds change them (by more at small n), so report the seed; `exact` is
-deterministic and takes none. Selecting
-`heritability_method="he"` changes the variance estimator to projected
-single-component randomized HE, distinct from official LDAK's partitioned HE
-workflow; it requires the default `alpha_method="he"`. Inspect HE boundary and
-precision diagnostics and CV/LOCO convergence before interpreting a fit.
-Trace-probe uncertainty is not a heritability confidence interval.
+Pass aligned covariates as `X=X`, including ancestry PCs under population or
+environmental confounding; the intercept is added internally. REML (HE with
+sampling weights) and one thread are the defaults. `random_state` (default 0)
+fixes the trace probes, the hold-out and the fold assignment. The same seed
+and thread setup reproduce p-values exactly; other seeds change them, more so
+at small n, so report the seed. `exact` is deterministic and takes none.
+`heritability_method="he"` switches to projected single-component randomized
+HE, which differs from official LDAK's partitioned HE and requires the default
+`alpha_method="he"`. Inspect its boundary and precision diagnostics and the
+CV/LOCO convergence flags before interpreting a fit; trace-probe uncertainty
+is not a confidence interval for heritability.
 
-Two settings trade accuracy for time. `slq_tol` (default 1e-6) lets the
-Lanczos REML run stop once h2 has converged, after 8 to 24 passes over the
-genotypes; `slq_tol=0` always runs 24, as before the October 2026 speed-ups,
-and the default moved log10 p by at most 4e-5 in tests. `cv_tol` (default:
-`vb_tol`, which changes nothing) sets a looser tolerance for HRATT's hold-out
+Two settings trade accuracy for time. `slq_tol` (default 1e-6) stops the
+Lanczos REML once h2 has converged, after 8 to 24 passes over the genotypes;
+`slq_tol=0` always runs 24, and the default moved log10 p by at most 4e-5 in
+tests. `cv_tol` (default `vb_tol`) loosens the tolerance of HRATT's hold-out
 grid fit alone; `cv_tol=1e-4` halves that fit's sweeps but can change the
-selected prior, so it changes results (see the
+selected prior and hence the results (see the
 [design notes](design.md#order-of-steps-prior-selection-and-convergence)).
 
 `n_threads=4` parallelizes preparation and independent model updates while
-preserving SNP order within each model. Preparation gives the same values at
-every thread count; parallel residual products may change floating-point
-rounding.
-Detected BLAS pools are limited internally for the parallel matrix products;
-Apple Accelerate needs the `VECLIB_MAXIMUM_THREADS` setting above. The requested
-count cannot exceed Numba's configured limit. Initial Numba compilation adds
-latency to the first use of a kernel. During the parallel model sweeps the
-workers spin between launches where the OpenMP runtime would put them to
-sleep at once (as on Apple silicon): 1.1-1.25x faster at four threads on a
-wide panel, for 1.5-2x the CPU time. Set `KMP_BLOCKTIME` or
+keeping the SNP order within each model. Preparation gives the same values at
+every thread count; parallel residual products may change rounding. Detected
+BLAS pools are limited internally, but Apple Accelerate needs the
+`VECLIB_MAXIMUM_THREADS` setting above, and the count cannot exceed Numba's
+configured limit. The first use of each kernel pays Numba's compilation.
+During parallel sweeps the workers spin between launches instead of sleeping
+at once (as OpenMP does on Apple silicon), 1.1-1.25x faster at four threads on
+a wide panel for 1.5-2x the CPU time; set `KMP_BLOCKTIME` or
 `OMP_WAIT_POLICY` to keep the runtime's own policy.
 
-Genotypes are decoded on every pass; no float copy is kept. For large
-panels, store the calls two bits each: `Genotypes.load_plink(prefix,
-packed=True)` holds the bed's codes in memory (a quarter of the int8 bytes),
+No float copy of the genotypes is kept; every pass decodes them. For large
+panels store the calls two bits each: `Genotypes.load_plink(prefix,
+packed=True)` holds the bed codes in memory (a quarter of the int8 bytes),
 `mmap=True` maps them from the file, and `Genotypes(G, packed=True)` packs an
-array. Results are identical to int8 storage. QC accumulates call counts
-directly from packed bytes rather than decoding first. Residuals and other
-workspaces remain resident: this is not a fully out-of-core fit.
+array. Results are identical to int8 storage, and QC counts calls straight
+from the packed bytes. Residuals and workspaces stay resident, so the fit is
+not fully out of core.
 
-An int8 array is decoded fastest variant-major, each variant's calls
-contiguous, as the readers return them and as `Genotypes(G.T)` gives for a
-C-ordered (variants, samples) array: about 0.16 ns per call on one thread,
-against 1 ns for a C-ordered (samples, variants) array, whose decoding is a
-transpose. Analysis entry points call `variant_major()` and make one int8
-layout copy instead of paying that transpose on every pass; the caller's
-array is not modified. `np.asfortranarray(G)` (or `packed=True`) avoids the
-copy, and selecting or aligning samples keeps the order it is given.
+int8 arrays decode fastest variant-major, each variant's calls contiguous, as
+the readers return them and as `Genotypes(G.T)` gives for a C-ordered
+(variants, samples) array: about 0.16 ns per call on one thread, against 1 ns
+for a C-ordered (samples, variants) array, which needs a transpose. Analysis
+entry points call `variant_major()` and make one int8 copy rather than
+transposing on every pass; the caller's array is not modified.
+`np.asfortranarray(G)` (or `packed=True`) avoids the copy, and selecting or
+aligning samples keeps the given order.
 
 ## The mixed model by hand
 
@@ -270,10 +260,9 @@ fit_two_kinships(y, K_close, K_structure)     # weights including 0 and 1
 ```
 
 Two-kinship fits reject covariance components that cannot be distinguished
-after covariate adjustment. `weight=None` and zero shares mean the
-ordinary linear model won with zero genetic variance. The refined mixture
-profile still performs a dense eigensolve per candidate weight; it is a
-dense, small-to-moderate-n method, not a streaming large-n approximation.
+after covariate adjustment. `weight=None` with zero shares means the ordinary
+linear model won, with zero genetic variance. The mixture profile does a dense
+eigensolve per candidate weight, so it is meant for small to moderate n.
 
 ## Command line
 
@@ -289,9 +278,9 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name case \
               --trait binary --weights weights.txt --pcs 10 --out gwas.csv
 ```
 
-Phenotype and covariate rows are aligned to the genotype sample IDs, and
-samples without a phenotype value or with a non-positive weight are
-dropped with a line saying how many. `--pcs K` appends the built-in PCs
+Phenotype and covariate rows are aligned to the genotype sample IDs; samples
+without a phenotype or with a non-positive weight are dropped, and the count
+is printed. `--pcs K` appends the built-in PCs
 (`mixmogam pca` writes them for other settings); `--trait` and `--weights`
 select the HRATT weighted/binary path. `--weights FILE` is a sample ID (or
 FID IID) followed by one weight column, read like a covariate file, and
@@ -307,10 +296,10 @@ See [file formats](formats.md) for dependencies and input limits.
 ## Input and inference contracts
 
 - Align phenotype and covariate rows by sample ID before scanning. Duplicate
-  genotype IDs and repeated phenotype observations are rejected. Aggregate
-  replicates explicitly; the loader no longer silently keeps the last row.
-- Refitting an `LMM` supersedes its previous `LMFit`. Keep the new fit for
-  scanning or prediction; operations on a superseded fit now raise an error.
+  genotype IDs and repeated phenotype observations are rejected; aggregate
+  replicates yourself.
+- Refitting an `LMM` supersedes its previous `LMFit`, and operations on a
+  superseded fit raise an error.
 - Calls are diploid hard calls in 0/1/2, with -1 missing. PLINK 1 loads count
   BIM A1 and preserve A1/A2. Recode haploid inbred 0/1 calls to 0/2 before
   interpreting diploid MAC or allele frequency. `allele_freqs()` returns the
@@ -321,23 +310,22 @@ See [file formats](formats.md) for dependencies and input limits.
 - Migration notes per release, such as changed random draws, are in the
   [changelog](../CHANGELOG.md).
 - `permutation_min_p(..., scheme="whitened")` permutes coordinates in the
-  residual subspace. The older projected-residual approximation is available
-  as `scheme="projected"`; old thresholds do not certify the corrected scheme.
+  residual subspace. The earlier projected-residual approximation is
+  `scheme="projected"`.
 - Posterior association probabilities require an explicit effect-size prior:
   `result.posterior_probabilities(priors, prior_variance=W)`, where `W` is a
-  variance in squared phenotype-units per counted allele. This uses a normal
-  approximation from `beta` and `se`, and is not a fine-mapping probability.
-  Binary one-step effects are excluded.
+  variance in squared phenotype units per counted allele. They use a normal
+  approximation from `beta` and `se` and are not fine-mapping probabilities.
+  Binary one-step effects are rejected.
 - CSV/TSV preserves variant columns and full float precision. `af` is the
-  frequency of `effect_allele` (BIM A1 or VCF/PGEN ALT), not MAF. `n` is the analysed
-  headcount and is omitted for binary and sampling-weighted scores:
-  downstream readers often alias it to effective sample size, which these
-  tests do not determine. The headcount remains in `result.n`. An explicitly
-  supplied `result.n_eff` is exported separately and can be nonintegral;
-  `read_csv` never interprets it as headcount. Binary effects retain the
+  frequency of `effect_allele` (BIM A1 or VCF/PGEN ALT), not MAF. `n` is the
+  analysed headcount. It is omitted for binary and sampling-weighted scores,
+  because downstream readers often take it as the effective sample size,
+  which these tests do not determine; the headcount stays in `result.n`. An
+  explicitly supplied `result.n_eff` is exported separately, can be
+  nonintegral, and is never read back as headcount. Binary effects keep the
   score-estimate labels above.
 - `gwas(..., genome_build="GRCh38")` or CLI `--genome-build GRCh38` declares
-  the coordinate assembly in the CSV. `read_csv` and variant subsetting
-  preserve it. This is a provenance label, not liftover or assembly
-  validation; pass it explicitly to downstream tools that require a build.
-  Other fit/calibration metadata in `result.extra` is not serialized.
+  the coordinate assembly in the CSV, and `read_csv` and variant subsetting
+  preserve it. It is a label only, with no liftover or assembly check. Other
+  fit and calibration metadata in `result.extra` is not serialized.

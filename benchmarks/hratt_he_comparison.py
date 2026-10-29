@@ -35,7 +35,8 @@ import subprocess
 import sys
 import time
 
-from hratt_efficiency import THREAD_VARS, digest, input_manifest, measured, power_state, save_json, snapshot, wait_for_quiet
+from _harness import THREAD_VARS, digest, power_state, save_json, wait_for_quiet
+from hratt_efficiency import input_manifest, measured, snapshot
 
 METHODS = ("mixmogam-he", "mixmogam-reml", "ldak-kvik")
 

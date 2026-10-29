@@ -45,87 +45,35 @@ versions; the new benchmarks use 2.0.0.dev8}
 \maketitle
 
 \begin{abstract}
-Mixed-model association combines a model of genetic background with a
-numerical approximation and a reference distribution for testing. These
-three parts require separate validation. We describe the revised
-mixmogam package and examine how population structure exposes their
-differences. The package provides dense and streaming Gaussian
-mixed-model analyses, leave-one-chromosome-out (LOCO) scans, and
-experimental two-step approximations. We derive the dependence of the
-association denominator on a variant's orientation in the kinship
-spectrum and show why calibration averaged over variants can conceal
-opposing errors. In a new conditional experiment with known covariance,
-256 samples, and 970 held-out audit variants, scalar calibration gives
-an overall rejection probability of 1.00\% at a nominal 1\% threshold
-under moderate frequency dispersion, but 1.19\% and 0.73\% in the lowest
-and highest structure-loading quintiles. A rank-four spectral correction
-reduces that spread to 1.010\% and 1.005\%. Analytic probabilities agree
-with simulations across 2,000 independent phenotype replicates.
-These results establish a mechanism under a controlled Gaussian null;
-they do not validate estimated-covariance scans or reference GWAS
-programs. We reassess historical simulations, separate environmental
-mean misspecification from denominator error, and withdraw an external
-comparison compromised by genotype encoding. A new matched phensim study
-uses six independent panels per cell, with and without local LD, and
-verifies every exported genotype. At $n=800$ with LD, environmental
-confounding gives official LDAK-KVIK 15.83\% rejection at a nominal 1\%
-under the genetic null; adjustment for two genotype PCs reduces this to
-0.97\%. Corresponding rates for mixmogam's Heritability-weighted Residual
-Association Two-step Test (HRATT), inspired by LDAK-KVIK, are 0.64\% and
-0.92\%.
-These small-panel stress tests do not establish a general ranking.
-We implement a HAPNEST-model simulator in phensim and measure generation
-through 100,000 samples. At 50,000 samples and 20,000 markers, explicit
-moment-based variance fitting with four workers gives mixmogam median
-complete-fit times of 33.2 and 29.2 seconds on two fixed panels with its
-default cross-fitted scores (21.7 and 20.7 with in-sample scores), with
-1.4~GiB peak resident memory, or 0.8~GiB with calls stored two bits
-each. Official LDAK-KVIK took 25.45 and 30.09 seconds and 0.65~GiB on
-3 October, when identical mixmogam code took 38\% longer than a day later;
-these cross-day ratios mostly reflect host conditions.
-Thread changes exceed a prespecified strict numerical tolerance,
-although the tested significance decisions are unchanged. These
-workstation timings establish a workload-specific tradeoff rather than
-general performance or calibration.
-Version 2.0.0.dev5 computes the same estimators with less work: in paired
-runs, an exact LOCO scan of 3,000 samples took 13.3 instead of 79.6
-seconds, and fewer Lanczos steps with more trace probes reduced Monte
-Carlo error. A later revision streams genotypes instead of caching them:
-fits take 0.86 to 1.23 times as long as dev5's cached fits (0.89 to 1.17
-with two-bit calls), and with two-bit calls HRATT's peak memory grows by
-0.36 instead of 4.06 bytes per genotype. HRATT also tests case-control
-outcomes and sampling-weighted samples, against each score's variance
-under genotype exchangeability with a genotype saddlepoint tail. In a
-prespecified simulation the weighted test was calibrated under selection on
-the outcome, where the sandwich variance rejected up to 26 times too often,
-but weights that depend on ancestry inflated low-frequency tails, and
-HRATT's effect estimates were attenuated by about a third. Cross-fitted
-LOCO scores reduced effect bias to within 2\% in most cells; weighted
-effects under selection on the outcome remained 5.4\% low (Monte Carlo
-standard error 2.1\%), failing the prespecified effect criterion.
-Covariate-specific genotype distributions with principal components
-removed the ancestry inflation in the tested cells. Cross-fitting cost
-1.08--1.11 times the fitting time; weighted fits cost 1.55 times HRATT-HE,
-failing the target of 1.3. The package now computes those principal components itself,
-and a rerun with them reproduced that calibration.
-On the bundled \emph{Arabidopsis thaliana} panel, a prespecified check
-found six of seven genes with known large effects on Atwell's phenotypes,
-under every method. No method found MOT1 for molybdenum on the
-prespecified raw scale, so the check failed its criterion; on log values,
-an exploratory rerun ranked MOT1 first.
-On a founder-block panel of 100,000 samples and 20,000 markers, three
-balanced-order repetitions with 2.0.0.dev8 gave median complete-process
-times of 25.84 seconds for HRATT-HE, 37.59 for LDAK-KVIK and 101.77 for
-BOLT-inf, on one host and phenotype. Three paired runs on each of two
-50,000-sample HAPNEST panels did not establish a speedup at the default
-cache budget. The rerun also found non-converged variational fits under
-strong confounding and in four of eight Atwell HRATT scans; a positive-control
-criterion counted these latter fits. These findings bound the interpretation
-of the timing and recovery results.
-REML remains the default variance estimator without sampling weights.
-The research agenda emphasizes
-independent calibration audits, reference-panel fidelity, error-controlled
-approximations and measured failure limits.
+We ask how population structure exposes errors in mixed-model
+association tests, using the mixmogam package: dense and streaming
+leave-one-chromosome-out (LOCO) scans and HRATT, a two-step test inspired
+by LDAK-KVIK. The association denominator depends on a variant's
+orientation in the kinship spectrum, so a scalar calibration that is right
+on average can be wrong in opposite directions for different variants. In a known-covariance
+experiment with 256 samples and 970 held-out audit variants, scalar
+calibration under moderate frequency dispersion rejected 1.00\% at a
+nominal 1\%, but 1.19\% and 0.73\% in the lowest and highest
+structure-loading quintiles; a rank-four spectral correction gave 1.010\%
+and 1.005\%. In matched simulations at $n=800$ with LD, an omitted
+environmental effect of ancestry gave official LDAK-KVIK 15.83\% rejection
+under the genetic null at 1\%, and HRATT 0.64\%; two genotype PCs brought
+these to 0.97\% and 0.92\%. We extended HRATT to case-control outcomes and
+sampling weights. In prespecified simulations the weighted test stayed
+calibrated under selection on the outcome, where the sandwich variance
+rejected up to 26 times too often; cross-fitted LOCO scores brought effect
+bias within 2\% in most cells; and covariate-specific genotype
+distributions with principal components removed inflation from
+ancestry-dependent weights. Two criteria failed: weighted effects under selection on the
+outcome were 5.4\% low (Monte Carlo standard error 2.1\%), and weighted fits
+took 1.55 times as long as HRATT-HE against a target of 1.3. On the
+\emph{Arabidopsis thaliana} RegMap panel every method found six of seven
+known major genes; none found MOT1 on the prespecified raw scale, so the
+check failed (an exploratory log-scale rerun ranked MOT1 first). At 100,000 samples and 20,000 markers, 2.0.0.dev8 took a
+median 25.84 seconds for HRATT-HE, 37.59 for LDAK-KVIK and 101.77 for
+BOLT-inf. Apart from the RegMap check all evidence is simulated, the new
+timings come from one workstation, and some variational fits did not
+converge under strong confounding.
 \end{abstract}
 
 \section{Introduction}
@@ -140,8 +88,7 @@ organisms and human association studies
 nevertheless conditional on assumptions about the phenotype mean, the
 background covariance, and the way nuisance parameters are fitted. A
 precise matrix calculation cannot repair a misspecified mean, and a
-well-fitted prediction model does not by itself supply a valid association
-test.
+good prediction model is not by itself a valid association test.
 
 The computational problem has changed with cohort size. Dense methods
 factorize an $n\times n$ covariance matrix and reuse the factorization
@@ -152,10 +99,9 @@ effects \citep{loh2015}; REGENIE constructs whole-genome predictions
 through successive ridge regressions \citep{mbatchou2021}; and newer
 approaches include LDAK-KVIK \citep{hof2025}, which inspired this
 package's Heritability-weighted Residual Association Two-step Test (HRATT),
-and the variational method Quickdraws \citep{loya2025}. These programs have distinct fitting and
-testing procedures. A claim about one denominator approximation should
-therefore be evaluated at the level of that approximation, rather than
-assigned to all methods with a two-step workflow.
+and the variational method Quickdraws \citep{loya2025}. Their fitting and
+testing procedures differ, so a finding about one denominator approximation
+applies to that approximation, not to every two-step method.
 
 Two statistical choices cut across these computational designs. First,
 a candidate variant and its correlated neighbours can contribute to the
@@ -166,49 +112,40 @@ ancestry can influence both allele frequencies and environmental
 exposures. Modelling genetic covariance and adjusting the phenotype mean
 with principal components (PCs) address different parts of this problem
 \citep{price2006,vilhjalmsson2013}. Neither chromosome exclusion nor
-covariance modelling makes environmental confounding disappear as a
-matter of algebra.
+covariance modelling removes environmental confounding.
 
-This report focuses on a third, more specific issue: the denominator of
-an association statistic depends on how the tested variant aligns with
-the covariance eigenvectors. Replacing that denominator by a scalar
-multiple of the variant norm can work well when this alignment has
-little effect. Under structure, a satisfactory average can instead hide
-inflation in one class of variants and deflation in another. The relevant
-object is the conditional rejection probability for a variant, or a
-prespecified class of variants, under a stated null model. A single
-genome-wide median is an incomplete diagnostic of that object.
+This report is about a third, narrower issue. The denominator of an
+association statistic depends on how the tested variant aligns with the
+covariance eigenvectors. Replacing it by a scalar multiple of the variant
+norm works when that alignment matters little. Under structure, a good
+average can hide inflation in one class of variants and deflation in
+another. What matters is the conditional rejection probability for a
+variant, or a prespecified class of variants, under a stated null model,
+and a genome-wide median does not measure it.
 
-mixmogam offers a useful setting for studying these distinctions because
+mixmogam is a convenient place to study these distinctions because its
 dense and streaming calculations share genotype handling and several
-model components. Its earlier work included multi-locus mixed-model
-association \citep{segura2012}; the current engine also supplies LOCO and
-experimental two-step analyses. The present contribution combines a methods
-and software investigation with a controlled reference-program benchmark.
-We provide the mathematical contracts
-needed to interpret its outputs, a new known-covariance experiment with
-a disjoint set of audit variants, matched phensim simulations with and
-without population structure and LD, and a critical reading of archived
-simulations. Section~\ref{sec:weights-binary} extends HRATT to case-control
-outcomes and sampling weights. We then formulate research questions that can distinguish
-a useful general method from an approximation that works only in a
-favourable example.
+model components. It began with multi-locus mixed-model association
+\citep{segura2012} and now also provides LOCO and two-step analyses.
+We set out the mathematical contracts needed to interpret its outputs,
+run a known-covariance experiment with a disjoint set of audit variants,
+compare complete scans with the official LDAK-KVIK executable on matched
+phensim simulations with and without population structure and LD, and
+reread archived simulations. Section~\ref{sec:weights-binary} extends HRATT
+to case-control outcomes and sampling weights. We close with research
+questions that could tell a general method from an approximation that
+works only in favourable examples.
 
-The evidence has several levels. Current software checks assess specified
-numerical and data-handling contracts. The new experiment isolates
-calibration geometry under a deliberately simple null. A matched phensim
-benchmark compares complete scans with the official LDAK-KVIK executable.
-Larger fixed-panel experiments distinguish estimator choice, numerical
-parallelism and storage costs. Historical
-simulations motivate broader questions but predate the scientific
-correctness review. Table~\ref{tab:evidence} records these boundaries;
-they apply throughout the report.
+The evidence comes at several levels: software checks of numerical and
+data-handling contracts, the known-covariance experiment, the matched
+benchmark, larger fixed-panel experiments that separate estimator choice,
+parallelism and storage, and historical simulations that predate the
+correctness review. Table~\ref{tab:evidence} lists what each supports.
 
 \begin{table}[htbp]
 \centering\small
 \caption{Evidence used in this revision and the inference it supports.
-Historical archives are preserved, not silently reclassified as results
-from the corrected package.}
+Historical archives keep their original versions.}
 \label{tab:evidence}
 \begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.23\textwidth}>{\raggedright\arraybackslash}X>{\raggedright\arraybackslash}X@{}}
 \toprule
@@ -301,12 +238,12 @@ shift in the residual subspace. The raw, unrescaled matrix is used in
 the new experiment in Section~\ref{sec:newdesign}.
 
 The current input contract is diploid hard calls $0,1,2$, with $-1$ for
-missing values. It is not a continuous-dosage interface. Minor allele
+missing values. Minor allele
 count is measured in allele copies. Sample identifiers must align
 uniquely; silently intersecting phenotype and genotype rows in different
 orders changes the scientific problem. PLINK effect-allele orientation,
-missingness, and identifier preservation are consequently part of the
-statistical contract, not merely file-format details.
+missingness, and identifier preservation are therefore part of the
+statistical contract.
 
 \subsection{Gaussian model, variance fitting, and chromosome exclusion}
 
@@ -341,8 +278,7 @@ log-likelihood is
 \end{equation}
 Thus $\widehat\sigma_g^2=\y^\top\Pm_H\y/(n-p)$ for REML at the fitted
 $\delta$. Maximum likelihood instead uses $n$ and omits the covariate
-determinant term. Confusing these objectives changes both the fit and
-its interpretation. A phenotype entirely explained by $\X$ has zero
+determinant term. A phenotype entirely explained by $\X$ has zero
 residual variance and is rejected rather than assigned numerical noise
 as a variance estimate.
 
@@ -368,9 +304,9 @@ $a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}.
 The optional \code{heritability\_method="he"} reuses these products to
 estimate the genetic and residual covariance coefficients. The default,
 \code{heritability\_method="auto"}, keeps REML without sampling weights and
-uses HE with them (Section~\ref{sec:weights-binary}); avoiding REML's
-iterative solves and stochastic likelihood calculations changes the
-estimator, not just its implementation.
+uses HE with them (Section~\ref{sec:weights-binary}). HE avoids REML's
+iterative solves and stochastic likelihood calculations, but it is a
+different estimator.
 
 Let $Q$ span the covariates orthonormally, $S=\I-QQ^\top$, $d=n-p$,
 and $K=S\K_wS$. After residualizing and scaling the phenotype, write
@@ -416,12 +352,12 @@ effects. The variational fit retains its existing residual-variance
 floor of 0.001 on the standardized phenotype scale, including at the
 opposite boundary; the effective value is reported.
 
-This is a projected single-component moment estimator. It is not
-LDAK-KVIK's partitioned HE procedure with large-effect exclusions, nor its
-optional Monte Carlo REML revision \citep{hof2025}. The pinned reference
-implementation conditions that revision on sample size and its structure
-workflow. Matching a command labelled HE therefore does not make the
-two covariance models or fitted ratios identical.
+This is a projected single-component moment estimator. LDAK-KVIK instead
+uses a partitioned HE procedure with large-effect exclusions and an
+optional Monte Carlo REML revision \citep{hof2025}, which the pinned
+reference implementation applies depending on sample size and its
+structure workflow. The two programs' HE fits therefore target different
+covariance models.
 
 \subsection{What an exact scan makes exact}
 \label{sec:exact}
@@ -525,9 +461,9 @@ The production implementation computes group-specific bases with
 randomized subspace iteration and currently tries widths
 64, 128, 256, and 512. It stops when the coefficient of variation of
 calibration ratios is at most 3\%, subject to the available dimension.
-The calibration markers also determine the scale, so this stopping
-criterion is an internal diagnostic. It is not an independent validation
-and does not bound the error at genome-wide thresholds. The production
+Because the calibration markers also set the scale, this stopping
+rule is an internal diagnostic; it bounds no error at genome-wide
+thresholds. The production
 infinitesimal calibration also selects candidate markers using a
 phenotype-dependent statistic; this differs from the phenotype-independent
 selection in our controlled experiment.
@@ -535,10 +471,9 @@ selection in our controlled experiment.
 For mixture-prior and elastic-net residuals, an infinitesimal spectral
 factor is transferred before further calibration. Once the residual is
 a nonlinear, data-adaptive function of $\y$, the proof of
-Equation~\eqref{eq:score} no longer supplies its null law. This transfer
-is a heuristic. ``BOLT-style'' and HRATT below denote mixmogam methods
-inspired by BOLT-LMM and LDAK-KVIK; they do not establish equivalence
-to the reference programs.
+Equation~\eqref{eq:score} no longer supplies its null law, and the
+transfer is a heuristic. ``BOLT-style'' and HRATT below denote mixmogam
+methods inspired by BOLT-LMM and LDAK-KVIK, not the reference programs.
 
 \subsection{Environmental mean misspecification}
 \label{sec:environment}
@@ -572,9 +507,8 @@ $O(n^2)$ storage, with a dense transformation cost of order $n^2m$ for
 $m$ tested variants. Streaming methods replace stored kinships by
 products with standardized genotype blocks. A product with $r$ right-hand
 sides costs order $nMr$ arithmetic; its memory consists of the stored
-calls, the right-hand sides and working blocks. Avoiding an $n\times n$
-kinship does not mean constant memory: the calls alone take one byte, or
-a quarter byte, per genotype.
+calls, the right-hand sides and working blocks; the calls alone take one
+byte, or a quarter byte, per genotype.
 
 Conjugate gradients supplies covariance solves, and stochastic Lanczos
 quadrature estimates likelihood terms for large samples. Both introduce
@@ -594,8 +528,8 @@ underlying distinction developed by \citet{abney2015}. Exact exchangeability
 requires the stipulated Gaussian covariance; substituting fitted
 variance components still requires calibration checks. Finally, the
 normal-approximation Bayes factor requires effect estimates, standard
-errors, and an explicit effect-variance prior \citep{wakefield2009}.
-It is not a replacement for a joint fine-mapping model. Appendix~\ref{sec:appendix}
+errors, and an explicit effect-variance prior \citep{wakefield2009};
+it does not replace a joint fine-mapping model. Appendix~\ref{sec:appendix}
 gives these identities and their interpretation.
 
 \subsection{Reuse, bounded workspaces and optional parallelism}
@@ -609,8 +543,8 @@ the hold-out cache is released. It reuses full-block Gram matrices for LOCO
 and reuses final predictions. A persistent matrix-product workspace replaces repeated
 allocations. Residual updates retain float64 accumulation while preparing
 the next matrix-product input in the genotype storage precision, float32
-by default. This distinction matters: converting the entire calculation
-to float32 would be a different numerical contract.
+by default. Converting the entire calculation to float32 would be a
+different numerical contract.
 
 Temporary widening is bounded without dividing the reduction axis:
 compiled genotype preparation keeps a few float64 values per marker of a
@@ -638,15 +572,14 @@ sum across workers. Detected BLAS pools are temporarily limited to one,
 and thread settings and workers are restored on exit. Apple Accelerate
 requires an external thread limit because it is not detected by
 \code{threadpoolctl}. Parallel residual products and BLAS reductions can
-still change floating-point rounding; a scientifically unchanged algorithm
-is not a promise of bitwise equality.
+still change floating-point rounding.
 
-\subsection{Version 2.0.0.dev5: the same estimators with less work}
+\subsection{Computing the same estimators with less work}
 \label{sec:dev5-methods}
 
-Version 2.0.0.dev5 computes the quantities of the preceding subsections
-with less work; models and estimators are unchanged. Three choices do
-change results. Two-step fits draw different trace probes and calibration
+The changes below, introduced in 2.0.0.dev5, compute the quantities of the
+preceding subsections with less work and leave the models and estimators
+unchanged. Three of them do change results. Two-step fits draw different trace probes and calibration
 markers for a given seed. The Lanczos defaults trade quadrature steps for
 probes. MLMM forward scans default to float32.
 Section~\ref{sec:dev5-results} reports the measured effects.
@@ -693,9 +626,9 @@ for $s$ Lanczos steps, and each product is one pass over the genotypes.
 Quadrature error falls quickly with $s$ for these smooth functions of a
 positive definite operator, whereas probe error falls only as $N^{-1/2}$.
 On the test machine, a pass cost nearly the same for 1 and 64 columns,
-because decoding and memory traffic dominate. Version 2.0.0.dev5
-therefore uses $s=24$ and $N=48$ rather than 96 and 12: a quarter of the
-passes and four times the probes. In the current implementation 24 is the
+because decoding and memory traffic dominate. The defaults are therefore
+$s=24$ and $N=48$ (96 and 12 before 2.0.0.dev5): a quarter of the
+passes and four times the probes. Here 24 is the
 cap of an adaptive stop controlled by \code{slq\_tol}, so fewer steps may
 be used. Probes that the covariate projection
 reduces to rounding noise are discarded.
@@ -719,18 +652,17 @@ subset of the qualifying markers, but a given seed selects different
 markers than before.
 
 \paragraph{Streamed genotypes.}
-With the float cache disabled, dev5 rebuilt standardized, projected blocks
-from int8 calls through per-variant value tables, replaying the covariate
-correction so that they matched the cached blocks bit for bit;
-Section~\ref{sec:streaming-methods} describes the revision that dropped
-this per-marker projection and the cache. With Numba, dense relationship
+With its float cache disabled, 2.0.0.dev5 rebuilt standardized, projected
+blocks from int8 calls through per-variant value tables, matching the
+cached blocks bit for bit; Section~\ref{sec:streaming-methods} describes
+the current streaming. With Numba, dense relationship
 matrices also standardize each genotype block in one compiled pass.
 
 \subsection{Genotype streaming without per-marker projection}
 \label{sec:streaming-methods}
 
-The development revision after 2.0.0.dev5 keeps the estimators and moves
-the covariate projection off the markers. With $\mathbf z_j$ a marker's
+Genotype streaming keeps the estimators and moves the covariate
+projection off the markers. With $\mathbf z_j$ a marker's
 standardized, unprojected values and $\mathbf Q$ the orthonormal
 covariate basis, preparation stores the three standardized call values,
 the coefficients $\mathbf c_j=\mathbf Q^\top\mathbf z_j$ and the squared
@@ -758,11 +690,10 @@ rank-$q$ correction,
  =\mathbf z_j^\top\mathbf z_k-\mathbf c_j^\top\mathbf c_k .
  \label{eq:rank-q}
 \end{equation}
-In the measured revision (commit 12aa504) the optional float cache held
-the same unprojected values, so cached and streamed fits agreed bit for
-bit. Commit e4089d8 removed that cache. It also stores calls two bits
-each, as PLINK BED rows, in memory or memory-mapped, and decodes them
-directly; preparation takes each marker's mean and variance from exact
+Calls are stored two bits each, as PLINK BED rows, in memory or
+memory-mapped, and decoded directly (commit e4089d8, which also removed an
+optional float cache that in commit 12aa504 held the same unprojected
+values, with bit-identical cached and streamed fits); preparation takes each marker's mean and variance from exact
 call counts, so int8 and two-bit storage, every layout and every thread
 count prepare identical values. Decoding follows the storage order: on
 one core of the test machine it costs about 0.2 ns per genotype from
@@ -774,10 +705,9 @@ slice, up to 512 MiB, amortizes the per-slice $n\times c$ accumulation at
 larger $n$. Slices and the 128-marker variational subblocks reuse their
 buffers: a fresh allocation per block faulted in every page and doubled
 the decoding time.
-BOLT-LMM's in-sample LD scores previously held every projected genotype,
-four bytes each, whatever the cache budget. They now stream each
-chromosome through a sliding position window and hold only its widest
-window.
+BOLT-LMM's in-sample LD scores stream each chromosome through a sliding
+position window and hold only its widest window, rather than every
+projected genotype at four bytes each.
 
 \subsection{Case-control outcomes and sampling weights}
 \label{sec:weights-binary}
@@ -866,7 +796,7 @@ trait, against 1.01--1.04 for Equation~\eqref{eq:retro-variance}.
 The validation of Section~\ref{sec:weights-binary-results} found three
 faults. HRATT's effects were attenuated, rare binary outcomes broke the
 per-group null fits, and weights that depend on ancestry inflated
-low-frequency tails. HRATT now addresses them as follows.
+low-frequency tails. The changes below address them.
 Section~\ref{sec:followup-results} reports the prespecified validation of
 these changes; the figures quoted here come from prototypes.
 
@@ -890,7 +820,7 @@ controls. Heritability on the Pearson scale was overestimated there
 made it worse.
 
 \paragraph{Cross-fitted scores.}
-HRATT now follows REGENIE's level~0 \citep{mbatchou2021}:
+HRATT follows REGENIE's level~0 \citep{mbatchou2021}:
 \begin{itemize}
  \item The samples are split into $k$ folds (\code{loco\_folds}, default
  5), by case status for binary traits.
@@ -959,9 +889,9 @@ The saddlepoint uses the same model. Each called genotype is an
 independent Binomial$(2,p_{ij})$ draw given the covariates and the observed
 missing calls, which assumes Hardy--Weinberg equilibrium given the
 covariates. An intercept-only design keeps the empirical genotype
-distribution. In 2.0.0.dev6 this replaced the pooled distribution with only
-its variance corrected, which still over-rejected 4.7-fold at $10^{-4}$
-against an exact convolution of ancestry-specific binomials.
+distribution. The pooled distribution with only its variance corrected,
+used before 2.0.0.dev6, over-rejected 4.7-fold at $10^{-4}$ against an
+exact convolution of ancestry-specific binomials.
 
 \paragraph{Two-sided tails.}
 \code{spa\_two\_sided="doubled"} doubles the saddlepoint tail beyond the
@@ -969,7 +899,7 @@ observed score, LDAK's default, putting $\alpha/2$ in each tail of a skewed
 null. The default still adds both tails at $\pm|u|$, as SPAtest, SAIGE and
 REGENIE do \citep{dey2017,zhou2018,mbatchou2021}.
 
-Since 2.0.0.dev6, weighted and binary standard errors describe the
+Weighted and binary standard errors describe the
 null-score linearisation and do not depend on the tail rule. Binary effects
 remain one-step approximations; exports label them \code{beta\_one\_step}
 and \code{se\_null\_score}.
@@ -1009,9 +939,9 @@ phenotype. The scalar denominator is the variant norm times the mean
 $q_j/\|\z_j\|^2$ among calibration markers. For the spectral method,
 we try $k\in\{4,8,16,32,64,128\}$ and select the first width whose
 calibration-ratio coefficient of variation is at most 3\%. All three
-panels select $k=4$. These exact leading eigenvectors provide a
-favourable test of spectral geometry, not a validation of the production
-randomized eigensolver or its width-selection procedure.
+panels select $k=4$. Exact leading eigenvectors make this a favourable
+test of spectral geometry; the production randomized eigensolver is not
+exercised.
 
 Audit variants are divided into quintiles by the share of their squared
 norm explained by the top three background eigenvectors. For each method
@@ -1028,8 +958,7 @@ The three genotype panels use seeds 20261003--20261005. Consequently,
 differences across $\theta$ also include differences among three realized
 panels; there are no genotype-replicate confidence intervals. The
 analytic result is exact conditional on each realized panel and its
-fixed approximation. It is not an estimate of an average over all
-possible populations.
+fixed approximation.
 
 \subsection{Matched phensim benchmark with official LDAK-KVIK}
 \label{sec:kvik-design}
@@ -1054,8 +983,7 @@ each haplotype to allele indicators. Blocks are independent conditional
 on population, but pooled genotypes share ancestry correlations across
 blocks and chromosomes. We added the optional block generator within
 phensim, preserving its existing independent-marker seeded draws.
-This controlled LD experiment does not reconstruct human demographic
-history. Markers with pooled minor-allele frequency below 0.01 are removed
+Markers with pooled minor-allele frequency below 0.01 are removed
 before either program receives them; calls are complete.
 
 The base global-null trait has no genetic effects and Gaussian residuals.
@@ -1071,7 +999,7 @@ explicit exposure $E$, standardized within the sample, and form
        \sqrt{1-s}(u+q+e)\right\},\qquad s\in\{0,0.2\}.
  \label{eq:phensim-environment}
 \end{equation}
-The component targets are not asserted to equal realized variance
+The component targets need not equal realized variance
 fractions: population structure can correlate $E$, $u$ and $q$.
 The archive therefore includes their covariance matrix.
 
@@ -1081,9 +1009,8 @@ confounded phenotype adjusted for the two leading genotype PCs. PCs are
 computed without phenotypes and supplied identically to all methods.
 Every analysis includes an intercept. Exact LOCO EMMAX, mixmogam BOLT-inf,
 mixmogam HRATT and official LDAK-KVIK use their default fitting and
-calibration settings with explicit seeds and one thread. These are
-comparisons of supplied procedures, whose priors and tuning searches
-differ; matching inputs does not make their statistical models identical.
+calibration settings with explicit seeds and one thread. We compare the
+procedures as supplied; their priors and tuning searches differ.
 ``LDAK-KVIK'' denotes the official standalone executable and ``mixmogam
 HRATT'' this package's method; they differ in statistical choices, such as
 variance-component estimation, as well as implementation language. Versions
@@ -1093,8 +1020,7 @@ tested above 50,000 samples, while also supporting smaller datasets with
 potentially less benefit from LOCO prediction.\footnote{LDAK-KVIK
 \href{https://www.ldak-kvik.com/docs/recommendations}{recommendations},
 accessed 3 October 2026.}
-The primary panels are therefore small-sample stress tests, not a proxy
-for performance in a densely genotyped biobank.
+The primary panels are therefore small-sample stress tests.
 
 Phensim writes PLINK calls counting BIM allele A2. An independent decoder
 checks every BED call against the simulated matrix; mixmogam must read
@@ -1117,8 +1043,7 @@ local-LD quintiles. Loading is the fraction of genotype sum of squares
 explained by population membership, chosen without phenotype outcomes.
 Power is direct causal-marker detection at $0.05/m$ and $5\times10^{-8}$.
 Monte Carlo standard errors use independent replicate panels, not the
-number of correlated markers. Six replicates cannot establish calibration
-at genome-wide significance thresholds.
+number of correlated markers.
 
 Each method runs in a separate process. Wall time includes startup, input
 loading, fitting, scanning and result writing; LDAK-KVIK time sums its
@@ -1126,8 +1051,7 @@ two stages. Kernel \code{wait4} counters provide peak resident memory,
 using the larger stage peak for LDAK-KVIK. Common simulation,
 export validation and PC construction are recorded separately. Method
 order rotates across replicates, code caches may be warm, and the macOS
-power guard requires AC power with Low Power Mode disabled. This is a
-bounded laptop comparison, not a biobank-scale performance claim.
+power guard requires AC power with Low Power Mode disabled.
 
 \subsection{Larger workloads and reference-based simulation}
 \label{sec:hapnest-design}
@@ -1135,8 +1059,7 @@ bounded laptop comparison, not a biobank-scale performance claim.
 After inspecting the primary study we fixed a descriptive runtime extension
 at n=2,000 with m=12,000 and n=4,000 with m=24,000, using two independent
 replicates for the unstructured and PC-adjusted confounded mixed traits.
-All four methods retain their fitting defaults. Increasing n and m together
-describes a workload curve, not an isolated complexity exponent. These
+All four methods retain their fitting defaults. These
 panels are not pooled into the six-replicate calibration experiment.
 
 For larger n, we implemented the genotype-copying model of HAPNEST
@@ -1158,8 +1081,7 @@ tuning, demographic admixture, or upstream phenotype model.
 The simulator resource experiment uses 600 phensim reference diploids,
 12,000 markers, three frequency-drift populations, latent AR(1) correlation
 0.8, map spacing 0.001 cM, mutation ages 1,000 generations, $N_e=10,000$
-and $\rho=0.7$. These are controlled inputs, not estimates from human data.
-Three seeded repeats compare backends at 2,000 samples and assess Numba
+and $\rho=0.7$, chosen as controlled inputs. Three seeded repeats compare backends at 2,000 samples and assess Numba
 through 100,000 samples. At 50,000 samples, output is streamed, retained
 in RAM, or memory-mapped. Matched modes must give identical output hashes.
 First-call compilation or cache loading is timed separately. Warm generation
@@ -1176,8 +1098,7 @@ Tiled phenotype generation preserves the dense GRM factor and Gaussian
 innovations up to summation roundoff. Genotype PCs use an iterative
 eigensolver with audited residuals, never an $n\times n$ matrix. Separate
 preparation processes keep simulation arrays outside association RSS.
-One realization describes feasibility and costs, not stable power or tail
-calibration; a synthetic reference does not establish human-data fidelity.
+With one realization per cell, these runs measure feasibility and cost.
 
 \subsection{Separating estimator validation from the 20,000-marker workload}
 \label{sec:20k-design}
@@ -1192,9 +1113,6 @@ and compares 32-probe HE with an independent dense solution of
 Equation~\eqref{eq:he-moments}. Components are not rescaled to force their
 realized sample variances. A separate 64-fit experiment compares complete
 HE and REML scans on the first eight global-null phenotypes per panel.
-These checks concern a specified covariance and Gaussian null; they do
-not validate adaptive exponent selection or confounded positive-heritability
-association scans.
 
 The 20,000-marker extension uses two new HAPNEST-model panels at
 $n=50{,}000$: unstructured, and structured with the environmental exposure
@@ -1229,23 +1147,21 @@ order is balanced across the six pairs. Each fit starts in a fresh
 process, with tiny compilation/cache warm-ups excluded. Local time
 includes startup, imports, input, fitting and output. Official time sums
 its two native stages and excludes subsequent parsing and compression;
-RSS is their larger stage peak. Thus timing boundaries are explicit but
-not perfectly symmetric.
+RSS is their larger stage peak, so the timing boundaries are not
+perfectly symmetric.
 
 All runs use the 16-GB Apple M2 Pro, AC power and Low Power Mode disabled.
 Local BLAS/OpenMP environment limits are one with a Numba pool ceiling
 of eight; \code{n\_threads} requests one or four workers. The official
 Mac executable receives the corresponding environment limit and native
-\code{--max-threads} argument. Requested counts do not assert identical
-thread execution across implementations. The fitted data and drivers are
+\code{--max-threads} argument. The fitted data and drivers are
 frozen. The reported cross-fitted mixmogam fits were rerun on 7 October
 with the revision that threads their fold fits' genotype products. The
 in-sample fits, which that change does not affect, and the storage fits
 are 2.0.0.dev6 reruns of 6 October. The official fits come from the
 original 2.0.0.dev3 experiment on the same inputs.
 Repeated timings on two phenotypes measure computational
-variability, not biological replication. The new data are also distinct
-from the small known-covariance HE validation panels.
+variability only.
 
 \subsection{Historical structure and environmental experiments}
 \label{sec:historicaldesign}
@@ -1253,8 +1169,7 @@ from the small known-covariance HE validation panels.
 The archived structure experiment used 1,300 samples, 20,000 markers,
 and five chromosomes, with both unstructured genotypes and a
 four-population generator labelled $F_{ST}=0.3$ in the archive. We
-retain that label as a generator setting, not a newly estimated
-differentiation measure. Six phenotype replicates shared each genotype
+keep that label as a generator setting. Six phenotype replicates shared each genotype
 panel. Genetic signal was generated outside the last chromosome from
 a polygenic component of variance share 0.4 and ten large QTLs of
 variance share 0.1. The last chromosome has no generating marker
@@ -1276,8 +1191,7 @@ $\sqrt{1/2}$, added, and then standardized together. The original genetic
 variance target of 0.25 becomes 0.125 before final standardization; the
 environmental variance target is 0.5. Realized component variances and
 cross-covariances can change their shares of the final phenotype variance.
-This is a strong quantitative-trait stress test, not a binary liability
-model or a typical confounding level.
+This is a strong quantitative-trait stress test.
 
 We report S2 statistics in blocks without a designated large QTL. Those
 blocks still contain infinitesimal effects. We therefore call them
@@ -1294,30 +1208,26 @@ independent simulation seeds.
 
 Genomic inflation is summarized as the median chi-square statistic
 divided by the median of $\chi^2_1$, approximately 0.455. This statistic
-mixes model error, true signal, and sampling variation; it is not an
-estimand of confounding alone. Loading-stratified rejection fractions
+mixes model error, true signal, and sampling variation. Loading-stratified rejection fractions
 are more informative about the denominator hypothesis. For the six
 historical phenotype replicates, Figure~\ref{fig:historical} uses
-Student-$t$ intervals for the mean with five degrees of freedom. These
-intervals concern variation among phenotypes conditional on a fixed
-genotype panel; six replicates offer limited precision. S2 displays all
+Student-$t$ intervals for the mean with five degrees of freedom; they
+describe variation among phenotypes on a fixed genotype panel. S2 displays all
 three seeds as well as their means.
 
 The archived comparison with the external LDAK program used a faulty
 PLINK encoding path. A matched-input claim cannot survive that failure.
 We exclude its empirical results, concordance coefficients, and real-data
 calibration curves from this revision. The underlying RegMap resource
-\citep{horton2012} remains suitable for a future controlled benchmark,
-but neither its archived export nor a redraw of its old results validates
-the corrected package. Section~\ref{sec:atwell-results} uses the panel
+\citep{horton2012} remains suitable for a future controlled benchmark.
+Section~\ref{sec:atwell-results} uses the panel
 only for a prespecified positive-control check.
 
 New numerical results record the generating script, seeds, software
 versions, requested BLAS thread limits, genotype hashes, and package
 baseline commit. Figure generation records hashes of its actual inputs
-and outputs. Historical archives retain their original source snapshots;
-we do not attach the current version number to computations performed
-by an earlier implementation.
+and outputs. Historical archives keep their original source snapshots and
+version labels.
 
 The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
 (Sections~\ref{sec:kvik-results}, \ref{sec:kvik-resources},
@@ -1326,8 +1236,7 @@ The matched phensim, HAPNEST, HE-versus-REML and 20,000-marker results
 7 October (Section~\ref{sec:20k-design}). Each repeated the mixmogam methods on the
 archived inputs, after checking the genotype files against their export
 hashes. The official LDAK-KVIK outputs, logs and process measurements of
-the original runs were reused unchanged. Input identity makes the official
-results reusable; it does not make the timings simultaneous. The reruns
+the original runs were reused unchanged. The reruns
 ran one after another on 6 October 2026, three days after the official
 runs, each timed fit waiting for a one-minute load average below 5.
 Host conditions matter: the original 20,000-marker runs' frozen source,
@@ -1353,17 +1262,16 @@ approximation is close to the known-covariance test: its analytic
 rejection probability is 0.99\% overall and 1.00\% versus 0.97\% in
 the extreme loading quintiles. At $\theta=0.05$, the overall value
 remains 1.00\% after rounding, but the extreme quintiles separate to
-1.19\% and 0.73\%. The average has become reassuring for the wrong
-reason: deviations in opposite directions largely cancel.
+1.19\% and 0.73\%. The average looks right only because deviations in
+opposite directions cancel.
 
 At $\theta=0.20$, the scalar approximation rejects 1.25\% overall,
 with 2.21\% in the lowest loading quintile and 0.31\% in the highest.
 The corresponding analytic rejection probabilities at a nominal
 $5\times10^{-8}$ are 27.4 and 0.025 times nominal. These tail ratios
 follow from the fully specified Gaussian model and
-Equation~\eqref{eq:tail}; they are not empirical estimates of
-real-cohort false-positive rates. They demonstrate why a denominator
-should be assessed at the intended testing threshold.
+Equation~\eqref{eq:tail}, and show why a denominator should be assessed
+at the threshold that will be used.
 
 \begin{table}[htbp]
 \centering\small
@@ -1394,8 +1302,7 @@ $5\times10^{-8}$ on a log scale. Each column is one fixed genotype
 panel. Candidate variants are held out from approximation calibration
 and ordered by loading on the leading three background eigenvectors.
 The spectral method uses four exact eigenvectors and a flat bulk.
-Columns share vertical scales. Panels describe denominator geometry, not fitted-covariance or
-external-program performance.}
+Columns share vertical scales.}
 \label{fig:geometry}
 \end{figure}
 
@@ -1404,11 +1311,8 @@ these panels. At $\theta=0.05$, its extreme-quintile probabilities are
 1.010\% and 1.005\%; at $\theta=0.20$, they are 0.998\% and 0.992\%.
 Its overall analytic rejection ratios at $5\times10^{-8}$ range from
 0.97 to 1.06 across the three panels. Held-out root-mean-square relative
-denominator-ratio errors are 1.36--1.53\%. This is evidence that the
-leading structure directions explain most of the approximation error
-in these particular designs. It neither proves that four directions
-suffice elsewhere nor tests the accuracy of an estimated leading
-subspace.
+denominator-ratio errors are 1.36--1.53\%. In these designs the leading
+structure directions explain most of the approximation error.
 
 The empirical rejection fractions agree with their analytic targets
 within the script's stated numerical and Monte Carlo tolerance. For the
@@ -1424,8 +1328,7 @@ sampling variation of the reported summaries.
 
 All 384 method runs returned valid p-values for every retained variant:
 288 mixmogam runs repeated with 2.0.0.dev6 and the 96 original official
-runs. Execution is distinct from convergence: mixmogam HRATT reported
-incomplete cross-validation in six unadjusted confounded mixed-trait runs,
+runs. mixmogam HRATT reported incomplete cross-validation in six unadjusted confounded mixed-trait runs,
 one of which also had incomplete LOCO fits (two in the original runs).
 These remain in the summaries. In the original archive, an independently
 regenerated structured/PC-adjusted case reproduced the serialized inputs
@@ -1443,8 +1346,7 @@ rejection on chromosome 6, and causal-marker detection. In unstructured
 global-null cells, mean rejection at 1\% is approximately 1.00--1.06\%
 across methods and LD settings. Under structure and the mixed trait,
 LDAK-KVIK's null-chromosome rejection is 1.87\% without local LD
-and 1.82\% with LD. This assesses the complete procedure, not an isolated
-denominator approximation.
+and 1.82\% with LD.
 
 Omitting the environmental mean shift produces the largest disagreement.
 With LD, LDAK-KVIK gives $\lgc=3.455$ and 15.83\% genetic-null
@@ -1452,17 +1354,15 @@ rejection at 1\%; exact LOCO and mixmogam BOLT-inf give 1.34\% and 1.25\%,
 and mixmogam HRATT gives 0.64\% (Table~\ref{tab:kvik-phensim}). LDAK-KVIK
 rejection is 21.5--25.2\% in four panels and 1.52--1.82\% in two.
 Some inflated runs reach LDAK-KVIK's lower heritability
-boundary after revision of the initial estimate. This motivates a
-diagnostic experiment; it does not identify the cause. The mixmogam deflation
-also fails nominal calibration.
+boundary after revision of the initial estimate; we have not identified
+the cause. The mixmogam deflation also fails nominal calibration.
 
 Adding the same two PCs reduces LD global-null rejection to 0.92\%
 (mixmogam HRATT) and 0.97\% (LDAK-KVIK). Mixed-trait null-chromosome rejection
 is 1.17\% and 1.05\%. They detect 29 and 30 of the 60 causal markers; ten
-causal markers per panel cannot resolve a power difference. Detection gains in inflated, unadjusted cells must not
-be interpreted as calibrated power. Explicit mean adjustment materially
-changes the comparison in these panels; neither a genome-wide median
-nor one favourable cell establishes general equivalence.
+causal markers per panel cannot resolve a power difference. In these
+panels, explicit mean adjustment changes the comparison more than the
+choice of method does.
 
 \begin{figure}[p]
  \centering
@@ -1510,8 +1410,7 @@ The historical HRATT implementation retains a pronounced gradient.
 \caption{Historical simulated strong-structure panel, six phenotype
 replicates. q1 and q5 denote loading quintiles. Rejection fractions are
 for the chromosome without generating effects, under the qualifications
-in Section~\ref{sec:historicaldesign}. These are archived implementation
-results, not a rerun of version 2.0.0.dev1 or reference programs.}
+in Section~\ref{sec:historicaldesign}. Archived implementation results.}
 \label{tab:historical}
 \begin{tabular}{@{}lccccc@{}}
 \toprule
@@ -1536,13 +1435,11 @@ program results are included.}
 \label{fig:historical}
 \end{figure}
 
-These results are supportive diagnostics, not a second proof of the
-mechanism. Variance fitting, sparse generating effects, calibration-marker
-selection, and the earlier implementation all contribute to the final
-statistics. The new experiment is stronger for identifying denominator
-error precisely because it holds those features fixed or removes them.
-Conversely, its simplicity limits what it says about the complete scan.
-Both evidence types are useful when their roles are kept distinct.
+These results support the mechanism but do not prove it a second time:
+variance fitting, sparse generating effects, calibration-marker selection
+and the earlier implementation all contribute to the final statistics.
+The new experiment identifies denominator error because it removes those
+features, and for the same reason says less about the complete scan.
 
 \subsection{Covariance adjustment and environmental adjustment are different}
 
@@ -1553,8 +1450,7 @@ with the highest environmental loading is 63.24. Dense LOCO reduces
 these summaries to 1.24 and 2.27, but substantial residual structure
 remains (Table~\ref{tab:s2}, Figure~\ref{fig:s2}). Including PC1 reduces
 them further to 1.09 and 1.13. The corresponding all-variant $\lgc$
-falls from 1.27 to 1.11. The residual is reduced, not demonstrably
-eliminated.
+falls from 1.27 to 1.11.
 
 \begin{table}[htbp]
 \centering\small
@@ -1582,9 +1478,7 @@ Method & $\lgc$, QTL-free & Bottom half & Top 1\% & detections & power \\
 \caption{Historical S2 statistics by environmental loading in QTL-free
 blocks. Large points and lines show means; small points show the three
 simulation seeds. A logarithmic vertical axis accommodates the large
-unadjusted mean. PC adjustment reduces the observed gradient, but the
-polygenic background and small replicate count prevent a strict-null
-calibration claim.}
+unadjusted mean. PC adjustment reduces the observed gradient.}
 \label{fig:s2}
 \end{figure}
 
@@ -1592,18 +1486,18 @@ The non-LOCO scan has all-variant $\lgc=0.98$ and QTL-free $\lgc=0.96$,
 yet its upper-loading mean remains 1.77 and its locus power is lower
 than LOCO's (0.13 versus 0.20). Apparent aggregate calibration is
 therefore compatible with both residual environmental structure and
-signal attenuation. These data do not identify their separate causal
-contributions; a factorial simulation holding the mean and covariance
-mechanisms apart is needed.
+signal attenuation. Separating the two needs a factorial simulation that
+varies the mean and covariance mechanisms independently
+(Section~\ref{sec:future}).
 
 A related interpretation problem appears in S1 and S3. Replacing fixed
 200-marker intervals with LD-aware boundaries reduces the number of
 QTL-free detections. In the recorded paired checks, dense LOCO's mean
 count changes from 1.33 to zero across three S1 seeds; the single paired
-S3 check changes from 17 to 11. This is consistent with
-large-QTL signal crossing arbitrary boundaries. It does not establish
-that every remaining detection is an error: the background is polygenic,
-and alternative block definitions also change the unit of discovery.
+S3 check changes from 17 to 11, consistent with large-QTL signal
+crossing arbitrary boundaries. With a polygenic background the remaining
+detections need not be errors, and other block definitions change the
+unit of discovery.
 Methods for constructing approximately independent LD blocks are useful
 here \citep{berisa2016,prive2022}, but evaluation must still define which
 biological or statistical null a ``false locus'' is meant to represent.
@@ -1618,35 +1512,29 @@ components. These checks include independent numerical references and
 reproductions of specific defects. The corrected contracts cover PLINK
 coding, sample alignment and allele counts, BLUP scaling, variance
 fitting, weighted kinships, window complements, permutation geometry,
-and effect/standard-error export. Passing them supports those contracts;
-it cannot substitute for an end-to-end calibration study.
+and effect/standard-error export.
 
 One allocation change has a directly recorded before/after comparison.
 For 800 samples, 1,000 markers, ten LOCO groups, and 80 right-hand sides,
 five warm matrix-product repetitions gave identical output arrays.
 The measured peak allocation fell from 7,235,824 to 2,625,120 bytes,
-a 64\% reduction. This measurement uses Python allocation tracing and
-excludes the pre-existing genotype cache and native BLAS allocations;
-it is not whole-process peak resident memory. The short timings do not
-support a general runtime-speedup claim.
+a 64\% reduction. Python allocation tracing excludes the pre-existing
+genotype cache and native BLAS allocations, so this is not whole-process
+peak memory.
 
-Older timing archives establish why batching and streaming are useful,
-but not current competitive performance. One internal comparison
+Older timing archives show why batching and streaming help. One internal comparison
 recorded 0.27 seconds for a batched EMMAX scan versus 33.7 seconds for
 a per-variant least-squares reference at $n=2,000$, $m=10,000$ (about
 123-fold). Historical S3 times were 221 seconds for 25-group dense
 LOCO and 18 seconds for the infinitesimal two-step path; a 2.7-second
 non-LOCO scan excluded its preceding fit. These workloads differ in
-both statistical procedure and accounted work. They were measured on
-a development laptop under concurrent activity, not a controlled
-cross-program benchmark.
+both statistical procedure and accounted work, and were measured on
+a development laptop under concurrent activity.
 
 At $n=10,000$, a historical stochastic-Lanczos fit obtained
 $\delta=0.91724$ versus 0.91639 for a full fit, a 0.09\% difference in
-one case. That agreement concerns one nuisance estimate. A historical
-scan based on a truncated spectrum still produced $\lgc=1.30$, versus
-0.85 for the full non-LOCO scan. Neither value establishes nominal
-calibration in that signal-containing simulation. Accurate likelihood
+one case. A historical scan based on a truncated spectrum still produced
+$\lgc=1.30$, versus 0.85 for the full non-LOCO scan. Accurate likelihood
 approximation, accurate association denominators, and calibrated tests
 are separate requirements.
 
@@ -1659,10 +1547,9 @@ uses its compiled kernels. Across the 96 primary inputs its median time
 is 2.27 seconds versus 0.74 seconds for LDAK-KVIK, with median RSS
 260.8 versus 40.1 MiB (Table~\ref{tab:kvik-resources}); the original
 2.0.0.dev2 runs took 2.57 seconds and 319.5 MiB, and the reruns with commit
-e4089d8 1.89 seconds and 199.1 MiB on a faster day. The approximately
-3-fold ratio of medians is workload-specific; startup and loading matter
-at this size, and the two programs were timed on different days. The native Mac LDAK build lacks MKL, so this is not
-a comparison of each program's fastest available hardware build.
+e4089d8 1.89 seconds and 199.1 MiB on a faster day. Startup and loading
+matter at this size, the two programs were timed on different days, and
+the native Mac LDAK build lacks MKL.
 
 Figure~\ref{fig:kvik-scaling} and Table~\ref{tab:kvik-scaling} extend the
 controlled LD workloads to 4,000 samples and 24,000 markers. Dense exact
@@ -1694,8 +1581,7 @@ do not identify a sample-size complexity exponent.
  workloads. Points are medians; bars span the observed range across six
  replicates at n=800 and two at n=2,000 or 4,000. Cost axes are logarithmic.
  Sample and marker counts increase together. mixmogam points are
- 2.0.0.dev6 reruns; LDAK-KVIK points are the original measurements.
- These are measurements, not extrapolations or fitted complexity laws.}
+ 2.0.0.dev6 reruns; LDAK-KVIK points are the original measurements.}
  \label{fig:kvik-scaling}
 \end{figure}
 
@@ -1721,10 +1607,9 @@ Numba, a 46.8-fold ratio; all paired output hashes agree. Streaming
 100,000 samples takes 25.73--28.40 seconds and at most 198.6 MiB process
 RSS across three repeats (Table~\ref{tab:hapnest-simulator}). These times
 include checksums but exclude loading the small reference and first-call
-setup. They do not compare against the upstream Julia program. At 50,000
+setup; we did not run the upstream Julia program. At 50,000
 samples a full int8 matrix requires 600 million bytes; RAM and memory-mapped
-modes retain much more resident memory than streaming. Disk backing alone
-does not guarantee low RSS.
+modes retain much more resident memory than streaming.
 
 At n=10,000 and m=12,000, tiling the phenotype factor reduces median
 process peak RSS from 1,607.5 to 320.2 MiB across three matched seeds;
@@ -1735,7 +1620,7 @@ BED hashes. Its median time is 0.81 versus 0.88 seconds, with substantial
 variation across repetitions; the clearest benefit is memory. The dense
 encoding baseline omits small metadata-writing costs, whereas the tiled
 writer includes them. These preparation measurements include the resident
-genotype and interpreter; they are not measurements of an allocation alone.
+genotype and interpreter.
 
 Table~\ref{tab:hapnest-kvik} holds m=12,000 fixed and extends the matched
 association comparison to n=50,000, with mixmogam HRATT at its default REML.
@@ -1745,8 +1630,8 @@ against 38.19 and 40.20 with commit e4089d8 on a faster day, 137.59 and
 for official LDAK-KVIK. Peak RSS fell from 2.93 and 3.16 GiB in the original
 runs to 1.86 and 1.83 GiB. Fitted heritabilities are unchanged; with
 cross-fitted scores, inflation moved by at most 0.07 and rejection by at
-most 0.2 percentage points. These are single-panel timing and
-feasibility observations (Table~\ref{tab:evidence}). All four rerun mixmogam HRATT fits at these larger sizes report completed
+most 0.2 percentage points. These are single-panel observations
+(Table~\ref{tab:evidence}). All four rerun mixmogam HRATT fits at these larger sizes report completed
 cross-validation and LOCO convergence. Both programs return valid p-values
 for all markers.
 
@@ -1808,9 +1693,8 @@ times should not be substituted for the baseline of the preceding
 experiment. The original runs on 3 October, with older code, took 76.13
 and 26.28 seconds, and 73.57 and 27.20; Section~\ref{sec:dev5-results}
 separates the code effect from the host. HE changed the fitted
-covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087.
-Its time saving is therefore an estimator tradeoff, not a numerically
-equivalent acceleration of REML. REML also needs more memory: 1.68 and
+covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087,
+so the time saving comes with a different estimate. REML also needs more memory: 1.68 and
 1.54 against 1.08 and 1.02 GiB peak RSS.
 
 The independent known-covariance study supports the narrower claim that
@@ -1821,13 +1705,10 @@ Across phenotype draws, HE mean ratios at targets 0.3 and 0.6 are
 0.3026 and 0.5930 without structure, and 0.2972 and 0.5968 with PCs;
 corresponding RMSE values range from 0.0508 to 0.0698. At the zero
 boundary, means are positive (0.0148 and 0.0165), as for the constrained
-dense comparator. This is finite-sample boundary bias, not evidence of
-an unbiased heritability estimator. No estimator failures occurred.
+dense comparator, a finite-sample boundary bias. No estimator failures occurred.
 In the separate global-null scans, both HE and REML reject 0.938\% and
 0.948\% of markers at the 1\% threshold in the two cells, respectively,
-with all 64 fits converged. These phenotype-level summaries are conditional
-on four fixed genotype panels and cannot establish genome-wide-tail
-calibration or validity under environmental confounding.
+with all 64 fits converged, on four fixed genotype panels.
 
 \subsection{Twenty thousand markers: speed, memory and numerical stability}
 \label{sec:20k-results}
@@ -1866,8 +1747,8 @@ peak RSS with dev5's cache, 20.5 seconds and 1.44~GiB with e4089d8. On a
 LOCO, unchanged, took the same time and memory under both versions, with
 identical p-values. mixmogam's
 median peak RSS of 1.4~GiB is about 2.2 times the official executable's
-0.65~GiB. These results support useful optional parallelism, now also for
-the cross-fitted default; they do not establish efficiency parity.
+0.65~GiB. Optional parallelism helps, now also for the cross-fitted
+default, but mixmogam still uses more memory.
 
 \begin{table}[htbp]
  \centering\small
@@ -1918,10 +1799,9 @@ rank-$q$ corrections from products of unprojected genotypes
 (Equation~\eqref{eq:rank-q}), which probably amplifies summation-order
 differences when PCs explain genotype variance. All-variant significance
 masks agree at 0.05, 0.01, 0.001, $0.05/20{,}000$ and $5\times10^{-8}$
-in all 60 checks, 30 cross-fitted and 30 in-sample. Unchanged decisions are
-useful evidence of stability for these particular data and thresholds; they
-do not turn the four-versus-one tolerance failures, six per set of fits,
-into passes or exclude threshold crossings elsewhere.
+in all 60 checks, 30 cross-fitted and 30 in-sample. The four-versus-one
+tolerance failures, six per set of fits, still count as failures, and other
+data could cross a threshold.
 
 Table~\ref{tab:20k-science} reports descriptive chromosome-6 diagnostics
 from four-worker cross-fitted fits. Local HE ratios are approximately 0.52 and 0.50,
@@ -1930,8 +1810,6 @@ partitioning, large-effect handling and fitted covariance definitions
 preclude interpreting this discrepancy as bias against a shared target.
 Both programs detect all ten designated QTLs at both tested stringent
 thresholds, a saturated result with little power to distinguish methods.
-Neither nominal-looking bulk rejection nor 3,300 correlated null markers
-supplies independent replication of a calibration claim.
 
 \begin{table}[htbp]
  \centering\small
@@ -1958,8 +1836,8 @@ stored two bits each about halve the remaining peak, to 0.77 and 0.79~GiB
 executable's 0.65~GiB, at the same wall time.
 All six storage pairs have exactly equal saved association arrays,
 variational coefficients and nested fit diagnostics. The calls, prepared
-per-marker values, Gram matrices and fitting workspaces remain, so this
-is lower-memory fitting, not an out-of-core analysis.
+per-marker values, Gram matrices and fitting workspaces stay in memory,
+so the analysis is not out-of-core.
 
 \begin{table}[htbp]
  \centering\small
@@ -1988,7 +1866,7 @@ finds no OpenMP library linkage or matching symbols. Source-level OpenMP
 directives cannot be assumed active in this executable. These measurements
 do not establish relative scaling against LDAK's Linux OpenMP/MKL build.
 
-\subsection{Version 2.0.0.dev5: paired fits and Lanczos accuracy}
+\subsection{Work reduction: paired fits and Lanczos accuracy}
 \label{sec:dev5-results}
 
 Table~\ref{tab:dev5-paired} compares frozen 2.0.0.dev4 and 2.0.0.dev5
@@ -1996,8 +1874,7 @@ sources on five seeded synthetic workloads, one per association path. Each
 source first warmed its own Numba cache on a small panel. Measured fits
 then ran in fresh processes, two per source, alternating which source ran
 first. An unrelated session's jobs kept the host at a load average of
-about 2.4 throughout. These are therefore paired comparisons under shared
-load, not isolated timings. Both repetitions of every fit returned
+about 2.4 throughout, so the timings are paired under shared load. Both repetitions of every fit returned
 identical arrays.
 
 \begin{table}[htbp]
@@ -2374,8 +2251,7 @@ hypersensitive responses and FLC expression. They ran to 100 iterations
 in 101--143 seconds, against 12--30 seconds for the converged fits and
 under two seconds for the other methods. They still found every control.
 These samples hold 84 to 166 accessions, where \code{auto} uses exact LOCO.
-The check covers data handling and power at large effects. It does not
-test tail calibration.
+The check covers data handling and power at large effects.
 
 \begin{table}[htbp]
  \centering\footnotesize
@@ -2396,7 +2272,7 @@ test tail calibration.
 
 \FloatBarrier
 
-\subsection{Package reruns: sample size, cache and convergence}
+\subsection{Sample-size scaling, cache budgets and convergence}
 \label{sec:dev8-reruns}
 
 On 29 October we reran the package benchmarks with 2.0.0.dev8 at commit
@@ -2420,8 +2296,7 @@ three further balanced-order repetitions on the same input gave median
 37.589 [37.188, 37.610] for LDAK-KVIK, and 101.770 [101.540, 102.395]
 for BOLT-inf. Median peak RSS was 2.491, 1.261 and 3.598~GiB,
 respectively. Each method's p-values exactly matched its own first run.
-These repetitions measure timing variability on one input, not variability
-across populations or independent phenotypes.
+These repetitions measure timing variability on one input.
 
 \begin{table}[htbp]
  \centering\small
@@ -2444,7 +2319,7 @@ threshold and lists a 0.9 correlation check; the BOLT-inf comparison misses
 that check. On a separate 50,000-sample HAPNEST panel with longer-range LD,
 single runs took 17.48 seconds for HRATT-HE, 19.51 for LDAK-KVIK and
 76.25 for BOLT-inf. The resource driver did not retain mixmogam p-values,
-so that comparison does not establish per-variant agreement.
+so per-variant agreement was not checked there.
 
 Table~\ref{tab:dev8-paired} compares the previous and current HRATT-HE
 implementations on two 50,000-sample HAPNEST panels. Each entry uses three
@@ -2478,8 +2353,8 @@ keyword. It used the default cross-fitting configuration.
 At 5,000 samples and 800,000 variants, one HRATT-HE fit per cache budget
 took 48.7 seconds with 1~GB and 47.1 with 2~GB; p-values matched exactly
 and both stages converged. The 1~GB budget initially retained 4,570 of
-6,260 cross-fit blocks. Final occupancy was not measured, and the two
-single timings do not establish a cache-budget speedup.
+6,260 cross-fit blocks. Final occupancy was not measured, and two single
+timings cannot show a cache-budget speedup.
 
 The 308-fit scale study includes ten independent replicates for each of
 five methods in each of five calibration cells. In the unstructured pure
@@ -2487,7 +2362,7 @@ null, mean fractions below $p=0.05$ were 0.0509--0.0512 across methods;
 in the structured null they were 0.0417--0.0483. BOLT-inf's structured-null
 fractions ranged from 0.0279 to 0.0703 across replicates. Variant-level
 binomial intervals in the original summary assume independence despite LD
-and should not be used as uncertainty intervals for the overall rate.
+and do not describe uncertainty in the overall rate.
 In the confounded cell, BOLT mixture, HRATT-HE and HRATT-REML each had at
 least one non-converged stage in 10/10 replicates; with two PCs the counts
 were 7/10, 8/10 and 7/10. The aggregate summaries include those fits.
@@ -2503,9 +2378,8 @@ The Atwell control rerun again recovered six of seven controls with every
 method: A1 failed on Mo98/MOT1 and A2 passed because HRATT and BOLT-inf
 recovered all controls found by exact LOCO. Four of eight HRATT scans had a
 non-converged stage; A2 does not exclude such fits. The earlier archive did
-not record comparable convergence fields, so these counts do not establish
-a convergence regression. These positive controls check recovery of large
-signals, not real-cohort tail calibration.
+not record comparable convergence fields, so we cannot tell whether
+convergence got worse.
 
 \FloatBarrier
 
@@ -2513,344 +2387,228 @@ signals, not real-cohort tail calibration.
 
 \subsection{The central distinction is between geometry and inference}
 
-Equation~\eqref{eq:spectrum} explains the observed conditional gradient
-without invoking a software bug: covariance precision weights variant
-directions differently. Scalar calibration discards that distinction.
-The new experiment shows that restoring a few leading directions can
-substantially reduce the error when population structure is concentrated
-in those directions and the remaining spectrum is comparatively benign.
-It also shows why a good average rejection fraction is insufficient.
+Equation~\eqref{eq:spectrum} explains the conditional gradient without
+any software bug: covariance precision weights variant directions
+differently, and scalar calibration discards that. The known-covariance
+experiment shows that restoring a few leading directions removes most of
+the error when structure is concentrated in them and the rest of the
+spectrum is benign. It also shows that a good average rejection fraction
+is not enough.
 
-The result has a deliberately narrow scope. The leading subspace is
-known exactly, the covariance is fixed, genotypes contain no local LD,
-and the tested statistic is linear in a Gaussian phenotype before
-squaring. Estimated covariance, approximate eigenvectors, rare-allele
-sampling, nonlinear shrinkage, and phenotype-dependent selection all
-introduce questions not answered by the conditional calculation. The
-new results justify further evaluation of the spectral correction;
-they do not justify treating it as a generally calibrated replacement
-for established GWAS procedures.
+The scope is deliberately narrow. The leading subspace is known exactly,
+the covariance is fixed, genotypes have no local LD, and the statistic is
+linear in a Gaussian phenotype before squaring. Estimated covariance,
+approximate eigenvectors, rare alleles, nonlinear shrinkage and
+phenotype-dependent selection each raise questions this calculation does
+not answer. The result justifies further work on the spectral correction;
+it does not make it a calibrated replacement for established GWAS
+procedures.
 
 \subsection{Prediction accuracy and test validity need separate targets}
 
-A flexible polygenic predictor can reduce residual variance and thereby
-improve association power. Yet changing the predictor also changes the
-null distribution of a test based on its residuals. Calibration inherited
-from an infinitesimal model may not survive a nonlinear prior, tuning
-selection, or incomplete optimization. LD Score regression provides a
-framework for separating components of genome-wide inflation under its
-assumptions \citep{bulikSullivan2015}; an intercept-based rescaling is
-not a per-variant guarantee in an arbitrary structured panel.
+A flexible polygenic predictor can reduce residual variance and so
+improve association power, but it also changes the null distribution of a
+test built on its residuals. Calibration inherited from an infinitesimal
+model may not survive a nonlinear prior, tuning, or incomplete
+optimization. LD Score regression separates components of genome-wide
+inflation under its assumptions \citep{bulikSullivan2015}, but an
+intercept-based rescaling says nothing about individual variants in a
+structured panel.
 
-The same separation applies to reported prediction performance. An
-internally tuned or in-sample BLUP is not a prospective prediction
-validation. Any future prediction claim needs a held-out sample design
-that respects family relationships, ancestry, and the intended target
-population. A model can improve prediction while leaving a poorly
-calibrated association statistic, and a calibrated test can sacrifice
-power through an unsuitable background model.
+The same applies to prediction. An internally tuned or in-sample BLUP is
+not a prospective validation, which needs held-out samples that respect
+family relationships, ancestry and the target population. A model can
+predict better while its association statistic is miscalibrated, and a
+calibrated test can lose power through a poor background model.
 
-\subsection{The historical evidence changes the questions, not the standard of proof}
+\subsection{Environmental confounding needs explicit definitions}
 
 The environmental experiment illustrates the noncentral mean term in
 Equation~\eqref{eq:noncentral}. An exposure generated from deme membership
-is causally external to the candidate variants in the simulation, but
-it is not statistically independent of them. Calling it independent
-would remove the very confounding mechanism being studied. A PC defined
-from the tested genotypes is also a legitimate mathematical stress axis,
-but answers a different question from a separately generated exposure.
-Future studies should include both with clearly stated causal and
-statistical interpretations.
+is causally external to the candidate variants, but statistically
+dependent on them; that dependence is the confounding being studied. A PC
+computed from the tested genotypes is also a legitimate stress axis, but
+it answers a different question from a separately generated exposure.
+Future studies should include both and state the causal and statistical
+role of each.
 
 \subsection{Limitations and intended use}
 
-The current contribution is strongest as a transparent research
-implementation and a framework for controlled comparisons. The conditional
-study contains three small fixed panels, while the broader archived
-simulations have three or six replicates and predate important fixes.
-The new matched-input external comparison has six independent panels per
-cell at $n=800$, uses controlled AR(1) rather than demographic LD, and
-assumes common genetic effects across three discrete populations.
-It does not establish equivalence of the mixmogam and official LDAK-KVIK models.
-There is no new validation in human multi-ancestry cohorts, no demonstrated
-biobank-scale resource profile, and no validation for imputed dosages.
-Case-control outcomes and sampling weights are supported only by HRATT
-(Section~\ref{sec:weights-binary}) and were tested in one prespecified
-simulation of unrelated samples with independent markers
-(Section~\ref{sec:weights-binary-results}): weighted quantitative tests were
-calibrated unless the weights depended on ancestry, binary tails were
-lopsided at low prevalence, and HRATT's effect estimates were attenuated.
-The follow-ups (Section~\ref{sec:followup-results}) removed the
-attenuation and, with principal components among the covariates, the
-ancestry inflation. Their saddlepoint assumes Hardy--Weinberg equilibrium
-given the covariates, and weighted fits take 1.55 times as long as
-HRATT-HE. Rarer outcomes, relatedness and real participation weights are untested,
-and HRATT's retrospective saddlepoint differs from SAIGE's model-based one
-\citep{zhou2018}.
+mixmogam is best used as a transparent research implementation and a
+framework for controlled comparisons. The main limitations of the
+evidence are these.
+\begin{itemize}
+ \item The conditional experiment uses three small fixed panels, a known
+ covariance and exact eigenvectors. It does not exercise the production
+ randomized eigensolver, its width selection, or phenotype-dependent
+ choice of calibration markers.
+ \item The archived simulations have three or six replicates and predate
+ important fixes.
+ \item The matched LDAK-KVIK comparison has six panels per cell at $n=800$,
+ AR(1) rather than demographic LD, and common genetic effects across three
+ discrete populations. The two programs fit different models, the official
+ timings come from other days, and the Mac LDAK build lacks MKL and
+ OpenMP.
+ \item The larger workloads are single synthetic realizations on one
+ workstation, often with one phenotype. Repeated timings measure
+ computational variability, not variation across populations.
+ \item There is no validation in human multi-ancestry cohorts, at
+ biobank scale, or with imputed dosages; the input contract is hard calls.
+ \item Case-control outcomes and sampling weights are supported only by
+ HRATT (Section~\ref{sec:weights-binary}) and were tested in simulations
+ of unrelated samples with independent markers
+ (Sections~\ref{sec:weights-binary-results} and~\ref{sec:followup-results}).
+ Weighted effects under selection on the outcome stayed 5.4\% low and
+ weighted fits took 1.55 times as long as HRATT-HE, both failing their
+ criteria. The saddlepoint assumes Hardy--Weinberg equilibrium given the
+ covariates and, being retrospective, differs from SAIGE's model-based
+ one \citep{zhou2018}. Rarer outcomes, relatedness and real participation
+ weights are untested.
+ \item Variational fits did not always converge: under strong confounding
+ in the scale study, and in four of eight Atwell HRATT scans. These fits
+ are included in the summaries and in the A2 criterion.
+ \item Four-thread fits at 20,000 markers fail a strict array tolerance
+ against one thread, although tested decisions are unchanged.
+ \item The RegMap check tests data handling and power for large effects,
+ not tail calibration.
+\end{itemize}
 
-The package exposes useful building blocks, but its multiple modes
-should not be presented as interchangeable. Dense plug-in tests,
-iterative infinitesimal tests, and nonlinear two-step heuristics differ
-in what is approximated. Reporting the mode, grouping, covariance
-estimation, convergence diagnostics, and genotype definition is necessary
-to make a result interpretable. The most productive next step is to
-reduce the gap between those explicit contracts and independently
-validated end-to-end behaviour.
-
-The computational extension narrows a practical gap without removing
-these inferential qualifications. Reusing work, choosing a cheaper
-variance estimator, and changing storage are three distinct interventions.
-The first can preserve a numerical result, the second can change the
-fitted model, and the third exchanges time for memory. Their evidence
-should not be collapsed into one speedup from an early implementation
-to the fastest observed run. At 20,000 markers, floating-point
-sensitivity to the thread count remains observable; the memory pressure
-of the original cached runs is gone with streaming. Keeping REML (without
-sampling weights) and one thread as defaults makes the new choices explicit
-while broader estimator and platform validation proceeds.
+The package's modes are not interchangeable. Dense plug-in tests,
+iterative infinitesimal tests and nonlinear two-step heuristics
+approximate different things, so a result needs its mode, grouping,
+covariance estimation, convergence diagnostics and genotype definition
+reported with it. Likewise, reusing work, choosing a cheaper variance
+estimator and changing storage are distinct interventions: the first can
+preserve a result, the second changes the fitted model, and the third
+trades time for memory. Their gains should not be folded into a single
+speedup. REML (without sampling weights) and one thread remain the
+defaults.
 
 \section{Future research: hypotheses and decisive experiments}
 \label{sec:future}
 
-The following directions extend the controlled comparisons in this report.
-Their order reflects dependence: reliable input identity and reproducible
-reference comparisons are prerequisites for interpreting a new method's
-power or speed. Each direction has a hypothesis and a result that could
-force it to be revised.
+The priorities are ordered by dependence: reliable input identity and
+reproducible reference comparisons come before claims about a new
+method's power or speed.
 
 \subsection{Priority 1: broaden the matched-input reference benchmark}
 
-\textbf{Question.} After input handling and nuisance definitions are
-matched, do the local implementations reproduce an independent Gaussian
-reference, and which differences from external programs remain?
+\textbf{Hypothesis.} With input handling and nuisance definitions matched,
+the local implementations reproduce an independent Gaussian reference,
+and the remaining differences from external programs can be explained.
 
-Section~\ref{sec:kvik-design} supplies the first matched phensim comparison
-with official LDAK-KVIK, including independent hard-call and reader checks.
-The next benchmark should retain that input contract while adding missing
-calls, admixed and related samples, demographic LD, larger panels and more
-independent replicates. Dense known-covariance and fitted-covariance cases
-should remain separate. Comparisons with reference BOLT-LMM, REGENIE, and
-Quickdraws should document differences in model and default preprocessing
-rather than assume they implement the same test.
-
-The HAPNEST-model extension makes large synthetic cohorts feasible.
-The next scientific validation should use independent empirical references:
-tune copying parameters on one subset, then audit allele frequencies, LD
-decay, PCs and excessive donor sharing in another. Expansion cannot recover
-haplotypes absent from its reference. Admixed samples require a model of
-admixture time and ancestry tract lengths; donor proportions alone do not
-supply one. Vary sample size and marker density separately and repeat
-across independently drawn reference panels.
-
-Variance estimation should be an explicit factor in this design.
-Cross projected HE and REML with polygenic and sparse architectures,
-known versus omitted environmental means, and increasing covariate
-leverage. Separate fixed-exponent experiments, where the generating
-covariance is known, from adaptive exponent selection. Compare raw
-component bias, boundary frequency, probe uncertainty, association
-calibration and calibrated power, rather than treating agreement in a
-reported $h^2$ as a sufficient endpoint. LDAK's partitioned estimator
-and its optional REML revision need separate reference configurations;
-they cannot serve as interchangeable oracles for the local single-component
-model. The zero-boundary bias observed here is a specific starting point
-for that analysis.
-
-\textbf{Decision criterion.} Numerical discrepancies under an identical
+\textbf{Experiment.} Keep the input contract of
+Section~\ref{sec:kvik-design} and add missing calls, admixed and related
+samples, demographic LD, larger panels and more replicates, with official
+BOLT-LMM, REGENIE and Quickdraws alongside LDAK-KVIK. Generate large
+cohorts from a HAPNEST-model reference tuned on one subset and audited
+(frequencies, LD decay, PCs, donor sharing) on another, varying sample
+size and marker density separately. Cross projected HE and REML with
+polygenic and sparse architectures and with known or omitted
+environmental means; LDAK's partitioned estimator and its REML revision
+need their own reference configurations. Discrepancies under an identical
 Gaussian model must be explained at the effect, standard-error,
-variance-component, and statistic levels before aggregate concordance
-is accepted. A flat loading gradient in a reference program where the
-local approximation shows one would restrict the claim to that local
-procedure. More discoveries alone would not establish better calibration
-or power. The invalid archived export must not be reused as the matched
-input.
+variance-component and statistic levels before aggregate concordance is
+accepted.
 
 \subsection{Priority 2: test calibration independently of adaptive choices}
 
 \textbf{Hypothesis.} An approximation selected on calibration markers
-retains its claimed accuracy on independent audit markers and independent
-genotype panels.
+keeps its accuracy on independent audit markers and genotype panels.
 
-A nested design should choose spectral width and scaling using one set
-of markers and reserve another for evaluation. For LD-containing data,
-hold out whole blocks where feasible, because random marker splits can
-make an audit nearly redundant with training. If phenotype-dependent
-selection is retained, repeat the entire selection and fitting procedure
-for every null phenotype. Prespecified strata should include frequency,
-missingness, LD score, ancestry loading, kinship leverage, and their
-most relevant intersections. Strict-null traits should first be drawn
-from a known covariance; fitted-covariance experiments should then add
-variance estimation as a separate factor.
-
-\textbf{Decision criterion.} Before running the study, specify acceptable
-relative rejection error at each threshold and use uncertainty intervals
-across independent phenotype and genotype replicates. A possible initial
-criterion is a rejection ratio within 0.9--1.1 at $\alpha=0.01$ in every
-adequately powered prespecified stratum; it is a proposed tolerance,
-not a standard already met here. Genome-wide tails need their own
-error budget and either sufficiently large independent simulations or
-a justified rare-event method. Bulk calibration or a 3\% training-ratio
-spread cannot stand in for that evidence. Persistent failures in an
-audited stratum should trigger a more accurate denominator or an explicit
-unsupported-case result.
+\textbf{Experiment.} Choose spectral width and scaling on one set of
+markers (whole LD blocks where possible) and audit on another, repeating
+any phenotype-dependent selection for every null phenotype. Stratify by
+frequency, missingness, LD score, ancestry loading and kinship leverage,
+first under a known covariance and then with fitted variance components.
+Fix the acceptable rejection error at each threshold in advance, for
+example a ratio within 0.9--1.1 at $\alpha=0.01$ in every adequately
+powered stratum, and give genome-wide tails their own error budget.
+Persistent failure in a stratum should lead to a more accurate
+denominator or an explicit unsupported-case result.
 
 \subsection{Priority 3: replace spectral heuristics with computable error bounds}
 
-\textbf{Hypothesis.} A hybrid method can retain streaming efficiency while
+\textbf{Hypothesis.} A hybrid method can keep streaming efficiency while
 bounding denominator error for difficult variants.
 
-Suppose the omitted eigenvalues are known to lie in $[a,b]$, with
-$a+\delta>0$, and let
-$s_j=\|\z_j\|^2-\sum_{\ell\leq k}a_{\ell j}^2$.
-The exact retained contribution $q_{j,\leq k}$ then yields
+If the omitted eigenvalues lie in $[a,b]$ with $a+\delta>0$ and
+$s_j=\|\z_j\|^2-\sum_{\ell\leq k}a_{\ell j}^2$, the exact retained
+contribution $q_{j,\leq k}$ gives
 \begin{equation}
  q_{j,\leq k}+\frac{s_j}{b+\delta}
  \ \leq\ q_j\ \leq\
  q_{j,\leq k}+\frac{s_j}{a+\delta}.
  \label{eq:tailbound}
 \end{equation}
-This interval can be propagated through Equation~\eqref{eq:tail},
-or through a fixed score numerator, to determine whether an approximation
-is adequate at the requested threshold. Variants with wide intervals
-could receive additional spectral work or an iterative exact-denominator
-solve. Approximate Ritz values alone do not certify the spectrum:
-residual bounds and uncertainty in the retained subspace must be
-included. Equation~\eqref{eq:tailbound} states a possible mathematical
-contract, not an implemented certificate.
-
-Iterative solves offer a complementary bound. For
-$A=\K+\delta\I\succeq\delta\I$, approximate solution
-$\widehat{\w}$, and residual $\mathbf r=\y-A\widehat{\w}$,
+Propagated through Equation~\eqref{eq:tail}, this interval says whether
+the approximation is adequate at the requested threshold; variants with
+wide intervals could receive an exact iterative solve. For
+$A=\K+\delta\I\succeq\delta\I$, an approximate solution $\widehat{\w}$ and
+residual $\mathbf r=\y-A\widehat{\w}$,
 \begin{equation}
  \big|\z_j^\top(A^{-1}\y-\widehat{\w})\big|
- \leq \frac{\|\z_j\|\,\|\mathbf r\|}{\delta}.
+ \leq \frac{\|\z_j\|\,\|\mathbf r\|}{\delta}
  \label{eq:cgbound}
 \end{equation}
-A corresponding solve with right-hand side $\z_j$ bounds denominator
-error. Such bounds may be loose, especially for small $\delta$, but
-make the numerical target explicit.
+bounds the numerator error in the same way. Neither bound is implemented,
+and Ritz values alone do not certify the spectrum.
 
-\textbf{Decision criterion.} Compare bounds with dense references on
-small problems, then record how often fallback solves are required,
-whole-process peak memory, and end-to-end time. The approach is useful
-only if the bound is honest and selective enough to save work. Even a
-perfect numerical certificate would leave estimated-covariance and
-model-misspecification questions unresolved.
+\textbf{Experiment.} Compare the bounds with dense references on small
+problems, then record how often fallback solves are needed, peak memory
+and end-to-end time. The approach is worth keeping only if the bounds are
+valid and selective enough to save work.
 
 \subsection{Priority 4: derive calibration for nonlinear polygenic residuals}
 
 \textbf{Hypothesis.} Mixture and elastic-net residuals need a calibration
-that reflects their own response to the phenotype, rather than a
-transferred infinitesimal factor.
+that reflects their own response to the phenotype, not a transferred
+infinitesimal factor.
 
-Start with a sequence of models whose complexity increases: fixed
-ridge shrinkage, tuned ridge, a fixed mixture prior, and then jointly
-tuned nonlinear models. For each, compare a conditional analytic or
-influence-function approximation where available with a parametric
-bootstrap that repeats fitting and hyperparameter selection. Sample splitting
-or cross-fitting, combined with candidate-region exclusion, may reduce reuse
-of information between nuisance fitting and testing, but does not by itself
-establish a null law. Null
-simulation should include both correctly specified and deliberately
-misspecified effect distributions, with convergence tolerances varied
-independently of prior choice.
-
-\textbf{Decision criterion.} An apparent power gain is retained only if
-it survives equal-calibration comparisons at matched type-I error and
-can be separated from incomplete optimization or reuse of the same data
-for tuning. Failure of the infinitesimal factor after nonlinear fitting
-would support method-specific calibration, not a universal multiplicative
-repair. Reference-program comparisons are essential because an error
-in a local reimplementation is not a property of the published method.
+\textbf{Experiment.} Step through fixed ridge, tuned ridge, a fixed
+mixture prior and jointly tuned nonlinear models. For each, compare an
+analytic or influence-function approximation with a parametric bootstrap
+that repeats fitting and hyperparameter selection, under correctly and
+deliberately misspecified effect distributions. A power gain counts only
+at matched type-I error and once separated from incomplete optimization
+and reuse of data for tuning.
 
 \subsection{Priority 5: separate mean confounding, covariance error, and localization}
 
-\textbf{Hypothesis.} The benefit and cost of PC adjustment depend on
-which part of the data-generating process is misspecified, and apparent
+\textbf{Hypothesis.} The benefit and cost of PC adjustment depend on which
+part of the data-generating process is misspecified, and apparent
 null-locus inflation depends on the discovery unit.
 
-A factorial simulation should vary ancestry-associated exposure from
-zero through modest effects to the S2 stress level; covariance fit from
-known truth to fitted and misspecified kinships; and fixed covariates
-from none to measured exposure and prespecified PCs. Demographic scenarios
-should include recent relatives, admixture, unequal ancestry sample sizes,
-and LD. Generate some outcomes under a strict null and others under
-sparse, polygenic, and ancestry-dependent effects. Report effect bias,
-interval coverage, conditional rejection, calibrated power, and
-between-ancestry performance. PC count should be chosen without looking
-at the final calibration outcome, or its selection repeated within
-validation.
-
-For signal-containing traits, distinguish causal-variant recovery,
-LD-tagged association, and block-level localization. A QTL-free block
-should be called a false discovery only under a null definition that
-actually excludes its background and tagging effects. Fixed boundaries,
-LD-aware boundaries, and explicitly independent simulated blocks should
-be compared on the same underlying genotypes where possible.
-
-\textbf{Decision criterion.} If LOCO is calibrated without PCs at modest
-exposure levels, the strong S2 result should remain a stress-test finding.
-If PCs reduce bias but also remove genuine ancestry-dependent signal,
-that trade-off must be reported instead of optimizing $\lgc$ toward one.
-A block method is better only if it improves the stated localization
-objective, not merely because relabelling blocks reduces a count.
+\textbf{Experiment.} A factorial simulation varying ancestry-associated
+exposure from zero to the S2 stress level, covariance from known to
+fitted and misspecified kinships, and covariates from none to measured
+exposure and prespecified PCs, across relatives, admixture, unequal
+ancestry sizes and LD. Report effect bias, coverage, conditional
+rejection, calibrated power and between-ancestry performance, and compare
+fixed, LD-aware and simulated-independent blocks on the same genotypes.
+If LOCO is calibrated without PCs at modest exposure, the S2 result stays
+a stress-test finding; if PCs remove genuine ancestry-dependent signal,
+that trade-off must be reported rather than tuning $\lgc$ to one.
 
 \subsection{Priority 6: make scale and reproducibility part of method design}
 
 \textbf{Hypothesis.} Compact hard-call access and better placement of
-decoding work can reduce the remaining memory gap without forfeiting the
+decoding work can close the remaining memory gap without losing the
 speed gained by reusing matrix products.
 
-The immediate experiment is a same-day repeat of both programs in the
-20,000-marker comparison on an otherwise idle host. The reruns repeated
-only the mixmogam half, so the cross-program ratios still span days with
-different host conditions. The pinned Linux OpenMP/MKL reference
-build should follow. Use the same
-datasets, balanced order, measured CPU time and complete-fit boundaries.
-Requested thread counts alone do not identify parallel work. Vary sample
-size and marker density separately, reporting peak memory per genotype
-for int8 and two-bit calls.
-
-Version 2.0.0.dev5 decodes through prepared per-variant value tables and
-covariate coefficients; the subsequent revisions no longer project
-markers, keep no float copy and decode two-bit calls directly
-(Sections~\ref{sec:dev5-methods} and~\ref{sec:streaming-methods}).
-Two-bit calls took 0.95 to 1.04 times as long as int8 calls, but REML and
-BOLT-LMM still take 1.14 to 1.23 times as long as with dev5's cache;
-profile decoding together with matrix products before trading memory back
-for time. Missing calls, noncontiguous chromosomes, repeated
-indices and high covariate dimension need independent precision oracles.
-The current $Mp$ projection store is modest for two PCs but its cost
-must be included when $p$ grows. Measure setup, variance fitting,
-prediction and testing separately, alongside total time and peak RSS;
-retain cold-start and warm-kernel distinctions.
-
-Numerical acceptance also needs a declared use. The present four-thread
-path preserves tested decisions while failing a strict array tolerance.
-Future variants should report both effect/standard-error error and
-changes in small p-values, with targeted phenotypes near decision
-thresholds. Test high LD, small residual variance and difficult covariance
-spectra before accepting a wider tolerance. Neither a normwise matrix
-bound nor unchanged decisions on two panels settles this question.
-
-A useful extension would add a carefully specified continuous-dosage
-interface with imputation-quality handling and independent decoding
-fixtures. HRATT's case-control and weighted tests need external
-validation: prevalence below 1\%, related samples, real participation
-weights, and comparison with SAIGE and REGENIE. Their conditional
-Hardy--Weinberg assumption should be checked against empirical
-covariate-specific genotype distributions. The other
-methods remain quantitative-only. Prospective prediction, if developed, should use
-held-out families or populations and report transportability separately
-from association power.
-
-\textbf{Decision criterion.} A scalability claim should identify the
-validated data size, hardware, resource limits, and failure boundary.
-A speedup is scientifically useful only if the inferential target and
-accuracy are preserved. Release artifacts should reproduce a compact
-set of known-truth calculations and input round trips before any larger
-performance claim is made. A compact backend should advance only when
-it improves a prespecified time--memory tradeoff over the measured int8
-and two-bit routes, without hiding estimator changes or numerical failures.
+\textbf{Experiment.} Repeat both programs in the 20,000-marker comparison
+on the same day on an idle host, then against the pinned Linux OpenMP/MKL
+build, with balanced order, CPU time and complete-fit boundaries. Vary
+sample size and marker density separately and report peak memory per
+genotype for int8 and two-bit calls, with setup, variance fitting,
+prediction and testing timed apart; REML and BOLT-LMM still take 1.14 to
+1.23 times as long as with dev5's cache. Before accepting a looser
+numerical tolerance, test high LD, small residual variance and phenotypes
+near decision thresholds. HRATT's case-control and weighted tests need
+external validation at prevalence below 1\%, with related samples, real
+participation weights and SAIGE and REGENIE as comparators. A scalability
+claim should state the validated data size, hardware, resource limits
+and failure boundary.
 
 \section*{Data, software, and reproducibility}
 
@@ -2912,8 +2670,7 @@ The 20,000-marker inputs and their all-call audit are archived as
 The original thread and cache experiments are in \code{20261003-kvik-20k}.
 They retain commands, raw measurements, association arrays, model
 diagnostics and verification records, including numerical failures and
-VM observations. Their frozen source version is 2.0.0.dev3. This report's
-version bump does not relabel those computations.
+VM observations. Their frozen source version is 2.0.0.dev3.
 
 The table generator, \code{report/}\allowbreak\code{make\_efficiency\_tables.py},
 reads saved individual measurements and never reruns a model. Its
