@@ -14,8 +14,8 @@ scale-study fits and the Atwell controls, with non-converged fits recorded.
 It is a compact copy of selected records; its manifest points to the full
 local archives.
 
-Archives made before the unreleased lean-up carry two driver defects, fixed
-since. `kvik_scale.py` did not forward `--max-load` to its fit workers, so
+Archives made before 2.0.0 carry two driver defects, fixed in
+2.0.0. `kvik_scale.py` did not forward `--max-load` to its fit workers, so
 load in those runs was observed, not gated. `hratt_efficiency.py` passed
 `--cache-bytes` under the wrong package keyword and did not forward
 `--loco-folds` in paired mode; the restricted-cache paired rerun used the

@@ -7,47 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Removed
-
-- `Genotypes.load_vcf`, `load_pgen`, `load_tped` and `load_hdf5`. Nothing
-  called or documented them, and `Genotypes.load` reads all four formats.
-  `load_plink`, `load_bgen` and `load_eigenstrat` stay.
-- `Phenotypes.incidence_matrix` and `GwasResult.neg_log10_p`, which had no
-  caller or test.
-- The ignored `dtype` argument of `scan_gxe` and `seed` argument of
-  `fit_two_kinships`.
-
-### Changed
-
-- The saddlepoint tail uses one root solver and one pair of row loops for
-  both genotype models; the binomial copy is gone. P-values are bit-identical.
-- `benchmarks/hratt_efficiency.py` and `benchmarks/ldak_kvik_comparison.py`
-  import the shared helpers from `benchmarks/_harness.py` instead of carrying
-  copies.
-- Tests share one `numpy_fallback` fixture (`tests/conftest.py`) in place of
-  seven copies of the module-loading code. The duplicated power-guard tests
-  became one identity check, and the second seed of the strong-structure
-  refit test runs only in the slow leg.
-
-### Fixed
-
-- `benchmarks/hratt_efficiency.py` passed `--cache-bytes` as `cache_bytes`,
-  which the package renamed `gram_cache_bytes` in 02a8c3a7. The worker now
-  uses whichever name the benchmarked source accepts. Its paired mode also
-  forwards `--loco-folds` to the workers.
-- `benchmarks/kvik_scale.py` parsed `--max-load` but never passed it to its
-  fit workers; it now gates both the reference and the mixmogam runs.
-- Documentation and the report are shorter: limitations are stated once, and
-  version history now lives here instead of in the README and abstract.
-
 ## [2.0.0] - 2026-10-29
 
 The first stable release of the 2.0 series. Its statistical content is
 identical to 2.0.0.dev9: this release changes the version string, the
 packaging metadata and the provenance documentation of the bundled real-data
-panel, and stops tracking one unused data file. No estimator, default or
-numerical path changed, so the measurements recorded for dev8 and dev9 still
-describe this release.
+panel, removes unused API, merges duplicated code and tests, and rewrites the
+documentation and report more plainly. No estimator, default or numerical
+result changed, so the measurements recorded for dev8 and dev9 still describe
+this release.
 
 ### Added
 
@@ -77,6 +45,17 @@ describe this release.
   sdist build; that one is current, not stale.
 - The README's install line lists every optional extra, and the README and
   research report describe the released version rather than a development one.
+- The saddlepoint tail uses one root solver and one pair of row loops for
+  both genotype models; the binomial copy is gone. P-values are bit-identical.
+- `benchmarks/hratt_efficiency.py` and `benchmarks/ldak_kvik_comparison.py`
+  import the shared helpers from `benchmarks/_harness.py` instead of carrying
+  copies.
+- Tests share one `numpy_fallback` fixture (`tests/conftest.py`) in place of
+  seven copies of the module-loading code. The duplicated power-guard tests
+  became one identity check, and the second seed of the strong-structure
+  refit test runs only in the slow leg.
+- Documentation and the report are shorter: limitations are stated once, and
+  version history now lives here instead of in the README and abstract.
 
 ### Removed
 
@@ -86,6 +65,22 @@ describe this release.
   benchmarks or documentation read it. It remains in the repository's history;
   rewriting history was out of scope for this release. The file stays on disk
   for local use and is now ignored.
+- `Genotypes.load_vcf`, `load_pgen`, `load_tped` and `load_hdf5`. Nothing
+  called or documented them, and `Genotypes.load` reads all four formats.
+  `load_plink`, `load_bgen` and `load_eigenstrat` stay.
+- `Phenotypes.incidence_matrix` and `GwasResult.neg_log10_p`, which had no
+  caller or test.
+- The ignored `dtype` argument of `scan_gxe` and `seed` argument of
+  `fit_two_kinships`.
+
+### Fixed
+
+- `benchmarks/hratt_efficiency.py` passed `--cache-bytes` as `cache_bytes`,
+  which the package renamed `gram_cache_bytes` in 02a8c3a7. The worker now
+  uses whichever name the benchmarked source accepts. Its paired mode also
+  forwards `--loco-folds` to the workers.
+- `benchmarks/kvik_scale.py` parsed `--max-load` but never passed it to its
+  fit workers; it now gates both the reference and the mixmogam runs.
 
 ## [2.0.0.dev9] - 2026-10-29
 
