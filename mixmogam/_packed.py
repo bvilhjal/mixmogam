@@ -80,6 +80,20 @@ def _pack_compiled(G, data, sample_major):
                 data[j, b] = byte
 
 
+def _take_samples_compiled(data, rows, out):
+    """Gather sample codes directly into new packed variant rows."""
+    for j in range(out.shape[0]):
+        for b in range(out.shape[1]):
+            byte = 0
+            for slot in range(4):
+                r = 4 * b + slot
+                if r < rows.size:
+                    old = rows[r]
+                    code = (data[j, old // 4] >> (2 * (old % 4))) & 3
+                    byte |= code << (2 * slot)
+            out[j, b] = byte
+
+
 def _qc_compiled(data, idx, n_samples, called, twice_ac):
     """Called count and summed dosage from one lookup per packed byte."""
     valid = (n_samples - 1) % 4 + 1
@@ -95,6 +109,7 @@ def _qc_compiled(data, idx, n_samples, called, twice_ac):
 if HAS_NUMBA:
     _decode_columns_compiled = njit(cache=True)(_decode_columns_compiled)
     _pack_compiled = njit(cache=True)(_pack_compiled)
+    _take_samples_compiled = njit(cache=True)(_take_samples_compiled)
     _qc_compiled = njit(cache=True)(_qc_compiled)
 
 
@@ -214,20 +229,31 @@ class PackedCalls:
 
     def with_missing(self, samples) -> "PackedCalls":
         """A copy with every call of the masked samples set to a no-call."""
+        result = PackedCalls(self.data.copy(), self.shape[0])
+        result._set_missing(samples)
+        return result
+
+    def _set_missing(self, samples):
+        """Set missing calls in owned, writable packed data."""
         samples = np.flatnonzero(np.asarray(samples, dtype=bool))
         keep = np.full(self.data.shape[1], 0xFF, dtype=np.uint8)
         add = np.zeros(self.data.shape[1], dtype=np.uint8)
         shift = (2 * (samples & 3)).astype(np.uint8)
         np.bitwise_and.at(keep, samples >> 2, ~(np.uint8(3) << shift))
         np.bitwise_or.at(add, samples >> 2, np.uint8(1) << shift)
-        return PackedCalls((np.asarray(self.data) & keep) | add, self.shape[0])
+        np.bitwise_and(self.data, keep, out=self.data)
+        np.bitwise_or(self.data, add, out=self.data)
 
     def take_samples(self, sample_indices) -> "PackedCalls":
         """Packed calls of the selected samples, repacked in bounded chunks."""
         idx = np.asarray(sample_indices)
-        n_new = np.arange(self.shape[0])[idx].size
+        rows = np.arange(self.shape[0], dtype=np.int64)[idx]
+        n_new = rows.size
         nb = (n_new + 3) // 4
         data = np.empty((self.shape[1], nb), dtype=np.uint8)
+        if HAS_NUMBA and rows.ndim == 1:
+            _take_samples_compiled(self.data, np.ascontiguousarray(rows), data)
+            return PackedCalls(data, n_new)
         step = max(1, _CHUNK_CALLS // max(4 * self.data.shape[1], 1))
         for start in range(0, self.shape[1], step):
             cols = np.arange(start, min(start + step, self.shape[1]))

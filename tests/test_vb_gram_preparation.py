@@ -201,6 +201,50 @@ def test_shared_budget_caches_every_hold_out_gram_first():
             assert not partial
 
 
+@pytest.mark.parametrize("packed, q", [(False, 0), (False, 2), (True, 2)])
+def test_crossfit_extends_partial_cache_on_first_sweep(packed, q, monkeypatch):
+    lg = _problem(q=q, packed=packed, n=67, m=1100)
+    cv_size, fit_size = _sizes(lg, lg.dtype.itemsize)
+    budget = int(cv_size.sum() + fit_size[:2].sum() + 1)
+    expected_blocks = int(np.searchsorted(np.cumsum(fit_size), budget, side="right"))
+    assert 2 < expected_blocks < fit_size.size
+    rng = np.random.default_rng(711)
+    y = rng.normal(size=(lg.n, 1))
+    fits, builds = [], []
+    for extend in (False, True):
+        cv, eng = _pair(lg, budget)
+        assert len(eng._grams) == 2
+        del cv  # its share of the budget is now available
+        counts = []
+        original = eng._gram
+
+        def counted(*args, **kwargs):
+            counts.append(1)
+            return original(*args, **kwargs)
+
+        monkeypatch.setattr(eng, "_gram", counted)
+        # Only two folds are used. Newly cached blocks must nevertheless
+        # contain every slot for a subsequent fit using the other folds.
+        folds = np.array([0, 1])
+        fit = eng.fit(np.repeat(y, folds.size, axis=1), folds, np.full(folds.size, -1),
+                      PRIOR_ENET, np.tile([0.2, 1.0, 0.3], (folds.size, 1)),
+                      np.full(folds.size, 0.7), snp_scale=np.full(lg.m, 0.5 / lg.m),
+                      max_iter=3, tol=0, _extend_grams=extend)
+        fits.append(fit)
+        builds.append(len(counts))
+        assert len(eng._grams) == (expected_blocks if extend else 2)
+        assert sum(g.nbytes + c.nbytes for g, c in zip(eng._grams, eng._coefs)) <= budget
+        if extend:
+            for b, (idx, _, z) in enumerate(eng._subblocks()):
+                if b >= len(eng._grams):
+                    break
+                grams, coefs = original(z, idx, np.arange(5))
+                np.testing.assert_array_equal(eng._grams[b], grams)
+                np.testing.assert_array_equal(eng._coefs[b], coefs)
+    _assert_same(fits[0], fits[1])
+    assert builds[0] - builds[1] == 2 * (expected_blocks - 2)
+
+
 def _fits(cv, crossfit, Y, refit=False):
     P = 4
     prior = np.column_stack([np.linspace(0.1, 0.9, P), np.full(P, 30.0), np.full(P, 0.4 / cv.lg.m)])

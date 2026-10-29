@@ -9,6 +9,21 @@ family of drivers answers, what the recorded evidence can support, and
 what the suite could not measure on 25 October 2026. Read it before
 adding a driver or quoting a number.
 
+**Efficiency follow-up (28 October 2026).** The
+[paired protocol](efficiency_followup_plan.md) measures HRATT score fits,
+conditional-binomial tails, the spectral quadratic-form step and packed
+sample alignment. The [first archive](results/20261028-efficiency-implementation/summary.json)
+contains the score-fit and spectral comparisons; the [packed follow-up](results/20261028-efficiency-packed-followup/summary.json)
+and [saddlepoint follow-up](results/20261028-efficiency-spa-followup/summary.json)
+measure the final versions of those paths. These are
+synthetic component measurements, not genome-scale or end-to-end speed
+claims. Each archive includes the frozen source trees and per-run resources.
+
+```sh
+python benchmarks/efficiency_followup.py --baseline /path/to/original/source \
+  --out benchmarks/results/NEW_RUN
+```
+
 **Scale, invariance and calibration study (25 October 2026).**
 `scale_study.py` runs the study that closes the gaps the efficiency
 reviews named: no archived run had exceeded 80,000 variants, every

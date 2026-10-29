@@ -1,6 +1,6 @@
 """Super-efficient mixed linear models for genome-wide association mapping."""
 
-__version__ = "2.0.0.dev7"
+__version__ = "2.0.0.dev8"
 
 __all__ = [
     "LMM",

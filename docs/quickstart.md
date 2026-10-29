@@ -187,8 +187,9 @@ intercept counts), so 1 GB holds about 620,000 variants with an intercept
 only and about 440,000 with ten principal components. If a partial-cache
 warning appears and RAM permits, raise it (for example, `4 * 1024**3`). A
 smaller cache lowers retained memory but rebuilds the uncached blocks on
-every sweep, with the same arithmetic as the cached ones, so it never
-changes the fitted model.
+every sweep, with the same arithmetic as the cached ones. After releasing
+the hold-out cache, the cross-fit uses the freed budget to retain additional
+blocks as they are built. Neither changes the fitted model.
 
 Pass an aligned covariate matrix as `X=X` when appropriate, including ancestry
 PCs for population/environmental confounding; the intercept is added internally.

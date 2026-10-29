@@ -143,6 +143,140 @@ def _rstar(a, v, p, x):
     return w + math.log(t * math.sqrt(k2) / w) / w
 
 
+def _binomial_cgf(t, a, af, called):
+    """Centred CGF for independent Binomial(2, af), conditional on calls."""
+    k0 = k1 = k2 = 0.0
+    for i in range(a.size):
+        if not called[i]:
+            continue  # a fixed imputed call has no centred contribution
+        p = af[i]
+        x = t * a[i]
+        if x > 30.0:
+            e = math.exp(-x)
+            denom = p + (1.0 - p) * e
+            logpart = x + math.log(denom)
+            prob = p / denom
+            diff = prob - p
+            curvature = p * (1.0 - p) * e / (denom * denom)
+        elif x < -30.0:
+            e = math.exp(x)
+            denom = (1.0 - p) + p * e
+            logpart = math.log(denom)
+            prob = p * e / denom
+            diff = prob - p
+            curvature = p * (1.0 - p) * e / (denom * denom)
+        else:
+            e = math.expm1(x)
+            denom = 1.0 + p * e
+            logpart = math.log1p(p * e)
+            prob = p * (1.0 + e) / denom
+            diff = p * (1.0 - p) * e / denom
+            curvature = prob * (1.0 - prob)
+        if abs(x) < 1e-4:
+            pq = p * (1.0 - p)
+            k0 += pq * x * x * (1.0 + (1.0 - 2.0 * p) * x / 3.0
+                                 + (1.0 - 6.0 * pq) * x * x / 12.0)
+        else:
+            k0 += 2.0 * (logpart - p * x)
+        k1 += 2.0 * a[i] * diff
+        k2 += 2.0 * a[i] * a[i] * curvature
+    return k0, k1, k2
+
+
+def _binomial_support(a, af, called):
+    lo = hi = 0.0
+    for i in range(a.size):
+        if called[i]:
+            x = -2.0 * a[i] * af[i]
+            y = 2.0 * a[i] * (1.0 - af[i])
+            lo += min(x, y)
+            hi += max(x, y)
+    return lo, hi
+
+
+def _binomial_boundary(a, af, called, x, both):
+    """Flag scores too near a support boundary for stable comparison."""
+    out = np.empty(af.shape[0], dtype=np.bool_)
+    magnitude = 0.0
+    for ai in a:
+        magnitude += abs(ai)
+    margin = max(1e-7, 128.0 * 2.220446049250313e-16 * (a.size + 1)) * max(1.0, magnitude)
+    for r in range(af.shape[0]):
+        lo, hi = _binomial_support(a, af[r], called[r])
+        point = abs(x[r]) if both else x[r]
+        out[r] = abs(point - lo) <= margin or abs(point - hi) <= margin
+        if both:
+            out[r] = out[r] or abs(-point - lo) <= margin or abs(-point - hi) <= margin
+    return out
+
+
+def _binomial_rstar(a, v, p, x):
+    """r* of the tail at x: P(S >= x) = Phi(-r*) for x > 0 and
+    P(S <= x) = Phi(r*) for x < 0. Returns +inf (or -inf) when x lies
+    beyond the support of S, nan when the root cannot be bracketed."""
+    lo_sup, hi_sup = _binomial_support(a, v, p)
+    if x >= hi_sup:
+        return math.inf
+    if x <= lo_sup:
+        return -math.inf
+    # Bracket the root of K'(t) = x, then Newton steps kept inside it.
+    lo, hi = 0.0, 0.0
+    if x > 0:
+        hi = 1.0
+        while _binomial_cgf(hi, a, v, p)[1] < x:
+            lo = hi
+            hi *= 2.0
+            if hi > 1e8:
+                return math.nan
+    else:
+        lo = -1.0
+        while _binomial_cgf(lo, a, v, p)[1] > x:
+            hi = lo
+            lo *= 2.0
+            if lo < -1e8:
+                return math.nan
+    t = 0.5 * (lo + hi)
+    for _ in range(200):
+        k0, k1, k2 = _binomial_cgf(t, a, v, p)
+        f = k1 - x
+        if f > 0:
+            hi = t
+        else:
+            lo = t
+        step = f / k2 if k2 > 0 else 0.0
+        new = t - step
+        if not (lo < new < hi) or k2 <= 0:
+            new = 0.5 * (lo + hi)
+        if abs(new - t) <= 1e-14 * max(1.0, abs(t)):
+            t = new
+            break
+        t = new
+    k0, k1, k2 = _binomial_cgf(t, a, v, p)
+    inner = t * x - k0
+    if inner <= 0 or k2 <= 0:
+        return math.nan
+    w = math.copysign(math.sqrt(2.0 * inner), t)
+    return w + math.log(t * math.sqrt(k2) / w) / w
+
+
+def _binomial_rows(a, af, called, x, out_up, out_lo, both):
+    for r in range(af.shape[0]):
+        if both:
+            out_up[r] = _binomial_rstar(a, af[r], called[r], abs(x[r]))
+            out_lo[r] = _binomial_rstar(a, af[r], called[r], -abs(x[r]))
+        else:
+            out_up[r] = _binomial_rstar(a, af[r], called[r], x[r])
+
+
+def _binomial_rows_parallel(a, af, called, x, out_up, out_lo, both):
+    for r in prange(af.shape[0]):
+        if both:
+            out_up[r] = _binomial_rstar(a, af[r], called[r], abs(x[r]))
+            out_lo[r] = _binomial_rstar(a, af[r], called[r], -abs(x[r]))
+        else:
+            out_up[r] = _binomial_rstar(a, af[r], called[r], x[r])
+
+
 def _rows(a, values, freqs, x, out_up, out_lo, both):
     for r in range(values.shape[0]):
         if both:
@@ -164,9 +298,73 @@ def _rows_parallel(a, values, freqs, x, out_up, out_lo, both):
 if HAS_NUMBA:
     _cgf = njit(cache=True)(_cgf)
     _support = njit(cache=True)(_support)
+    _binomial_cgf = njit(cache=True)(_binomial_cgf)
+    _binomial_support = njit(cache=True)(_binomial_support)
+    _binomial_boundary = njit(cache=True)(_binomial_boundary)
     _rstar = njit(cache=True)(_rstar)
+    _binomial_rstar = njit(cache=True)(_binomial_rstar)
+    _binomial_rows = njit(cache=True)(_binomial_rows)
+    _binomial_rows_parallel = njit(parallel=True, cache=True)(_binomial_rows_parallel)
     _rows = njit(cache=True)(_rows)
     _rows_parallel = njit(parallel=True, cache=True)(_rows_parallel)
+
+
+def _binomial_spa(u, a, af, called, missing_mean, *, var_ratio=1.0,
+                  two_sided="distance", n_threads=1, variance=None):
+    """SPA for conditional binomial calls and fixed mean-imputed missing calls."""
+    if two_sided not in ("distance", "doubled"):
+        raise ValueError("two_sided must be 'distance' or 'doubled'")
+    a = np.ascontiguousarray(a, dtype=np.float64)
+    af = np.ascontiguousarray(af, dtype=np.float64)
+    called = np.ascontiguousarray(called, dtype=np.bool_)
+    if (af.ndim != 2 or called.shape != af.shape or a.ndim != 1 or af.shape[1] != a.size
+            or not np.isfinite(af).all() or not np.isfinite(a).all()
+            or np.any(af <= 0) or np.any(af >= 1)):
+        raise ValueError("conditional allele frequencies must lie between zero and one")
+    k = af.shape[0]
+    missing_mean = np.broadcast_to(np.asarray(missing_mean, dtype=np.float64), (k,))
+    scores = np.broadcast_to(np.asarray(u, dtype=np.float64), (k,))
+    ratio = np.broadcast_to(np.asarray(var_ratio, dtype=np.float64), (k,))
+    expected = (2.0 * af * called) @ a + missing_mean * ((~called) @ a)
+    x = np.ascontiguousarray((scores - expected) * np.sqrt(ratio))
+    both = two_sided == "distance"
+    if variance is None:
+        variance = (2.0 * af * (1.0 - af) * called) @ (a * a)
+    # Retain the generic calculation near zero, at support boundaries, for
+    # degenerate rows and for nonfinite inputs. In those regions even tiny
+    # changes in rounding can materially change the saddlepoint result.
+    near = ((np.abs(x) <= 0.05 * np.sqrt(variance)) | ~np.isfinite(x) | (variance <= 0)
+            | _binomial_boundary(a, af, called, x, both))
+    p, log_p = np.empty(k), np.empty(k)
+    good = ~near
+    if np.any(good):
+        all_good = bool(np.all(good))
+        probs = af if all_good else af[good]
+        masks = called if all_good else called[good]
+        scores_good = x if all_good else x[good]
+        up, lo = np.empty(scores_good.size), np.empty(scores_good.size)
+        if n_threads > 1 and HAS_NUMBA:
+            from mixmogam._vb import _numba_thread_limit
+            with _numba_thread_limit(min(n_threads, scores_good.size)):
+                _binomial_rows_parallel(a, probs, masks, scores_good, up, lo, both)
+        else:
+            _binomial_rows(a, probs, masks, scores_good, up, lo, both)
+        if both:
+            log_good = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
+        else:
+            log_good = np.minimum(np.log(2.0) + log_ndtr(-np.abs(up)), 0.0)
+        p[good], log_p[good] = np.exp(log_good), log_good
+    if np.any(near):
+        prob = af[near]
+        mask = called[near]
+        freqs = np.stack([(1 - prob)**2 * mask, 2 * prob * (1 - prob) * mask,
+                          prob**2 * mask, ~mask], axis=-1)
+        count = int(np.count_nonzero(near))
+        values = np.column_stack([np.zeros(count), np.ones(count), np.full(count, 2.),
+                                  missing_mean[near]])
+        p[near], log_p[near] = spa_pvalue(scores[near], a, values, freqs, var_ratio=ratio[near],
+                                         two_sided=two_sided, n_threads=n_threads)
+    return p, log_p
 
 
 def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance",

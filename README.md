@@ -8,7 +8,7 @@ unavailable, since their Python fallbacks can be orders of magnitude slower
 (measured: 5 times for BOLT-LMM-inf, 61 times for HRATT and 163 times for
 the BOLT-LMM mixture on a 1,000 x 20,000 panel).
 
-**Development version 2.0.0.dev7**; changes are in the
+**Development version 2.0.0.dev8**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads, and historical evidence, with a testable research agenda. Its text

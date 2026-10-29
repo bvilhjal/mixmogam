@@ -320,6 +320,62 @@ def test_loco_eigh_matches_dense_loco_spectrum():
         assert bases[g][2] == pytest.approx((np.trace(Kg) - vals[:5].sum()) / (st.lg.n - 5), rel=0.02)
 
 
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("spread", [0.01, 0.03 - 1e-12, 0.03, 0.03 + 1e-12, 0.4])
+def test_automatic_spectral_width_matches_full_pass_oracle(monkeypatch, packed, spread):
+    rng = np.random.default_rng(704)
+    n, m = 90, 384
+    calls = rng.binomial(2, rng.uniform(.1, .5, m), (n, m)).astype(np.int8)
+    calls[rng.random(calls.shape) < .02] = -1
+    gt = Genotypes(calls, chromosome=np.repeat(np.arange(4), m // 4), packed=packed)
+    st = _setup(rng.normal(size=n), gt, rng.normal(size=(n, 2)), 25, 128)
+    widths = (8, 16, 32)
+    all_bases = {}
+    for k in widths:
+        all_bases[k] = []
+        for _ in range(st.lg.n_groups):
+            U = np.linalg.qr(rng.normal(size=(n, k)))[0]
+            all_bases[k].append((np.linspace(4., .8, k), U, .6))
+    weights = rng.uniform(.2, 1.8, m)
+    monkeypatch.setattr(twostep, "SPECTRAL_WIDTHS", widths)
+
+    def basis(_st, k, weights=None):
+        assert weights is not None
+        return all_bases[k]
+
+    monkeypatch.setattr(twostep, "_loco_eigh", basis)
+    snps = np.array([2, 25, 97, 120, 194, 210, 289, 305])
+    full = twostep._spectral_quadform
+    first = full(st, all_bases[8], .7)
+    cal = {"snps": snps, "d_prosp": .6 * first[snps] *
+           (1 + spread * np.tile([-1., 1.], 4))}
+
+    # The previous implementation evaluates every candidate for every SNP.
+    for k in widths:
+        A = full(st, all_bases[k], .7)
+        ratio = cal["d_prosp"] / (.6 * A[snps])
+        c = float(ratio.mean())
+        expected = {"D": c * .6 * A, "c": c, "cv": float(ratio.std() / c),
+                    "ratios": ratio, "k": k}
+        if expected["cv"] <= twostep.SPECTRAL_CV_TARGET:
+            break
+    passes = []
+
+    def counted(*args):
+        passes.append(args[1][0][0].size)
+        return full(*args)
+
+    monkeypatch.setattr(twostep, "_spectral_quadform", counted)
+    actual = twostep._spectral_denominator(st, .6, .7, cal, weights=weights)
+    assert actual["k"] == expected["k"]
+    for key in expected:
+        np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
+    if abs(spread - .03) < 1e-10:
+        assert passes[0] == 8  # borderline decisions use the original full pass
+    elif spread == .4:
+        assert passes == [actual["k"]]  # rejected widths use calibration rows only
+
+
 @pytest.mark.slow
 def test_spectral_denominator_fixes_structure_gradient():
     """Constant-ratio calibration (BOLT-LMM-inf) is biased by structure

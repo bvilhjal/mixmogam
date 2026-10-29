@@ -358,7 +358,7 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
     sqrt(lam K''(0) / V), so that the bulk agrees with the calibrated
     normal statistic; ``two_sided`` as in :func:`mixmogam._spa.spa_pvalue`.
     """
-    from mixmogam._spa import spa_pvalue
+    from mixmogam._spa import _binomial_spa, spa_pvalue
 
     n = st.lg.n
     p = np.full(idx.size, np.nan)
@@ -368,7 +368,7 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
         a = np.ascontiguousarray(A[:, g])
         a2 = float(a @ a)
         sel = np.flatnonzero(groups == g)
-        # Bound the (variants, samples, 4) probability tile to 8 MiB.
+        # Keep per-sample probability and genotype tiles bounded.
         tile = min(256, max(1, (8 * 1024**2) // (32 * n)))
         for start in range(0, sel.size, tile):
             rows = sel[start : start + tile]
@@ -379,18 +379,12 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
                 af = _allele_probabilities(z64 @ st.Q_raw, np.einsum("ij,ij->i", z64, z64),
                                             st.Q_raw, st.lg.mean[js], st.lg.sd[js])
                 called = np.asarray(st.lg.gt.G[:, js]).T != -1
-                freqs = np.zeros((rows.size, n, 4))
-                freqs[:, :, 0] = (1 - af) ** 2 * called
-                freqs[:, :, 1] = 2 * af * (1 - af) * called
-                freqs[:, :, 2] = af**2 * called
-                freqs[:, :, 3] = ~called
-                values = np.column_stack([np.zeros(rows.size), np.ones(rows.size),
-                                           np.full(rows.size, 2), st.lg.mean[js]])
                 variance = (2 * af * (1 - af) * called) @ (a * a)
                 raw_score = U[rows] * st.lg.sd[js] + st.lg.mean[js] * a.sum()
                 ratio = lam * variance / (V[rows] * st.lg.sd[js] ** 2)
-                p[rows], log_p[rows] = spa_pvalue(raw_score, a, values, freqs, var_ratio=ratio,
-                                                  two_sided=two_sided, n_threads=n_threads)
+                p[rows], log_p[rows] = _binomial_spa(raw_score, a, af, called, st.lg.mean[js],
+                                                     var_ratio=ratio, two_sided=two_sided,
+                                                     n_threads=n_threads, variance=variance)
                 continue
             values, freqs = np.zeros((rows.size, 4)), np.zeros((rows.size, 4))
             for r in range(rows.size):
@@ -579,6 +573,31 @@ def _spectral_quadform(st: _Setup, bases: list, delta: float) -> np.ndarray:
     return out
 
 
+def _spectral_calibration_quadform(st: _Setup, bases: list, delta: float, snps: np.ndarray) -> np.ndarray:
+    """The spectral quadratic form at the calibration variants only."""
+    out = np.zeros(st.lg.m)
+    selected = np.zeros(st.lg.m, dtype=bool)
+    selected[snps] = True
+    current, basis = None, None
+    tile = max(1, (32 * 1024**2) // max(8 * st.lg.n, 1))
+    for idx, g in st.lg.slices():
+        rows = idx[selected[idx]]
+        if not rows.size:
+            continue
+        key = g if len(bases) > 1 else 0
+        if key != current:
+            current = key
+            vals, U, lam_bar = bases[key]
+            basis = (vals, st.lg.project(U), lam_bar)
+        vals, U, lam_bar = basis
+        for start in range(0, rows.size, tile):
+            take = rows[start:start + tile]
+            P = st.lg._decode(take).astype(np.float64) @ U
+            top = np.einsum("ij,ij->i", P, P)
+            out[take] = (P * P) @ (1.0 / (vals + delta)) + (st.lg.zz[take] - top) / (lam_bar + delta)
+    return out
+
+
 def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResult:
     if any(extra.get(key) is False for key in ("cv_converged", "loco_converged")):
         warnings.warn("variational fit did not converge; inspect cv_converged/loco_converged before using results",
@@ -632,8 +651,26 @@ def _spectral_denominator(st: _Setup, vg: float, delta: float, cal: dict,
         raise ValueError("n_spectral must be a positive integer or 'auto'")
     widths = tuple(dict.fromkeys(min(k, st.lg.n - 2) for k in widths))
     best = None
-    for k in widths:
+    for width_index, k in enumerate(widths):
         bases = _loco_eigh(st, k, weights=weights)
+        if n_spectral == "auto" and width_index + 1 < len(widths):
+            # A different GEMM shape can change the last bits of a
+            # calibration quadratic form. Only skip a whole-genome pass
+            # for a clear rejection; check the full calculation near the
+            # threshold or when cancellation makes it ill-conditioned.
+            selected = _spectral_calibration_quadform(st, bases, delta, cal["snps"])
+            ratio = cal["d_prosp"] / (vg * selected[cal["snps"]])
+            mean = float(np.mean(ratio))
+            cv = float(np.std(ratio) / mean)
+            least = min(min(float(np.min(vals + delta)), bulk + delta) for vals, _, bulk in bases)
+            with np.errstate(divide="ignore", invalid="ignore"):
+                condition = (np.max(st.lg.zz[cal["snps"]] /
+                                    (least * np.abs(selected[cal["snps"]])))
+                             if least > 0 and np.size(cal["snps"]) else np.inf)
+            margin = (max(1e-10, 64 * np.finfo(float).eps * (st.lg.n + k) * condition)
+                      if np.isfinite(condition) else np.inf)
+            if np.isfinite(cv) and np.isfinite(margin) and cv > SPECTRAL_CV_TARGET + margin:
+                continue
         A = _spectral_quadform(st, bases, delta)
         ratio = cal["d_prosp"] / (vg * A[cal["snps"]])
         c_s = float(np.mean(ratio))
@@ -1458,7 +1495,8 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     effects and the engine's Gram cache before returning. Cross-fitted scores prepare both
     fits' Gram caches in one pass before the hold-out fit, within one
     ``gram_cache_bytes`` (:func:`mixmogam._vb._prepare_crossfit_grams`);
-    the hold-out fit's cache is released before the cross-fit.
+    the hold-out fit's cache is released before the cross-fit, whose first
+    sweep can use the freed budget to extend its cache.
 
     With ``folds`` (labels 0..k-1, :func:`_crossfit_folds`) the LOCO scores
     are cross-fitted: as in REGENIE's level 0, k genome-wide fits,
@@ -1524,12 +1562,13 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
         loco = eng.fit(np.repeat(ys[:, None], P, axis=1), col_fold, col_group,
                        PRIOR_ENET, np.tile(prior_row(*grid[best]), (P, 1)), np.full(P, s2e),
                        snp_scale=h2j, max_iter=vb_max_iter, tol=vb_tol,
-                       _compute_prediction=refit)  # ordinary cross-fit uses only beta below
+                       _compute_prediction=False, _extend_grams=True)
         if refit:
             prediction = np.empty((n, G))
-            for c in range(P):
-                rows = folds == col_fold[c]
-                prediction[rows, col_group[c]] = loco["prediction"][rows, c]
+            for f in range(k):
+                rows = np.flatnonzero(folds == f)
+                cols = np.flatnonzero(col_fold == f)
+                prediction[rows] = eng.predict(loco["beta"][:, cols], rows=rows)
         else:
             prediction = _out_of_fold_loco(st.lg, loco["beta"], folds)
         # Shrink an over-dispersed score, never inflate one: a slope above

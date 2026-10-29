@@ -165,6 +165,41 @@ def test_genotype_spa_uses_each_variants_dense_support(binary_problem, weighted)
         assert log_p[k] == pytest.approx(ref[1][0], rel=1e-5)
 
 
+@pytest.mark.parametrize("packed, weighted", [(False, False), (True, True)])
+@pytest.mark.parametrize("two_sided", ["distance", "doubled"])
+def test_covariate_genotype_spa_matches_four_point_oracle(binary_problem, packed, weighted, two_sided):
+    G, _, y, X, weights, _ = binary_problem
+    calls = np.ascontiguousarray(G.T)
+    calls[::17, ::13] = -1
+    gt = Genotypes(calls, chromosome=np.repeat(np.arange(5), calls.shape[1] // 5), packed=packed)
+    st = twostep._setup(y, gt, X, 25, 128, trait="binary", sample_weights=weights if weighted else None)
+    rng = np.random.default_rng(315)
+    A = rng.normal(size=(y.size, st.lg.n_groups))
+    idx = np.arange(1, gt.n_variants, 29)
+    V = rng.uniform(100., 300., idx.size)
+    U = rng.normal(0., 4., idx.size) * np.sqrt(V)
+    actual = twostep._genotype_spa(st, A, idx, U, V, 1.3, 1, two_sided=two_sided)
+    expected = [np.empty(idx.size), np.empty(idx.size)]
+    for g in np.unique(st.lg.groups[idx]):
+        r = np.flatnonzero(st.lg.groups[idx] == g)
+        js = idx[r]
+        a = A[:, g]
+        z = st.lg._decode(js, scaled=False).astype(float)
+        af = twostep._allele_probabilities(z @ st.Q_raw, np.einsum("ij,ij->i", z, z),
+                                           st.Q_raw, st.lg.mean[js], st.lg.sd[js])
+        called = np.asarray(st.lg.gt.G[:, js]).T != -1
+        freqs = np.stack([(1 - af)**2 * called, 2 * af * (1 - af) * called,
+                          af**2 * called, ~called], axis=-1)
+        values = np.column_stack([np.zeros(r.size), np.ones(r.size),
+                                  np.full(r.size, 2.), st.lg.mean[js]])
+        variance = (2 * af * (1 - af) * called) @ (a * a)
+        score = U[r] * st.lg.sd[js] + st.lg.mean[js] * a.sum()
+        ratio = 1.3 * variance / (V[r] * st.lg.sd[js]**2)
+        p, log_p = spa_pvalue(score, a, values, freqs, var_ratio=ratio, two_sided=two_sided)
+        expected[0][r], expected[1][r] = p, log_p
+    np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=1e-10, equal_nan=True)
+
+
 def dense_scan(G, y, Xd, w, offsets, groups, free=False):
     """Logistic score tests in allele units with each group's offset, the
     reference of binary HRATT's step 2: the score of a = w (y - mu) against

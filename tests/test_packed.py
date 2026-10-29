@@ -6,6 +6,7 @@ import numpy as np
 import pytest
 
 from mixmogam import gwas
+from mixmogam import _packed
 from mixmogam._loco import LocoGenotypes
 from mixmogam._packed import PackedCalls
 from mixmogam.genotypes import Genotypes, MISSING
@@ -67,6 +68,73 @@ def test_genotypes_methods_match_int8_storage():
     np.testing.assert_array_equal(np.asarray(got.G), want.G)
     for a, b in zip(packed.iter_snp_blocks(block=7), dense.iter_snp_blocks(block=7)):
         np.testing.assert_array_equal(a, b)
+
+
+@pytest.mark.parametrize("wanted", [["S4", "S0", "S6"], ["S4", "absent", "S0"]])
+def test_alignment_changes_only_the_new_packed_array(monkeypatch, wanted):
+    rng = np.random.default_rng(917)
+    calls = _calls(rng, 9, 11)
+    gt = Genotypes(calls, packed=True)
+    original = gt.G.data.copy()
+    # Alignment owns the sample-selection output; it need not copy it again.
+    def fail_copy(*args):
+        raise AssertionError("alignment copied packed data a second time")
+    monkeypatch.setattr(PackedCalls, "with_missing", fail_copy)
+    aligned, found = gt.align_samples(wanted, strict=False)
+    expected = np.full((len(wanted), calls.shape[1]), MISSING, dtype=np.int8)
+    for i, name in enumerate(wanted):
+        if found[i]:
+            expected[i] = calls[int(name[1:])]
+    np.testing.assert_array_equal(np.asarray(aligned.G), expected)
+    np.testing.assert_array_equal(gt.G.data, original)
+    assert not np.shares_memory(aligned.G.data, gt.G.data)
+
+
+def test_with_missing_is_non_destructive_for_read_only_packed_data():
+    calls = _calls(np.random.default_rng(3), 13, 9)
+    source = PackedCalls.pack(calls)
+    source.data.flags.writeable = False
+    before = source.data.copy()
+    drop = np.arange(13) % 3 == 0
+    masked = source.with_missing(drop)
+    calls[drop] = MISSING
+    np.testing.assert_array_equal(np.asarray(masked), calls)
+    np.testing.assert_array_equal(source.data, before)
+    assert not np.shares_memory(masked.data, source.data)
+
+
+@pytest.mark.parametrize("mapped", [False, True])
+def test_packed_sample_gather_matches_numpy_fallback(tmp_path, monkeypatch, mapped):
+    if not _packed.HAS_NUMBA:
+        pytest.skip("direct packed gather requires Numba")
+    rng = np.random.default_rng(501)
+    calls = _calls(rng, 13, 17)
+    data = PackedCalls.pack(calls).data
+    if mapped:
+        path = tmp_path / "calls.bin"
+        disk = np.memmap(path, dtype=np.uint8, mode="w+", shape=data.shape)
+        disk[:] = data
+        disk.flush()
+        data = np.memmap(path, dtype=np.uint8, mode="r", shape=data.shape)
+    else:
+        data.flags.writeable = False
+    source = PackedCalls(data, calls.shape[0])
+    before = source.data.copy()
+    for rows in (np.array([], dtype=np.int64), np.array([12, 0, -2, 0, 3]),
+                 np.array([True, False] * 6 + [True]), np.arange(13)[::-1]):
+        with monkeypatch.context() as patch:
+            def no_decode(*args):
+                raise AssertionError("packed sample selection decoded calls")
+            patch.setattr(PackedCalls, "_decode_columns", no_decode)
+            direct = source.take_samples(rows)
+        with monkeypatch.context() as patch:
+            patch.setattr(_packed, "HAS_NUMBA", False)
+            fallback = source.take_samples(rows)
+        np.testing.assert_array_equal(direct.data, fallback.data)
+        np.testing.assert_array_equal(np.asarray(direct), calls[rows])
+        if direct.shape[0] % 4:
+            assert not np.any(direct.data[:, -1] >> (2 * (direct.shape[0] % 4)))
+    np.testing.assert_array_equal(source.data, before)
 
 
 @pytest.mark.parametrize("n", [9, 12])

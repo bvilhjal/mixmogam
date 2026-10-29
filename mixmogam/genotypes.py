@@ -309,7 +309,9 @@ class Genotypes:
             missing = wanted[~found]
             raise KeyError(f"samples absent from genotypes: {missing[:5]} ...")
         if self.packed:
-            calls = self.G.take_samples(np.asarray(cols, dtype=np.int64)).with_missing(~found)
+            calls = self.G.take_samples(np.asarray(cols, dtype=np.int64))
+            if not found.all():
+                calls._set_missing(~found)  # take_samples owns its new data
         else:
             order = "F" if _variant_major(self.G) else "C"
             calls = np.full((wanted.size, self.n_variants), MISSING, dtype=np.int8, order=order)

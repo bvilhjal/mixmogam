@@ -870,6 +870,7 @@ class VBEngine:
         tol: float = 1e-6,
         *,
         _compute_prediction: bool = True,
+        _extend_grams: bool = False,
     ) -> dict:
         """Fit every column; returns ``{"beta", "resid", "iterations", ...}``.
 
@@ -927,6 +928,12 @@ class VBEngine:
         gram_folds, gidx = self._prepare_grams(col_fold)
         used_slots = set(np.unique(gidx).tolist())  # Gram slots this fit reads
         slot = gidx if self._full_slot else gidx - 1  # their stored positions
+        # HRATT can release its hold-out cache after joint preparation. Fill
+        # the cross-fit cache's remaining budget as its first sweep builds
+        # uncached blocks. Cached entries must contain every labeled slot.
+        extend = _extend_grams and self._grams is not None
+        remaining = (self.gram_cache_bytes - sum(g.nbytes + c.nbytes
+                     for g, c in zip(self._grams, self._coefs))) if extend else 0
         # Reuse the large workspaces. The residual itself stays float64; its
         # storage-precision image is refreshed after *every* block update.
         work = R.astype(zdt)
@@ -1001,7 +1008,22 @@ class VBEngine:
                     if self._grams is not None and b < len(self._grams):
                         grams, coefs = self._grams[b], self._coefs[b]
                     else:
-                        grams, coefs = self._gram(Zs, idx, gram_folds, used_slots)
+                        k = idx.size
+                        size = ((gram_folds.size + int(self._full_slot)) *
+                                (k * (k + 1) // 2) * zdt.itemsize +
+                                (gram_folds.size + 1) * k * q * 8)
+                        cache = extend and b == len(self._grams) and size <= remaining
+                        grams, coefs = self._gram(Zs, idx, gram_folds, None if cache else used_slots)
+                        if cache:
+                            self._grams.append(grams)
+                            try:
+                                self._coefs.append(coefs)
+                            except BaseException:
+                                self._grams.pop()
+                                raise
+                            remaining -= size
+                        elif extend:
+                            extend = False  # preserve the cached prefix
                     # GEMMs in the storage precision (float32 by default): no
                     # per-sweep widening of the genotype block, and the residual
                     # is recomputed exactly below
@@ -1155,8 +1177,9 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     hold-out slot of every sub-block, read in every sweep of every
     candidate prior, then cross-fit slots in order with what remains. Both
     are held during the hold-out fit. Sub-blocks left out are recomputed
-    every sweep by the same arithmetic, and an engine left without any
-    prepares its own cache when its fit starts.
+    every sweep by the same arithmetic. Once the hold-out cache is released,
+    the cross-fit may extend its prefix while computing the first sweep.
+    An engine left without any cache prepares its own when its fit starts.
     """
     lg, rows = crossfit.lg, crossfit.sub_block
     if cv.lg is not lg or cv.sub_block != rows:
@@ -1204,7 +1227,7 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     if crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
         warnings.warn(
             f"VB Gram cache holds {n_cv} of {sizes.size} sub-blocks for the hold-out fit and "
-            f"{n_fit} for the cross-fitted fits; the rest are recomputed every sweep. Increase "
+            f"{n_fit} for the cross-fitted fits; uncached blocks are recomputed as needed. Increase "
             f"gram_cache_bytes (currently {budget / 1024**3:.2f} GiB, shared by both) "
             "if memory permits.", RuntimeWarning, stacklevel=3)
         cv._cache_warned = crossfit._cache_warned = True

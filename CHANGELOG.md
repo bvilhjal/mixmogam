@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0.dev8] - 2026-10-29
+
 ### Added
 
 - `principal_components(..., solver="randomized")` provides a top-k
@@ -32,6 +34,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- HRATT cross-fits can reuse the Gram budget released by the hold-out fit;
+  strong-structure refits predict only the rows held out by each fold.
+  Automatic spectral width selection evaluates rejected candidates on the
+  calibration variants, with whole-genome checks near the decision boundary
+  or under ill-conditioning. Conditional-binomial saddlepoint tails use a
+  specialized CGF, falling back to the original calculation near zero and
+  support boundaries. These alternative arithmetic orders can change the
+  last bits of scores and tail probabilities. Packed sample selection
+  gathers two-bit codes directly with Numba, and alignment avoids copying
+  its newly repacked calls a second time.
 - Parallel VB fits (`n_threads` above one, several model columns) let
   Numba's OpenMP workers spin for 1 ms between launches instead of
   sleeping at once (LLVM's default on hybrid CPUs such as Apple silicon),

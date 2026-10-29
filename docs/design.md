@@ -135,7 +135,9 @@ proximal-contamination deflation.
   hold-out and cross-fitted fits' Grams in one pass: the cross-fit folds' products, their sum and one
   product over the hold-out give both, within one shared budget that
   caches every hold-out Gram first, and neither stores the all-sample
-  Gram, which neither reads. With `loco_folds=1` both fits share one engine
+  Gram, which neither reads. Once the hold-out cache is released, the
+  cross-fit fills its remaining budget with first-sweep Gram matrices, in
+  block order. With `loco_folds=1` both fits share one engine
   and one cache, which keeps the all-sample Gram. Reused workspaces avoid repeatedly
   widening whole genotype blocks; residual accumulation remains float64,
   and the residual update tests sample folds instead of reading an
@@ -244,7 +246,9 @@ model is fitted genome-wide on all but one fold, five fits in one sweep, and
 a sample's score for group g is its own fold's fit without group g's
 variants, as in REGENIE's level 0. With strong structure each group's model
 is refitted without its variants instead (five fits per group,
-`extra["loco_refit"]`).
+`extra["loco_refit"]`). Only each fold's held-out samples are predicted;
+changing a matrix product's row count can alter its last bits on some BLAS
+implementations.
 
 Each group's score then enters with its own least-squares coefficient, or
 logistic coefficient for binary traits, kept in [0, 1]. This out-of-fold
@@ -387,6 +391,9 @@ called genotype independently from Binomial(2, p_ij), conditional on the
 observed missing-call mask. This uses the whole conditional distribution,
 not just its variance, and assumes Hardy-Weinberg equilibrium given the
 covariates. An intercept-only design retains empirical genotype frequencies.
+The conditional-binomial cumulants are evaluated directly, without a
+four-point probability array; scores close to zero or to a support boundary
+use the original four-point calculation, where rounding is most sensitive.
 A pooled distribution with a corrected variance still gave inflated tails
 when ancestry predicted both weights and allele frequency. Two departures from common practice
 follow from pilots: the Huber-White sandwich sum a^2 Z^2 of weighted GWAS
@@ -466,7 +473,9 @@ variant-major calls, and selecting or aligning samples keeps that order.
 Analysis entry points make one variant-major copy of sample-major int8
 input rather than decoding through its slow stride on every pass. General
 packed indexing has a direct compiled decoder, and packed QC counts calls
-through 256-entry byte tables without a decoded temporary.
+through 256-entry byte tables without a decoded temporary. Sample selection
+gathers the two-bit codes directly when Numba is available; alignment marks
+absent samples in the newly allocated packed output.
 One-pass consumers decode 16 MiB slices
 (at least 256 variants, at most 512 MiB) into reused buffers; those that
 need float64 rows (predictions, out-of-fold scores, test statistics)
@@ -520,7 +529,11 @@ c'v_g\left[\left\|(L_g+\delta I)^{-1/2}U_g'z\right\|^2
 \]
 
 with c' calibrated on the same 30 SNPs. The width is adaptive: k doubles
-from 64 to at most 512 until the calibration spread falls below 3%. The
+from 64 to at most 512 until the calibration spread falls below 3%.
+Rejected widths are screened on the calibration SNPs alone. The original
+whole-genome arithmetic is used for the accepted width and for decisions
+near 3% or flagged as ill-conditioned; the guard is conservative, not a
+proof of bit-identical width selection on every numerical platform. The
 bulk of an LD-rich kinship is not flat. On a coalescent sample (n = 1,500) the
 constant left a 1.11 → 0.93 chi2 gradient against exact by loading quintile,
 which the spectral denominator removed at k = 256 (archive

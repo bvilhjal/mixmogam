@@ -1,6 +1,7 @@
 """Saddlepoint p-values of retrospective score statistics against exact
 distributions."""
 
+import importlib.util
 import itertools
 
 import numpy as np
@@ -206,6 +207,7 @@ def test_individual_genotype_cgf_matches_independent_binomial_formula():
 
 def test_ancestry_specific_tails_against_exact_null_convolution():
     from scipy import optimize, signal
+    from mixmogam._spa import _binomial_spa
     sizes = np.array([10, 990, 800, 3200])
     coeff = np.array([99, -1, 4, -1])
     af = np.array([.02, .02, .4, .4])
@@ -226,6 +228,12 @@ def test_ancestry_specific_tails_against_exact_null_convolution():
     for level in (1e-3, 1e-4, 1e-5):
         cutoff = optimize.brentq(lambda u: spa_pvalue([u], a, [[0., 1., 2.]], frequencies)[0][0] - level,
                                   2 * sd, 15 * sd)
+        # The specialized binomial path must represent the same score and
+        # retain the independently calculated exact-null tail behavior.
+        expected = np.sum(2 * probabilities * a)
+        p = _binomial_spa([cutoff + expected], a, probabilities[None, :],
+                          np.ones((1, a.size), dtype=bool), [0.], two_sided="distance")[0][0]
+        assert p == pytest.approx(level, rel=1e-9)
         observed = exact[np.abs(support) >= cutoff].sum()
         # Integer scores make the cutoff discrete. The old pooled CGF
         # over-rejected 4.7-fold at 1e-4 despite an exact variance correction.
@@ -245,6 +253,111 @@ def test_individual_probabilities_are_parallel_invariant_and_condition_on_missin
     without = spa_pvalue(u - a[0], a[1:], np.tile(np.arange(3.), (3, 1)), f[:, 1:])
     np.testing.assert_allclose(first, without, rtol=1e-11)
     np.testing.assert_array_equal(first, spa_pvalue(u, a, np.tile(np.arange(3.), (3, 1)), f, n_threads=2))
+
+
+@pytest.mark.parametrize("two_sided", ["distance", "doubled"])
+@pytest.mark.parametrize("n_threads", [1, 2])
+def test_conditional_binomial_spa_matches_four_point_oracle(two_sided, n_threads):
+    from mixmogam._spa import _binomial_spa
+    rng = np.random.default_rng(1309)
+    n, k = 120, 24
+    a = np.exp(rng.normal(0, .7, n)) * rng.choice([-1., 1.], n)
+    a[0] = 0
+    af = rng.uniform(.5 / n, 1 - .5 / n, (k, n))
+    af[:, :2] = [0.5 / n, 1 - 0.5 / n]
+    called = rng.random((k, n)) > .1
+    called[0] = False
+    missing = rng.uniform(0., 2., k)
+    freqs = np.stack([(1 - af)**2 * called, 2 * af * (1 - af) * called,
+                      af**2 * called, ~called], axis=-1)
+    values = np.column_stack([np.zeros(k), np.ones(k), np.full(k, 2.), missing])
+    expected = np.einsum("rns,rs,n->r", freqs, values, a)
+    variance = (2 * af * (1 - af) * called) @ (a * a)
+    ratio = np.linspace(.5, 1.5, k)
+    for z in (-12., -8., -2., 2., 8., 12.):
+        score = expected + z * np.sqrt(variance)
+        oracle = spa_pvalue(score, a, values, freqs, var_ratio=ratio, two_sided=two_sided)
+        actual = _binomial_spa(score, a, af, called, missing, var_ratio=ratio,
+                               two_sided=two_sided, n_threads=n_threads)
+        np.testing.assert_allclose(actual, oracle, rtol=2e-10, atol=2e-10, equal_nan=True)
+
+
+def test_binomial_cgf_agrees_with_closed_form():
+    from scipy.special import expit
+    from mixmogam._spa import _binomial_cgf
+    a = np.array([-2., -.1, .2, 3., 0.])
+    af = np.array([.001, .1, .5, .999, .3])
+    called = np.array([True, False, True, True, True])
+    for t in (-100., -1., -1e-6, 0., 1e-6, 1., 100.):
+        x = t * a[called]
+        p = af[called]
+        aa = a[called]
+        tilted = expit(np.log(p) - np.log1p(-p) + x)
+        # logaddexp is a separate stable expression for the same CGF.
+        k0 = np.sum(2 * (np.logaddexp(np.log1p(-p), np.log(p) + x) - p * x))
+        expected = (k0, np.sum(2 * aa * (tilted - p)),
+                    np.sum(2 * aa * aa * tilted * (1 - tilted)))
+        np.testing.assert_allclose(_binomial_cgf(t, a, af, called), expected, atol=2e-13, rtol=1e-10)
+
+    # Computing p_t * (1 - p_t) loses all curvature once p_t rounds to
+    # one; expm1(-50) similarly rounds to -1 for the opposite tilt.
+    for t in (-50., 50.):
+        e = np.exp(-abs(t))
+        curvature = 2 * e / (1 + e)**2
+        actual = _binomial_cgf(t, np.ones(1), np.full(1, .5), np.ones(1, dtype=bool))
+        assert actual[2] == pytest.approx(curvature, rel=1e-14)
+
+
+@pytest.mark.parametrize("two_sided", ["distance", "doubled"])
+def test_conditional_binomial_uses_four_point_oracle_at_support_boundary(two_sided):
+    from mixmogam._spa import _binomial_spa, _support
+    rng = np.random.default_rng(71)
+    for _ in range(5):
+        n = 40
+        a = rng.normal(size=n)
+        af = rng.uniform(.001, .999, (1, n))
+        called = rng.random((1, n)) > .2
+        missing = np.array([.7])
+        values = np.array([[0., 1., 2., missing[0]]])
+        freqs = np.stack([(1 - af)**2 * called, 2 * af * (1 - af) * called,
+                          af**2 * called, ~called], axis=-1)
+        normalized = freqs / freqs.sum(axis=-1, keepdims=True)
+        center = np.einsum("ris,rs,i->r", normalized, values, a)[0]
+        lower, upper = _support(a, values[0], normalized[0])
+        for i, boundary in enumerate((lower, upper, -lower, -upper)):
+            for offset in (-1e-12, 0., 1e-12):
+                score = [center + boundary + offset]
+                with np.errstate(invalid="ignore"):
+                    expected = spa_pvalue(score, a, values, freqs, two_sided=two_sided)
+                    actual = _binomial_spa(score, a, af, called, missing, two_sided=two_sided)
+                if two_sided == "distance" or i < 2:
+                    np.testing.assert_array_equal(actual, expected)
+                else:
+                    np.testing.assert_allclose(actual, expected, rtol=1e-10, atol=1e-10, equal_nan=True)
+
+
+def test_conditional_binomial_fallback_without_numba(monkeypatch):
+    from mixmogam import _fast, _spa
+    monkeypatch.setattr(_fast, "HAS_NUMBA", False)
+    spec = importlib.util.spec_from_file_location("mixmogam._spa_without_numba", _spa.__file__)
+    fallback = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fallback)
+    rng = np.random.default_rng(508)
+    n, k = 40, 4
+    a = rng.normal(size=n)
+    af = rng.uniform(.01, .99, (k, n))
+    called = rng.random((k, n)) > .1
+    missing = rng.uniform(0., 2., k)
+    freqs = np.stack([(1 - af)**2 * called, 2 * af * (1 - af) * called,
+                      af**2 * called, ~called], axis=-1)
+    values = np.column_stack([np.zeros(k), np.ones(k), np.full(k, 2.), missing])
+    expected = np.einsum("rns,rs,n->r", freqs, values, a)
+    sd = np.sqrt((2 * af * (1 - af) * called) @ (a * a))
+    score = expected + np.array([0., 2., -4., 8.]) * sd
+    with np.errstate(invalid="ignore"):
+        oracle = fallback.spa_pvalue(score, a, values, freqs)
+        actual = fallback._binomial_spa(score, a, af, called, missing, n_threads=2)
+    np.testing.assert_allclose(actual, oracle, rtol=1e-10, atol=1e-10, equal_nan=True)
 
 
 @pytest.mark.numba

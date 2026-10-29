@@ -77,29 +77,37 @@ def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binar
     actual = twostep._hratt_fit_scores(*args, **kwargs)
     # The hold-out error decodes only the held-out samples; full predictions
     # remain where their values are used (in-sample and refitted scores).
-    assert passes == ["held"] + (["all"] if mode in ("refit", "in_sample") else [])
+    assert passes == ["held"] + (["held"] * 3 if mode == "refit" else
+                                ["all"] if mode == "in_sample" else [])
     passes.clear()
+    reference = {}
 
     def full_fit(self, *args, **kwargs):
         # The original path always materialized the full prediction/residual
-        return fit(self, *args, **{**kwargs, "_compute_prediction": True})
+        out = fit(self, *args, **{**kwargs, "_compute_prediction": True})
+        reference.update(prediction=out["prediction"], fold=0)
+        return out
 
     def full_predict(self, beta, rows=None):
         # and took the held-out rows of the full prediction.
         passes.append("all")
+        if mode == "refit" and rows is not None and reference["prediction"].shape[1] == 9:
+            f = reference["fold"]
+            reference["fold"] += 1
+            return reference["prediction"][rows, f * 3:(f + 1) * 3]
         full = predict(self, beta)
         return full if rows is None else full[rows]
 
     monkeypatch.setattr(VBEngine, "fit", full_fit)
     monkeypatch.setattr(VBEngine, "predict", full_predict)
     expected = twostep._hratt_fit_scores(*args, **kwargs)
-    assert len(passes) == (2 if mode == "zero_h2" else 3)
+    assert len(passes) == (6 if mode == "refit" else 2 if mode == "zero_h2" else 3)
     assert actual.keys() == expected.keys()
     for key in actual:
-        if key == "mse" and sys.platform != "darwin":
+        if mode == "refit" or (key == "mse" and sys.platform != "darwin"):
             # Accelerate rounds each GEMM row apart from the others; other
             # BLAS builds may round a row by its place in the product.
-            np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12, err_msg=key)
+            np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12, atol=1e-13, err_msg=key)
         else:
             np.testing.assert_array_equal(actual[key], expected[key], err_msg=key)
 

@@ -1,0 +1,2282 @@
+[
+  {
+    "case": "cache",
+    "rep": -1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/warm/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.5351697080768645,
+      "peak_rss_bytes": 283852800,
+      "user_seconds": 3.72519,
+      "system_seconds": 0.240942,
+      "load_average_before": [
+        2.7060546875,
+        2.61767578125,
+        2.42822265625
+      ],
+      "load_wait_seconds": 4.00003045797348e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 124,
+      "predict_seconds": 0.20876599894836545,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 1.6155740828253329
+    }
+  },
+  {
+    "case": "cache",
+    "rep": -1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/warm/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 4.301972624845803,
+      "peak_rss_bytes": 291028992,
+      "user_seconds": 3.7123559999999998,
+      "system_seconds": 0.231819,
+      "load_average_before": [
+        2.6494140625,
+        2.60693359375,
+        2.42529296875
+      ],
+      "load_wait_seconds": 5.749985575675964e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 148,
+      "predict_seconds": 0.1917818752117455,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 1.610377499833703
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 0,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-1/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.771679166238755,
+      "peak_rss_bytes": 204423168,
+      "user_seconds": 0.94926,
+      "system_seconds": 0.19555599999999998,
+      "load_average_before": [
+        2.67724609375,
+        2.61328125,
+        2.42822265625
+      ],
+      "load_wait_seconds": 5.667097866535187e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 148,
+      "predict_seconds": 0.019688707776367664,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.21128974994644523
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 0,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-1/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.3575860001146793,
+      "peak_rss_bytes": 213811200,
+      "user_seconds": 0.840563,
+      "system_seconds": 0.16411599999999998,
+      "load_average_before": [
+        2.70263671875,
+        2.61962890625,
+        2.43115234375
+      ],
+      "load_wait_seconds": 5.500391125679016e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 124,
+      "predict_seconds": 0.008956791833043098,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.13703083293512464
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-2/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.4245783751830459,
+      "peak_rss_bytes": 205307904,
+      "user_seconds": 0.8406669999999999,
+      "system_seconds": 0.166796,
+      "load_average_before": [
+        2.70263671875,
+        2.61962890625,
+        2.43115234375
+      ],
+      "load_wait_seconds": 6.1658211052417755e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 124,
+      "predict_seconds": 0.005535957869142294,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.11480799969285727
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-2/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7537936246953905,
+      "peak_rss_bytes": 204390400,
+      "user_seconds": 0.9567749999999999,
+      "system_seconds": 0.204361,
+      "load_average_before": [
+        2.70263671875,
+        2.61962890625,
+        2.43115234375
+      ],
+      "load_wait_seconds": 6.167218089103699e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 148,
+      "predict_seconds": 0.005544667597860098,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.13009804114699364
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 2,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-3/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7446001670323312,
+      "peak_rss_bytes": 204570624,
+      "user_seconds": 0.954658,
+      "system_seconds": 0.20313799999999999,
+      "load_average_before": [
+        2.64599609375,
+        2.60888671875,
+        2.42822265625
+      ],
+      "load_wait_seconds": 5.582813173532486e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 148,
+      "predict_seconds": 0.005066792480647564,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.12225383380427957
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 2,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-3/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.632920416072011,
+      "peak_rss_bytes": 206553088,
+      "user_seconds": 0.940064,
+      "system_seconds": 0.20071599999999998,
+      "load_average_before": [
+        2.64599609375,
+        2.60888671875,
+        2.42822265625
+      ],
+      "load_wait_seconds": 5.542300641536713e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 124,
+      "predict_seconds": 0.004811832681298256,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.111886250320822
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 3,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-4/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.269809584133327,
+      "peak_rss_bytes": 208830464,
+      "user_seconds": 0.832784,
+      "system_seconds": 0.166711,
+      "load_average_before": [
+        2.64599609375,
+        2.60888671875,
+        2.42822265625
+      ],
+      "load_wait_seconds": 5.541834980249405e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 124,
+      "predict_seconds": 0.004860292188823223,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.11172995809465647
+    }
+  },
+  {
+    "case": "cache",
+    "rep": 3,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "cache",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/cache/rep-4/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.2600772911682725,
+      "peak_rss_bytes": 213254144,
+      "user_seconds": 0.847795,
+      "system_seconds": 0.171041,
+      "load_average_before": [
+        2.64599609375,
+        2.60888671875,
+        2.42822265625
+      ],
+      "load_wait_seconds": 5.417037755250931e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 148,
+      "predict_seconds": 0.004533832892775536,
+      "predict_calls": [
+        [
+          500,
+          1
+        ],
+        [
+          100,
+          1
+        ]
+      ],
+      "gram_cache_bytes": 2117377,
+      "initial_crossfit_blocks": 3,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 4,
+      "fit_seconds": 0.11993004195392132
+    }
+  },
+  {
+    "case": "refit",
+    "rep": -1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/warm/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.069155208300799,
+      "peak_rss_bytes": 351961088,
+      "user_seconds": 1.538779,
+      "system_seconds": 0.18953199999999998,
+      "load_average_before": [
+        3.07470703125,
+        2.6982421875,
+        2.46044921875
+      ],
+      "load_wait_seconds": 5.749985575675964e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.08794620865955949,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.7442651246674359
+    }
+  },
+  {
+    "case": "refit",
+    "rep": -1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/warm/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.2474866253323853,
+      "peak_rss_bytes": 352157696,
+      "user_seconds": 1.513863,
+      "system_seconds": 0.206249,
+      "load_average_before": [
+        3.07470703125,
+        2.6982421875,
+        2.46044921875
+      ],
+      "load_wait_seconds": 5.749985575675964e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.025206456426531076,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          2000,
+          50
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.7064173752442002
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 0,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-1/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.042689375113696,
+      "peak_rss_bytes": 343261184,
+      "user_seconds": 1.232193,
+      "system_seconds": 0.200813,
+      "load_average_before": [
+        2.98828125,
+        2.6865234375,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.291774868965149e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.024500082712620497,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          2000,
+          50
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.41633308259770274
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 0,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-1/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7948061251081526,
+      "peak_rss_bytes": 333709312,
+      "user_seconds": 1.200359,
+      "system_seconds": 0.184632,
+      "load_average_before": [
+        2.98828125,
+        2.6865234375,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.416106432676315e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.03556720819324255,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.39790954208001494
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-2/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.0445572501048446,
+      "peak_rss_bytes": 324059136,
+      "user_seconds": 1.265734,
+      "system_seconds": 0.205619,
+      "load_average_before": [
+        2.98828125,
+        2.6865234375,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.249865353107452e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.025423333048820496,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.3776554171927273
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-2/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.05044125020504,
+      "peak_rss_bytes": 333037568,
+      "user_seconds": 1.263063,
+      "system_seconds": 0.21382099999999998,
+      "load_average_before": [
+        2.98876953125,
+        2.69140625,
+        2.46044921875
+      ],
+      "load_wait_seconds": 5.62518835067749e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.026355791836977005,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          2000,
+          50
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.3805099166929722
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 2,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-3/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.014505499973893,
+      "peak_rss_bytes": 333004800,
+      "user_seconds": 1.250055,
+      "system_seconds": 0.206343,
+      "load_average_before": [
+        2.98876953125,
+        2.69140625,
+        2.46044921875
+      ],
+      "load_wait_seconds": 8.541159331798553e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.025092083029448986,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          2000,
+          50
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.37884675012901425
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 2,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-3/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.8655300829559565,
+      "peak_rss_bytes": 326746112,
+      "user_seconds": 1.206254,
+      "system_seconds": 0.18670699999999998,
+      "load_average_before": [
+        2.9091796875,
+        2.6796875,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.541834980249405e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.025051207281649113,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.37731925025582314
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 3,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-4/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.003191208001226,
+      "peak_rss_bytes": 325107712,
+      "user_seconds": 1.250887,
+      "system_seconds": 0.20169399999999998,
+      "load_average_before": [
+        2.9091796875,
+        2.6796875,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.000270903110504e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.02520520891994238,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ],
+        [
+          400,
+          10
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.37642504181712866
+    }
+  },
+  {
+    "case": "refit",
+    "rep": 3,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "refit",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/refit/rep-4/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.8299664999358356,
+      "peak_rss_bytes": 334905344,
+      "user_seconds": 1.216343,
+      "system_seconds": 0.199288,
+      "load_average_before": [
+        2.9091796875,
+        2.6796875,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.33275306224823e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "gram": 0,
+      "predict_seconds": 0.024398459121584892,
+      "predict_calls": [
+        [
+          2000,
+          1
+        ],
+        [
+          400,
+          1
+        ],
+        [
+          2000,
+          50
+        ]
+      ],
+      "gram_cache_bytes": 1000000000,
+      "initial_crossfit_blocks": 50,
+      "cv_converged": true,
+      "loco_converged": true,
+      "loco_iterations": 6,
+      "fit_seconds": 0.3812219584360719
+    }
+  },
+  {
+    "case": "spa",
+    "rep": -1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/warm/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.5381373330019414,
+      "peak_rss_bytes": 234831872,
+      "user_seconds": 1.732469,
+      "system_seconds": 0.21276299999999998,
+      "load_average_before": [
+        2.916015625,
+        2.6845703125,
+        2.46044921875
+      ],
+      "load_wait_seconds": 5.166046321392059e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.9539558328688145
+    }
+  },
+  {
+    "case": "spa",
+    "rep": -1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/warm/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 3.1924677090719342,
+      "peak_rss_bytes": 253231104,
+      "user_seconds": 2.345795,
+      "system_seconds": 0.22985499999999998,
+      "load_average_before": [
+        2.916015625,
+        2.6845703125,
+        2.46044921875
+      ],
+      "load_wait_seconds": 6.250105798244476e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 1.5427435422316194
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 0,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-1/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.575187916867435,
+      "peak_rss_bytes": 305233920,
+      "user_seconds": 1.9208669999999999,
+      "system_seconds": 0.207153,
+      "load_average_before": [
+        2.84228515625,
+        2.6728515625,
+        2.45751953125
+      ],
+      "load_wait_seconds": 5.457550287246704e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 1.157462541013956
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 0,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-1/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.1215143338777125,
+      "peak_rss_bytes": 216137728,
+      "user_seconds": 1.325039,
+      "system_seconds": 0.207976,
+      "load_average_before": [
+        2.84228515625,
+        2.6728515625,
+        2.45751953125
+      ],
+      "load_wait_seconds": 6.207730621099472e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.5133398748002946
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-2/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.1344852498732507,
+      "peak_rss_bytes": 214269952,
+      "user_seconds": 1.326872,
+      "system_seconds": 0.20832299999999998,
+      "load_average_before": [
+        3.0146484375,
+        2.71142578125,
+        2.47216796875
+      ],
+      "load_wait_seconds": 5.166977643966675e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.5050931666046381
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-2/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.7980242501944304,
+      "peak_rss_bytes": 263405568,
+      "user_seconds": 1.9706679999999999,
+      "system_seconds": 0.22347799999999998,
+      "load_average_before": [
+        3.0146484375,
+        2.71142578125,
+        2.47216796875
+      ],
+      "load_wait_seconds": 5.584210157394409e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 1.1460633748210967
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 2,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-3/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.728956709150225,
+      "peak_rss_bytes": 290471936,
+      "user_seconds": 1.9457229999999999,
+      "system_seconds": 0.216602,
+      "load_average_before": [
+        2.93310546875,
+        2.69921875,
+        2.46923828125
+      ],
+      "load_wait_seconds": 5.917157977819443e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 1.148168709129095
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 2,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-3/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.0237174169160426,
+      "peak_rss_bytes": 231047168,
+      "user_seconds": 1.292931,
+      "system_seconds": 0.19745,
+      "load_average_before": [
+        2.93310546875,
+        2.69921875,
+        2.46923828125
+      ],
+      "load_wait_seconds": 5.375128239393234e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.5077622919343412
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 3,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-4/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.145665124990046,
+      "peak_rss_bytes": 251068416,
+      "user_seconds": 1.32491,
+      "system_seconds": 0.215305,
+      "load_average_before": [
+        3.01806640625,
+        2.720703125,
+        2.47802734375
+      ],
+      "load_wait_seconds": 4.9578957259655e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.5208280831575394
+    }
+  },
+  {
+    "case": "spa",
+    "rep": 3,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spa",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spa/rep-4/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 2.777743250131607,
+      "peak_rss_bytes": 248397824,
+      "user_seconds": 1.9648029999999999,
+      "system_seconds": 0.224154,
+      "load_average_before": [
+        3.01806640625,
+        2.720703125,
+        2.47802734375
+      ],
+      "load_wait_seconds": 7.166992872953415e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 1.1444952497258782
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": -1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/warm/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.65266237501055,
+      "peak_rss_bytes": 275054592,
+      "user_seconds": 0.9306359999999999,
+      "system_seconds": 0.19536799999999999,
+      "load_average_before": [
+        3.0966796875,
+        2.74169921875,
+        2.48681640625
+      ],
+      "load_wait_seconds": 5.375128239393234e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.018846792168915272
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": -1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/warm/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.64099624985829,
+      "peak_rss_bytes": 284639232,
+      "user_seconds": 0.933697,
+      "system_seconds": 0.20097199999999998,
+      "load_average_before": [
+        3.0966796875,
+        2.74169921875,
+        2.48681640625
+      ],
+      "load_wait_seconds": 5.791895091533661e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.03902870789170265
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 0,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-1/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7172405421733856,
+      "peak_rss_bytes": 275005440,
+      "user_seconds": 0.9559329999999999,
+      "system_seconds": 0.20646499999999998,
+      "load_average_before": [
+        3.0966796875,
+        2.74169921875,
+        2.48681640625
+      ],
+      "load_wait_seconds": 4.541128873825073e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.03805833403021097
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 0,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-1/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.5467882081866264,
+      "peak_rss_bytes": 279576576,
+      "user_seconds": 0.8964439999999999,
+      "system_seconds": 0.189336,
+      "load_average_before": [
+        3.0087890625,
+        2.72900390625,
+        2.48388671875
+      ],
+      "load_wait_seconds": 6.166286766529083e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.021076209377497435
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-2/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.770297707989812,
+      "peak_rss_bytes": 294043648,
+      "user_seconds": 0.974347,
+      "system_seconds": 0.216278,
+      "load_average_before": [
+        3.0087890625,
+        2.72900390625,
+        2.48388671875
+      ],
+      "load_wait_seconds": 5.0836242735385895e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.02155337482690811
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-2/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.3284454997628927,
+      "peak_rss_bytes": 281788416,
+      "user_seconds": 0.852416,
+      "system_seconds": 0.174513,
+      "load_average_before": [
+        3.0078125,
+        2.7333984375,
+        2.48681640625
+      ],
+      "load_wait_seconds": 6.084330379962921e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.03826204128563404
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 2,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-3/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7757397089153528,
+      "peak_rss_bytes": 275136512,
+      "user_seconds": 0.9823839999999999,
+      "system_seconds": 0.21556499999999998,
+      "load_average_before": [
+        3.0078125,
+        2.7333984375,
+        2.48681640625
+      ],
+      "load_wait_seconds": 5.208421498537064e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.03725279122591019
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 2,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-3/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.5868662921711802,
+      "peak_rss_bytes": 297795584,
+      "user_seconds": 0.926225,
+      "system_seconds": 0.198786,
+      "load_average_before": [
+        3.0078125,
+        2.7333984375,
+        2.48681640625
+      ],
+      "load_wait_seconds": 5.207955837249756e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.02269829111173749
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 3,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-4/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.2808318748138845,
+      "peak_rss_bytes": 282542080,
+      "user_seconds": 0.839739,
+      "system_seconds": 0.17005299999999998,
+      "load_average_before": [
+        3.0078125,
+        2.7333984375,
+        2.48681640625
+      ],
+      "load_wait_seconds": 6.041955202817917e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.018063249997794628
+    }
+  },
+  {
+    "case": "spectral",
+    "rep": 3,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "spectral",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/spectral/rep-4/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.6182045829482377,
+      "peak_rss_bytes": 274989056,
+      "user_seconds": 0.9239809999999999,
+      "system_seconds": 0.191431,
+      "load_average_before": [
+        3.0068359375,
+        2.73779296875,
+        2.48974609375
+      ],
+      "load_wait_seconds": 5.542300641536713e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "fit_seconds": 0.03697120817378163
+    }
+  },
+  {
+    "case": "packed",
+    "rep": -1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/warm/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.9380157911218703,
+      "peak_rss_bytes": 285868032,
+      "user_seconds": 1.145927,
+      "system_seconds": 0.210719,
+      "load_average_before": [
+        3.0068359375,
+        2.73779296875,
+        2.48974609375
+      ],
+      "load_wait_seconds": 5.6247226893901825e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.4320536246523261
+    }
+  },
+  {
+    "case": "packed",
+    "rep": -1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/warm/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7838465832173824,
+      "peak_rss_bytes": 306544640,
+      "user_seconds": 1.077461,
+      "system_seconds": 0.194543,
+      "load_average_before": [
+        3.0068359375,
+        2.73779296875,
+        2.48974609375
+      ],
+      "load_wait_seconds": 5.875248461961746e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.41499629197642207
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 0,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-1/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.8212955840863287,
+      "peak_rss_bytes": 295239680,
+      "user_seconds": 0.9687659999999999,
+      "system_seconds": 0.205207,
+      "load_average_before": [
+        3.166015625,
+        2.77490234375,
+        2.50439453125
+      ],
+      "load_wait_seconds": 5.791895091533661e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.3082165000960231
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 0,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-1/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7488715830259025,
+      "peak_rss_bytes": 277610496,
+      "user_seconds": 0.958526,
+      "system_seconds": 0.195377,
+      "load_average_before": [
+        3.166015625,
+        2.77490234375,
+        2.50439453125
+      ],
+      "load_wait_seconds": 5.249865353107452e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.2871809583157301
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 1,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-2/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7400075001642108,
+      "peak_rss_bytes": 277184512,
+      "user_seconds": 0.966575,
+      "system_seconds": 0.197269,
+      "load_average_before": [
+        3.072265625,
+        2.76171875,
+        2.5009765625
+      ],
+      "load_wait_seconds": 5.2908435463905334e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.2654211251065135
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 1,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-2/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7462764591909945,
+      "peak_rss_bytes": 294944768,
+      "user_seconds": 0.96132,
+      "system_seconds": 0.201821,
+      "load_average_before": [
+        3.072265625,
+        2.76171875,
+        2.5009765625
+      ],
+      "load_wait_seconds": 5.542300641536713e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.25683699967339635
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 2,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-3/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.6928277080878615,
+      "peak_rss_bytes": 295550976,
+      "user_seconds": 0.946986,
+      "system_seconds": 0.198484,
+      "load_average_before": [
+        3.072265625,
+        2.76171875,
+        2.5009765625
+      ],
+      "load_wait_seconds": 5.166977643966675e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.24040887504816055
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 2,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-3/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.712860332801938,
+      "peak_rss_bytes": 277954560,
+      "user_seconds": 0.965602,
+      "system_seconds": 0.196703,
+      "load_average_before": [
+        2.986328125,
+        2.7490234375,
+        2.49755859375
+      ],
+      "load_wait_seconds": 6.082933396100998e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.2521803746931255
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 3,
+    "source": "current",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-4/current"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.7534920829348266,
+      "peak_rss_bytes": 277463040,
+      "user_seconds": 0.9755079999999999,
+      "system_seconds": 0.199381,
+      "load_average_before": [
+        2.986328125,
+        2.7490234375,
+        2.49755859375
+      ],
+      "load_wait_seconds": 5.083158612251282e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/current/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.2677362086251378
+    }
+  },
+  {
+    "case": "packed",
+    "rep": 3,
+    "source": "baseline",
+    "resources": {
+      "command": [
+        "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/efficiency_followup.py",
+        "--worker",
+        "packed",
+        "--out",
+        "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/packed/rep-4/baseline"
+      ],
+      "exit_code": 0,
+      "wall_seconds": 1.6506760413758457,
+      "peak_rss_bytes": 295157760,
+      "user_seconds": 0.928114,
+      "system_seconds": 0.188112,
+      "load_average_before": [
+        2.986328125,
+        2.7490234375,
+        2.49755859375
+      ],
+      "load_wait_seconds": 6.00004568696022e-06,
+      "power_state": {
+        "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37814371)\t100%; charged; 0:00 remaining present: true\n",
+        "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+      },
+      "measurement": "fresh process; wall time and os.wait4 per-child rusage"
+    },
+    "diagnostics": {
+      "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261028-efficiency-implementation/sources/baseline/mixmogam/__init__.py",
+      "version": "2.0.0.dev7",
+      "data_sha256": "688853acae10d471f0a0fb68065aa702ce28ab89d14e3ad11fb0dd646c8b1ca2",
+      "found": 11880,
+      "fit_seconds": 0.254530250094831
+    }
+  }
+]
