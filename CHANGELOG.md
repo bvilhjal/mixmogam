@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-10-29
+
+The first stable release of the 2.0 series. Its statistical content is
+identical to 2.0.0.dev9: this release changes the version string, the
+packaging metadata and the provenance documentation of the bundled real-data
+panel, and stops tracking one unused data file. No estimator, default or
+numerical path changed, so the measurements recorded for dev8 and dev9 still
+describe this release.
+
+### Added
+
+- `CITATION.cff`, and a citation and references section in the README, so the
+  software and the methods it implements can be cited without reading the
+  manuscript. Its identities come from the verified bibliography in
+  `report/references.json`.
+- `at_data/README.md` records the provenance of the bundled *A. thaliana*
+  panel: the RegMap genotypes and Atwell phenotypes (Atwell et al. 2010;
+  Horton et al. 2012) and the TAIR10 gene annotations. Those data are third
+  party and are not covered by this repository's MIT licence, which applies to
+  the software only.
+- Distribution metadata for a public release: PyPI classifiers, keywords, and
+  `Documentation` and `Changelog` project URLs.
+
+### Changed
+
+- `LICENSE` states the copyright years as 2013-2026 instead of 2013 alone; the
+  grant text is unchanged.
+- Distribution metadata names `mixmogam contributors` as the author, matching
+  the manuscript's author block. The copyright holder remains named in
+  `LICENSE`.
+- The source distribution no longer carries the stale editable-install
+  metadata in `mixmogam.egg-info/`, six files whose `PKG-INFO` still recorded
+  the previous version, and now includes `examples/` and `CITATION.cff`.
+  Setuptools still writes a freshly generated `SOURCES.txt` there during every
+  sdist build; that one is current, not stale.
+- The README's install line lists every optional extra, and the README and
+  research report describe the released version rather than a development one.
+
+### Removed
+
+- `at_data/call_method_75_info.tsv` is no longer tracked. It held 1,307 rows of
+  accession-collection metadata, including collectors' given and family names
+  with their site, region and country, and nothing in the package, its tests,
+  benchmarks or documentation read it. It remains in the repository's history;
+  rewriting history was out of scope for this release. The file stays on disk
+  for local use and is now ignored.
+
 ## [2.0.0.dev9] - 2026-10-29
 
 ### Changed

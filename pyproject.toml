@@ -10,13 +10,34 @@ readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Bjarni Vilhjálmsson" }]
+authors = [{ name = "mixmogam contributors" }]
+keywords = [
+    "gwas",
+    "mixed linear model",
+    "association mapping",
+    "heritability",
+    "statistical genetics",
+    "bioinformatics",
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Science/Research",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+]
 dependencies = ["numpy>=1.26", "scipy>=1.11"]
 
 [project.urls]
 Homepage = "https://github.com/bvilhjal/mixmogam"
 Repository = "https://github.com/bvilhjal/mixmogam"
+Documentation = "https://github.com/bvilhjal/mixmogam#readme"
 Issues = "https://github.com/bvilhjal/mixmogam/issues"
+Changelog = "https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md"
 
 [project.scripts]
 mixmogam = "mixmogam.cli:main"

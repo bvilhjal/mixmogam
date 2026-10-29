@@ -8,12 +8,13 @@ unavailable, since their Python fallbacks can be orders of magnitude slower
 (one measured fit: 4.8 times for BOLT-LMM-inf, 68 times for HRATT-HE and
 187 times for the BOLT-LMM mixture on a 1,000 x 20,000 panel).
 
-**Development version 2.0.0.dev9**; changes are in the
+**Version 2.0.0**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
 workloads, and historical evidence, with a testable research agenda. Its latest
-benchmark section describes 2.0.0.dev8 at commit `d550c412`; dev9 updates the
-documentation, and the [design notes](docs/design.md) describe the methods.
+benchmark section describes 2.0.0.dev8 at commit `d550c412`; the 2.0.0 release
+changes packaging, provenance documentation and the version string, not the
+estimators, and the [design notes](docs/design.md) describe the methods.
 The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 
@@ -133,15 +134,17 @@ The first scale study measured BOLT-LMM's mixture at 91 s and 3.2 GiB on the
 
 ## Install
 
-From this repository:
+From this repository (the package is not on PyPI):
 
 ```sh
-python -m pip install -e ".[fast,formats,plot,test,lint]"
+python -m pip install -e ".[fast,formats,bgen,plot,hdf5,dataframe,test,lint]"
 ```
 
-Python >= 3.10. Extras: `fast` adds Numba and threadpoolctl, `formats` adds
+Python >= 3.10. Only NumPy and SciPy are required, so any subset of the extras
+installs and the analysis paths run without them. Extras: `fast` adds Numba and threadpoolctl, `formats` adds
 PGEN/BCF readers, `bgen` adds BGEN probability input, `plot` adds matplotlib, `hdf5` adds h5py for legacy
-storage, and `dataframe` adds pandas for `to_dataframe()`.
+storage, and `dataframe` adds pandas for `to_dataframe()`; `test` adds pytest
+and `lint` adds ruff.
 
 ## Quickstart
 
@@ -221,11 +224,46 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   independent simulation studies and validation of the corrected permutation
   scheme remain necessary.
 
+## Citation and references
+
+Cite the software with [CITATION.cff](CITATION.cff), and cite the methods you
+actually use. The identities below come from the verified bibliography in
+[report/references.json](report/references.json), which also holds each paper's
+PMID and lookup URL; the manuscript's reference list is in
+[report/mixmogam_report.tex](report/mixmogam_report.tex).
+
+Table 2. What to cite for each part of the package.
+
+| If you use | Cite |
+|---|---|
+| the software itself | [CITATION.cff](CITATION.cff), version 2.0.0 |
+| `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
+| `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
+| `method="hratt"`: its two-step design and LDAK heritability model | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |
+| HRATT's cross-fitted LOCO scores | Mbatchou J et al. (2021). Computationally efficient whole-genome regression for quantitative and binary traits. *Nat Genet* **53**(7). [doi:10.1038/s41588-021-00870-7](https://doi.org/10.1038/s41588-021-00870-7) |
+| `trait="binary"` saddlepoint tails | Zhou W et al. (2018). *Nat Genet* **50**(9). [doi:10.1038/s41588-018-0184-y](https://doi.org/10.1038/s41588-018-0184-y); Dey R et al. (2017). *Am J Hum Genet* **101**(1). [doi:10.1016/j.ajhg.2017.05.014](https://doi.org/10.1016/j.ajhg.2017.05.014); Bi W et al. (2020). *Am J Hum Genet* **107**(2). [doi:10.1016/j.ajhg.2020.06.003](https://doi.org/10.1016/j.ajhg.2020.06.003); Ma Y et al. (2025). SPAmix. *Genome Biol* **26**(1). [doi:10.1186/s13059-025-03827-9](https://doi.org/10.1186/s13059-025-03827-9) |
+| `sample_weights=` (participation or inverse-probability weights) | Schoeler T et al. (2023). Participation bias in the UK Biobank distorts genetic associations and downstream analyses. *Nat Hum Behav* **7**(7). [doi:10.1038/s41562-023-01579-9](https://doi.org/10.1038/s41562-023-01579-9) |
+| stepwise MLMM (`mixmogam.stepwise`) | Segura V et al. (2012). An efficient multi-locus mixed-model approach for genome-wide association studies in structured populations. *Nat Genet* **44**(7). [doi:10.1038/ng.2314](https://doi.org/10.1038/ng.2314) |
+| ancestry components (`mixmogam.pca`) | Price AL et al. (2006). Principal components analysis corrects for stratification in genome-wide association studies. *Nat Genet* **38**(8). [doi:10.1038/ng1847](https://doi.org/10.1038/ng1847) |
+| residual-coordinate permutations | Abney M (2015). Permutation testing in the presence of polygenic variation. *Genet Epidemiol* **39**(4). [doi:10.1002/gepi.21893](https://doi.org/10.1002/gepi.21893) |
+| the spectral and streaming LMM solvers | Lippert C et al. (2011). *Nat Methods* **8**(10). [doi:10.1038/nmeth.1681](https://doi.org/10.1038/nmeth.1681); Listgarten J et al. (2012). *Nat Methods* **9**(6). [doi:10.1038/nmeth.2037](https://doi.org/10.1038/nmeth.2037); Svishcheva GR et al. (2012). *Nat Genet* **44**(10). [doi:10.1038/ng.2410](https://doi.org/10.1038/ng.2410); Loya H et al. (2025). *Nat Genet* **57**(2). [doi:10.1038/s41588-024-02044-7](https://doi.org/10.1038/s41588-024-02044-7) |
+| lambda_GC, confounding and mixed-model pitfalls | Yang J et al. (2014). Advantages and pitfalls in the application of mixed-model association methods. *Nat Genet* **46**(2). [doi:10.1038/ng.2876](https://doi.org/10.1038/ng.2876); Sul JH et al. (2018). Population structure in genetic studies: confounding factors and mixed models. *PLoS Genet* **14**(12). [doi:10.1371/journal.pgen.1007309](https://doi.org/10.1371/journal.pgen.1007309) |
+| the bundled *A. thaliana* panel in [`at_data/`](at_data/README.md) | Atwell S et al. (2010). Genome-wide association study of 107 phenotypes in *Arabidopsis thaliana* inbred lines. *Nature* **465**(7298). [doi:10.1038/nature08800](https://doi.org/10.1038/nature08800); Horton MW et al. (2012). *Nat Genet* **44**(2). [doi:10.1038/ng.1042](https://doi.org/10.1038/ng.1042); Baxter I et al. (2008). *PLoS Genet* **4**(2). [doi:10.1371/journal.pgen.1000004](https://doi.org/10.1371/journal.pgen.1000004) |
+| the simulated benchmark panels | Wharrie S et al. (2023). HAPNEST. *Bioinformatics* **39**(9). [doi:10.1093/bioinformatics/btad535](https://doi.org/10.1093/bioinformatics/btad535); Baumdicker F et al. (2022). msprime 1.0. *Genetics* **220**(3). [doi:10.1093/genetics/iyab229](https://doi.org/10.1093/genetics/iyab229); Kelleher J et al. (2016). *PLoS Comput Biol* **12**(5). [doi:10.1371/journal.pcbi.1004842](https://doi.org/10.1371/journal.pcbi.1004842) |
+
+Passing input, numerical-equivalence and performance checks does not establish
+scientific calibration, and citing a method's paper does not transfer that
+paper's validation to this implementation. The [research
+report](report/README.md) states what each archived measurement can and cannot
+support.
+
 Also available: stepwise MLMM, GxE, genotypic tests, residual-coordinate
 permutations, two-kinship fits, and Manhattan/QQ plots. Start with the
 [quickstart](docs/quickstart.md); use [design notes](docs/design.md) for
 implementation details. The [research report](report/README.md) gives the
 statistical argument, evidence boundaries, and reproduction commands.
 The [25 October review](docs/review-2026-10-25.md) records the latest
-efficiency measurements, format additions, and remaining limitations.
+efficiency measurements, format additions, and remaining limitations, and the
+[29 October review](docs/review-2026-10-29.md) records this release's
+readiness checks.
 The Python-2-era package remains under the `v1.0-legacy` Git tag.

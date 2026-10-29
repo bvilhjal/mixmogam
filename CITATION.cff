@@ -1,0 +1,31 @@
+# How to cite this software. The README's "Citation and references" section
+# lists the papers behind each method mixmogam implements and the provenance
+# of the real-data panel it bundles; cite those alongside this entry.
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "mixmogam: super-efficient mixed linear models for genome-wide association mapping"
+authors:
+  - name: "mixmogam contributors"
+version: "2.0.0"
+date-released: 2026-10-29
+license: MIT
+repository-code: "https://github.com/bvilhjal/mixmogam"
+url: "https://github.com/bvilhjal/mixmogam#readme"
+keywords:
+  - gwas
+  - mixed linear model
+  - association mapping
+  - heritability
+  - statistical genetics
+abstract: >-
+  mixmogam fits mixed linear models for genome-wide association mapping of
+  quantitative traits and, with HRATT, case-control outcomes and
+  sampling-weighted samples, with leave-one-chromosome-out testing by
+  default. It provides an exact EMMAX-style REML path, BOLT-LMM-style
+  infinitesimal and two-Gaussian mixture fits, and HRATT, a cross-fitted
+  two-step test inspired by LDAK-KVIK. The core uses NumPy and SciPy, with
+  optional Numba kernels. The two-step paths are research implementations
+  with documented departures from the original programs, and passing input,
+  numerical-equivalence and performance checks does not establish scientific
+  calibration.

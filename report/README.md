@@ -3,8 +3,10 @@
 This revision (29 October) adds the dev8 package benchmark reruns and
 updates the current cache and Lanczos descriptions. Its earlier sections
 retain their original versions and measured evidence; the new results
-used `2.0.0.dev8` at commit `d550c412`. The dev9 release changes the
-documentation and version string. The
+used `2.0.0.dev8` at commit `d550c412`. The `2.0.0` release changes the
+packaging, the provenance documentation of the bundled real-data panel and
+the version string; its estimators are those of `2.0.0.dev9`, so every
+measurement below still describes the released code. The
 [design notes](../docs/design.md) and [changelog](../CHANGELOG.md) describe
 the methods and release history.
 The abstract retains the failed
