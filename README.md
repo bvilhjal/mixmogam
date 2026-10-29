@@ -59,7 +59,13 @@ the original programs.
 
 ## Install
 
-From this repository (the package is not on PyPI):
+From PyPI:
+
+```sh
+python -m pip install "mixmogam[fast]"
+```
+
+or, for development, from this repository:
 
 ```sh
 python -m pip install -e ".[fast,formats,bgen,plot,hdf5,dataframe,test,lint]"
