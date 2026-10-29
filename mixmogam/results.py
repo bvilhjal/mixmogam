@@ -5,7 +5,7 @@ from __future__ import annotations
 import csv
 import gzip
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Optional, Sequence
 
 import numpy as np
 from scipy import special, stats
@@ -229,6 +229,31 @@ class GwasResult:
             "n_false_loci": n_loci - n_true,
             "fdr": (n_loci - n_true) / n_loci if n_loci else 0.0,
         }
+
+    # ------------------------------------------------------------------
+    # Plotting (matplotlib optional, via mixmogam.plotting)
+    # ------------------------------------------------------------------
+
+    def plot_manhattan(self, ax=None, bonferroni: bool = True, alpha: float = 0.05,
+                       suggestive: Optional[float] = 1e-5, label_top: int = 5,
+                       highlight: Optional[Sequence] = None,
+                       title: Optional[str] = None,
+                       savepath: Optional[str] = None):
+        """Manhattan plot of this result; see :func:`mixmogam.plotting.plot_manhattan`."""
+        from mixmogam.plotting import plot_manhattan
+
+        return plot_manhattan(self, ax=ax, bonferroni=bonferroni, alpha=alpha,
+                              suggestive=suggestive, label_top=label_top,
+                              highlight=highlight, title=title, savepath=savepath)
+
+    def plot_qq(self, ax=None, title: Optional[str] = None,
+                savepath: Optional[str] = None, band: bool = True,
+                show_lambda: bool = True):
+        """QQ plot of this result's p-values; see :func:`mixmogam.plotting.plot_qq`."""
+        from mixmogam.plotting import plot_qq
+
+        return plot_qq(self.p, ax=ax, title=title, savepath=savepath, band=band,
+                       show_lambda=show_lambda)
 
     # ------------------------------------------------------------------
     # Bayesian priors (v1 snp_priors / PPA machinery)

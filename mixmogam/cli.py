@@ -4,8 +4,9 @@
 optional covariate, weight and PC columns) and writes a summary-statistic
 CSV/TSV (optionally gzip-compressed); ``mixmogam pca``
 writes built-in ancestry components (:mod:`mixmogam.pca`) as a covariate
-file. Every value is the library's own: the CSV is byte-identical to the
-one the same call in Python writes.
+file; ``mixmogam plot`` turns a result CSV into Manhattan and QQ PNGs
+(needs the ``plot`` extra). Every value is the library's own: the CSV is
+byte-identical to the one the same call in Python writes.
 """
 
 from __future__ import annotations
@@ -106,6 +107,25 @@ def _parser() -> argparse.ArgumentParser:
                      help="PCA working-memory budget (default 4 GiB)")
     pca.add_argument("--solver", choices=("exact", "randomized"), default="exact",
                      help="PCA eigensolver (default exact SVD)")
+
+    plot = sub.add_parser("plot", help="Manhattan and QQ plots of a result CSV",
+                          description="Read a result CSV/TSV (optional .gz) written by "
+                                      "mixmogam gwas or GwasResult.write_csv and write "
+                                      "<out-prefix>_manhattan.png and <out-prefix>_qq.png. "
+                                      "Requires the plot extra (matplotlib).")
+    plot.add_argument("--in", "-i", dest="infile", required=True,
+                      help="result CSV/TSV (optional .gz) to plot")
+    plot.add_argument("--out-prefix", "-o", required=True,
+                      help="output prefix; writes <prefix>_manhattan.png and <prefix>_qq.png")
+    plot.add_argument("--alpha", type=float, default=0.05,
+                      help="genome-wide significance level of the Manhattan threshold line (default 0.05)")
+    plot.add_argument("--no-threshold", action="store_true",
+                      help="omit the significance line from the Manhattan plot")
+    plot.add_argument("--suggestive", type=float, default=1e-5,
+                      help="suggestive significance line on the Manhattan plot (default 1e-5; 0 omits it)")
+    plot.add_argument("--label-top", type=int, default=5, metavar="N",
+                      help="annotate the N smallest-p variants on the Manhattan plot (default 5; 0 omits)")
+    plot.add_argument("--title", help="title for both figures")
     return ap
 
 
@@ -214,10 +234,30 @@ def _cmd_gwas(args) -> int:
     return 0
 
 
+def _cmd_plot(args) -> int:
+    from mixmogam.plotting import plot_manhattan, plot_qq
+    from mixmogam.results import GwasResult
+
+    result = GwasResult.read_csv(args.infile)
+    manhattan = f"{args.out_prefix}_manhattan.png"
+    qq = f"{args.out_prefix}_qq.png"
+    plot_manhattan(result, bonferroni=not args.no_threshold, alpha=args.alpha,
+                   suggestive=args.suggestive if args.suggestive > 0 else None,
+                   label_top=args.label_top, title=args.title, savepath=manhattan)
+    plot_qq(result.p, title=args.title, savepath=qq)
+    print(f"wrote {manhattan} and {qq} "
+          f"({len(result)} variants, lambda_GC={result.genomic_control():.3f})")
+    return 0
+
+
 def main(argv: Optional[Sequence[str]] = None) -> int:
     args = _parser().parse_args(argv)
     try:
-        return _cmd_pca(args) if args.command == "pca" else _cmd_gwas(args)
+        if args.command == "pca":
+            return _cmd_pca(args)
+        if args.command == "plot":
+            return _cmd_plot(args)
+        return _cmd_gwas(args)
     except (ValueError, KeyError, OSError, TypeError, ImportError) as exc:
         print(f"mixmogam: error: {exc}", file=sys.stderr)
         return 2

@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `plot_manhattan` and `plot_qq` are exported from the package root
+  (`from mixmogam import plot_manhattan, plot_qq`), and `GwasResult` grew
+  `plot_manhattan()` / `plot_qq()` methods, so plots no longer require
+  importing `mixmogam.plotting` directly. Matplotlib stays optional
+  (`pip install "mixmogam[plot]"`).
+- `mixmogam plot --in gwas.csv --out-prefix fig` writes
+  `fig_manhattan.png` and `fig_qq.png` from a result CSV/TSV (optional
+  `.gz`), with `--alpha` and `--no-threshold` controlling the
+  genome-wide significance line.
+- `plot_manhattan` accepts an `alpha` argument (default 0.05) for the
+  significance line; `bonferroni=False` still omits the line.
+
+### Changed
+
+- The Manhattan and QQ plots were redrawn: the chromosome layout is
+  vectorized (`np.unique`/`reduceat` instead of a per-chromosome Python
+  loop), points alternate two colors on a gap-separated axis, axes are
+  despined with a light y-grid, figures use constrained layout, and the
+  QQ plot draws a 95% pointwise confidence band from the Beta
+  order-statistic distribution (`band=False` disables it) and annotates
+  lambda_GC (`show_lambda=False` disables). Signatures use PEP 604 unions
+  under `TYPE_CHECKING`; behavior and saved values are unchanged apart
+  from the new band.
+- `plot_manhattan` gained `suggestive` (dotted line, default 1e-5) and
+  `label_top` (default 5: annotates the smallest-p variants with their
+  variant ID or chr:pos, staggered leader lines); positions are scaled to
+  Mb/kb on large panels and threshold lines carry right-edge labels. The
+  `mixmogam plot` command exposes `--suggestive` and `--label-top`.
+
 ## [2.0.1] - 2026-10-29
 
 The first release on PyPI. The package is unchanged from 2.0.0 apart from the

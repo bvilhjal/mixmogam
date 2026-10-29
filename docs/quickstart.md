@@ -90,9 +90,18 @@ result.genomic_control()                     # lambda_GC (> 1 = inflation)
 result.extra.get("calibration_cv")            # available when calibration is performed
 result.write_csv("gwas.csv")
 
-from mixmogam.plotting import plot_manhattan, plot_qq
+from mixmogam import plot_manhattan, plot_qq   # needs pip install "mixmogam[plot]"
 plot_manhattan(result, savepath="manhattan.png")
 plot_qq(result.p, savepath="qq.png")
+# or directly on the result:
+result.plot_manhattan(savepath="manhattan.png")
+result.plot_qq(savepath="qq.png")
+```
+
+From the shell, the same two figures from a written result file:
+
+```sh
+mixmogam plot --in gwas.csv --out-prefix gwas   # writes gwas_manhattan.png, gwas_qq.png
 ```
 
 Every method tests a SNP against a polygenic model built without its

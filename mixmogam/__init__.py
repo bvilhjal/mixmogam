@@ -13,6 +13,8 @@ __all__ = [
     "lmm",
     "pca",
     "simulate",
+    "plot_manhattan",
+    "plot_qq",
     "__version__",
 ]
 
@@ -27,6 +29,8 @@ _LAZY = {
     "lmm": ("mixmogam.lmm", None),
     "pca": ("mixmogam.pca", None),
     "simulate": ("mixmogam.simulate", None),
+    "plot_manhattan": ("mixmogam.plotting", "plot_manhattan"),
+    "plot_qq": ("mixmogam.plotting", "plot_qq"),
 }
 
 
