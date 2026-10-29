@@ -7,16 +7,23 @@ where the suite was blind. It was written on 25 October 2026, after the
 (`scale_study_plan.md`) was run, and updated on 26 October after the
 LDAK-KVIK comparisons at 400,000 variants, the scaling ladders and the
 speed branch's review.
+The [29 October rerun](results/20261029-report-evidence/README.md) extends
+the sample-size ladder to 100,000, adds paired 50,000-sample fits and
+qualifies the calibration and cache-budget claims below.
 
 The suite is a *measured-evidence* suite, not a test suite. The tests
-(`tests/`) decide whether the code is correct; the benchmarks decide what
+(`tests/`) check specified software contracts; the benchmarks measure what
 the code costs and what it produces on data whose truth is known. An
 archive under `benchmarks/results/<run-id>/` is the unit of evidence: it
 carries the source snapshot, the environment manifest, the commands, the
 logs, the raw results and, where the numbers are compared, the
 comparison itself.
+The 29 October report-evidence bundle is a compact copy of selected
+records, not a full run archive; its manifest identifies the originals.
 
 ## 1. The five layers
+
+Table 1. Benchmark questions and their evidential roles.
 
 | Layer | Question | Drivers | What it can support |
 |---|---|---|---|
@@ -36,17 +43,19 @@ time.
 
 ## 2. The gaps this suite had on 25 October 2026
 
+Table 2. Historical gaps and their present status.
+
 | # | Gap | How it was visible | Status |
 |---|---|---|---|
-| G1 | Nothing was measured above 80,000 variants | the 25 October efficiency review: the variational Gram cache holds about 320,000 variants (620,000 since the speed branch packed the Grams) at the default budget, so every archived run sat inside the cache and never measured the recompute tax; the LD-score window and the mixture model's cross-validation matrix are only large at genome scale | closed by the scale study (arms C and C2) |
+| G1 | Nothing was measured above 80,000 variants | the 25 October efficiency review: the variational Gram cache holds about 320,000 variants (620,000 since the speed branch packed the Grams) at the default budget, so every archived run sat inside the cache and never measured the recompute tax; the LD-score window and the mixture model's cross-validation matrix are only large at genome scale | scale measured through 800,000 variants; the dev8 600,000-variant ladder stayed within budget, and the 800,000-variant arm recorded initial but not final cache occupancy |
 | G2 | The default installation was never measured | every archive used the optional acceleration package and pinned the native libraries to one thread; the pure NumPy fallbacks and the unpinned default were unmeasured | closed by the scale study (arms A and D) |
 | G3 | Peak memory was traced, not resident | the component tables of the 25 October review report traced allocations, which exclude NumPy, BLAS and Numba allocations and are not RSS | closed for the two-step engine (arm C reports operating-system peak RSS) |
-| G4 | No cheap scientific check | the calibration benchmarks need the RegMap panel, the official LDAK-KVIK executable, or a long simulation; a contributor cannot check calibration in minutes | closed by the calibration arm (arm B: null type-I error, power, effect attenuation, with Monte Carlo intervals) |
+| G4 | No cheap scientific check | the calibration benchmarks need the RegMap panel, the official LDAK-KVIK executable, or a long simulation; a contributor cannot check calibration in minutes | calibration arm B supplies simulations; interpret spread across independent replicates and account for non-converged fits, not SNP-level binomial intervals under LD |
 | G5 | The drivers duplicate their infrastructure | eight drivers each implement the power guard, the thread environment, the source snapshot, the archive layout and the fresh-process measurement | partly closed: `_harness.py` holds the shared parts for the new drivers; the older drivers keep their copies so that their published archives stay byte-reproducible |
 | G6 | No single entry point and no index | there is no command that produces "the current measured state" of the package, and no way to ask which archive measured what | partly closed: `index.py` lists the archives; a suite-wide "current state" command is still open |
 | G7 | A numerical invariant lived in a benchmark | `run_benchmarks.py` asserts that the batched scan agrees with the v1 per-SNP reference; the same assertion is already in `tests/test_lmm.py`, and the benchmark repeats it at a larger size and times it | closed |
 | G8 | The external comparison stopped at 20,000 variants | the matched comparison with the official LDAK-KVIK had no archive above 50,000 samples and 20,000 variants, so the claim that mixmogam is efficient at genome scale had no external counterpart | closed by `kvik_scale.py`: the official program and mixmogam on the same 5,000 x 400,000 panel |
-| G9 | No measured scaling axis | every archived wall time was a single point; nothing said how cost grows in n or m, so a new panel size could not be extrapolated and two panels of equal cell count looked comparable | closed by the two ladders: `scaling_ladder.py` (n, m and LD at fixed host) and the sample-size ladder (`kvik_scale.py` at m = 20,000, n = 1,000 to 50,000), each with the programs' own iteration counts as the mechanism |
+| G9 | No measured scaling axis | every archived wall time was a single point; nothing said how cost grows in n or m, so a new panel size could not be extrapolated and two panels of equal cell count looked comparable | ladders measure sample size, marker count and LD; the 20,000-marker sample ladder now reaches 100,000, with three additional timing repetitions there on the same input |
 | G10 | Speed changes were not verified end to end against the external program | the 26 October speed branch was reviewed by equivalence matrices and paired A/B on reduced panels, but no run confirmed the association results against LDAK-KVIK after the branch | closed by the 26 October reruns of every LDAK-KVIK benchmark on the same panels, seeds and threads |
 
 ## 3. The rethought structure

@@ -1,0 +1,77 @@
+{
+  "bolt-inf": {
+    "numba_fit_seconds": 0.562,
+    "fallback_fit_seconds": 2.695,
+    "ratio": 4.79,
+    "numba_wall_seconds": 0.562,
+    "fallback_warned": true,
+    "fallback_warnings": [
+      {
+        "category": "RuntimeWarning",
+        "message": "two-step methods without Numba use slow Python/NumPy fallbacks; install mixmogam[fast] for production HRATT/BOLT fits"
+      }
+    ],
+    "numba_has_numba": true,
+    "fallback_has_numba": false,
+    "agreement": {
+      "shape_equal": true,
+      "identical": false,
+      "n_comparable": 20000,
+      "max_abs_log10_error": 8.171241461241152e-14,
+      "mean_abs_log10_error": 1.5541816558760705e-15,
+      "n_exceeding_1e-6": 0,
+      "spearman_p": 0.999999999999625,
+      "top100_overlap": 100
+    }
+  },
+  "bolt": {
+    "numba_fit_seconds": 4.721,
+    "fallback_fit_seconds": 883.777,
+    "ratio": 187.21,
+    "numba_wall_seconds": 4.721,
+    "fallback_warned": true,
+    "fallback_warnings": [
+      {
+        "category": "RuntimeWarning",
+        "message": "two-step methods without Numba use slow Python/NumPy fallbacks; install mixmogam[fast] for production HRATT/BOLT fits"
+      }
+    ],
+    "numba_has_numba": true,
+    "fallback_has_numba": false,
+    "agreement": {
+      "shape_equal": true,
+      "identical": false,
+      "n_comparable": 20000,
+      "max_abs_log10_error": 8.881784197001252e-14,
+      "mean_abs_log10_error": 1.5514066353333962e-15,
+      "n_exceeding_1e-6": 0,
+      "spearman_p": 0.999999999999625,
+      "top100_overlap": 100
+    }
+  },
+  "hratt-he": {
+    "numba_fit_seconds": 1.671,
+    "fallback_fit_seconds": 113.93,
+    "ratio": 68.2,
+    "numba_wall_seconds": 1.671,
+    "fallback_warned": true,
+    "fallback_warnings": [
+      {
+        "category": "RuntimeWarning",
+        "message": "two-step methods without Numba use slow Python/NumPy fallbacks; install mixmogam[fast] for production HRATT/BOLT fits"
+      }
+    ],
+    "numba_has_numba": true,
+    "fallback_has_numba": false,
+    "agreement": {
+      "shape_equal": true,
+      "identical": false,
+      "n_comparable": 20000,
+      "max_abs_log10_error": 6.927791673660977e-14,
+      "mean_abs_log10_error": 1.4587192730992774e-15,
+      "n_exceeding_1e-6": 0,
+      "spearman_p": 0.9999999999999999,
+      "top100_overlap": 100
+    }
+  }
+}

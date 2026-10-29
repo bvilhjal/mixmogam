@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{16 October 2026\\\small Research report for 2.0.0.dev6 and the
-unreleased changes through 16 October}
+\date{29 October 2026\\\small Historical studies retain their original
+versions; the new benchmarks use 2.0.0.dev8}
 
 \begin{document}
 \maketitle
@@ -113,6 +113,15 @@ found six of seven genes with known large effects on Atwell's phenotypes,
 under every method. No method found MOT1 for molybdenum on the
 prespecified raw scale, so the check failed its criterion; on log values,
 an exploratory rerun ranked MOT1 first.
+On a founder-block panel of 100,000 samples and 20,000 markers, three
+balanced-order repetitions with 2.0.0.dev8 gave median complete-process
+times of 25.84 seconds for HRATT-HE, 37.59 for LDAK-KVIK and 101.77 for
+BOLT-inf, on one host and phenotype. Three paired runs on each of two
+50,000-sample HAPNEST panels did not establish a speedup at the default
+cache budget. The rerun also found non-converged variational fits under
+strong confounding and in four of eight Atwell HRATT scans; a positive-control
+criterion counted these latter fits. These findings bound the interpretation
+of the timing and recovery results.
 REML remains the default variance estimator without sampling weights.
 The research agenda emphasizes
 independent calibration audits, reference-panel fidelity, error-controlled
@@ -593,10 +602,11 @@ gives these identities and their interpretation.
 \label{sec:efficient-implementation}
 
 The computational changes first remove work whose result is already
-available. Variational fitting caches only requested fold-specific Gram
-matrices, in the genotype storage precision and block by block up to a
-$10^9$-byte budget; it reuses full-block Gram matrices for LOCO, and
-reuses final predictions. A persistent matrix-product workspace replaces repeated
+available. Variational fitting caches requested fold-specific Gram matrices
+as packed triangles in the genotype storage precision, block by block under
+a shared $10^9$-byte default budget. HRATT's cross-fit cache can expand after
+the hold-out cache is released. It reuses full-block Gram matrices for LOCO
+and reuses final predictions. A persistent matrix-product workspace replaces repeated
 allocations. Residual updates retain float64 accumulation while preparing
 the next matrix-product input in the genotype storage precision, float32
 by default. This distinction matters: converting the entire calculation
@@ -685,7 +695,9 @@ positive definite operator, whereas probe error falls only as $N^{-1/2}$.
 On the test machine, a pass cost nearly the same for 1 and 64 columns,
 because decoding and memory traffic dominate. Version 2.0.0.dev5
 therefore uses $s=24$ and $N=48$ rather than 96 and 12: a quarter of the
-passes and four times the probes. Probes that the covariate projection
+passes and four times the probes. In the current implementation 24 is the
+cap of an adaptive stop controlled by \code{slq\_tol}, so fewer steps may
+be used. Probes that the covariate projection
 reduces to rounding noise are discarded.
 
 \paragraph{Shared spectral basis and calibration solves.}
@@ -2384,6 +2396,119 @@ test tail calibration.
 
 \FloatBarrier
 
+\subsection{Package reruns: sample size, cache and convergence}
+\label{sec:dev8-reruns}
+
+On 29 October we reran the package benchmarks with 2.0.0.dev8 at commit
+\code{d550c412}, on an Apple M2 Pro with 16~GiB RAM. Selected measurements,
+manifests and diagnostics are retained in the compact
+\code{20261029-report-evidence} bundle; full inputs and worker output
+remain in the original local archives. The requested worker and
+native-library limits were one except where stated; the active Apple
+Accelerate thread pool could not be independently observed. Whole-process
+time includes startup and input handling. LDAK time sums its two processes,
+and its RSS is the larger process peak. The sample-size and matched-genome
+drivers observed load but did not forward their load limit to fit workers.
+
+Table~\ref{tab:dev8-ladder} fixes the marker count at 20,000 and varies
+the number of samples. Each entry is one run on a synthetic mixed trait.
+The panels share a 100-marker founder-block design but are distinct
+realizations, and the number of founders changes with sample size. HRATT-HE
+is the fastest tested method from 10,000 to 100,000 samples. At 100,000,
+three further balanced-order repetitions on the same input gave median
+[minimum, maximum] seconds of 25.836 [25.565, 26.307] for HRATT-HE,
+37.589 [37.188, 37.610] for LDAK-KVIK, and 101.770 [101.540, 102.395]
+for BOLT-inf. Median peak RSS was 2.491, 1.261 and 3.598~GiB,
+respectively. Each method's p-values exactly matched its own first run.
+These repetitions measure timing variability on one input, not variability
+across populations or independent phenotypes.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Whole-process wall seconds in the 20,000-marker sample-size
+ ladder, one run per cell. The panels are different realizations.}
+ \label{tab:dev8-ladder}
+ \begin{tabular}{@{}rrrrrr@{}}
+ \toprule
+ Samples & LDAK-KVIK & HRATT-HE & HRATT-REML & BOLT-inf & Exact \\
+ \midrule
+ \tabinput{tables/dev8_sample_ladder.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+At 100,000 samples HRATT-HE and LDAK-KVIK had Spearman correlation 0.980
+and 98 of the top 100 variants in common; BOLT-inf and LDAK had 0.861 and
+97. These estimators differ. The protocol both says there is no agreement
+threshold and lists a 0.9 correlation check; the BOLT-inf comparison misses
+that check. On a separate 50,000-sample HAPNEST panel with longer-range LD,
+single runs took 17.48 seconds for HRATT-HE, 19.51 for LDAK-KVIK and
+76.25 for BOLT-inf. The resource driver did not retain mixmogam p-values,
+so that comparison does not establish per-variant agreement.
+
+Table~\ref{tab:dev8-paired} compares the previous and current HRATT-HE
+implementations on two 50,000-sample HAPNEST panels. Each entry uses three
+warmed, alternating-order pairs. At the default cache budget, the small
+timing differences do not establish a speedup. With a deliberately
+restricted 28,000,000-byte budget, median paired baseline/current ratios
+were 1.093 and 1.129. All saved arrays matched exactly within each pair;
+shared diagnostics passed their tolerance and both variational stages
+converged with matching iteration counts. Initial cross-fit allocations
+were partial, but the new implementation can expand the cache after the
+hold-out fit releases its allocation; final occupancy was not measured.
+The restricted-cache run used a corrected archived benchmark driver,
+because the repository driver passes the cache option under the wrong
+keyword. It used the default cross-fitting configuration.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Three paired runs per panel at 50,000 samples and 20,000
+ markers. Default-budget entries are median wall seconds. The restricted
+ column is the median paired baseline/current wall-time ratio.}
+ \label{tab:dev8-paired}
+ \begin{tabular}{@{}lrrr@{}}
+ \toprule
+ Panel & Baseline, s & dev8, s & Restricted ratio \\
+ \midrule
+ \tabinput{tables/dev8_paired.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+At 5,000 samples and 800,000 variants, one HRATT-HE fit per cache budget
+took 48.7 seconds with 1~GB and 47.1 with 2~GB; p-values matched exactly
+and both stages converged. The 1~GB budget initially retained 4,570 of
+6,260 cross-fit blocks. Final occupancy was not measured, and the two
+single timings do not establish a cache-budget speedup.
+
+The 308-fit scale study includes ten independent replicates for each of
+five methods in each of five calibration cells. In the unstructured pure
+null, mean fractions below $p=0.05$ were 0.0509--0.0512 across methods;
+in the structured null they were 0.0417--0.0483. BOLT-inf's structured-null
+fractions ranged from 0.0279 to 0.0703 across replicates. Variant-level
+binomial intervals in the original summary assume independence despite LD
+and should not be used as uncertainty intervals for the overall rate.
+In the confounded cell, BOLT mixture, HRATT-HE and HRATT-REML each had at
+least one non-converged stage in 10/10 replicates; with two PCs the counts
+were 7/10, 8/10 and 7/10. The aggregate summaries include those fits.
+
+All finite masks matched in the configuration study. At 5,000 samples and
+400,000 variants, unpinned-BLAS BOLT mixture exceeded the $10^{-6}$
+absolute log-p tolerance at 8 of 400,000 variants, with maximum $8.39\times
+10^{-6}$; other configurations met it. A paused worker's original parent
+wall time includes the pause and is not a runtime measurement; an isolated
+repeat matched its stored arrays exactly.
+
+The Atwell control rerun again recovered six of seven controls with every
+method: A1 failed on Mo98/MOT1 and A2 passed because HRATT and BOLT-inf
+recovered all controls found by exact LOCO. Four of eight HRATT scans had a
+non-converged stage; A2 does not exclude such fits. The earlier archive did
+not record comparable convergence fields, so these counts do not establish
+a convergence regression. These positive controls check recovery of large
+signals, not real-cohort tail calibration.
+
+\FloatBarrier
+
 \section{Discussion}
 
 \subsection{The central distinction is between geometry and inference}
@@ -2730,9 +2855,9 @@ and two-bit routes, without hiding estimator changes or numerical failures.
 \section*{Data, software, and reproducibility}
 
 The repository is available at
-\url{https://github.com/bvilhjal/mixmogam}. This report describes package
-version 2.0.0.dev6 and the unreleased changes after it, listed in the
-changelog; the known-covariance experiment uses baseline commit
+\url{https://github.com/bvilhjal/mixmogam}. Earlier report sections describe
+package version 2.0.0.dev6 and the unreleased changes after it; the new
+benchmark section identifies 2.0.0.dev8 and its commit. The known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/}\allowbreak\code{denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-}\allowbreak\code{manuscript-}\allowbreak\code{geometry} beneath

@@ -5,16 +5,15 @@ and, with HRATT, case-control outcomes and sampling-weighted samples, with
 leave-one-chromosome-out (LOCO) testing by default. The core uses NumPy and
 SciPy; Numba accelerates optional kernels. Two-step methods warn when it is
 unavailable, since their Python fallbacks can be orders of magnitude slower
-(measured: 5 times for BOLT-LMM-inf, 61 times for HRATT and 163 times for
-the BOLT-LMM mixture on a 1,000 x 20,000 panel).
+(one measured fit: 4.8 times for BOLT-LMM-inf, 68 times for HRATT-HE and
+187 times for the BOLT-LMM mixture on a 1,000 x 20,000 panel).
 
-**Development version 2.0.0.dev8**; changes are in the
+**Development version 2.0.0.dev9**; changes are in the
 [changelog](CHANGELOG.md). The [research report](report/README.md)
 separates correctness checks, known-covariance experiments, matched LDAK-KVIK
-workloads, and historical evidence, with a testable research agenda. Its text
-describes the 17 October revision (2.0.0.dev6); its evidence table also
-indexes the later archives, and the [design notes](docs/design.md) describe
-the current methods.
+workloads, and historical evidence, with a testable research agenda. Its latest
+benchmark section describes 2.0.0.dev8 at commit `d550c412`; dev9 updates the
+documentation, and the [design notes](docs/design.md) describe the methods.
 The [3 October review](docs/review-2026-10-03.md)
 records the 2.0.0.dev1 correctness fixes.
 
@@ -82,30 +81,21 @@ and `mmap=True` to leave them in the mapped bed file). BOLT and HRATT expose
 have a separate working-memory budget. See the
 [quickstart](docs/quickstart.md#larger-hratt-fits) for a configuration.
 
-Performance figures are simulated data, one fit per configuration in a fresh
-process on one thread, with wall time and peak resident memory from the
-operating system. On a 5,000 x 400,000 panel after the 26 October speed
-branch, HRATT-HE takes 29 s at 2.6 GiB (22 s under a null trait),
-BOLT-LMM-inf 35 s at 2.1 GiB and official LDAK-KVIK 26 s at 1.1 GiB (29 s
-under the null trait), on the same day, host and exported files
-([rerun](benchmarks/results/20261026T143800Z-kvik-scale/README.md)); with
-four BLAS threads HRATT-HE takes 26 s against the reference program's 25 s
-([rerun](benchmarks/results/20261026T144700Z-kvik-scale-blas4/README.md)).
-Before the branch the same programs took 34 s at 3.1 GiB (HRATT-HE) and 51 s
-at 2.4 GiB (BOLT-LMM-inf)
-([first run](benchmarks/results/20261025T153917Z-kvik-scale/README.md)); the
-reference program itself moved 8% between those two days, which is the noise
-floor for ratios across days. The programs were equally calibrated
-(lambda_GC 1.006 against 1.006 under a global null) and detected the same 8
-of 10 causal variants; their p-values correlate at 0.998, and every
-statistic reproduces to the digits of the first run. Most of the memory
-difference is the genotype panel, which mixmogam holds decoded in memory and
-LDAK streams from disk; with `mmap=True` or two-bit storage that 2.0 GiB
-leaves the resident set. That panel is an easy one (LD inside 100-variant
-blocks, ten times fewer samples than the HAPNEST panels below), so it
-measures scale and memory, not the difficulty of a realistic genome; the
-[scaling ladder](benchmarks/results/20261025T190534Z-scaling-ladder/README.md)
-separates the sample-size, LD and iteration effects.
+On one simulated 100,000-sample, 20,000-variant founder-block panel, three
+balanced-order repetitions gave median whole-process times of 25.84 s for
+HRATT-HE, 37.59 s for official LDAK-KVIK and 101.77 s for BOLT-LMM-inf;
+median peak RSS was 2.49, 1.26 and 3.60 GiB, respectively. Each method's
+p-values exactly reproduced its own initial run. These are different
+estimators, and the three repeats use one phenotype and one host. The
+[evidence bundle](benchmarks/results/20261029-report-evidence/README.md)
+also reports a one-run sample-size ladder, a longer-range-LD panel, and the
+requested thread and process-measurement details.
+
+On one 5,000 x 400,000 founder-block panel, LDAK-KVIK, HRATT-HE and
+BOLT-LMM-inf took 22.27, 23.92 and 31.29 s, respectively, for a mixed
+trait; on its null trait they took 26.10, 20.04 and 30.20 s. These are
+single runs, not repeated estimates. They measure this panel and do not
+establish real-cohort calibration or a general method ranking.
 
 The default 1 GB variational Gram cache held about 320,000 variants at the
 time of the first scale study, so at 400,000 variants it warned that the rest
@@ -118,17 +108,19 @@ fits, so 1 GB holds about 620,000 variants with an intercept only (each
 covariate column costs 8 KB per 128-variant block) and that warning is gone
 at 400,000 variants.
 
-Scaling in the sample count was measured on its own axis at m = 20,000,
-n = 1,000 to 50,000: LDAK-KVIK and both HRATT paths are linear in n
-(local exponents 0.80-0.97, their sweep counts bounded, falling from 10-13 to 5),
-BOLT-LMM-inf is superlinear (1.21, its conjugate-gradient count growing
-from 10 to 22), and `exact`, measured only to n = 2,500, grows towards cubic. HRATT-HE is
-the fastest method from n = 10,000 up -- 13.6 s against the reference
-program's 20.3 s at 50,000 -- and peak memory is linear in n for every
-streaming method
-([ladder](benchmarks/results/20261026T161500Z-kvik-sample-scaling/README.md)).
+In the 20,000-variant sample-size ladder, HRATT-HE was fastest from
+10,000 through 100,000 samples on the tested founder-block panels. The
+100,000-sample repetitions above strengthen the timing comparison at that
+size; the other ladder rows are single runs. Panels at different sizes are
+different realizations, with founder count changing with sample size.
 
-Earlier measurements, before the speed branch and not repeated: on two
+On two 50,000-sample HAPNEST panels, three warmed pairs per panel did not
+establish a default-budget HRATT speedup over the previous implementation.
+With a deliberately restricted Gram budget, the median paired ratios were
+1.09 and 1.13; all saved arrays matched within each pair, and both stages
+converged. This is a constrained-cache result, not a default-budget claim.
+
+Earlier measurements, before the speed branch: on two
 50,000 x 20,000 HAPNEST panels, four-thread HRATT-HE took 29-33 s at 1.4 GiB
 peak RSS, or 0.8 GiB with two-bit calls, and 21-22 s with in-sample scores
 (`loco_folds=1`); official LDAK-KVIK, timed on 3 October when the host was
@@ -217,15 +209,10 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
   ([archive](benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 - BOLT mixture p-values accompany infinitesimal-model effects and standard
   errors, recorded by `extra["effect_method"] == "bolt-inf"`.
-- On the simulated ladder (m = 20,000, one thread), method cost scales
-  differently in the sample count: `exact` grows towards cubic in n, BOLT-LMM-inf is superlinear (its conjugate-gradient iterations grow
-  with n, from 10 at n = 1,000 to 22 at 50,000 at m = 20,000), and both
-  HRATT paths and LDAK-KVIK are linear (bounded sweep counts).
-  HRATT-HE is the cheapest association path from n = 10,000 up; BOLT-LMM-inf
-  is the cheapest at n = 1,000 and the most expensive at 50,000
-  ([ladder](benchmarks/results/20261026T161500Z-kvik-sample-scaling/README.md)).
-  `auto` still chooses `exact` up to 5,000 samples, although at n = 2,500
-  `exact` takes 9.8 s against 2.4-2.9 s for the two-step methods.
+- On the simulated 20,000-variant ladder, HRATT-HE was fastest from
+  10,000 through 100,000 samples. The default `auto` method still chooses
+  `exact` through 5,000 samples; at 2,500 samples, one run took 9.45 s
+  for exact versus 1.91-3.19 s for LDAK-KVIK and the HRATT paths.
 - HRATT's weighted and binary tests take allele frequencies from the
   covariates: when weights or case fractions vary with ancestry, include
   ancestry principal components (`mixmogam.pca`).

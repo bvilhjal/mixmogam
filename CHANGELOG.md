@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0.dev9] - 2026-10-29
+
+### Changed
+
+- Update the documentation and research report with the 29 October package
+  benchmarks, including the 100,000-sample comparison, paired cache studies,
+  convergence diagnostics and the limits of each measurement. A compact,
+  checksummed evidence bundle accompanies the report. The benchmarks used
+  2.0.0.dev8 at commit `d550c412`; this release changes documentation only.
+
 ## [2.0.0.dev8] - 2026-10-29
 
 ### Added

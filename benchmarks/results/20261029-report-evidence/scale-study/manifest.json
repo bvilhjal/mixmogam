@@ -1,0 +1,100 @@
+{
+  "started_utc": "2026-10-29T04:11:54Z",
+  "command": [
+    "benchmarks/scale_study.py",
+    "--tier",
+    "fast",
+    "--reps",
+    "10",
+    "--max-load",
+    "5",
+    "--out",
+    "benchmarks/results/20261029-scale-study-dev8"
+  ],
+  "tier": "fast",
+  "reps": 10,
+  "max_load": 5.0,
+  "plan": "/Users/au507860/REPOS/mixmogam/benchmarks/scale_study_plan.md",
+  "plan_sha256": "2e6463365e8eb181cd7de32db1f521213f71702e1db5c6f5f0fe94444bff053e",
+  "driver_sha256": "7693e6d59fa5962b86aa1d0e04f1777467df3e6efdac61ba78993b2e617b1a17",
+  "panels": {
+    "P1": {
+      "n": 1500,
+      "m": 20000,
+      "nchr": 8,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261026
+    },
+    "P2": {
+      "n": 1000,
+      "m": 10000,
+      "nchr": 8,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261027
+    },
+    "P2s": {
+      "n": 1000,
+      "m": 10000,
+      "nchr": 8,
+      "kind": "structured",
+      "block_size": 125,
+      "n_pops": 4,
+      "fst": 0.3,
+      "seed": 20261030
+    },
+    "P3": {
+      "n": 5000,
+      "m": 400000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    "P4": {
+      "n": 1000,
+      "m": 20000,
+      "nchr": 8,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261029
+    }
+  },
+  "methods": [
+    "exact",
+    "bolt-inf",
+    "bolt",
+    "hratt-he",
+    "hratt-reml"
+  ],
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "load_average": [
+      2.01806640625,
+      1.93359375,
+      1.61572265625
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 1,
+    "mixmogam": "2.0.0.dev8",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev9",
+    "phensim_path": "/Users/au507860/REPOS/phensim/phensim/__init__.py",
+    "phensim_git": null
+  },
+  "finished_utc": "2026-10-29T06:01:10Z",
+  "measurements": 308
+}

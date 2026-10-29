@@ -6,8 +6,24 @@ battery power or with macOS Low Power Mode on, like the sibling packages.
 
 [`DESIGN.md`](DESIGN.md) is the map of the suite: which question each
 family of drivers answers, what the recorded evidence can support, and
-what the suite could not measure on 25 October 2026. Read it before
+what the suite could not measure on 25 October 2026 and the later reruns. Read it before
 adding a driver or quoting a number.
+
+**Package rerun (29 October 2026).** A
+[compact evidence bundle](results/20261029-report-evidence/README.md)
+records the completed dev8 package benchmarks, including the sample-size
+ladder to 100,000, paired 50,000-sample fits, 308 scale-study fits and the
+Atwell controls. It separates repeated timings from independent simulated
+replicates and records non-converged fits and the omitted largest standard
+scan. Its manifest hashes selected copied records; large panels and full
+worker output remain in the original local archives.
+
+The `kvik_scale.py` load option is not forwarded to its fit workers, so
+load in those runs was observed, not gated. `hratt_efficiency.py` currently
+passes `--cache-bytes` using the wrong package keyword and does not forward
+`--loco-folds` to its worker. The restricted-cache paired rerun used the
+corrected driver preserved in the evidence bundle; it used the default
+cross-fitting configuration.
 
 **Efficiency follow-up (28 October 2026).** The
 [paired protocol](efficiency_followup_plan.md) measures HRATT score fits,
@@ -44,8 +60,10 @@ first measurement and is hashed into the archive. Four arms:
 * **C** and **C2** scale: wall time, CPU time and operating-system peak
   RSS of one complete fit at 5,000 samples and up to 600,000 variants,
   with the Gram cache switched off, at its default budget and sized to
-  hold the whole panel, so that the point where the default budget runs
-  out can be read off the table.
+  hold the whole panel. Packing changed cache capacity: in the dev8 rerun
+  the 100,000-600,000-variant ladder did not cross the default budget. A
+  separate 800,000-variant extension recorded an initially partial cache;
+  its final occupancy after hold-out release was not measured.
 * **D** the default installation: what the pure NumPy fallbacks cost,
   and whether the package warns that it is using them.
 

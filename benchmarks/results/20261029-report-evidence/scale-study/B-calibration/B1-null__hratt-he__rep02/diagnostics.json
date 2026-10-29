@@ -1,0 +1,188 @@
+{
+  "method": "hratt-he",
+  "config": {
+    "threads": 1,
+    "blas_threads": 1,
+    "numba_threads": 1,
+    "cache_bytes": null,
+    "storage": "int8",
+    "numba": true,
+    "random_state": 0,
+    "pin_threads": true,
+    "name": "ref"
+  },
+  "panel": {
+    "n": 1000,
+    "m": 10000,
+    "nchr": 8,
+    "kind": "blocks",
+    "block_size": 100,
+    "seed": 20263027
+  },
+  "phenotype": {
+    "h2": 0.0,
+    "seed": 20263100,
+    "confounding": 0.0,
+    "pcs": 0,
+    "h2_qtl": 0.25,
+    "n_qtl": 10,
+    "n_background": 2000
+  },
+  "panel_seconds": 0.15403862530365586,
+  "phenotype_seconds": 0.00012170802801847458,
+  "pc_seconds": 0.0,
+  "fit_seconds": 0.30406600004062057,
+  "has_numba": true,
+  "options": {
+    "method": "hratt",
+    "heritability_method": "he",
+    "n_threads": 1,
+    "random_state": 0
+  },
+  "warnings": [],
+  "extra": {
+    "statistic": "chi2",
+    "n": 1000,
+    "n_loco_groups": 8,
+    "loco_groups": [
+      [
+        1
+      ],
+      [
+        2
+      ],
+      [
+        3
+      ],
+      [
+        4
+      ],
+      [
+        5
+      ],
+      [
+        6
+      ],
+      [
+        7
+      ],
+      [
+        8
+      ]
+    ],
+    "method": "hratt",
+    "denominator": "constant",
+    "alpha": -1.0,
+    "h2": 0.029508203020445302,
+    "alpha_method": "he",
+    "alpha_scores": [
+      0.6965886865429514,
+      0.6388795140865413,
+      0.5940331271480531,
+      0.5586422944826026,
+      0.5302045875457051
+    ],
+    "structure": {
+      "excess": 0.009657093459133126,
+      "z": 2.4033517234743416,
+      "strong": false,
+      "n_snps": 512
+    },
+    "cv_grid": [
+      [
+        0.5,
+        0.5
+      ],
+      [
+        0.5,
+        0.3
+      ],
+      [
+        0.5,
+        0.1
+      ],
+      [
+        0.1,
+        0.5
+      ],
+      [
+        0.1,
+        0.3
+      ],
+      [
+        0.1,
+        0.1
+      ],
+      [
+        0.01,
+        0.5
+      ],
+      [
+        0.01,
+        0.3
+      ],
+      [
+        0.01,
+        0.1
+      ],
+      [
+        0.0,
+        1.0
+      ]
+    ],
+    "cv_mse": [
+      0.9619211689899784,
+      0.9619293282090647,
+      0.9619435925186655,
+      0.9619698347199618,
+      0.962029826198043,
+      0.9621122152238398,
+      0.9626045087893702,
+      0.9632816641030366,
+      0.9641568948229063,
+      0.9619148093144929
+    ],
+    "cv_best": [
+      0.0,
+      1.0
+    ],
+    "cv_converged": true,
+    "loco_folds": 5,
+    "loco_refit": false,
+    "loco_iterations": 2,
+    "loco_converged": true,
+    "offset_slope": [
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      1.0,
+      0.34499346123852376,
+      1.0
+    ],
+    "heritability_method": "he",
+    "he_variance": {
+      "raw_vg": 0.02950733126719597,
+      "raw_ve": 0.9704631259901054,
+      "vg": 0.02950733126719597,
+      "ve": 0.9704631259901054,
+      "h2": 0.029508203020445302,
+      "status": "interior",
+      "boundary": "none",
+      "denominator": 652.0538993218163,
+      "trace_k2": 1653.0552984993537,
+      "trace_k_over_df": 1.0010012000892494,
+      "projected_genetic_variance_fraction": 0.02953687400989421,
+      "probe_se": 16.202914234167146,
+      "curvature_se_ratio": 40.24300134520417,
+      "n_probes": 32
+    },
+    "vb_residual_variance": 0.9704917969795547,
+    "vb_noise_floor_applied": false,
+    "lambda": 1.0
+  },
+  "n": 1000,
+  "m": 10000,
+  "p_finite": 10000
+}

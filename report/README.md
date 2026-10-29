@@ -1,18 +1,12 @@
 # Research report
 
-This revision (17 October) describes [2.0.0.dev6](../CHANGELOG.md) and the
-unreleased changes through 17 October. The evidence table below also
-indexes the 25-26 October archives (genome-scale suite rework, the
-LDAK-KVIK comparisons at 400,000 variants, the covariate study, the
-speed branch and its review, and both scaling ladders) so the next
-revision can cite them; the manuscript text does not describe them yet.
-The speed branch superseded two method statements in it: the subsection
-"Lanczos steps and probes" gives the REML run 24 steps, which are now the
-cap of an adaptive stop (`slq_tol`), and "Reuse, bounded workspaces and
-optional parallelism" describes per-fold full Gram matrices, which are now
-packed triangles under one budget shared by HRATT's hold-out and cross-fitted
-fits. The [design notes](../docs/design.md) and the
-[changelog](../CHANGELOG.md) describe the current methods.
+This revision (29 October) adds the dev8 package benchmark reruns and
+updates the current cache and Lanczos descriptions. Its earlier sections
+retain their original versions and measured evidence; the new results
+used `2.0.0.dev8` at commit `d550c412`. The dev9 release changes the
+documentation and version string. The
+[design notes](../docs/design.md) and [changelog](../CHANGELOG.md) describe
+the methods and release history.
 The abstract retains the failed
 weighted-effect and runtime criteria; the software contracts describe
 sample-size and assembly metadata and the PCA memory guard. Section 4.13
@@ -27,9 +21,9 @@ threaded; older studies keep the versions they ran with.
 The [manuscript PDF](mixmogam_report.pdf) develops the statistical argument
 behind mixmogam, its evidence, and six research priorities. The
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. This revision
-includes a matched comparison with official LDAK-KVIK, optimized workloads at
-50,000 samples and 20,000 variants, and HAPNEST-model simulation measurements
-through 100,000 samples. Historical evidence retains its original limitations.
+includes matched comparisons with official LDAK-KVIK, paired workloads at
+50,000 samples and a repeated 100,000-sample comparison. Historical evidence
+retains its original limitations.
 Section 2.10 describes how version 2.0.0.dev5 computes the same estimators
 with less work; paired fits against 2.0.0.dev4 and a Lanczos accuracy study
 support it. Sections 2.11 and 4.10 cover the subsequent revisions, which
@@ -43,7 +37,7 @@ and a genotype saddlepoint approximation; Section 4.11 reports their
 prespecified validation. Section 2.13 adds cross-fitted LOCO scores and
 covariate-specific genotype distributions, and Section 4.12 validates them,
 including a rerun with the package's built-in ancestry PCs.
-The benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
+The earlier benchmark results are reruns of the mixmogam methods with 2.0.0.dev6
 on the archived inputs (the 20,000-variant cross-fitted fits with the later
 revision, 7 October), each timed fit waiting for a one-minute load average
 below 5. Official LDAK-KVIK results are reused from the
@@ -51,6 +45,14 @@ original runs of 3 October, when identical mixmogam code took 38% longer than
 a day later, so cross-program time ratios span days; same-day checks compare
 the mixmogam versions directly. Archived sources and measurements are
 preserved rather than relabelled as computations of the current version.
+
+Section 4.14 reports the 29 October reruns: HRATT-HE was faster at the
+larger sample sizes in the tested synthetic panels; the default-cache paired
+comparison did not establish a general implementation speedup. Confounded
+calibration fits and four Atwell HRATT scans had non-converged stages. The
+[evidence bundle](../benchmarks/results/20261029-report-evidence/README.md)
+contains selected raw measurements, per-fit convergence diagnostics, source
+and input identities, and the limitations of the compact archive.
 
 Table 1. Evidence and provenance used in the manuscript.
 
@@ -79,6 +81,7 @@ Table 1. Evidence and provenance used in the manuscript.
 | Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, stacked HE-alpha GEMM, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
 | Post-branch reruns of the 400,000-variant, covariate and four-thread LDAK-KVIK benchmarks | `20261026T143800Z-kvik-scale`, `20261026T144700Z-kvik-scale-blas4`, `20261026T152200Z-kvik-covariates-small`, `20261026T152400Z-kvik-covariates-large` (`20261026T145400Z-kvik-covariates-small` and `20261026T150200Z-kvik-covariates-large` are superseded by these) | Statistics reproduce to four decimals in lambda_GC; HRATT-HE level with the reference program on the mixed trait and faster on the null; HRATT-HE peak RSS down ~0.5 GiB; the reference program's own 2-34% day drift recorded as the cross-day noise floor |
 | Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: LDAK-KVIK and both HRATT paths linear in n (0.80-0.97) with bounded sweep counts, BOLT-LMM-inf superlinear (1.21; CG iterations 10 to 22), exact cubic; HRATT-HE cheapest from n = 10,000 up |
+| dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -108,8 +111,9 @@ source snapshot. On macOS it requires AC power with Low Power Mode disabled.
 The known-covariance archive uses package `2.0.0.dev1` at commit `729c8532`.
 The 20K archive records its timed code as `2.0.0.dev3` with uncommitted
 optimizations frozen in full; its computational modules match `2.0.0.dev4`.
-This manuscript describes `2.0.0.dev6` and its unreleased changes; the
-[changelog](../CHANGELOG.md) has the release history.
+Earlier manuscript sections describe `2.0.0.dev6` and its unreleased changes;
+the new results identify the dev8 commit. The [changelog](../CHANGELOG.md)
+has the release history.
 
 ## Rebuild the manuscript
 
@@ -124,8 +128,11 @@ python report/make_streaming_tables.py
 python report/make_weights_binary_tables.py
 python report/make_followup_tables.py
 python report/make_atwell_table.py
+python report/make_dev8_benchmark_tables.py
 cd report
 tectonic mixmogam_report.tex
+cd ..
+python report/make_report_manifest.py
 ```
 
 This is a multi-file LaTeX project: its figures and tables must remain beside the
@@ -137,10 +144,13 @@ extensions frozen per archive; subsequent simulation changes do not retroactivel
 validate old results. At large n, input BED files stay local and are ignored by
 Git, with hashes and generating references/seeds retained. The primary matched
 case was independently regenerated and all four methods' p-values agreed exactly.
-`report_manifest.json` records the delivered manuscript, supporting sources, and
-verification. `references.json` contains verified bibliography identities and
-lookup URLs. Regenerate the report manifest when delivering a revised PDF;
-its hashes describe this revision rather than updating automatically.
+`report_manifest.json` records hashes of the delivered PDF, its current
+manuscript inputs and the compact evidence manifest; the manifest script
+uses `pdfinfo` to count pages. The previous revision's manifest is preserved
+as `report_manifest_20261017.json`: its historical hashes describe that
+revision and need not match the current tree. `references.json` contains
+verified bibliography identities and lookup URLs. Regenerate the report
+manifest when delivering a revised PDF; its hashes do not update automatically.
 
 The mathematical derivations, diagnostic limitations, and research hypotheses
 are in the manuscript. API usage belongs in the [quickstart](../docs/quickstart.md);

@@ -1,0 +1,62 @@
+{
+  "started_utc": "2026-10-29T06:01:28.273445+00:00",
+  "n": 100000,
+  "m": 20000,
+  "replicates": 3,
+  "threads": 1,
+  "max_load": 5,
+  "ldak_sha256": "8e6fd8469dead25e0e4ffc3fbf4b5ed7e50c8088b444ff7c1e7734ba12b2b6ef",
+  "inputs": {
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n100000/panel/geno.bed": "4cb6d1a11f42ac9abcd2c7a7274b46cf44d0ea8d9675b11e9568720d23078bb1",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n100000/panel/geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n100000/panel/geno.fam": "00bf570d6c8d47ec43c494594fc8bb620d638bed176630d3aebdbfb6ce337c75",
+    "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n100000/mixed-nopc/phenotype.txt": "f2504941d7fadb2922da41c3945bfd082015d0303d0b56448470cc1c6c8c5001"
+  },
+  "driver_sha256": "68143e78fde01dd9a0c07be232b1410e2b92a37a4798044930836c91218a8bfd",
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "load_average": [
+      5.12255859375,
+      2.99462890625,
+      2.3349609375
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 1,
+    "mixmogam": "2.0.0.dev8",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev9",
+    "phensim_path": "/Users/au507860/REPOS/phensim/phensim/__init__.py",
+    "phensim_git": null
+  },
+  "order": [
+    [
+      "ldak-kvik",
+      "hratt-he",
+      "bolt-inf"
+    ],
+    [
+      "hratt-he",
+      "bolt-inf",
+      "ldak-kvik"
+    ],
+    [
+      "bolt-inf",
+      "ldak-kvik",
+      "hratt-he"
+    ]
+  ],
+  "finished_utc": "2026-10-29T06:09:56.735602+00:00",
+  "measurements": 9
+}
