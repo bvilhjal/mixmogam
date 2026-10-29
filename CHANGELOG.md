@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.1] - 2026-10-29
+
+The first release on PyPI. The package is unchanged from 2.0.0 apart from the
+version string.
+
+### Changed
+
+- README links are absolute GitHub URLs pinned to the `v2.0.1` tag, so they
+  resolve on the PyPI project page.
+
 ## [2.0.0] - 2026-10-29
 
 The first stable release of the 2.0 series. Its statistical content is
