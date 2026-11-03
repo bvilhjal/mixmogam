@@ -172,16 +172,14 @@ def _pm_mixture(u, gjj, s2e, pi1, v1, v2):
     b = u / s2e
     lw1 = -math.inf
     m1 = 0.0
-    if pi1 > 0.0 and v1 > 0.0:
-        t1 = a + 1.0 / v1
-        m1 = b / t1
-        lw1 = math.log(pi1) - 0.5 * math.log(v1 * t1) + 0.5 * b * m1
+    if pi1 > 0.0 and v1 >= 0.0:
+        m1 = b * (v1 / (1.0 + a * v1))
+        lw1 = math.log(pi1) - 0.5 * math.log1p(a * v1) + 0.5 * b * m1
     lw2 = -math.inf
     m2 = 0.0
-    if pi1 < 1.0 and v2 > 0.0:
-        t2 = a + 1.0 / v2
-        m2 = b / t2
-        lw2 = math.log(1.0 - pi1) - 0.5 * math.log(v2 * t2) + 0.5 * b * m2
+    if pi1 < 1.0 and v2 >= 0.0:
+        m2 = b * (v2 / (1.0 + a * v2))
+        lw2 = math.log1p(-pi1) - 0.5 * math.log1p(a * v2) + 0.5 * b * m2
     mx = max(lw1, lw2)
     if mx == -math.inf:
         return 0.0
@@ -206,7 +204,8 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
     a = gjj / s2e
     b = u / s2e
     sa = math.sqrt(a)
-    lwl = -math.inf
+    # A zero-scale component is a point mass, not an absent component.
+    lwl = math.log(p) if p > 0.0 and lam == math.inf else -math.inf
     ml = 0.0
     if p > 0.0 and lam > 0.0 and math.isfinite(lam):
         mp = (b - lam) / a
@@ -225,10 +224,9 @@ def _pm_enet(u, gjj, s2e, p, lam, v):
                + mz + math.log(wp + wn))
     lwn = -math.inf
     mnn = 0.0
-    if p < 1.0 and v > 0.0:
-        t = a + 1.0 / v
-        mnn = b / t
-        lwn = math.log(1.0 - p) - 0.5 * math.log(v * t) + 0.5 * b * mnn
+    if p < 1.0 and v >= 0.0:
+        mnn = b * (v / (1.0 + a * v))
+        lwn = math.log1p(-p) - 0.5 * math.log1p(a * v) + 0.5 * b * mnn
     mx = max(lwl, lwn)
     if mx == -math.inf:
         return 0.0

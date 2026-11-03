@@ -84,7 +84,7 @@ def _cholesky_scan_factors(reml, L: np.ndarray, dtype) -> dict:
     """:meth:`LMM._scan_factors` with W = L^-1, L L' = K + delta I."""
     if reml.n - reml.q - 1 <= 0:
         raise ValueError("association tests require positive residual degrees of freedom")
-    W = linalg.solve_triangular(L, np.column_stack([reml.X, reml.y0]), lower=True,
+    W = linalg.solve_triangular(L, np.column_stack([reml.Q, reml.y0]), lower=True,
                                 check_finite=False)
     Xt, yt = W[:, : reml.q].astype(dtype), W[:, reml.q].astype(dtype)
     Q = linalg.qr(Xt, mode="economic", check_finite=False)[0].astype(dtype, copy=False)

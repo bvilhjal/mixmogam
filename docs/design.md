@@ -50,8 +50,10 @@ deflation.
 
 ## Exact engine
 
-- Variance components: EMMA REML/ML from one eigendecomposition of K (matrix
-  determinant lemma for the REML terms), profile grid plus Brent.
+- Variance components: EMMA REML/ML from one eigendecomposition of K,
+  profile grid plus Brent. Covariates are represented by their orthonormal
+  basis throughout fitting and whitening; coefficients are converted back
+  to the supplied units only on return (equation (1) below).
 - Scan: the EMMAX statistic as BLAS-3, per SNP block
   G~ = (I - QQ') W G' with W = (L + delta I)^{-1/2} U' (one GEMM in eigen
   coordinates and one rank-q residualization), then closed-form F, beta and
@@ -76,6 +78,82 @@ deflation.
 - `LMM.fit()` returns an `LMFit` that holds its model. The model caches the fit
   without a back reference (`fit_result` binds it on access), so no reference
   cycle keeps K and its eigendecomposition alive until garbage collection.
+
+### Likelihood and prior identities (3 November 2026 review)
+
+Let X = QR be a thin QR factorization, and write H = K + delta I.
+The REML determinant correction simplifies to equation (1):
+
+\[
+\log|X^T H^{-1}X|-\log|X^TX|
+=\log|Q^T H^{-1}Q|. \tag{1}
+\]
+
+The two factors involving R cancel. Working directly with Q avoids forming
+ill-conditioned normal equations in the supplied covariate units. Both
+likelihood engines and their scans now use Q; the returned coefficients
+still satisfy beta = R^{-1} gamma. This is the same model. A shift of 10^7
+in two covariate columns changed the former eigen likelihood by 0.056 in a
+60-sample test, although the intercept makes the shift immaterial. The
+regression tests cover offsets, units, fitted values and both scan precisions.
+
+For stochastic traces, let P project onto the residual subspace after
+removing the covariates and the retained leading eigenvectors. Write
+r = rank(P), and let A be the covariance operator restricted to this
+subspace. For independent Rademacher vectors z_b, equation (2) estimates
+only the departure from the identity contribution:
+
+\[
+\widehat{\operatorname{tr}f(A)}
+= r f(1)+\frac1B\sum_{b=1}^{B}(Pz_b)^T
+  \{f(A)-f(1)I\}(Pz_b). \tag{2}
+\]
+
+Use f(t) = log(t + delta) for the determinant and f(t) = 1/(t + delta)
+for its derivative. Add the retained eigenvalues' contributions exactly.
+The identity term and these eigenvalues therefore carry no probe noise.
+Lanczos quadrature evaluates the remaining quadratic forms; see
+[Ubaru, Chen and Saad (2017)](https://epubs.siam.org/doi/10.1137/16M1104974)
+for the underlying trace method. Equation (2) is a control-variate
+rearrangement used here, not a claim of a new estimator.
+
+A probe projected to zero remains in the average. For three samples and
+an intercept, two of the eight Rademacher vectors vanish. Dropping them
+makes the mean squared projected norm 8/3 instead of the correct rank, 2.
+Zero-vector quadrature now contributes zero without an operator call.
+Probe generation must remain independent of the design. Null and
+roundoff-sized eigenvalues are excluded from deflation, even when the bulk
+median is zero; they may lie in the covariate space. Deflation remains
+approximate unless its retained subspace is invariant.
+
+These changes add no genotype passes or dense sample covariance. They
+change stochastic fits for a fixed seed. They are exact for identity bulk
+plus exactly deflated spikes, but do not guarantee smaller error in every
+finite-probe fit. In a 300-sample, 1,200-variant check over 12 seeds, the
+48-probe heritability RMSE against exact REML changed from 0.0259 to 0.0241
+without structure, and from 0.0164 to 0.0179 with four populations and
+F_ST = 0.35. These are numerical checks on two panels, not calibration or
+power validation; defaults remain 48 probes and at most 24 steps. The check
+used `simulate_genotypes` with seed 21 and four populations, `simulate_traits`
+with seed 22, h2 = 0.5 and ten causal variants, SLQ seeds 0 through 11 and
+`slq_tol=0` (Python 3.14.6, NumPy 2.4.6, SciPy 1.18.0).
+
+Finally, a Gaussian prior component of variance v and prior probability pi
+has conditional mean m and log weight ell given by equation (3), with
+a = x'x / s2e and b = x'r / s2e:
+
+\[
+m=\frac{bv}{1+av},\qquad
+\ell=\log\pi-\tfrac12\log(1+av)+\tfrac12bm. \tag{3}
+\]
+
+At v = 0 this becomes m = 0 and ell = log(pi): a point mass retains its
+probability. The former code dropped that component. The same correction
+applies to the Gaussian part of the elastic-net mixture and to a Laplace
+component whose rate tends to infinity. The default grids have positive
+component scales; custom zero-scale priors are now handled correctly.
+Direct integration and a separate spike-and-slab calculation check this
+boundary. The Gaussian calculation also avoids division by tiny v.
 
 ## Two-step engine (K-free)
 
@@ -130,9 +208,11 @@ deflation.
   the operator, with at most 24 Lanczos steps and 48 Rademacher probes. A pass
   over the genotypes costs about the same for 1 to 64 columns, and the
   phenotype rule and trace probes share batched products. 24 steps matched 96
-  to five digits in every tested spectrum; 12 probes left h2 with an SD of
-  0.12 over probe seeds at n = 500 under strong structure, against 0.02 with
-  48 (archive `20261004-slq-defaults`). The run stops after step
+  to five digits in the archived spectra. Before the trace changes in
+  equation (2), 12 probes left h2 with an SD of 0.12 over probe seeds at
+  n = 500 under strong structure, against 0.02 with 48 (archive
+  `20261004-slq-defaults`); those historical error measurements do not
+  describe the revised estimator. The run stops after step
   j >= 8 once the h2 fitted from the j-step rules has changed by less than
   `slq_tol` (1e-6) at each of the last two steps and the last three fits each
   found a bracketed root; `slq_tol=0` runs all 24. The root guard matters

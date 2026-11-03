@@ -146,7 +146,10 @@ def _separated_extremes(values: np.ndarray, vectors: np.ndarray,
     if values.size == 0:
         return values, vectors
     bulk = float(np.median(values))
-    keep = int(np.sum(values >= ratio * bulk))
+    # A zero bulk is common for low-rank kinships. Zero (or roundoff-sized)
+    # modes are not separated extremes and may lie in the covariate space.
+    cutoff = max(ratio * bulk, 32 * np.finfo(float).eps * float(np.max(values)))
+    keep = int(np.sum((values > 0.0) & (values >= cutoff)))
     return values[:keep], vectors[:, :keep]
 
 
@@ -162,6 +165,24 @@ def _rule_nodes(rules) -> tuple[np.ndarray, np.ndarray]:
     return theta, mass
 
 
+def _spectral_traces(theta, mass, deltas, rank, top):
+    """Log determinant and inverse trace with the unit bulk known exactly.
+
+    The probes cover a residual subspace of dimension ``rank``; ``top``
+    contains the separately deflated eigenvalues. Centering f at 1 removes
+    the random probe-norm multiplier from the known identity contribution.
+    """
+    x = np.asarray(deltas, dtype=np.float64).reshape(-1, 1)
+    base = 1.0 + x
+    v = theta.reshape(1, -1) + x
+    weights = mass.ravel()
+    logdet = rank * np.log1p(x[:, 0]) + (np.log(v) - np.log(base)) @ weights
+    tr_inv = rank / base[:, 0] + ((1.0 - theta.ravel()) / v / base) @ weights
+    logdet += np.log(top + x).sum(axis=1)
+    tr_inv += (1.0 / (top + x)).sum(axis=1)
+    return logdet, tr_inv
+
+
 def _reml_grid(theta, mass, deltas, p, y_top_coef, lam_d) -> tuple[np.ndarray, np.ndarray]:
     """REML ll and dll of :meth:`LMM._slq_pack` at every delta at once.
 
@@ -174,11 +195,8 @@ def _reml_grid(theta, mass, deltas, p, y_top_coef, lam_d) -> tuple[np.ndarray, n
     top = y_top_coef**2 / (lam_d + x)
     s1 = inv_y @ mass[0] + top.sum(axis=1)
     s3 = inv_y**2 @ mass[0] + (top / (lam_d + x)).sum(axis=1)
-    t = theta[1:, None, :] + x
-    bulk = mass[1:, None, :] / (theta.shape[0] - 1)
-    d = lam_d.size
-    logdet = (bulk * np.log(t)).sum(axis=(0, 2)) + np.log(lam_d + x).sum(axis=1) - d * np.log(deltas)
-    tr_inv = (bulk / t).sum(axis=(0, 2)) + (1.0 / (lam_d + x)).sum(axis=1) - d / deltas
+    logdet, tr_inv = _spectral_traces(theta[1:], mass[1:] / (theta.shape[0] - 1),
+                                     deltas, p - lam_d.size, lam_d)
     ll = 0.5 * (p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(s1)) - logdet)
     return ll, 0.5 * (p * s3 / s1 - tr_inv)
 
@@ -229,6 +247,7 @@ class LMM:
         self._eig: Optional[dict] = None
         self._eig_R: Optional[tuple[np.ndarray, np.ndarray]] = None
         self._resid_projector: Optional[np.ndarray] = None
+        self._design_r: Optional[np.ndarray] = None
         if K is not None:
             if hasattr(K, "matmul") and getattr(K, "n", None) is not None:
                 if K.n != self.n:
@@ -286,8 +305,12 @@ class LMM:
     def resid_projector(self) -> np.ndarray:
         """Q (n, q): orthonormal basis of the covariate space."""
         if self._resid_projector is None:
-            self._resid_projector = linalg.qr(self.X, mode="economic")[0]
+            self._resid_projector, self._design_r = linalg.qr(self.X, mode="economic")
         return self._resid_projector
+
+    def _covariate_beta(self, coefficients):
+        """Map coefficients of Q back to the user's X = Q R coordinates."""
+        return linalg.solve_triangular(self._design_r, coefficients, check_finite=False)
 
     def _residualized_y(self) -> np.ndarray:
         Q = self.resid_projector
@@ -471,8 +494,9 @@ class LMM:
         """Exact ll/dll/s1 evaluators from ONE eigendecomposition.
 
         REML is evaluated through the matrix determinant lemma:
-        log|X'V^-1 X| and the GLS quadratic need only U'X (n x q) and
-        U'y once the spectrum of K is known, so the second O(n^3)
+        after X = Q R cancels R from the determinant correction, the GLS
+        quadratic and log|Q'V^-1 Q| need only U'Q (n x q) and U'y once the
+        spectrum of K is known, so the second O(n^3)
         eigendecomposition of S(K+I)S (the v1/EMMA construction, kept
         as :meth:`eig_R` for reference tests) is unnecessary.
         """
@@ -489,13 +513,14 @@ class LMM:
             vals, vecs = _dense_eigh(self.K)
             lam = vals[::-1].copy()
             U = _reverse_columns(vecs)
-        W = U.T @ self.X
+        # X = Q R: the two REML log determinants involving R cancel.
+        # Work in Q coordinates to avoid squaring the condition number of X.
+        W = U.T @ self.resid_projector
         # Remove an arbitrary fixed-effect component before spectral
         # projection. The likelihood is unchanged, but a large intercept
         # can no longer destroy RSS through subtraction of large squares.
         y0 = self._residualized_y()
         w = U.T @ y0
-        XtX_logdet = float(np.linalg.slogdet(self.X.T @ self.X)[1])
         df = self.n if method == "ml" else self.n - self.q
 
         def pieces(d):
@@ -515,7 +540,7 @@ class LMM:
             v, _, chol, _, rss = pieces(d)
             logdet = float(np.log(v).sum())
             if method == "reml":
-                logdet += 2 * np.log(np.diag(chol[0])).sum() - XtX_logdet
+                logdet += 2 * np.log(np.diag(chol[0])).sum()
             return float(0.5 * (df * (np.log(df / (2 * np.pi)) - 1 - np.log(rss)) - logdet))
 
         def dll_at(d):
@@ -580,7 +605,11 @@ class LMM:
         # the y rule and the trace probes share every operator pass: one
         # batched Lanczos run instead of 1 + probes sequential ones (same
         # probes, same rules up to rounding)
-        Z = rademacher_probes(self.n, probes, rng, pre=lambda x: x - Q @ (Q.T @ x))
+        def project_bulk(x):
+            x = x - Q @ (Q.T @ x)
+            return x - U_d @ (U_d.T @ x)
+
+        Z = rademacher_probes(self.n, probes, rng, pre=project_bulk)
         p = self.n - self.q
         stop = None
         if method == "reml" and stop_tol > 0 and Z.shape[1] > 0:
@@ -626,18 +655,10 @@ class LMM:
             )
             return top + y_rule.apply(lambda t: 1.0 / (np.maximum(t, 0.0) + delta) ** 2)
 
-        def _tr_sum(rules, f):
-            return float(np.mean([r.apply(f) for r in rules]))
+        theta_r, mass_r = _rule_nodes(tr_rules)
 
-        def logdetR_at(delta):
-            top = float(np.sum(np.log(lam_d + delta))) if d else 0.0
-            bulk = _tr_sum(tr_rules, lambda t: np.log(np.maximum(t, 0.0) + delta))
-            return top + bulk - d * np.log(delta)
-
-        def trInvR_at(delta):
-            top = float(np.sum(1.0 / (lam_d + delta))) if d else 0.0
-            bulk = _tr_sum(tr_rules, lambda t: 1.0 / (np.maximum(t, 0.0) + delta))
-            return top + bulk - d / delta
+        def traces_r(delta):
+            return _spectral_traces(theta_r, mass_r / len(tr_rules), delta, p - d, lam_d)
 
         if method == "ml":
             lam_k = np.empty(0)
@@ -658,32 +679,27 @@ class LMM:
                     out = out - U_k @ (lam_k[:, None] * c if c.ndim == 2 else lam_k * c)
                 return out
 
-            k_rules = trace_estimator(_k_op, self.n, probes, steps, rng)
+            k_rules = trace_estimator(
+                _k_op, self.n, probes, steps, rng,
+                pre=None if U_k is None else lambda x: x - U_k @ (U_k.T @ x))
+            theta_k, mass_k = _rule_nodes(k_rules)
             n = self.n
 
-            def logdetF_at(delta):
-                top = float(np.sum(np.log(lam_k + delta))) if U_k is not None else 0.0
-                bulk = _tr_sum(k_rules, lambda t: np.log(np.maximum(t, 0.0) + delta))
-                dk = 0 if U_k is None else lam_k.size
-                return top + bulk - dk * np.log(delta)
-
-            def trInvF_at(delta):
-                top = float(np.sum(1.0 / (lam_k + delta))) if U_k is not None else 0.0
-                bulk = _tr_sum(k_rules, lambda t: 1.0 / (np.maximum(t, 0.0) + delta))
-                dk = 0 if U_k is None else lam_k.size
-                return top + bulk - dk / delta
+            def traces_k(delta):
+                return _spectral_traces(theta_k, mass_k / len(k_rules), delta,
+                                         n - lam_k.size, lam_k)
 
             def ll_at(delta):
                 return float(
                     0.5
                     * (
                         n * (np.log(n / (2.0 * np.pi)) - 1.0 - np.log(s1_at(delta)))
-                        - logdetF_at(delta)
+                        - traces_k(delta)[0][0]
                     )
                 )
 
             def dll_at(delta):
-                return float(0.5 * (n * s3_at(delta) / s1_at(delta) - trInvF_at(delta)))
+                return float(0.5 * (n * s3_at(delta) / s1_at(delta) - traces_k(delta)[1][0]))
 
         else:
 
@@ -692,12 +708,12 @@ class LMM:
                     0.5
                     * (
                         p * (np.log(p / (2.0 * np.pi)) - 1.0 - np.log(s1_at(delta)))
-                        - logdetR_at(delta)
+                        - traces_r(delta)[0][0]
                     )
                 )
 
             def dll_at(delta):
-                return float(0.5 * (p * s3_at(delta) / s1_at(delta) - trInvR_at(delta)))
+                return float(0.5 * (p * s3_at(delta) / s1_at(delta) - traces_r(delta)[1][0]))
 
         return ll_at, dll_at, s1_at
 
@@ -779,7 +795,7 @@ class LMM:
         if self._fit is not None and self._fit_options == options and not recompute:
             return self.fit_result
         if variance.solver == "ols":
-            beta = linalg.lstsq(self.X, self.y)[0]
+            beta = self._covariate_beta(self.resid_projector.T @ self.y)
             rss = variance.ols_rss
             tail = 0.0
         else:
@@ -790,10 +806,12 @@ class LMM:
                 tail = float("nan") if self._eig is None else self._eig["tail_mass"]
             else:
                 H_inv_sqrt_y, H_inv_sqrt_X = (
-                    self._apply_inv_sqrt(a, variance.delta, np.float64) for a in (self.y, self.X)
+                    self._apply_inv_sqrt(a, variance.delta, np.float64)
+                    for a in (self.y, self.resid_projector)
                 )
                 XtX = H_inv_sqrt_X.T @ H_inv_sqrt_X
-                beta = linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos")
+                beta = self._covariate_beta(
+                    linalg.solve(XtX, H_inv_sqrt_X.T @ H_inv_sqrt_y, assume_a="pos"))
                 tail = self.eigen()["tail_mass"]
             residuals = self.y - self.X @ beta
             rss = float(residuals @ residuals)
@@ -914,13 +932,14 @@ class LMM:
         pre = SpectralPreconditioner(self._kdot, self.n, self._operator_trace(),
                                      k=min(64, self.n - 2),
                                      random_state=self.random_state)
-        rhs = np.column_stack([self.X, self.y])
+        Q = self.resid_projector
+        rhs = np.column_stack([Q, self.y])
         W, info = batched_pcg(lambda P, cols: self._kdot(P) + delta * P, rhs,
                            lambda R: pre(R, delta), tol=1e-8, max_iter=1000)
         if not info["converged"]:
             raise RuntimeError("GLS conjugate-gradient solve did not converge")
         WX, Wy = W[:, : self.q], W[:, self.q]
-        return linalg.solve(self.X.T @ WX, self.X.T @ Wy, assume_a="pos")
+        return self._covariate_beta(linalg.solve(Q.T @ WX, Q.T @ Wy, assume_a="pos"))
 
     # ------------------------------------------------------------------
     # Scanning
@@ -936,7 +955,7 @@ class LMM:
         if np.dtype(dtype) not in (np.dtype(np.float32), np.dtype(np.float64)):
             raise ValueError("scan dtype must be float32 or float64")
         delta = self.fit_result.delta if self.fit_result is not None else 1.0
-        Xt = self._apply_inv_sqrt(self.X, delta, dtype, sample_space)
+        Xt = self._apply_inv_sqrt(self.resid_projector, delta, dtype, sample_space)
         # Remove fixed effects in float64 before the optional float32 scan.
         y0 = self._residualized_y()
         yt = self._apply_inv_sqrt(y0, delta, dtype, sample_space)

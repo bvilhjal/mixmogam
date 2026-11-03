@@ -8,8 +8,8 @@ kernels, and the two-step methods warn without it because their Python
 fallbacks are much slower (on one 1,000 x 20,000 panel, 4.8 times for
 BOLT-LMM-inf, 68 times for HRATT-HE and 187 times for the BOLT-LMM mixture).
 
-Version 2.0.1. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/CHANGELOG.md), the methods in the
-[design notes](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/design.md), and the evidence in the
+Development version 2.0.2.dev1. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+[design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/report/README.md).
 
 | `gwas(..., method=)` | Implementation |
@@ -54,7 +54,7 @@ target of 1.3.
 
 The two-step methods and `denominator="spectral"` (a mixmogam extension whose
 use with mixture and elastic-net statistics is heuristic) are research
-implementations; the [design notes](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/design.md) list where they depart from
+implementations; the [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md) list where they depart from
 the original programs.
 
 ## Install
@@ -158,13 +158,13 @@ measurement details.
 
 ## Citation and references
 
-Cite the software with [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/CITATION.cff) and the papers for the
+Cite the software with [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff) and the papers for the
 methods you use. Each paper's PMID and lookup URL is in
 [report/references.json](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/report/references.json).
 
 | If you use | Cite |
 |---|---|
-| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/CITATION.cff), version 2.0.1 |
+| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.0.2.dev1 |
 | `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
 | `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
 | `method="hratt"`: its two-step design and LDAK heritability model | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |

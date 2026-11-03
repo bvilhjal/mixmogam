@@ -119,12 +119,12 @@ class CholeskyREML:
         self.q = self.X.shape[1]
         self.method = method
         self.df = self.n if method == "ml" else self.n - self.q
-        Q = linalg.qr(self.X, mode="economic")[0]
+        self.Q = Q = linalg.qr(self.X, mode="economic")[0]
         self.y0 = self.y - Q @ (Q.T @ self.y)
         if linalg.norm(self.y0) <= 10 * np.finfo(float).eps * linalg.norm(self.y):
             raise ValueError("phenotype has no residual variation after covariate adjustment")
-        self._xy = np.column_stack([self.X, self.y0])
-        self._xtx_logdet = float(np.linalg.slogdet(self.X.T @ self.X)[1])
+        # X = Q R; R cancels from log|X'H^-1 X| - log|X'X|.
+        self._xy = np.column_stack([Q, self.y0])
         self._work = np.empty((self.n, self.n), order="F" if K.flags.f_contiguous else "C")
         self._work_at: Optional[float] = None  # log delta held in the buffer
         self.evaluations = 0
@@ -161,7 +161,7 @@ class CholeskyREML:
             return -math.inf
         logdet = 2.0 * float(np.log(np.diag(L)).sum())
         if self.method == "reml":
-            logdet += 2.0 * float(np.log(np.diag(chol_a[0])).sum()) - self._xtx_logdet
+            logdet += 2.0 * float(np.log(np.diag(chol_a[0])).sum())
         df = self.df
         return 0.5 * (df * (math.log(df / (2 * math.pi)) - 1 - math.log(rss)) - logdet)
 

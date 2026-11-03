@@ -58,11 +58,12 @@ def lanczos_quadrature(
     ``v' f(A) v`` by ``norm2(v) * sum_i w_i f(theta_i)``; exact for
     polynomials up to degree ``2 * steps - 1``. A breakdown (``v`` lies in
     an invariant subspace) stops the run early with fewer nodes; the rule
-    is then exact.
+    is then exact. A zero starting vector returns a zero-mass rule without
+    applying the operator.
     """
     norm = float(np.linalg.norm(v))
     if norm == 0.0:
-        raise ValueError("starting vector has zero norm")
+        return QuadratureRule(np.zeros(1), np.ones(1), 0.0)
     v0 = v / norm
     steps = max(1, min(steps, v0.size))
     V = np.zeros((v0.size, steps))
@@ -118,19 +119,19 @@ def lanczos_quadrature_batch(
         V0 = V0[:, None]
     n, r = V0.shape
     norms = np.linalg.norm(V0, axis=0)
-    if np.any(norms == 0.0):
-        raise ValueError("starting vector has zero norm")
     steps = max(1, min(steps, n))
     # Every basis slice is assigned before use; zeroing the whole Krylov
     # history first only adds another full memory pass.
     Q = np.empty((steps, n, r))
     alpha = np.zeros((steps, r))
     beta = np.zeros((max(steps - 1, 1), r))
-    Q[0] = V0 / norms
-    t_eff = np.full(r, steps)
-    active = np.ones(r, dtype=bool)
+    Q[0] = V0 / np.where(norms > 0.0, norms, 1.0)
+    active = norms > 0.0
+    t_eff = np.where(active, steps, 1)
     for j in range(steps):
         cols = np.nonzero(active)[0]
+        if cols.size == 0:
+            break
         W = np.empty((n, r))
         W[:, cols] = matvec(Q[j][:, cols])
         if cols.size < r:
@@ -179,19 +180,21 @@ def rademacher_probes(n: int, probes: int, rng: np.random.Generator,
     """(n, p) Rademacher probes, drawn one at a time (the sequence of the
     sequential estimator), optionally projected.
 
-    A probe the projection reduces to rounding noise is dropped: counted
-    with its zero contribution it would bias the trace estimate by
-    tr(f(A)) / p. Independent draws hit this only through aliasing, e.g. a
-    random stream shared with indicator covariates.
+    A probe annihilated by the projection contributes zero and remains in
+    the average. Dropping it conditions the draw on survival and biases the
+    trace upward. Probes must be independent of the covariate design.
     """
+    if not isinstance(probes, (int, np.integer)) or probes < 1:
+        raise ValueError("probes must be a positive integer")
     out = []
     for _ in range(probes):
         z = rng.choice(np.array([-1.0, 1.0]), size=n)
         if pre is not None:
             z = pre(z)
-        if float(z @ z) > 1e-8 * n:
-            out.append(z)
-    return np.column_stack(out) if out else np.empty((n, 0))
+        if float(z @ z) <= (32 * np.finfo(float).eps) ** 2 * n:
+            z = np.zeros(n)
+        out.append(z)
+    return np.column_stack(out)
 
 
 class QuadratureRule:
@@ -205,6 +208,8 @@ class QuadratureRule:
         self.norm2 = float(norm2)
 
     def apply(self, f: Callable[[np.ndarray], np.ndarray]) -> float:
+        if self.norm2 == 0.0:
+            return 0.0
         return self.norm2 * float(np.sum(self.weights * f(self.theta)))
 
 

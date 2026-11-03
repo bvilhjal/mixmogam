@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2.dev1] - 2026-11-03
+
+### Fixed
+
+- REML/ML fitting and exact scans use an orthonormal covariate basis,
+  cancelling the redundant REML determinant factors and preventing large
+  covariate offsets or unit changes from corrupting the likelihood. Returned
+  covariate effects retain their original units.
+- Stochastic likelihood traces keep zero projected probes in their average,
+  remove the deflated eigenspace from probes, and evaluate the identity
+  contribution analytically. Null and roundoff-sized spectral modes are
+  excluded from deflation, including an all-zero kinship. This changes
+  fixed-seed SLQ results, adds no genotype passes, and makes identity-bulk
+  cases exact; it does not guarantee
+  a smaller error for every finite set of probes.
+- Gaussian-mixture and elastic-net posterior means retain the probability
+  of zero-scale components as a point mass at zero. Gaussian calculations
+  avoid division by the prior variance and use `log1p` for small variances.
+
+The derivations and numerical limits are in [the design notes](docs/design.md#likelihood-and-prior-identities-3-november-2026-review).
+
 ### Added
 
 - `plot_manhattan` and `plot_qq` are exported from the package root

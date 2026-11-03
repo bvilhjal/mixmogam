@@ -1,5 +1,5 @@
 """Stochastic Lanczos REML defaults: steps converge early, probes carry the
-error, and degenerate probes are dropped."""
+error, and degenerate probes remain in the average."""
 
 import numpy as np
 import pytest
@@ -29,19 +29,21 @@ def test_24_steps_reproduce_96(structured):
     assert short.ll == pytest.approx(long.ll, abs=1e-3)
 
 
-def test_default_probes_shrink_the_monte_carlo_spread(structured):
-    """At n = 500 with strong structure, 12 probes left h2 with SD 0.11 over
-    seeds (errors up to 0.39); 48 probes, SD 0.02 (errors up to 0.04)."""
+def test_probe_budgets_stay_close_to_exact_reml(structured):
+    """Check numerical error against REML, not a historical ratio of seed SDs.
+
+    Projecting probes out of the deflated space removes the former few-probe
+    outliers. Twelve seeds cannot establish the asymptotic variance ratio.
+    """
     K, y = structured
     exact = LMM(y, K=K).fit().pseudo_heritability
-    default = np.array([_slq(K, y, seed=s).pseudo_heritability for s in range(12)])
-    few = np.array([_slq(K, y, seed=s, slq_probes=12).pseudo_heritability for s in range(12)])
-    assert np.abs(default - exact).max() < 0.06
-    # The few-probe estimator is heavy-tailed: most seeds agree, a few do not.
-    assert np.std(default) < 0.5 * np.std(few)
+    for probes in (12, 48):
+        estimates = np.array([_slq(K, y, seed=s, slq_probes=probes).pseudo_heritability
+                              for s in range(12)])
+        assert np.abs(estimates - exact).max() < 0.06
 
 
-def test_probes_projected_to_noise_are_dropped():
+def test_probes_projected_to_noise_are_retained_as_zero():
     class Stream:
         """A first draw aliased with the projected-out direction."""
 
@@ -55,4 +57,5 @@ def test_probes_projected_to_noise_are_dropped():
             return self.rng.choice(values, size=size)
 
     Z = rademacher_probes(50, 3, Stream(), pre=lambda z: z - z.mean())
-    assert Z.shape == (50, 2)
+    assert Z.shape == (50, 3)
+    np.testing.assert_array_equal(Z[:, 0], 0.)
