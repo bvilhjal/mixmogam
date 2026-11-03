@@ -259,14 +259,21 @@ res = fit.scan(gt, with_betas=True)          # classic EMMAX: the tested SNP
 ```python
 from mixmogam.stepwise import mlmm
 from mixmogam.scan import scan_gxe, permutation_min_p, fit_two_kinships
+from mixmogam import gwas_by_group
 
 out = mlmm(y, gt, K=K, max_steps=10)         # forward-backward; float32 scans
 out["selected"]["ebic"], out["selected"]["mbonf"]
 scan_gxe(LMM(y, X=E, K=K).fit(), gt, E)      # interaction given the main effect
 scan_gxe(LMM(y, X=E, K=K).fit(), gt, E, polygenic_gxe=True)  # + polygenic K*(EE')
+out = gwas_by_group(y, gt, groups)           # one gwas per group
+out["results"], out["difference"]            # b0, b1; Wald test of b1 - b0
 permutation_min_p(fit, gt, n_perm=1000)      # whitened-residual permutations
 fit_two_kinships(y, K_close, K_structure)     # weights including 0 and 1
 ```
+
+`gwas_by_group` needs two non-overlapping groups with no relatives split
+between them. Its per-group effects show whether an interaction is a
+difference in size or in sign.
 
 Two-kinship fits reject covariance components that cannot be distinguished
 after covariate adjustment. `weight=None` with zero shares means the ordinary

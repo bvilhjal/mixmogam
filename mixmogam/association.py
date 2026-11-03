@@ -35,7 +35,7 @@ from mixmogam._fast import standardize_block
 from mixmogam.lmm import _whitened_scan
 from mixmogam.results import GwasResult
 
-__all__ = ["gwas", "loco_groups", "EXACT_N_AUTO"]
+__all__ = ["gwas", "gwas_by_group", "loco_groups", "EXACT_N_AUTO"]
 
 EXACT_N_AUTO = 5000
 
@@ -234,3 +234,68 @@ def gwas(
     result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
     result.genome_build = genome_build
     return result
+
+
+def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "auto",
+                  **kwargs) -> dict:
+    """Separate GWAS in two non-overlapping groups and a test of their difference.
+
+    :func:`gwas` runs in each group with its own variance components, so the
+    groups may differ in heritability and residual variance; the pooled
+    interaction model of :func:`mixmogam.scan.scan_gxe` shares them. The
+    per-group effects b0 and b1 show how an interaction arises: the same
+    sign with different sizes, or opposite signs. The difference test
+    z = (b1 - b0) / sqrt(se0^2 + se1^2) treats the two estimates as
+    independent, which needs no relatives split across the groups.
+
+    Covariate columns constant within a group (such as the group indicator
+    itself) are dropped in that group, where the intercept absorbs them.
+    ``method="auto"`` is resolved once, from the larger group, so both groups
+    use the same method. ``sample_weights`` (HRATT) are split with the
+    samples; other options are passed to :func:`gwas` unchanged.
+
+    Returns a dict with ``groups`` (the two labels, sorted), ``results``
+    (one GwasResult per group, in that order) and ``difference``, a
+    GwasResult with beta = b1 - b0, its standard error and the two-sided
+    normal p-value. SNPs monomorphic in either group get NaN.
+    """
+    from scipy import stats
+
+    y = np.asarray(y, dtype=np.float64).ravel()
+    groups = np.asarray(groups).ravel()
+    if groups.size != y.size or y.size != gt.n_samples:
+        raise ValueError("y, groups and genotypes disagree on the sample count")
+    labels = np.unique(groups)
+    if labels.size != 2:
+        raise ValueError(f"groups must have exactly two levels, got {labels.size}")
+    if X is not None:
+        X = np.asarray(X, dtype=np.float64)
+        X = X.reshape(-1, 1) if X.ndim == 1 else X
+        if X.shape[0] != y.size:
+            raise ValueError("X and y disagree on the sample count")
+    members = [np.flatnonzero(groups == label) for label in labels]
+    if method == "auto":
+        method = "exact" if max(idx.size for idx in members) <= EXACT_N_AUTO else "bolt-inf"
+    weights = kwargs.pop("sample_weights", None)
+    results = []
+    for idx in members:
+        Xg = None
+        if X is not None:
+            Xg = X[idx][:, np.ptp(X[idx], axis=0) > 0]
+            Xg = Xg if Xg.shape[1] else None
+        if weights is not None:
+            kwargs["sample_weights"] = np.asarray(weights)[idx]
+        results.append(gwas(y[idx], gt.filter_samples(idx), X=Xg, method=method, **kwargs))
+    r0, r1 = results
+    beta = r1.beta - r0.beta
+    se = np.hypot(r0.se, r1.se)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        p = 2 * stats.norm.sf(np.abs(beta / se))
+    n = r0.n + r1.n if r0.n is not None and r1.n is not None else None
+    difference = GwasResult(
+        chromosome=r0.chromosome, position=r0.position, p=p, variant_ids=r0.variant_ids,
+        beta=beta, se=se, af=gt.allele_freqs(), effect_allele=r0.effect_allele,
+        other_allele=r0.other_allele, n=n, genome_build=r0.genome_build,
+        extra={"groups": tuple(labels), "test": "wald, independent group effects"},
+    )
+    return {"groups": tuple(labels), "results": tuple(results), "difference": difference}

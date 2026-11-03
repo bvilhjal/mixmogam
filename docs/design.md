@@ -560,7 +560,13 @@ overall inflation under strong simulated structure.
 
 - **GxE**: the 1-df interaction test is conditional on the SNP main effect,
   with E among the covariates. `polygenic_gxe=True` adds a K * (EE') variance
-  component (Sul et al. 2016).
+  component (Sul et al. 2016). `gwas_by_group` instead runs `gwas` in each of
+  two groups, with variance components fitted per group, and tests b1 - b0
+  as a difference of independent estimates. Without GxE its difference
+  correlates 0.92 with the pooled interaction estimate under strong
+  structure, with 16% larger standard errors: the per-group fits do not use
+  relatedness across groups (one simulation: n = 400, 3 populations,
+  F_ST 0.2).
 - **Permutations**: GLS-whitened null residuals are rotated into an
   orthonormal residual basis, permuted there and rotated back (Abney 2015);
   whitening alone does not make fitted residual entries exchangeable. All

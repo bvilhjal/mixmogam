@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `gwas_by_group(y, gt, groups, X)` runs `gwas` separately in two
+  non-overlapping groups and returns both results plus a Wald test of the
+  effect difference b1 - b0. The per-group effects show whether a GxE
+  signal is a difference in size or in sign. Covariates constant within a
+  group are dropped there, `method="auto"` is resolved once for both
+  groups, and HRATT `sample_weights` are split with the samples.
+
 ## [2.0.2.dev1] - 2026-11-03
 
 ### Fixed

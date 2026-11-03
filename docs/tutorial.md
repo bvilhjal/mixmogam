@@ -194,7 +194,8 @@ packed ([archive](../benchmarks/results/20261006-kvik-20k-dev6/README.md),
 
 ## Also available
 
-GxE interaction scans (`scan_gxe`), genotypic (non-additive) tests,
+GxE interaction scans (`scan_gxe`) and per-group scans with a difference
+test (`gwas_by_group`), genotypic (non-additive) tests,
 two-kinship variance-component fits (`fit_two_kinships`), posterior
 association probabilities with an explicit effect-size prior, a covariate
 file reader (`read_covariates`), and HDF5 / EIGENSTRAT / PLINK I/O. See
