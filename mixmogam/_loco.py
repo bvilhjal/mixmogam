@@ -196,6 +196,9 @@ class LocoGenotypes:
                 raise ValueError("moments must hold (mean, sd, projection, zz) for every variant")
             self.mean[:], self.sd[:], self._projection[:], self.zz[:] = mean, sd, projection, zz
         else:
+            self._readahead = None
+            if readahead is not None and self.set_readahead(readahead):
+                self._readahead.begin()
             for idx, _ in self._blocks:
                 self._prepare(idx)
         for array in (self.mean, self.sd, self._projection, self.zz):
@@ -209,7 +212,7 @@ class LocoGenotypes:
         self._lut[:, :3] = (np.arange(3.0)[None, :] - self.mean[:, None]) / divisor[:, None]
         self._readahead = None
         if readahead is not None:
-            self.set_readahead(readahead)
+            self.set_readahead(readahead)  # (again: preparation may have been skipped)
 
     def set_readahead(self, window: Optional[int]) -> bool:
         """Advise read-ahead/drop-behind on memory-mapped two-bit calls for
@@ -248,8 +251,11 @@ class LocoGenotypes:
             from mixmogam._standardize import prepare_moments
             Q = self._Q_prepare if scaled else self.Q
             sq = self._sq_weights if scaled else None
+            advise = getattr(self, "_readahead", None)
             for start in range(0, idx.size, 1024):
                 take = idx[start : start + 1024]
+                if advise is not None:
+                    advise.at(take)
                 (self.mean[take], self.sd[take], self._projection[take],
                  self.zz[take]) = prepare_moments(self.gt.G, take, Q, self.n_threads,
                                                   sq_weights=sq)

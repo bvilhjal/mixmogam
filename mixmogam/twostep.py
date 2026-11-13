@@ -113,7 +113,8 @@ def _normalize_weights(sample_weights, n: int) -> Optional[np.ndarray]:
 
 
 def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None,
-           trait: str = "quantitative", mu_clip: float = 1e-4) -> _Setup:
+           trait: str = "quantitative", mu_clip: float = 1e-4,
+           readahead: Optional[int] = None) -> _Setup:
     """The (row-scaled) working model shared by the two-step steps.
 
     Without weights and for quantitative traits this is the phenotype, the
@@ -164,7 +165,8 @@ def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None
     groups, labels = loco_groups(gt.chromosome, max_loco_groups)
     if len(labels) < 2:
         raise ValueError("LOCO needs variants on at least two chromosomes/groups")
-    lg = LocoGenotypes(gt, groups, Q, block=block, n_threads=n_threads, row_scale=s)
+    lg = LocoGenotypes(gt, groups, Q, block=block, n_threads=n_threads, row_scale=s,
+                       readahead=readahead)
     ys = y_work if s is None else s * y_work
     y_p = ys - Q @ (Q.T @ ys)
     q = Xd.shape[1]
@@ -1361,7 +1363,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("model_snps_stream streams a model_snps subset; set model_snps")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
-                sample_weights=sample_weights, trait=trait)
+                sample_weights=sample_weights, trait=trait,
+                readahead=None if stream is None else stream["window_bytes"])
     n = st.lg.n
     st_test = st  # stage 2 always tests every variant
     model_info = None
@@ -1549,7 +1552,6 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
             position=gt.position[idx], variant_ids=gt.variant_ids[idx],
             allele1=None if gt.allele1 is None else gt.allele1[idx],
             allele2=None if gt.allele2 is None else gt.allele2[idx])
-        st.lg.set_readahead(stream["window_bytes"])  # the panel's passes, if mapped
     else:
         sub = gt.variant_mask(idx)
     moments = (st.lg.mean[idx], st.lg.sd[idx], st.lg._projection[idx], st.lg.zz[idx])
