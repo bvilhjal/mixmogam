@@ -52,6 +52,70 @@ scores: 28-36% low), except weighted effects under selection on the outcome
 (5.4% low), and weighted fits took 1.55 times as long as HRATT-HE against a
 target of 1.3.
 
+### Stage-1 model SNPs (large panels)
+
+HRATT can fit step 1 on a subset of variants and still test every variant in step 2, as
+BOLT-LMM's `--modelSnps`, LDAK-KVIK's thinned predictors and REGENIE's step 1 do. Every
+model SNP keeps the LOCO rule: no chromosome's scores contain its own variants.
+
+```python
+gwas(y, gt, X, method="hratt", model_snps="hm3")       # human data: HapMap3 variants
+gwas(y, gt, X, method="hratt", model_snps="auto")      # other species / no HM3 coverage
+gwas(y, gt, X, method="hratt", model_snps="hm3",
+     model_snps_include=["rs1234", "6:25000000-34000000"])  # plus known loci
+```
+
+```
+mixmogam gwas --geno imputed --pheno y.txt --out r.csv --model-snps hm3 [--hm3-build GRCh38]
+mixmogam hm3 match --geno imputed                       # the match report only
+```
+
+**Human data: `"hm3"`, the documented default.**
+- Uses the 1,054,330 HapMap3 variants of LDpred2 (Privé et al. 2020; figshare
+  [10.6084/m9.figshare.19213299](https://doi.org/10.6084/m9.figshare.19213299), CC BY 4.0).
+  They are bundled in 5.9 MB and need no network ([provenance](mixmogam/data/README.md)).
+- Variants are matched by rsID and/or chromosome:position, in GRCh37 or GRCh38. The build is
+  detected from the overlap unless `build=` (`--hm3-build`) or `genome_build=` says otherwise.
+- Chromosome names `chr1`, `1`, `X` and `23` are all accepted.
+- Allele swaps and strand flips are counted, not corrected, because stage 1 does not depend on
+  orientation. Indels or other alleles found at an HM3 site, duplicates, and variants with
+  MAF ≤ 1% are dropped. The counts for each reason are in
+  `result.extra["model_snps"]["options"]["hm3"]`.
+- If fewer than half of the HM3 variants on the panel's chromosomes match, or fewer than
+  300,000 match (for example an unimputed array, the wrong build, or another species), HRATT
+  warns and falls back to `"auto"`.
+
+**Other data: `"auto"`.**
+- Keeps variants with MAF > 1%, then greedy pairwise pruning to r² < 0.5 within 100 kb.
+- r² is estimated on 10,000 samples drawn at random with seed 0, so a file sorted by cohort or
+  ancestry does not bias it.
+
+**`None` (the library default)** fits stage 1 on every variant. Results are byte-identical to
+earlier versions.
+
+**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag. In simulated
+nuclear families (n = 2,000), lambda_GC on null SNPs was:
+
+| Stage-1 SNPs | lambda_GC |
+|---|---|
+| Every variant | 1.016 |
+| 50% subset | 1.040 |
+| 20% subset | 1.101 |
+| 5% subset | 1.237 |
+
+The LOCO scores removed less of the relatives' shared signal. In unrelated samples the
+subsets stayed calibrated.
+
+**Warnings.** HRATT therefore warns, and records the details in
+`result.extra["model_snps"]["warnings"]`, when:
+- the subset's HE heritability is below 0.85 × the same estimate on every variant. This
+  costs one extra panel pass; turn it off with `model_snps_h2_check=False` or
+  `--no-model-snps-h2-check`.
+- the structure test signals relatedness or residual structure (excess > 0.05) and the subset
+  is small (< 20% of the variants or < 500,000). The expected rise in the null mean chi-square,
+  about excess × the h² the subset misses, is reported.
+- `"auto"` keeps more than 80% of the variants.
+
 The two-step methods and `denominator="spectral"` (a mixmogam extension whose
 use with mixture and elastic-net statistics is heuristic) are research
 implementations; the [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md) list where they depart from

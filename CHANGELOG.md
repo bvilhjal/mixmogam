@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- HRATT `model_snps=` / `--model-snps` fits stage 1 on a subset of variants. Stage 2 still
+  tests every variant against LOCO scores, and the LOCO groups are those of the full panel.
+  - `"hm3"`: the bundled LDpred2 HapMap3 map (1,054,330 variants, CC BY 4.0), matched by
+    rsID and/or GRCh37/GRCh38 position, with a match report. It falls back to `"auto"` below
+    50% (on the panel's chromosomes) or below 300,000 matches. This is the documented choice
+    for human data.
+  - `"auto"`: MAF/LD thinning, with r² estimated on seeded random samples.
+  - IDs, indices or a mask.
+  - `model_snps_include=` / `--model-snps-include` forces known loci (IDs or `chr:start-end`)
+    into the subset.
+  - The default `None` leaves results byte-identical.
+- Subset warnings (also in `extra["model_snps"]["warnings"]`):
+  - the subset's HE h² is below 0.85 × the HE h² on all variants (one extra pass;
+    `model_snps_h2_check=False` turns it off);
+  - relatedness or residual structure combined with a small subset;
+  - `"auto"` keeps more than 80% of the variants.
+- `mixmogam hm3 info|match|build`: show, match or rebuild the HapMap3 map (for example
+  HapMap3+).
 - `gwas_by_group(y, gt, groups, X)` runs `gwas` separately in two
   non-overlapping groups and returns both results plus a Wald test of the
   effect difference b1 - b0. The per-group effects show whether a GxE

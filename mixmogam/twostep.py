@@ -1077,7 +1077,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
           gram_cache_bytes: float = 1e9, model_snps=None,
-          model_snps_options: Optional[dict] = None) -> GwasResult:
+          model_snps_options: Optional[dict] = None, model_snps_include=None,
+          model_snps_h2_check: bool = True) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1195,13 +1196,45 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     greedy r2 < 0.5 pruning within 100 kb, both settable through
     ``model_snps_options``, e.g. ``{"min_maf": 0.05, "max_r2": 0.2,
     "window_bp": 250_000, "ld_samples": 10_000, "max_snps": 1_000_000}``),
-    variant indices, a boolean mask or variant IDs. The subset keeps the
+    ``"hm3"`` (the panel's HapMap3 variants: the 1,054,330 of LDpred2's map,
+    matched by rsID and/or chromosome:position in GRCh37 or GRCh38,
+    :func:`mixmogam._hm3.match_hm3`; options ``build``, ``map``,
+    ``min_frac``, ``min_snps``, ``min_maf``, ``drop_ambiguous``; when fewer
+    than half of the map's variants on the panel's chromosomes, or fewer
+    than 300,000, match it warns and falls back to ``"auto"``), variant indices, a boolean mask or variant IDs. For
+    human panels with HapMap3 coverage (imputed arrays, sequencing) the
+    documented choice is ``"hm3"``; otherwise ``"auto"``. The subset keeps the
     full panel's LOCO groups, so a variant on chromosome c, model SNP or
     not, is tested against scores fitted without chromosome c's model
     SNPs. A memory-mapped panel's subset is copied into memory (two bits
     per call). ``None`` (default) fits stage 1 on every variant, unchanged.
     Not available with ``denominator="spectral"`` (its per-variant factors
     exist only for model SNPs) or with the LDpred3 stage 1.
+    ``model_snps_include`` adds variants to any subset (indices, a mask,
+    variant IDs, or regions ``"chr:pos"``/``"chr:start-end"``), e.g. known
+    large-effect loci, which sparse architectures need in stage 1; they
+    keep the LOCO rule (scores for chromosome c never contain them when
+    they lie on c).
+
+    A subset's stage 1 sees only the polygenic signal its SNPs tag. In
+    simulated nuclear families (n = 2,000) the median null chi-square
+    (lambda_GC) rose from 1.016 with every variant to 1.040, 1.101 and
+    1.237 with subsets of 50%, 20% and 5% of the variants: the LOCO scores
+    removed less of the relatives' shared polygenic signal (their slope
+    stayed calibrated). So ``extra["model_snps"]["warnings"]`` (also
+    issued as RuntimeWarnings) records: (a) the subset's randomized-HE h2
+    below 0.85 times the same estimate on every variant (one extra pass
+    over the panel and one over the subset with ``he_probes`` probes;
+    ``model_snps_h2_check=False`` skips it); (b) relatedness or residual
+    structure (structure-test excess above 0.05 with z > 3; for relatives
+    the excess is about sum_{j != i} K_ij^2 averaged over samples, e.g.
+    0.25 times the fraction of samples with one full sibling, so distant
+    relatives alone rarely reach it) together with a small subset (below
+    20% of the variants or 500,000); the null mean chi-square then rises by
+    about excess x (h2 missed by the subset), reported as
+    ``predicted_inflation`` when the h2 check ran; (c)
+    ``"auto"`` keeping more than 80% of the variants (the subset copy then
+    costs memory for little time).
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     elastic-net statistic): with strong structure, U and T are multiplied by
@@ -1302,7 +1335,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if stage1 != "enet":
             raise ValueError("model_snps applies to the elastic-net stage 1 (stage1='enet')")
     elif model_snps_options is not None:
-        raise ValueError("model_snps_options needs model_snps='auto'")
+        raise ValueError("model_snps_options needs model_snps='auto' or 'hm3'")
+    elif model_snps_include is not None:
+        raise ValueError("model_snps_include adds to a model_snps subset; without model_snps "
+                         "stage 1 already uses every variant")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
                 sample_weights=sample_weights, trait=trait)
@@ -1311,7 +1347,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     model_info = None
     if model_snps is not None:
         st, model_info = _model_snp_setup(st_test, gt, model_snps, model_snps_options,
-                                          n_threads)
+                                          n_threads, include=model_snps_include)
     if linalg.norm(st.y_p) <= 10 * np.finfo(float).eps * linalg.norm(st.y):
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
@@ -1329,6 +1365,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     vc = _hratt_variance(st, struct, alphas, alpha_method, heritability_method, he_probes, rng,
                          random_state, design_weights=design, slq_tol=slq_tol)
     h2, w = vc["h2"], vc["w"]
+    if model_info is not None:
+        model_info["warnings"] = _model_snp_warnings(
+            st, st_test, struct, vc["alpha"], model_info, he_probes, random_state,
+            model_snps_h2_check, design)
     h2j = w * h2 / float(np.sum(w))
     s2e = max(1.0 - h2, 1e-3)
 
@@ -1442,7 +1482,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
 
 
-def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int) -> tuple:
+def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
+                     include=None) -> tuple:
     """The stage-1 working model on the model SNPs, and its record.
 
     The subset's LocoGenotypes keeps the panel's group of every variant and
@@ -1455,6 +1496,13 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int) -> tup
     half = st.lg.mean / 2.0
     maf = np.minimum(half, 1.0 - half)
     idx, source, settings = resolve_model_snps(gt, model_snps, maf, options)
+    include_info = None
+    if include is not None:
+        from mixmogam._thin import resolve_include
+
+        inc, include_info = resolve_include(gt, include)
+        include_info["added"] = int(np.setdiff1d(inc, idx).size)
+        idx = np.union1d(idx, inc).astype(np.int64)
     if idx.size < 2:
         raise ValueError(f"model_snps selected {idx.size} variants; stage 1 needs at least two")
     groups = st.lg.groups[idx]
@@ -1470,7 +1518,75 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int) -> tup
                        n_groups=st.lg.n_groups)
     info = {"n": int(idx.size), "source": source, "options": settings,
             "per_group": per_group, "indices": idx}
+    if include_info is not None:
+        info["include"] = include_info
     return replace(st, lg=lg), info
+
+
+H2_RATIO_WARN = 0.85
+RELATED_EXCESS = 0.05
+SMALL_SUBSET = (0.2, 500_000)
+AUTO_KEEP_WARN = 0.8
+
+
+def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float, info: dict,
+                        he_probes: int, random_state, h2_check: bool, design) -> list:
+    """Warnings (a)-(c) of a model-SNP subset (see :func:`hratt`); each is
+    issued as a RuntimeWarning and returned as a dict. The h2 check uses its
+    own random stream, so it changes no other result."""
+    out = []
+    m, k = st_full.lg.m, st.lg.m
+    frac = k / m
+
+    def emit(kind, text, **fields):
+        warnings.warn(f"model_snps: {text}", RuntimeWarning, stacklevel=4)
+        out.append({"kind": kind, "message": text, **fields})
+
+    if h2_check and k < m:
+        seed = 0 if random_state is None else random_state
+        est = {}
+        for name, s_ in (("subset", st), ("full", st_full)):
+            f = np.clip(s_.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+            try:
+                he = _he_alpha(s_, f, [alpha], he_probes, np.random.default_rng([seed, 0x6832]),
+                               design_weights=design)
+                est[name] = float(he["h2_he"][0])
+            except ValueError:
+                est[name] = float("nan")
+        ratio = est["subset"] / est["full"] if est["full"] > 0 else float("nan")
+        info["h2_check"] = {"h2_he_subset": est["subset"], "h2_he_full": est["full"],
+                            "ratio": ratio, "alpha": float(alpha)}
+        if np.isfinite(ratio) and est["full"] > 0.05 and ratio < H2_RATIO_WARN:
+            emit("h2", f"the {k:,} model SNPs tag {est['subset']:.3f} of the trait by HE against "
+                       f"{est['full']:.3f} on all {m:,} variants (ratio {ratio:.2f} < "
+                       f"{H2_RATIO_WARN}); stage 1 misses polygenic signal, and with related "
+                       "samples the tests are inflated. Enlarge model_snps (or use every variant).",
+                 ratio=ratio)
+    related = struct["excess"] > RELATED_EXCESS and struct["z"] > 3.0
+    small = frac < SMALL_SUBSET[0] or k < SMALL_SUBSET[1]
+    info["relatedness_signal"] = {"structure_excess": float(struct["excess"]),
+                                  "z": float(struct["z"]), "flag": bool(related)}
+    pred = None
+    if "h2_check" in info and np.isfinite(info["h2_check"]["ratio"]):
+        c = info["h2_check"]
+        pred = float(max(struct["excess"], 0.0) * max(c["h2_he_full"] - c["h2_he_subset"], 0.0))
+        info["relatedness_signal"]["predicted_inflation"] = pred
+    if related and small:
+        extra_txt = ("" if pred is None else
+                     f" Expected rise of the null mean chi-square: about {pred:.3f} "
+                     "(excess x h2 missed by the subset).")
+        emit("related", f"relatedness or residual structure (structure-test excess "
+                        f"{struct['excess']:.3f}, z {struct['z']:.1f}) with a small subset ({k:,} "
+                        f"variants, {100 * frac:.1f}% of {m:,}).{extra_txt} In simulated families a 20% "
+                        "subset gave lambda_GC 1.10 and a 5% subset 1.24 (1.02 with every "
+                        "variant); compare lambda_GC or the LD-score intercept with a full "
+                        "stage-1 run on one trait.", excess=float(struct["excess"]))
+    if str(info["source"]).startswith("auto") and frac > AUTO_KEEP_WARN:
+        emit("auto_keeps_most", f"'auto' kept {k:,} of {m:,} variants ({100 * frac:.0f}%); the "
+                                "subset copy costs memory for little time. Use "
+                                "model_snps_options={'max_snps': ...}, stricter thinning, or "
+                                "model_snps=None.", frac=frac)
+    return out
 
 
 def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritability_method: str,

@@ -55,6 +55,9 @@ lint = ["ruff>=0.5"]
 [tool.setuptools]
 packages = ["mixmogam", "mixmogam.io"]
 
+[tool.setuptools.package-data]
+mixmogam = ["data/*.npz", "data/README.md"]
+
 [tool.setuptools.dynamic]
 version = { attr = "mixmogam.__version__" }
 

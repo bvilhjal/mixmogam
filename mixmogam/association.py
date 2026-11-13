@@ -183,9 +183,14 @@ def gwas(
         (case-control) outcomes, ``trait="binary"``, sampling weights,
         ``sample_weights=w``, and the stage-1 predictor, ``stage1=``
         (see :mod:`mixmogam.stage1`), are HRATT options
-        (``method="hratt"``). ``model_snps=`` (``"auto"``, indices, a mask or
-        variant IDs) and ``model_snps_options=`` fit HRATT's stage 1 on a
-        variant subset and test every variant (see :func:`mixmogam.twostep.hratt`).
+        (``method="hratt"``). ``model_snps=`` (``"hm3"``, ``"auto"``, indices,
+        a mask or variant IDs), ``model_snps_options=``, ``model_snps_include=``
+        and ``model_snps_h2_check=`` fit HRATT's stage 1 on a variant subset
+        and test every variant (see :func:`mixmogam.twostep.hratt`). For
+        human data with HapMap3 coverage use ``model_snps="hm3"`` (falls back
+        to ``"auto"`` when the panel matches too few HapMap3 variants);
+        with ``model_snps="hm3"``, a ``genome_build`` naming GRCh37/hg19 or
+        GRCh38/hg38 sets the matching build unless the options give one.
     """
     from mixmogam.results import _genome_build
     genome_build = _genome_build(genome_build)
@@ -199,7 +204,8 @@ def gwas(
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
-                         "stage1", "stage1_kwargs", "model_snps", "model_snps_options"}
+                         "stage1", "stage1_kwargs", "model_snps", "model_snps_options",
+                         "model_snps_include", "model_snps_h2_check"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "
@@ -233,6 +239,14 @@ def gwas(
     # One layout conversion is cheaper than striding through a sample-major
     # array on every genotype pass; the caller's container is not mutated.
     gt = gt.variant_major()
+    if (isinstance(kwargs.get("model_snps"), str) and kwargs["model_snps"] == "hm3"
+            and genome_build is not None):
+        from mixmogam._hm3 import _BUILD_ALIAS
+        b = _BUILD_ALIAS.get(genome_build.lower().replace("_", ""))
+        opts = dict(kwargs.get("model_snps_options") or {})
+        if b is not None and "build" not in opts:
+            opts["build"] = b
+            kwargs["model_snps_options"] = opts
     result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
     result.genome_build = genome_build
     return result
