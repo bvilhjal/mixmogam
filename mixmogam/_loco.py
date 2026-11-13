@@ -104,6 +104,24 @@ class LocoGenotypes:
         covariates diag(s) X, so the coefficients c = Q'(s z) and the norms
         ``zz`` = sum_i s_i^2 z_i^2 - |c|^2 are those of the scaled values.
         Means, SDs and the lookup table stay those of the unweighted calls.
+    n_groups : optional number of LOCO groups (default: the largest
+        group index plus one); a variant subset passes its panel's count so
+        that group indices, and empty groups, stay those of the full panel
+    moments : optional ``(mean, sd, projection, zz)`` rows of these
+        variants from a LocoGenotypes over a panel that contains them, with the
+        same ``Q``, ``row_scale`` and ``dtype`` (HRATT's stage-1 subset). They
+        replace preparation, which saves one pass over the genotypes; the
+        compiled preparation is per-variant, so they equal what it would give.
+    readahead : bytes of read-ahead for memory-mapped two-bit storage, or
+        None. When set and the calls are a ``numpy.memmap``, every sequential
+        :meth:`slices` iteration advises the kernel to read the next
+        ``readahead`` bytes while the current slice is decoded and to drop the
+        mapping of the slices already passed, so resident file pages stay
+        bounded by about one window whatever the number of variants.
+    prefetch : ``"advise"`` (kernel read-ahead advice only) or ``"thread"``
+        (a background thread reads the window into the page cache, so the
+        decode's page faults do not wait for the disk); see
+        :class:`mixmogam._stream.Prefetcher`. Values are unchanged either way.
     n_threads : positive integer, default 1
         Above one, prepare and decode independent variants with Numba
         workers. Preparation sums each variant's samples in order in every
@@ -114,7 +132,9 @@ class LocoGenotypes:
 
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
                  block: int = 4096, dtype=np.float32, n_threads: int = 1,
-                 row_scale: Optional[np.ndarray] = None):
+                 row_scale: Optional[np.ndarray] = None, n_groups: Optional[int] = None,
+                 moments: Optional[tuple] = None, readahead: Optional[int] = None,
+                 prefetch: str = "advise"):
         if (isinstance(n_threads, (int, np.integer))
                 and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
             self.n_threads = 1
@@ -133,6 +153,12 @@ class LocoGenotypes:
         if self.groups.shape != (self.m,):
             raise ValueError("groups must have one entry per variant")
         self.n_groups = int(self.groups.max()) + 1 if self.m else 0
+        if n_groups is not None:
+            # A variant subset (HRATT's stage-1 model SNPs) keeps the LOCO
+            # groups of the full panel, including groups it holds no variant of.
+            if self.m and (self.groups.min() < 0 or self.n_groups > n_groups):
+                raise ValueError("groups must lie in 0..n_groups-1")
+            self.n_groups = int(n_groups)
         self.m_group = np.bincount(self.groups, minlength=self.n_groups).astype(np.float64)
         self.Q = np.zeros((self.n, 0)) if Q is None else np.array(Q, dtype=np.float64, copy=True)
         if self.Q.ndim != 2 or self.Q.shape[0] != self.n:
@@ -168,8 +194,18 @@ class LocoGenotypes:
         self.sd = np.zeros(self.m)
         self._projection = np.zeros((self.m, self.Q.shape[1]))
         self.zz = np.zeros(self.m)
-        for idx, _ in self._blocks:
-            self._prepare(idx)
+        self._readahead = None
+        if moments is not None:
+            mean, sd, projection, zz = (np.asarray(a, dtype=np.float64) for a in moments)
+            if (mean.shape != (self.m,) or sd.shape != (self.m,) or zz.shape != (self.m,)
+                    or projection.shape != self._projection.shape):
+                raise ValueError("moments must hold (mean, sd, projection, zz) for every variant")
+            self.mean[:], self.sd[:], self._projection[:], self.zz[:] = mean, sd, projection, zz
+        else:
+            if readahead is not None and self.set_readahead(readahead, prefetch):
+                self._readahead.begin()
+            for idx, _ in self._blocks:
+                self._prepare(idx)
         for array in (self.mean, self.sd, self._projection, self.zz):
             array.flags.writeable = False
         self.trace = float(self.zz.sum()) / max(self.m, 1)
@@ -179,6 +215,21 @@ class LocoGenotypes:
         divisor = np.where(self.sd > 0, self.sd, 1.0)
         self._lut = np.zeros((self.m, 4), dtype=self.dtype)
         self._lut[:, :3] = (np.arange(3.0)[None, :] - self.mean[:, None]) / divisor[:, None]
+        if readahead is not None and self._readahead is None:  # moments were given
+            self.set_readahead(readahead, prefetch)
+
+    def set_readahead(self, window: Optional[int], prefetch: str = "advise") -> bool:
+        """Advise read-ahead/drop-behind on memory-mapped two-bit calls for
+        sequential passes (see ``readahead``); None turns it off. Returns
+        whether the storage is a mapping it applies to."""
+        from mixmogam._stream import Readahead
+
+        self._readahead = None
+        G = self.gt.G
+        if window is None or not isinstance(G, PackedCalls):
+            return False
+        self._readahead = Readahead.for_array(G.data, int(window), prefetch=prefetch)
+        return self._readahead is not None
 
     # ------------------------------------------------------------------
     def _check_source(self):
@@ -204,8 +255,11 @@ class LocoGenotypes:
             from mixmogam._standardize import prepare_moments
             Q = self._Q_prepare if scaled else self.Q
             sq = self._sq_weights if scaled else None
+            advise = getattr(self, "_readahead", None)
             for start in range(0, idx.size, 1024):
                 take = idx[start : start + 1024]
+                if advise is not None:
+                    advise.at(take)
                 (self.mean[take], self.sd[take], self._projection[take],
                  self.zz[take]) = prepare_moments(self.gt.G, take, Q, self.n_threads,
                                                   sq_weights=sq)
@@ -267,9 +321,15 @@ class LocoGenotypes:
         """Yield ``(variant_indices, group)``, at most ``rows`` per slice
         and within one block: the slices of :meth:`raw_slices`, undecoded."""
         rows = self._slice_rows() if rows is None else max(1, int(rows))
+        advise = self._readahead
+        if advise is not None:
+            advise.begin()
         for idx, g in self._blocks:
             for start in range(0, idx.size, rows):
-                yield idx[start : start + rows], g
+                take = idx[start : start + rows]
+                if advise is not None:
+                    advise.at(take)
+                yield take, g
 
     def raw_slices(self, rows: Optional[int] = None, out: Optional[np.ndarray] = None):
         """Yield ``(variant_indices, group, z)``: unprojected standardized

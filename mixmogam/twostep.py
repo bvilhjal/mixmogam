@@ -48,7 +48,7 @@ optional Monte Carlo REML.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 import warnings
 
@@ -113,7 +113,8 @@ def _normalize_weights(sample_weights, n: int) -> Optional[np.ndarray]:
 
 
 def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None,
-           trait: str = "quantitative", mu_clip: float = 1e-4) -> _Setup:
+           trait: str = "quantitative", mu_clip: float = 1e-4,
+           readahead: Optional[int] = None, prefetch: str = "advise") -> _Setup:
     """The (row-scaled) working model shared by the two-step steps.
 
     Without weights and for quantitative traits this is the phenotype, the
@@ -164,7 +165,8 @@ def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None
     groups, labels = loco_groups(gt.chromosome, max_loco_groups)
     if len(labels) < 2:
         raise ValueError("LOCO needs variants on at least two chromosomes/groups")
-    lg = LocoGenotypes(gt, groups, Q, block=block, n_threads=n_threads, row_scale=s)
+    lg = LocoGenotypes(gt, groups, Q, block=block, n_threads=n_threads, row_scale=s,
+                       readahead=readahead, prefetch=prefetch)
     ys = y_work if s is None else s * y_work
     y_p = ys - Q @ (Q.T @ ys)
     q = Xd.shape[1]
@@ -346,9 +348,10 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
 
 
 def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: np.ndarray,
-                  lam: float, n_threads: int, two_sided: str = "distance") -> tuple:
+                  lam, n_threads: int, two_sided: str = "distance") -> tuple:
     """Retrospective saddlepoint p-values (and logs) of scores
-    ``U`` = z_j'a_g for variants ``idx``.
+    ``U`` = z_j'a_g for variants ``idx``. ``lam``: a scalar or one value per
+    LOCO group (lambda_g = 1 / kappa_g under ``relatedness``).
 
     With covariates, genotypes are independent Binomial(2, p_ij) draws at
     the covariate-predicted allele frequencies, conditional on the observed
@@ -364,7 +367,10 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
     p = np.full(idx.size, np.nan)
     log_p = np.full(idx.size, np.nan)
     groups = st.lg.groups[idx]
+    lam_vec = np.ndim(lam) > 0  # a per-group lambda_g (1 / kappa_g)
+    lam_all = lam
     for g in np.unique(groups):
+        lam = float(lam_all[g]) if lam_vec else lam_all
         a = np.ascontiguousarray(A[:, g])
         a2 = float(a @ a)
         sel = np.flatnonzero(groups == g)
@@ -880,7 +886,19 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
 # ----------------------------------------------------------------------
 
 
-def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
+def _kappa_guard(kap: np.ndarray, floor: float) -> np.ndarray:
+    """Clip kappa_g below ``floor`` with a warning (a pathological pair list)."""
+    kap = np.asarray(kap, dtype=np.float64)
+    if np.any(kap < floor):
+        warnings.warn(f"relatedness: kappa_g {float(kap.min()):.3f} < {floor:g} in "
+                      f"{int(np.sum(kap < floor))} LOCO group(s), clipped to {floor:g}; check the "
+                      "relatedness pairs (sign, scale 2 x kinship, sample alignment)",
+                      RuntimeWarning, stacklevel=3)
+        kap = np.maximum(kap, floor)
+    return kap
+
+
+def structure_test(st: _Setup, n_snps: int = 512, rng=None, samples=None) -> dict:
     """LDAK-KVIK's test for strong structure (operation 1a).
 
     Mean squared correlation between ``n_snps`` evenly spread SNPs on
@@ -891,6 +909,8 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
     unit) exceeds 3. In a row-scaled (weighted) model the correlations of
     scaled genotypes average sum v^2 / (sum v)^2 without structure, so the
     sample size is the Kish size of the working weights, less q.
+    ``samples`` (row indices) restricts the correlations to those samples,
+    e.g. a maximal unrelated set; the reference size scales with them.
     """
     rng = np.random.default_rng(0) if rng is None else rng
     m = st.lg.m
@@ -899,13 +919,18 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None) -> dict:
     jitter = rng.uniform(-0.5, 0.5, k) * (m / k)
     sel = np.unique(np.clip(np.round(base + jitter), 0, m - 1).astype(np.int64))
     Z = st.lg.rows(sel)
+    n_ref = st.n_eff if st.n_struct is None else st.n_struct
+    if samples is not None:
+        samples = np.asarray(samples, dtype=np.int64)
+        Z = Z[:, samples]
+        Z = Z - Z.mean(axis=1, keepdims=True)
+        n_ref = n_ref * samples.size / st.lg.n
     norms = np.sqrt(np.einsum("ij,ij->i", Z, Z))
     norms[norms == 0] = 1.0
     R = (Z @ Z.T) / np.outer(norms, norms)
     chrom = np.asarray(st.lg.gt.chromosome)[sel]
     diff = chrom[:, None] != chrom[None, :]
     r2 = np.where(diff, R * R, np.nan)
-    n_ref = st.n_eff if st.n_struct is None else st.n_struct
     per_snp = n_ref * np.nanmean(r2, axis=1)
     per_snp = per_snp[np.isfinite(per_snp)]
     excess = float(np.mean(per_snp) - 1.0)
@@ -1076,7 +1101,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
-          gram_cache_bytes: float = 1e9) -> GwasResult:
+          gram_cache_bytes: float = 1e9, model_snps=None,
+          model_snps_options: Optional[dict] = None, model_snps_include=None,
+          model_snps_h2_check: bool = True, model_snps_stream=None,
+          relatedness=None, relatedness_threshold: float = 0.025,
+          relatedness_correction: str = "auto",
+          relatedness_options: Optional[dict] = None) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1185,6 +1215,107 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     many samples), for 1.5-2x the process CPU time. Setting KMP_BLOCKTIME or
     OMP_WAIT_POLICY keeps the runtime's own policy.
 
+    ``model_snps`` fits stage 1 (structure test, variance components,
+    the elastic-net prior choice, the LOCO scores and, under strong
+    structure, lambda) on a subset of the variants, as BOLT-LMM's
+    ``--modelSnps``, LDAK-KVIK's thinned predictors and REGENIE's step 1
+    do; stage 2 still tests every variant against those scores. It takes
+    ``"auto"`` (:func:`mixmogam._thin.thin_variants`: MAF above 1%, then
+    greedy r2 < 0.5 pruning within 100 kb, both settable through
+    ``model_snps_options``, e.g. ``{"min_maf": 0.05, "max_r2": 0.2,
+    "window_bp": 250_000, "ld_samples": 10_000, "max_snps": 1_000_000}``),
+    ``"hm3"`` (the panel's HapMap3 variants: by default the 1,444,196
+    HapMap3+ variants of ldpred3's UK Biobank LD reference, a superset of
+    LDpred2's 1,054,330, which ``{"map": "hm3-ldpred2"}`` selects; matched by rsID and/or chromosome:position in GRCh37 or GRCh38,
+    :func:`mixmogam._hm3.match_hm3`; options ``build``, ``map``,
+    ``min_frac``, ``min_snps``, ``min_maf``, ``drop_ambiguous``; when fewer
+    than half of the map's variants on the panel's chromosomes, or fewer
+    than 300,000, match it warns and falls back to ``"auto"``), variant indices, a boolean mask or variant IDs. For
+    human panels with HapMap3 coverage (imputed arrays, sequencing) the
+    documented choice is ``"hm3"``; otherwise ``"auto"``. The subset keeps the
+    full panel's LOCO groups, so a variant on chromosome c, model SNP or
+    not, is tested against scores fitted without chromosome c's model
+    SNPs. A memory-mapped panel's subset is copied into memory (two bits
+    per call). ``None`` (default) fits stage 1 on every variant, unchanged.
+    Not available with ``denominator="spectral"`` (its per-variant factors
+    exist only for model SNPs) or with the LDpred3 stage 1.
+    ``model_snps_include`` adds variants to any subset (indices, a mask,
+    variant IDs, or regions ``"chr:pos"``/``"chr:start-end"``), e.g. known
+    large-effect loci, which sparse architectures need in stage 1; they
+    keep the LOCO rule (scores for chromosome c never contain them when
+    they lie on c).
+
+    ``relatedness`` (Spec A of the SG's relatedness specs) corrects for
+    close relatives exactly instead of through lambda. For a null variant
+    in LOCO group g the statistic's expectation given the residual a_g is
+    kappa_g = a_g' Phi a_g / a_g'a_g (Phi = I + 2 x kinship off the
+    diagonal), so ``relatedness_correction="kappa"`` (the default when
+    ``relatedness`` is given) reports U / (kappa_g c_X), with c_X = n_eff /
+    (n - tr(Q' Phi Q)) for the covariates Q; weighted tests multiply their
+    retrospective variance by kappa_g, binary tests that of w (y - mu_g),
+    and the saddlepoint takes lambda_g = 1 / kappa_g as its per-group
+    variance ratio. lambda is then 1. ``relatedness`` takes (i, j, r = 2
+    phi) arrays or a :class:`mixmogam._relatedness.Relatedness` (e.g. a
+    pedigree's, :func:`~mixmogam._relatedness.pedigree_relatedness`: no
+    genotype pass; preferred), a KING / PLINK 2 ``.kin0`` path or a GCTA
+    ``.grm.sp`` prefix (IDs aligned to ``gt.sample_ids``; pairs outside are
+    dropped and counted; files keep phi > ``relatedness_threshold``), or
+    ``"auto"``: KING-robust on at most 50,000 common (MAF >= 0.05) variants
+    that are not model SNPs (model SNPs bias kappa_g down through the fit),
+    for n <= 50,000 only, keeping phi > max(``relatedness_threshold``, 4 x
+    the KING noise SD from random pairs). The structure test is repeated on
+    a maximal unrelated set, which then decides the LOCO refit and the
+    ancestry-PC warning (relatives alone trip the all-sample test; both are
+    in ``extra["structure"]``). ``"gls"`` (opt-in, unweighted quantitative)
+    whitens the residual with a sparse family covariance instead;
+    ``"lambda"`` is the behaviour without ``relatedness``, ``"none"`` no
+    correction. ``extra["relatedness"]`` records the pairs, kappa_g, c_X
+    and the KING settings.
+
+    A subset's stage 1 sees only the polygenic signal its SNPs tag. In
+    simulated nuclear families (n = 2,000) the median null chi-square
+    (lambda_GC) rose from 1.016 with every variant to 1.040, 1.101 and
+    1.237 with subsets of 50%, 20% and 5% of the variants: the LOCO scores
+    removed less of the relatives' shared polygenic signal (their slope
+    stayed calibrated). So ``extra["model_snps"]["warnings"]`` (also
+    issued as RuntimeWarnings) records: (a) a predicted rise of the null
+    mean chi-square above 0.02, the structure-test excess (for relatives
+    about sum_{j != i} K_ij^2 averaged over samples, e.g. 0.25 times the
+    fraction of samples with one full sibling) times the h2 the subset
+    misses by randomized HE (``predicted_inflation``; the h2 check costs one
+    extra pass over the panel and one over the subset with ``he_probes``
+    probes, and ``model_snps_h2_check=False`` skips it and this warning);
+    (b) with ``model_snps="hm3"``, an autosome on which matching kept under
+    half of the map's variants although the panel has variants there; (c)
+    ``"auto"`` keeping more than 80% of the variants (the subset copy then
+    costs memory for little time). Informational, in
+    ``extra["model_snps"]["notes"]``: an HE h2 ratio (subset / every
+    variant) below 0.85. Both HE fits use the alpha that HE selects on the
+    full panel (``h2_check["alpha"]``). The ratio measures tagging, not
+    inflation risk: HapMap3-like sets sit near 0.7 and are calibrated in
+    unrelated samples. ``relatedness_signal["flag"]`` (excess > 0.05 with
+    z > 3) is recorded as a relatedness-detector trigger, not a warning.
+    The structure test (and so lambda calibration and the LOCO refit) is
+    run on every variant, not on the subset. HapMap3+ (the bundled
+    default) roughly halves the inflation of HapMap3 in dense families and
+    40% full-sib samples (simulated, n = 2,000), but does not remove it
+    (nuclear families with low-frequency causal variants: +0.044 in the null
+    mean chi-square); there a 20% 'auto' subset or every variant is safer.
+
+    ``model_snps_stream`` keeps the subset on disk instead of in RAM (n k / 4
+    bytes, 180 GB for HapMap3+ at n = 5e5): one pass writes the subset's
+    rows to a page-aligned two-bit file that every stage-1 pass maps and
+    reads sequentially, with read-ahead and drop-behind advice so resident
+    memory does not grow with the subset. Results are bit-identical to the
+    in-RAM copy. ``True``/``"on"`` always streams, ``"auto"`` streams when
+    n k / 4 exceeds ``threshold_bytes`` (default 8 GiB), and a dict sets
+    ``mode``, ``cache_dir`` (keep the file there and reuse it while the
+    panel, the subset and the samples are unchanged; default: a temporary
+    file, unlinked once mapped), ``threshold_bytes``, ``window_bytes``
+    (read-ahead, default 64 MiB) and ``verify`` (re-hash a reused file).
+    Default ``None``: the in-RAM copy. ``extra["model_snps"]["stream"]``
+    records the decision, path, size, cache hit and extraction time.
+
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     elastic-net statistic): with strong structure, U and T are multiplied by
     the structure-aware factors kappa_j of the weighted ridge model, T is
@@ -1278,10 +1409,59 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("loco_folds exceeds the number of samples")
     if weighted:
         sample_weights = _normalize_weights(sample_weights, gt.n_samples)
+    if model_snps is not None:
+        if denominator == "spectral":
+            raise ValueError("model_snps is not available with denominator='spectral'")
+        if stage1 != "enet":
+            raise ValueError("model_snps applies to the elastic-net stage 1 (stage1='enet')")
+    elif model_snps_options is not None:
+        raise ValueError("model_snps_options needs model_snps='auto' or 'hm3'")
+    elif model_snps_include is not None:
+        raise ValueError("model_snps_include adds to a model_snps subset; without model_snps "
+                         "stage 1 already uses every variant")
+    from mixmogam._stream import stream_options
+
+    stream = stream_options(model_snps_stream)
+    if stream is not None and model_snps is None:
+        raise ValueError("model_snps_stream streams a model_snps subset; set model_snps")
+    rel_opt = None
+    if relatedness_correction not in ("auto", "kappa", "lambda", "none", "gls"):
+        raise ValueError("relatedness_correction must be 'auto', 'kappa', 'lambda', 'none' or 'gls'")
+    if relatedness is not None:
+        from mixmogam._relatedness import RELATEDNESS_OPTIONS
+
+        if relatedness_correction == "auto":
+            relatedness_correction = "kappa"
+        if relatedness_correction == "gls" and (trait != "quantitative" or weighted):
+            raise ValueError("relatedness_correction='gls' is implemented for unweighted "
+                             "quantitative traits; use 'kappa'")
+        if not (np.isfinite(relatedness_threshold) and 0 <= relatedness_threshold < 0.5):
+            raise ValueError("relatedness_threshold is a KING kinship in [0, 0.5)")
+        unknown = set(relatedness_options or {}) - set(RELATEDNESS_OPTIONS)
+        if unknown:
+            raise ValueError(f"unknown relatedness_options: {sorted(unknown)}")
+        rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
+        if rel_opt["denominator"] not in ("exact", "gamma"):
+            raise ValueError("relatedness_options['denominator'] must be 'exact' or 'gamma'")
+    else:
+        if relatedness_correction in ("kappa", "gls"):
+            raise ValueError(f"relatedness_correction={relatedness_correction!r} needs relatedness=")
+        if relatedness_options is not None:
+            raise ValueError("relatedness_options needs relatedness=")
+        relatedness_correction = "lambda"
+    kappa_on = relatedness is not None and relatedness_correction in ("kappa", "gls")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
-                sample_weights=sample_weights, trait=trait)
+                sample_weights=sample_weights, trait=trait,
+                readahead=None if stream is None else stream["window_bytes"],
+                prefetch="advise" if stream is None else stream["prefetch"])
     n = st.lg.n
+    st_test = st  # stage 2 always tests every variant
+    model_info = None
+    if model_snps is not None:
+        st, model_info = _model_snp_setup(st_test, gt, model_snps, model_snps_options,
+                                          n_threads, include=model_snps_include,
+                                          stream=stream)
     if linalg.norm(st.y_p) <= 10 * np.finfo(float).eps * linalg.norm(st.y):
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
@@ -1289,8 +1469,41 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     ys = st.y_p / sy
 
-    struct = structure_test(st, structure_snps, rng)
-    if struct["strong"] and (weighted or trait == "binary"):
+    # The structure test reads structure_snps rows of the panel that stage 2
+    # tests (every variant), not of a model-SNP subset: on HapMap3-like
+    # subsets it flagged "strong structure" that the full panel does not
+    # show, and the resulting lambda inflated every statistic (SG HM3
+    # recheck). Calibration then runs on the subset when this test is strong.
+    struct = structure_test(st_test, structure_snps, rng)
+    rel, rel_info = None, None
+    struct_all = struct
+    if relatedness is not None:
+        # Spec A/C: relatives alone trip the all-sample test. The test on a
+        # maximal unrelated set (its own random stream, so the rest of the
+        # fit is unchanged) decides the LOCO refit, lambda and the warning.
+        from mixmogam._relatedness import resolve_relatedness, unrelated_set
+
+        seed = 0 if random_state is None else random_state
+        rel, rel_info = resolve_relatedness(
+            relatedness, gt, mean=st_test.lg.mean,
+            model_idx=None if model_info is None else model_info["indices"],
+            threshold=relatedness_threshold, options=rel_opt,
+            rng=np.random.default_rng([seed, 0x4B49]))
+        keep = unrelated_set(rel)
+        struct_unrel = (struct_all if keep.size == n else
+                        structure_test(st_test, structure_snps, np.random.default_rng([seed, 0x5553]),
+                                       samples=keep))
+        struct = {**struct_unrel, "on": "unrelated", "n_unrelated": int(keep.size),
+                  "all_samples": struct_all}
+        rel_info.update({"correction": relatedness_correction, **rel.summary(),
+                         "s2": float(2.0 * np.sum(rel.upper.data ** 2) / n),
+                         "n_unrelated": int(keep.size)})
+        if struct["strong"] and kappa_on:
+            warnings.warn("strong population structure remains among unrelated samples after the "
+                          "covariates; kappa_g corrects for relatives, not for structure, so "
+                          "include ancestry principal components among the covariates",
+                          RuntimeWarning, stacklevel=2)
+    if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
                       "so include ancestry principal components among them",
@@ -1299,6 +1512,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     vc = _hratt_variance(st, struct, alphas, alpha_method, heritability_method, he_probes, rng,
                          random_state, design_weights=design, slq_tol=slq_tol)
     h2, w = vc["h2"], vc["w"]
+    if model_info is not None:
+        model_info["warnings"] = _model_snp_warnings(
+            st, st_test, struct, vc["alpha"], model_info, he_probes, random_state,
+            model_snps_h2_check, design, alphas=alphas, kappa_on=kappa_on)
+        model_info["structure_test_on"] = "panel" if rel is None else "panel, unrelated set"
+
     h2j = w * h2 / float(np.sum(w))
     s2e = max(1.0 - h2, 1e-3)
 
@@ -1336,11 +1555,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if "stage1_selection" in scores:
             scores["stage1_selection"]["heldout_mse_enet"] *= weight_scale
             scores["stage1_selection"]["heldout_mse_ldpred3"] *= weight_scale
+    resid = scores.pop("resid")
     if binary and not (struct["strong"] and h2 > 0):
         rsU, U = None, None  # step 2 is logistic; no working-model statistic needed
-        scores.pop("resid")
     else:
-        rsU = _retro_stats(st, scores.pop("resid"), retrospective=weighted and not binary)
+        rsU = _retro_stats(st_test, resid, retrospective=weighted and not binary)
         U = rsU["chi2"]
 
     extra = {"method": "hratt", "denominator": denominator, "alpha": vc["alpha"], "h2": h2,
@@ -1367,30 +1586,91 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if weighted:
         kish = float(np.sum(st.w) ** 2 / np.sum(st.w * st.w))
         extra.update({"kish_n": kish, "design_effect": n / kish})
+    if model_info is not None:
+        extra["model_snps"] = model_info
+    kap_g, c_X, gls = None, 1.0, None
+    if rel is not None:
+        from mixmogam._relatedness import covariate_factor, gls_stats
+
+        if relatedness_correction == "kappa" and not binary:
+            # kappa_g = a_g' Phi a_g / a_g'a_g of the residual each score is
+            # taken against: the projected LOCO residual, or the weighted
+            # residual of the retrospective (weighted) test.
+            A_rel = rsU["A"] if weighted else st_test.lg.project(resid)
+            kap_g = _kappa_guard(rel.kappa(A_rel), rel_opt["kappa_floor"])
+            del A_rel
+            if not weighted:
+                c_X, trq = covariate_factor(rel, st_test.lg.Q, st_test.n_eff)
+                rel_info["trace_QPhiQ"] = trq
+        elif relatedness_correction == "gls":
+            Wp = st_test.lg.project(resid)
+            gls = gls_stats(st_test.lg, Wp, rel, denominator=rel_opt["denominator"],
+                            n_gamma=rel_opt["n_gamma"], max_cluster=rel_opt["max_cluster"],
+                            rng=np.random.default_rng([0 if random_state is None else random_state,
+                                                       0x7663]))
+            rel_info.update({"kappa": rel.kappa(Wp), "s_f": gls["s_f"], "s_e": gls["s_e"],
+                             "gamma": gls["gamma"]})
+            del Wp
+        if kap_g is not None:
+            rel_info.update({"kappa": kap_g, "c_X": c_X})
+        extra["relatedness"] = rel_info
     lam = 1.0
-    if struct["strong"] and h2 > 0:
+    if struct["strong"] and h2 > 0 and relatedness_correction == "lambda":
         # At the HE residual-zero boundary, use the same declared noise
         # floor for ridge calibration as for VB. A zero ridge would leave
         # the projected LOCO operator singular in the covariate directions.
         residual_variance = s2e if heritability_method == "he" else 1.0 - h2
-        lam, U, lam_extra = _hratt_lambda(st, ys, U, h2, residual_variance, w, vc["basis"],
-                                          n_calibration, denominator, n_spectral, cg_tol, rng)
+        if st is st_test:
+            lam, U, lam_extra = _hratt_lambda(st, ys, U, h2, residual_variance, w, vc["basis"],
+                                              n_calibration, denominator, n_spectral, cg_tol, rng)
+        else:
+            # lambda is a stage-1 quantity: calibrated on the model SNPs'
+            # own statistics, then applied to every tested variant.
+            U_model = _retro_stats(st, resid)["chi2"]
+            lam, _, lam_extra = _hratt_lambda(st, ys, U_model, h2, residual_variance, w,
+                                              vc["basis"], n_calibration, denominator,
+                                              n_spectral, cg_tol, rng)
         extra.update(lam_extra)
+    del resid
     extra["lambda"] = lam
+    st = st_test
     if binary:
         return _hratt_binary_step2(st, gt, scores.pop("prediction"), sy, lam, spa_threshold,
                                    n_threads, extra, crossfit=folds is not None,
-                                   two_sided=spa_two_sided)
+                                   two_sided=spa_two_sided,
+                                   rel=rel if relatedness_correction == "kappa" else None,
+                                   kappa_floor=None if rel_opt is None else rel_opt["kappa_floor"])
     p = None
     if weighted:
         # lambda, a structure correction of the model-based statistic,
         # multiplies the retrospective one; saddlepoint tails above the
         # threshold.
+        # kappa_g multiplies the retrospective variance (lambda_g = 1/kappa_g,
+        # also the saddlepoint's variance ratio, per LOCO group)
+        lam_g = np.full(st.lg.n_groups, lam) if kap_g is None else 1.0 / kap_g
+        lam_j = lam_g[st.lg.groups]
         p, chi2, n_spa = _genotype_tails(st, rsU["A"], rsU["num"], rsU["V"],
-                                         lam * rsU["chi2_retro"], lam, spa_threshold, n_threads,
-                                         spa_two_sided)
+                                         lam_j * rsU["chi2_retro"], lam_g if kap_g is not None
+                                         else lam, spa_threshold, n_threads, spa_two_sided)
         extra.update({"spa_threshold": float(spa_threshold), "spa_two_sided": spa_two_sided,
                       "n_spa": n_spa})
+        if kap_g is not None:
+            with np.errstate(divide="ignore", invalid="ignore"):
+                beta_z = rsU["num"] / rsU["zz"] * sy
+                se_z = np.sqrt(rsU["V"] / lam_j) / rsU["zz"] * sy
+            return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
+    elif gls is not None:
+        chi2 = lam * gls["chi2"]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            beta_z = gls["num"] / gls["den"] * sy
+            se_z = np.abs(beta_z) / np.sqrt(chi2)
+        return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
+    elif kap_g is not None:
+        chi2 = U / (kap_g[st.lg.groups] * c_X)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            beta_z = rsU["num"] / rsU["zz"] * sy
+            se_z = np.abs(beta_z) / np.sqrt(chi2)
+        return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
     else:
         chi2 = lam * U
     with np.errstate(divide="ignore", invalid="ignore"):
@@ -1398,6 +1678,179 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         se_z = (np.sqrt(lam * rsU["V"]) / rsU["zz"] * sy if weighted else
                 np.abs(beta_z) / np.sqrt(chi2))
     return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
+
+
+def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
+                     include=None, stream: Optional[dict] = None) -> tuple:
+    """The stage-1 working model on the model SNPs, and its record.
+
+    The subset's LocoGenotypes keeps the panel's group of every variant and
+    the panel's group count, so LOCO score column g excludes exactly the
+    model SNPs of the panel's group g. Allele frequencies for thinning come
+    from the prepared moments (no genotype pass), and so do the subset's
+    moments (the panel's rows, bit-identical to preparing them again).
+    With ``stream`` (normalized ``model_snps_stream``) the subset's calls
+    are a memory-mapped on-disk cache instead of an in-RAM copy (see
+    :mod:`mixmogam._stream`).
+    """
+    from mixmogam._thin import resolve_model_snps
+
+    half = st.lg.mean / 2.0
+    maf = np.minimum(half, 1.0 - half)
+    idx, source, settings = resolve_model_snps(gt, model_snps, maf, options)
+    include_info = None
+    if include is not None:
+        from mixmogam._thin import resolve_include
+
+        inc, include_info = resolve_include(gt, include)
+        include_info["added"] = int(np.setdiff1d(inc, idx).size)
+        idx = np.union1d(idx, inc).astype(np.int64)
+    if idx.size < 2:
+        raise ValueError(f"model_snps selected {idx.size} variants; stage 1 needs at least two")
+    groups = st.lg.groups[idx]
+    per_group = np.bincount(groups, minlength=st.lg.n_groups)
+    if np.count_nonzero(per_group) < 2:
+        raise ValueError("model_snps must cover at least two LOCO groups")
+    stream_info = None
+    subset_bytes = float(gt.n_samples) * idx.size / 4.0
+    streaming = (stream is not None and idx.size < st.lg.m
+                 and (stream["mode"] == "on" or subset_bytes > stream["threshold_bytes"]))
+    if idx.size == st.lg.m:
+        sub = gt  # every variant: the same calls, no copy
+    elif streaming:
+        from mixmogam._stream import open_subset_cache
+
+        calls, stream_info = open_subset_cache(gt, idx, st.lg.mean[idx], st.lg.sd[idx], stream)
+        sub = gt._from_validated(
+            calls, sample_ids=gt.sample_ids, chromosome=gt.chromosome[idx],
+            position=gt.position[idx], variant_ids=gt.variant_ids[idx],
+            allele1=None if gt.allele1 is None else gt.allele1[idx],
+            allele2=None if gt.allele2 is None else gt.allele2[idx])
+    else:
+        sub = gt.variant_mask(idx)
+    moments = (st.lg.mean[idx], st.lg.sd[idx], st.lg._projection[idx], st.lg.zz[idx])
+    lg = LocoGenotypes(sub, groups, st.lg.Q, block=st.lg.block, dtype=st.lg.dtype,
+                       n_threads=st.lg.n_threads, row_scale=st.lg.row_scale,
+                       n_groups=st.lg.n_groups, moments=moments,
+                       readahead=stream["window_bytes"] if streaming else None,
+                       prefetch=stream["prefetch"] if streaming else "advise")
+    info = {"n": int(idx.size), "source": source, "options": settings,
+            "per_group": per_group, "indices": idx}
+    if stream is not None:
+        info["stream"] = {"mode": stream["mode"], "streamed": bool(streaming),
+                          "subset_bytes": subset_bytes,
+                          "threshold_bytes": stream["threshold_bytes"],
+                          **(stream_info or {})}
+    if include_info is not None:
+        info["include"] = include_info
+    return replace(st, lg=lg), info
+
+
+H2_RATIO_NOTE = 0.85
+RELATED_EXCESS = 0.05
+PREDICTED_INFLATION_WARN = 0.02
+CHROM_MATCH_WARN = 0.5
+AUTO_KEEP_WARN = 0.8
+
+
+def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float, info: dict,
+                        he_probes: int, random_state, h2_check: bool, design,
+                        alphas=HRATT_ALPHAS, kappa_on: bool = False) -> list:
+    """Warnings of a model-SNP subset (see :func:`hratt`); each is issued as
+    a RuntimeWarning and returned as a dict. Informational findings go to
+    ``info["notes"]`` without a warning. The h2 check uses its own random
+    stream, so it changes no other result.
+
+    The h2 check picks alpha by randomized HE on the full panel (one pass
+    serves every alpha) and evaluates the subset at that alpha, so both
+    estimates share one weighting (a subset picks more negative alphas,
+    which made ratios incomparable across maps). The ratio itself measures
+    tagging, not inflation risk: below 0.85 it is a note. The calibration
+    warning is driven by the predicted inflation (structure-test excess x h2
+    missed by the subset) above 0.02; excess > 0.05 with z > 3 is recorded
+    as the relatedness-detector trigger only.
+    """
+    out = []
+    notes = info.setdefault("notes", [])
+    m, k = st_full.lg.m, st.lg.m
+    frac = k / m
+
+    def emit(kind, text, **fields):
+        warnings.warn(f"model_snps: {text}", RuntimeWarning, stacklevel=4)
+        out.append({"kind": kind, "message": text, **fields})
+
+    hm3 = (info.get("options") or {}).get("hm3") or {}
+    low = hm3.get("low_chromosomes") if str(info["source"]) == "hm3" else None
+    if low:
+        per = hm3.get("per_chromosome", {})
+        detail = ", ".join(f"chr{c} {per[c]['matched']:,}/{per[c]['map']:,}" for c in low)
+        emit("hm3_chromosome", f"HapMap3 matching kept under {100 * CHROM_MATCH_WARN:.0f}% of the "
+                               f"map's variants on chromosome(s) {detail} (matched/map) although the "
+                               "panel has variants there; a chromosome with few model SNPs "
+                               "leaves its relatives' polygenic signal in the LOCO scores. "
+                               "Check that chromosome's build, naming and variant IDs.",
+             chromosomes=list(low))
+    if h2_check and k < m:
+        seed = 0 if random_state is None else random_state
+        est, alpha_full = {}, float("nan")
+        try:
+            f = np.clip(st_full.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+            grid = list(alphas)
+            he = _he_alpha(st_full, f, grid, he_probes, np.random.default_rng([seed, 0x6832]),
+                           design_weights=design)
+            alpha_full = float(he["alpha"])
+            est["full"] = float(np.asarray(he["h2_he"])[grid.index(he["alpha"])])
+        except ValueError:
+            est["full"] = float("nan")
+        if np.isfinite(alpha_full):
+            try:
+                f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+                he = _he_alpha(st, f, [alpha_full], he_probes,
+                               np.random.default_rng([seed, 0x6832]), design_weights=design)
+                est["subset"] = float(he["h2_he"][0])
+            except ValueError:
+                est["subset"] = float("nan")
+        else:
+            est["subset"] = float("nan")
+        ratio = est["subset"] / est["full"] if est["full"] > 0 else float("nan")
+        info["h2_check"] = {"h2_he_subset": est["subset"], "h2_he_full": est["full"],
+                            "ratio": ratio, "alpha": alpha_full, "alpha_rule": "full-panel HE",
+                            "alpha_stage1": float(alpha)}
+        if np.isfinite(ratio) and est["full"] > 0.05 and ratio < H2_RATIO_NOTE:
+            notes.append({"kind": "h2", "ratio": ratio, "message": (
+                f"the {k:,} model SNPs tag {est['subset']:.3f} of the trait by HE against "
+                f"{est['full']:.3f} on all {m:,} variants (ratio {ratio:.2f}, alpha {alpha_full:g}); "
+                "usual for HapMap3-like sets and harmless in unrelated samples; it costs some "
+                "stage-1 power" + ("; calibration with relatives is handled by kappa_g"
+                                   if kappa_on else ""))})
+    related = struct["excess"] > RELATED_EXCESS and struct["z"] > 3.0
+    info["relatedness_signal"] = {"structure_excess": float(struct["excess"]),
+                                  "z": float(struct["z"]), "flag": bool(related),
+                                  "flag_rule": f"excess > {RELATED_EXCESS} and z > 3 (detector trigger)"}
+    pred = None
+    if kappa_on:
+        info["relatedness_signal"]["kappa"] = "relatedness= active: kappa_g replaces the prediction"
+    elif "h2_check" in info and np.isfinite(info["h2_check"]["ratio"]):
+        c = info["h2_check"]
+        pred = float(max(struct["excess"], 0.0) * max(c["h2_he_full"] - c["h2_he_subset"], 0.0))
+        info["relatedness_signal"]["predicted_inflation"] = pred
+    if pred is not None and pred > PREDICTED_INFLATION_WARN:
+        emit("related", f"predicted rise of the null mean chi-square {pred:.3f} > "
+                        f"{PREDICTED_INFLATION_WARN} (structure-test excess {struct['excess']:.3f}, "
+                        f"z {struct['z']:.1f}, x h2 missed by the {k:,} model SNPs "
+                        f"{info['h2_check']['h2_he_full'] - info['h2_check']['h2_he_subset']:.3f}). "
+                        "Relatives share polygenic signal the subset's LOCO scores miss. Enlarge "
+                        "model_snps (a 20% 'auto' subset or every variant) or compare lambda_GC / "
+                        "the LD-score intercept with a full stage-1 run on one trait. Under "
+                        "population stratification the excess also reflects structure, so the "
+                        "prediction is then an upper bound.",
+             predicted_inflation=pred, excess=float(struct["excess"]))
+    if str(info["source"]).startswith("auto") and frac > AUTO_KEEP_WARN:
+        emit("auto_keeps_most", f"'auto' kept {k:,} of {m:,} variants ({100 * frac:.0f}%); the "
+                                "subset copy costs memory for little time. Use "
+                                "model_snps_options={'max_snps': ...}, stricter thinning, or "
+                                "model_snps=None.", frac=frac)
+    return out
 
 
 def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritability_method: str,
@@ -1666,7 +2119,8 @@ def _hratt_lambda(st: _Setup, ys: np.ndarray, U: np.ndarray, h2: float, residual
 
 
 def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_threads,
-                        extra, crossfit: bool = False, two_sided: str = "distance") -> GwasResult:
+                        extra, crossfit: bool = False, two_sided: str = "distance",
+                        rel=None, kappa_floor=None) -> GwasResult:
     """Logistic score tests of a binary trait with the LOCO polygenic scores
     as offsets (step 2 of binary HRATT).
 
@@ -1702,15 +2156,24 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     w = np.ones(y.size) if st.w is None else st.w
     V = sp["zvar"] * np.einsum("ij,ij->j", A, A)[st.lg.groups] * sp["rho"]
     valid = (J > 0) & (V > 0) & (st.lg.zz > 0)
+    lam_spa = lam
+    lam_j = lam
+    if rel is not None:
+        # Spec A: kappa_g of a_g = w (y - mu_g) multiplies V; the saddlepoint
+        # takes lambda_g = 1 / kappa_g as its per-group variance ratio.
+        kap = _kappa_guard(rel.kappa(A), kappa_floor)
+        extra["relatedness"]["kappa"] = kap
+        lam_spa = 1.0 / kap
+        lam_j = lam_spa[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
-        chi2_normal = np.where(valid, lam * U * U / V, np.nan)
-    p, chi2, n_spa = _genotype_tails(st, A, U, V, chi2_normal, lam, spa_threshold, n_threads,
+        chi2_normal = np.where(valid, lam_j * U * U / V, np.nan)
+    p, chi2, n_spa = _genotype_tails(st, A, U, V, chi2_normal, lam_spa, spa_threshold, n_threads,
                                      two_sided)
     with np.errstate(divide="ignore", invalid="ignore"):
         beta_z = np.where(valid, U / J, np.nan)
         # Uncertainty of the null-score linearization, independent of the
         # choice of tail approximation. This is not a fitted logistic MLE.
-        se_z = np.where(valid, np.sqrt(V / lam) / J, np.nan)
+        se_z = np.where(valid, np.sqrt(V / lam_j) / J, np.nan)
     off = offsets - offsets.mean(axis=0)
     extra.update({"n_cases": int(y.sum()),
                   "n_controls": int(y.size - y.sum()),
