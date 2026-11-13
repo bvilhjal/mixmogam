@@ -1080,7 +1080,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           block: int = 4096, n_threads: int = 1,
           gram_cache_bytes: float = 1e9, model_snps=None,
           model_snps_options: Optional[dict] = None, model_snps_include=None,
-          model_snps_h2_check: bool = True, model_snps_stream=None) -> GwasResult:
+          model_snps_h2_check: bool = True, model_snps_stream=None,
+          relatedness=None, relatedness_correction: str = "kappa",
+          relatedness_options: Optional[dict] = None) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1371,6 +1373,24 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     stream = stream_options(model_snps_stream)
     if stream is not None and model_snps is None:
         raise ValueError("model_snps_stream streams a model_snps subset; set model_snps")
+    rel_opt = None
+    if relatedness is not None:
+        from mixmogam._relatedness import RELATEDNESS_OPTIONS
+
+        if relatedness_correction not in ("kappa", "vc", "none"):
+            raise ValueError("relatedness_correction must be 'kappa', 'vc' or 'none'")
+        if trait != "quantitative" or weighted:
+            raise ValueError("relatedness= is implemented for unweighted quantitative traits")
+        if denominator == "spectral":
+            raise ValueError("relatedness= is not available with denominator='spectral'")
+        unknown = set(relatedness_options or {}) - set(RELATEDNESS_OPTIONS)
+        if unknown:
+            raise ValueError(f"unknown relatedness_options: {sorted(unknown)}")
+        rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
+        if rel_opt["denominator"] not in ("exact", "gamma"):
+            raise ValueError("relatedness_options['denominator'] must be 'exact' or 'gamma'")
+    elif relatedness_options is not None:
+        raise ValueError("relatedness_options needs relatedness=")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
                 sample_weights=sample_weights, trait=trait,
@@ -1480,8 +1500,29 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         extra.update({"kish_n": kish, "design_effect": n / kish})
     if model_info is not None:
         extra["model_snps"] = model_info
+    rel_info = None
+    rel_factor = None
+    if relatedness is not None:
+        from mixmogam._relatedness import as_relatedness, gls_stats
+
+        rel = as_relatedness(relatedness, n)
+        Wp = st_test.lg.project(resid)
+        kap = rel.kappa(Wp)
+        rel_info = {"correction": relatedness_correction, "kappa": kap, **rel.summary(),
+                    "options": rel_opt}
+        if relatedness_correction == "kappa":
+            rel_factor = 1.0 / kap[st_test.lg.groups]
+        elif relatedness_correction == "vc":
+            gls = gls_stats(st_test.lg, Wp, rel, denominator=rel_opt["denominator"],
+                            n_gamma=rel_opt["n_gamma"], max_cluster=rel_opt["max_cluster"],
+                            rng=np.random.default_rng([random_state, 0x7663]))
+            rel_info.update({"s_f": gls["s_f"], "s_e": gls["s_e"], "gamma": gls["gamma"]})
+        del Wp
+        extra["relatedness"] = rel_info
+    skip_lambda = (relatedness is not None and relatedness_correction != "none"
+                   and not rel_opt["keep_lambda"])
     lam = 1.0
-    if struct["strong"] and h2 > 0:
+    if struct["strong"] and h2 > 0 and not skip_lambda:
         # At the HE residual-zero boundary, use the same declared noise
         # floor for ridge calibration as for VB. A zero ridge would leave
         # the projected LOCO operator singular in the covariate directions.
@@ -1514,6 +1555,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                                          spa_two_sided)
         extra.update({"spa_threshold": float(spa_threshold), "spa_two_sided": spa_two_sided,
                       "n_spa": n_spa})
+    elif rel_info is not None and relatedness_correction == "vc":
+        chi2 = lam * gls["chi2"]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            beta_z = gls["num"] / gls["den"] * sy
+            se_z = np.abs(beta_z) / np.sqrt(chi2)
+        return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
+    elif rel_factor is not None:
+        chi2 = lam * rel_factor * U
+        with np.errstate(divide="ignore", invalid="ignore"):
+            beta_z = rsU["num"] / rsU["zz"] * sy
+            se_z = np.abs(beta_z) / np.sqrt(chi2)
+        return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
     else:
         chi2 = lam * U
     with np.errstate(divide="ignore", invalid="ignore"):

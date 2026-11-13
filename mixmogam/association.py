@@ -206,7 +206,8 @@ def gwas(
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
                          "stage1", "stage1_kwargs", "model_snps", "model_snps_options",
-                         "model_snps_include", "model_snps_h2_check", "model_snps_stream"}
+                         "model_snps_include", "model_snps_h2_check", "model_snps_stream",
+                         "relatedness", "relatedness_correction", "relatedness_options"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "
