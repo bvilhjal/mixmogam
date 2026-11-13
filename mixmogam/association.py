@@ -186,6 +186,7 @@ def gwas(
         (``method="hratt"``). ``model_snps=`` (``"hm3"``, ``"auto"``, indices,
         a mask or variant IDs), ``model_snps_options=``, ``model_snps_include=``
         and ``model_snps_h2_check=`` fit HRATT's stage 1 on a variant subset
+        (``model_snps_stream=`` keeps it on disk instead of in RAM)
         and test every variant (see :func:`mixmogam.twostep.hratt`). For
         human data with HapMap3 coverage use ``model_snps="hm3"`` (falls back
         to ``"auto"`` when the panel matches too few HapMap3 variants);
@@ -205,7 +206,7 @@ def gwas(
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
                          "stage1", "stage1_kwargs", "model_snps", "model_snps_options",
-                         "model_snps_include", "model_snps_h2_check"}
+                         "model_snps_include", "model_snps_h2_check", "model_snps_stream"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "

@@ -1078,7 +1078,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           block: int = 4096, n_threads: int = 1,
           gram_cache_bytes: float = 1e9, model_snps=None,
           model_snps_options: Optional[dict] = None, model_snps_include=None,
-          model_snps_h2_check: bool = True) -> GwasResult:
+          model_snps_h2_check: bool = True, model_snps_stream=None) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1237,6 +1237,20 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``"auto"`` keeping more than 80% of the variants (the subset copy then
     costs memory for little time).
 
+    ``model_snps_stream`` keeps the subset on disk instead of in RAM (n k / 4
+    bytes, 180 GB for HapMap3+ at n = 5e5): one pass writes the subset's
+    rows to a page-aligned two-bit file that every stage-1 pass maps and
+    reads sequentially, with read-ahead and drop-behind advice so resident
+    memory does not grow with the subset. Results are bit-identical to the
+    in-RAM copy. ``True``/``"on"`` always streams, ``"auto"`` streams when
+    n k / 4 exceeds ``threshold_bytes`` (default 8 GiB), and a dict sets
+    ``mode``, ``cache_dir`` (keep the file there and reuse it while the
+    panel, the subset and the samples are unchanged; default: a temporary
+    file, unlinked once mapped), ``threshold_bytes``, ``window_bytes``
+    (read-ahead, default 64 MiB) and ``verify`` (re-hash a reused file).
+    Default ``None``: the in-RAM copy. ``extra["model_snps"]["stream"]``
+    records the decision, path, size, cache hit and extraction time.
+
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     elastic-net statistic): with strong structure, U and T are multiplied by
     the structure-aware factors kappa_j of the weighted ridge model, T is
@@ -1340,6 +1354,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     elif model_snps_include is not None:
         raise ValueError("model_snps_include adds to a model_snps subset; without model_snps "
                          "stage 1 already uses every variant")
+    from mixmogam._stream import stream_options
+
+    stream = stream_options(model_snps_stream)
+    if stream is not None and model_snps is None:
+        raise ValueError("model_snps_stream streams a model_snps subset; set model_snps")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
                 sample_weights=sample_weights, trait=trait)
@@ -1348,7 +1367,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     model_info = None
     if model_snps is not None:
         st, model_info = _model_snp_setup(st_test, gt, model_snps, model_snps_options,
-                                          n_threads, include=model_snps_include)
+                                          n_threads, include=model_snps_include,
+                                          stream=stream)
     if linalg.norm(st.y_p) <= 10 * np.finfo(float).eps * linalg.norm(st.y):
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
@@ -1484,13 +1504,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
 
 
 def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
-                     include=None) -> tuple:
+                     include=None, stream: Optional[dict] = None) -> tuple:
     """The stage-1 working model on the model SNPs, and its record.
 
     The subset's LocoGenotypes keeps the panel's group of every variant and
     the panel's group count, so LOCO score column g excludes exactly the
     model SNPs of the panel's group g. Allele frequencies for thinning come
-    from the prepared moments (no genotype pass).
+    from the prepared moments (no genotype pass), and so do the subset's
+    moments (the panel's rows, bit-identical to preparing them again).
+    With ``stream`` (normalized ``model_snps_stream``) the subset's calls
+    are a memory-mapped on-disk cache instead of an in-RAM copy (see
+    :mod:`mixmogam._stream`).
     """
     from mixmogam._thin import resolve_model_snps
 
@@ -1510,15 +1534,36 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
     per_group = np.bincount(groups, minlength=st.lg.n_groups)
     if np.count_nonzero(per_group) < 2:
         raise ValueError("model_snps must cover at least two LOCO groups")
+    stream_info = None
+    subset_bytes = float(gt.n_samples) * idx.size / 4.0
+    streaming = (stream is not None and idx.size < st.lg.m
+                 and (stream["mode"] == "on" or subset_bytes > stream["threshold_bytes"]))
     if idx.size == st.lg.m:
         sub = gt  # every variant: the same calls, no copy
+    elif streaming:
+        from mixmogam._stream import open_subset_cache
+
+        calls, stream_info = open_subset_cache(gt, idx, st.lg.mean[idx], st.lg.sd[idx], stream)
+        sub = gt._from_validated(
+            calls, sample_ids=gt.sample_ids, chromosome=gt.chromosome[idx],
+            position=gt.position[idx], variant_ids=gt.variant_ids[idx],
+            allele1=None if gt.allele1 is None else gt.allele1[idx],
+            allele2=None if gt.allele2 is None else gt.allele2[idx])
+        st.lg.set_readahead(stream["window_bytes"])  # the panel's passes, if mapped
     else:
         sub = gt.variant_mask(idx)
+    moments = (st.lg.mean[idx], st.lg.sd[idx], st.lg._projection[idx], st.lg.zz[idx])
     lg = LocoGenotypes(sub, groups, st.lg.Q, block=st.lg.block, dtype=st.lg.dtype,
                        n_threads=st.lg.n_threads, row_scale=st.lg.row_scale,
-                       n_groups=st.lg.n_groups)
+                       n_groups=st.lg.n_groups, moments=moments,
+                       readahead=stream["window_bytes"] if streaming else None)
     info = {"n": int(idx.size), "source": source, "options": settings,
             "per_group": per_group, "indices": idx}
+    if stream is not None:
+        info["stream"] = {"mode": stream["mode"], "streamed": bool(streaming),
+                          "subset_bytes": subset_bytes,
+                          "threshold_bytes": stream["threshold_bytes"],
+                          **(stream_info or {})}
     if include_info is not None:
         info["include"] = include_info
     return replace(st, lg=lg), info

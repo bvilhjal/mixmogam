@@ -107,6 +107,17 @@ class LocoGenotypes:
     n_groups : optional number of LOCO groups (default: the largest
         group index plus one); a variant subset passes its panel's count so
         that group indices, and empty groups, stay those of the full panel
+    moments : optional ``(mean, sd, projection, zz)`` rows of these
+        variants from a LocoGenotypes over a panel that contains them, with the
+        same ``Q``, ``row_scale`` and ``dtype`` (HRATT's stage-1 subset). They
+        replace preparation, which saves one pass over the genotypes; the
+        compiled preparation is per-variant, so they equal what it would give.
+    readahead : bytes of read-ahead for memory-mapped two-bit storage, or
+        None. When set and the calls are a ``numpy.memmap``, every sequential
+        :meth:`slices` iteration advises the kernel to read the next
+        ``readahead`` bytes while the current slice is decoded and to drop the
+        mapping of the slices already passed, so resident file pages stay
+        bounded by about one window whatever the number of variants.
     n_threads : positive integer, default 1
         Above one, prepare and decode independent variants with Numba
         workers. Preparation sums each variant's samples in order in every
@@ -117,7 +128,8 @@ class LocoGenotypes:
 
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
                  block: int = 4096, dtype=np.float32, n_threads: int = 1,
-                 row_scale: Optional[np.ndarray] = None, n_groups: Optional[int] = None):
+                 row_scale: Optional[np.ndarray] = None, n_groups: Optional[int] = None,
+                 moments: Optional[tuple] = None, readahead: Optional[int] = None):
         if (isinstance(n_threads, (int, np.integer))
                 and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
             self.n_threads = 1
@@ -177,8 +189,15 @@ class LocoGenotypes:
         self.sd = np.zeros(self.m)
         self._projection = np.zeros((self.m, self.Q.shape[1]))
         self.zz = np.zeros(self.m)
-        for idx, _ in self._blocks:
-            self._prepare(idx)
+        if moments is not None:
+            mean, sd, projection, zz = (np.asarray(a, dtype=np.float64) for a in moments)
+            if (mean.shape != (self.m,) or sd.shape != (self.m,) or zz.shape != (self.m,)
+                    or projection.shape != self._projection.shape):
+                raise ValueError("moments must hold (mean, sd, projection, zz) for every variant")
+            self.mean[:], self.sd[:], self._projection[:], self.zz[:] = mean, sd, projection, zz
+        else:
+            for idx, _ in self._blocks:
+                self._prepare(idx)
         for array in (self.mean, self.sd, self._projection, self.zz):
             array.flags.writeable = False
         self.trace = float(self.zz.sum()) / max(self.m, 1)
@@ -188,6 +207,22 @@ class LocoGenotypes:
         divisor = np.where(self.sd > 0, self.sd, 1.0)
         self._lut = np.zeros((self.m, 4), dtype=self.dtype)
         self._lut[:, :3] = (np.arange(3.0)[None, :] - self.mean[:, None]) / divisor[:, None]
+        self._readahead = None
+        if readahead is not None:
+            self.set_readahead(readahead)
+
+    def set_readahead(self, window: Optional[int]) -> bool:
+        """Advise read-ahead/drop-behind on memory-mapped two-bit calls for
+        sequential passes (see ``readahead``); None turns it off. Returns
+        whether the storage is a mapping it applies to."""
+        from mixmogam._stream import Readahead
+
+        self._readahead = None
+        G = self.gt.G
+        if window is None or not isinstance(G, PackedCalls):
+            return False
+        self._readahead = Readahead.for_array(G.data, int(window))
+        return self._readahead is not None
 
     # ------------------------------------------------------------------
     def _check_source(self):
@@ -276,9 +311,15 @@ class LocoGenotypes:
         """Yield ``(variant_indices, group)``, at most ``rows`` per slice
         and within one block: the slices of :meth:`raw_slices`, undecoded."""
         rows = self._slice_rows() if rows is None else max(1, int(rows))
+        advise = self._readahead
+        if advise is not None:
+            advise.begin()
         for idx, g in self._blocks:
             for start in range(0, idx.size, rows):
-                yield idx[start : start + rows], g
+                take = idx[start : start + rows]
+                if advise is not None:
+                    advise.at(take)
+                yield take, g
 
     def raw_slices(self, rows: Optional[int] = None, out: Optional[np.ndarray] = None):
         """Yield ``(variant_indices, group, z)``: unprojected standardized

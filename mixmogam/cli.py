@@ -109,6 +109,16 @@ def _parser() -> argparse.ArgumentParser:
                            "chromosome's LOCO scores like every model SNP")
     gwas.add_argument("--no-model-snps-h2-check", action="store_true",
                       help="skip the subset-vs-all-variants HE h2 check (one extra panel pass)")
+    gwas.add_argument("--model-snps-stream", choices=("off", "on", "auto"),
+                      help="keep the model-SNP subset in an on-disk two-bit cache read sequentially "
+                           "by every stage-1 pass instead of in RAM; identical results (default off; "
+                           "auto: above --model-snps-stream-threshold)")
+    gwas.add_argument("--model-snps-cache", metavar="DIR",
+                      help="--model-snps-stream: keep the cache file in DIR and reuse it while the panel, "
+                           "the subset and the samples are unchanged (default: temporary, deleted)")
+    gwas.add_argument("--model-snps-stream-threshold", type=float, metavar="GB",
+                      help="--model-snps-stream auto: stream when the subset needs more than GB "
+                           "gigabytes (n k / 4 bytes; default 8 GiB)")
     gwas.add_argument("--thin-min-maf", type=float, help="--model-snps auto: MAF threshold (default 0.01)")
     gwas.add_argument("--thin-max-r2", type=float, help="--model-snps auto: r2 threshold (default 0.5)")
     gwas.add_argument("--thin-window-kb", type=float, help="--model-snps auto: window in kb (default 100)")
@@ -330,9 +340,21 @@ def _cmd_gwas(args) -> int:
             kwargs["model_snps_include"] = read_snp_list(args.model_snps_include)
         if args.no_model_snps_h2_check:
             kwargs["model_snps_h2_check"] = False
-    elif thin or hm3 or args.model_snps_include or args.no_model_snps_h2_check:
-        raise ValueError("--thin-*, --hm3-*, --model-snps-include and --no-model-snps-h2-check "
-                         "need --model-snps")
+        stream = {"mode": args.model_snps_stream or "off"}
+        if args.model_snps_cache is not None:
+            stream["cache_dir"] = args.model_snps_cache
+        if args.model_snps_stream_threshold is not None:
+            stream["threshold_bytes"] = args.model_snps_stream_threshold * 1e9
+        if stream["mode"] != "off":
+            kwargs["model_snps_stream"] = stream
+        elif len(stream) > 1:
+            raise ValueError("--model-snps-cache and --model-snps-stream-threshold need "
+                             "--model-snps-stream on or auto")
+    elif (thin or hm3 or args.model_snps_include or args.no_model_snps_h2_check
+          or args.model_snps_stream not in (None, "off") or args.model_snps_cache is not None
+          or args.model_snps_stream_threshold is not None):
+        raise ValueError("--thin-*, --hm3-*, --model-snps-include, --no-model-snps-h2-check and "
+                         "--model-snps-stream/-cache/-stream-threshold need --model-snps")
     result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
                   genome_build=args.genome_build, **kwargs)
     info = result.extra.get("model_snps")
