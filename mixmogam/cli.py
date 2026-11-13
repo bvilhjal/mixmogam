@@ -80,6 +80,15 @@ def _parser() -> argparse.ArgumentParser:
                       help="hratt stage-1 whole-genome predictor (default enet); "
                            "ldpred3-* and auto need the separate ldpred3 package, "
                            "quantitative traits and --stage1 implies --method hratt")
+    gwas.add_argument("--model-snps", metavar="FILE|auto",
+                      help="hratt stage-1 model SNPs: a file of variant IDs (one per line) or 'auto' "
+                           "(MAF/LD thinning); stage 2 tests every variant; implies --method hratt")
+    gwas.add_argument("--thin-min-maf", type=float, help="--model-snps auto: MAF threshold (default 0.01)")
+    gwas.add_argument("--thin-max-r2", type=float, help="--model-snps auto: r2 threshold (default 0.5)")
+    gwas.add_argument("--thin-window-kb", type=float, help="--model-snps auto: window in kb (default 100)")
+    gwas.add_argument("--thin-ld-samples", type=int,
+                      help="--model-snps auto: samples used for r2, 0 for all (default 10000)")
+    gwas.add_argument("--thin-max-snps", type=int, help="--model-snps auto: cap on model SNPs (default none)")
     gwas.add_argument("--random-state", type=int, default=None,
                       help="two-step method seed (default: the method's own, 0)")
     gwas.add_argument("--n-threads", type=int, default=1,
@@ -210,7 +219,8 @@ def _cmd_gwas(args) -> int:
         # Resolve exactly as mixmogam.gwas does (trait=, sample_weights= and
         # stage1= are HRATT options, so they move auto to hratt).
         from mixmogam.association import EXACT_N_AUTO
-        if args.trait is not None or w is not None or args.stage1 != "enet":
+        if (args.trait is not None or w is not None or args.stage1 != "enet"
+                or args.model_snps is not None):
             method = "hratt"
         else:
             method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
@@ -227,6 +237,24 @@ def _cmd_gwas(args) -> int:
         kwargs["stage1"] = args.stage1
     if w is not None:
         kwargs["sample_weights"] = w
+    thin = {"min_maf": args.thin_min_maf, "max_r2": args.thin_max_r2,
+            "window_bp": None if args.thin_window_kb is None else int(round(args.thin_window_kb * 1000)),
+            "ld_samples": args.thin_ld_samples, "max_snps": args.thin_max_snps}
+    thin = {k: v for k, v in thin.items() if v is not None}
+    if "ld_samples" in thin and thin["ld_samples"] == 0:
+        thin["ld_samples"] = None
+    if args.model_snps is not None:
+        if args.model_snps == "auto":
+            kwargs["model_snps"] = "auto"
+            if thin:
+                kwargs["model_snps_options"] = thin
+        else:
+            from mixmogam._thin import read_snp_list
+            if thin:
+                raise ValueError("--thin-* options apply to --model-snps auto only")
+            kwargs["model_snps"] = read_snp_list(args.model_snps)
+    elif thin:
+        raise ValueError("--thin-* options need --model-snps auto")
     result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
                   genome_build=args.genome_build, **kwargs)
     result.write_csv(args.out)

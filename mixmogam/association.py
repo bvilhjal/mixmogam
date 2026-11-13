@@ -183,7 +183,9 @@ def gwas(
         (case-control) outcomes, ``trait="binary"``, sampling weights,
         ``sample_weights=w``, and the stage-1 predictor, ``stage1=``
         (see :mod:`mixmogam.stage1`), are HRATT options
-        (``method="hratt"``).
+        (``method="hratt"``). ``model_snps=`` (``"auto"``, indices, a mask or
+        variant IDs) and ``model_snps_options=`` fit HRATT's stage 1 on a
+        variant subset and test every variant (see :func:`mixmogam.twostep.hratt`).
     """
     from mixmogam.results import _genome_build
     genome_build = _genome_build(genome_build)
@@ -197,7 +199,7 @@ def gwas(
     if not np.isfinite(y).all():
         raise ValueError("y contains NaN or infinite values; drop those samples first")
     hratt_only = sorted({"trait", "sample_weights", "spa_threshold", "spa_two_sided", "loco_folds",
-                         "stage1", "stage1_kwargs"}
+                         "stage1", "stage1_kwargs", "model_snps", "model_snps_options"}
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "

@@ -104,6 +104,9 @@ class LocoGenotypes:
         covariates diag(s) X, so the coefficients c = Q'(s z) and the norms
         ``zz`` = sum_i s_i^2 z_i^2 - |c|^2 are those of the scaled values.
         Means, SDs and the lookup table stay those of the unweighted calls.
+    n_groups : optional number of LOCO groups (default: the largest
+        group index plus one); a variant subset passes its panel's count so
+        that group indices, and empty groups, stay those of the full panel
     n_threads : positive integer, default 1
         Above one, prepare and decode independent variants with Numba
         workers. Preparation sums each variant's samples in order in every
@@ -114,7 +117,7 @@ class LocoGenotypes:
 
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
                  block: int = 4096, dtype=np.float32, n_threads: int = 1,
-                 row_scale: Optional[np.ndarray] = None):
+                 row_scale: Optional[np.ndarray] = None, n_groups: Optional[int] = None):
         if (isinstance(n_threads, (int, np.integer))
                 and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
             self.n_threads = 1
@@ -133,6 +136,12 @@ class LocoGenotypes:
         if self.groups.shape != (self.m,):
             raise ValueError("groups must have one entry per variant")
         self.n_groups = int(self.groups.max()) + 1 if self.m else 0
+        if n_groups is not None:
+            # A variant subset (HRATT's stage-1 model SNPs) keeps the LOCO
+            # groups of the full panel, including groups it holds no variant of.
+            if self.m and (self.groups.min() < 0 or self.n_groups > n_groups):
+                raise ValueError("groups must lie in 0..n_groups-1")
+            self.n_groups = int(n_groups)
         self.m_group = np.bincount(self.groups, minlength=self.n_groups).astype(np.float64)
         self.Q = np.zeros((self.n, 0)) if Q is None else np.array(Q, dtype=np.float64, copy=True)
         if self.Q.ndim != 2 or self.Q.shape[0] != self.n:

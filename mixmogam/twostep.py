@@ -48,7 +48,7 @@ optional Monte Carlo REML.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Optional
 import warnings
 
@@ -1076,7 +1076,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
-          gram_cache_bytes: float = 1e9) -> GwasResult:
+          gram_cache_bytes: float = 1e9, model_snps=None,
+          model_snps_options: Optional[dict] = None) -> GwasResult:
     """HRATT, the Heritability-weighted Residual Association Two-step Test.
 
     Elastic-net LOCO polygenic scores as offsets, OLS score tests. Inspired
@@ -1185,6 +1186,23 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     many samples), for 1.5-2x the process CPU time. Setting KMP_BLOCKTIME or
     OMP_WAIT_POLICY keeps the runtime's own policy.
 
+    ``model_snps`` fits stage 1 (structure test, variance components,
+    the elastic-net prior choice, the LOCO scores and, under strong
+    structure, lambda) on a subset of the variants, as BOLT-LMM's
+    ``--modelSnps``, LDAK-KVIK's thinned predictors and REGENIE's step 1
+    do; stage 2 still tests every variant against those scores. It takes
+    ``"auto"`` (:func:`mixmogam._thin.thin_variants`: MAF above 1%, then
+    greedy r2 < 0.5 pruning within 100 kb, both settable through
+    ``model_snps_options``, e.g. ``{"min_maf": 0.05, "max_r2": 0.2,
+    "window_bp": 250_000, "ld_samples": 10_000, "max_snps": 1_000_000}``),
+    variant indices, a boolean mask or variant IDs. The subset keeps the
+    full panel's LOCO groups, so a variant on chromosome c, model SNP or
+    not, is tested against scores fitted without chromosome c's model
+    SNPs. A memory-mapped panel's subset is copied into memory (two bits
+    per call). ``None`` (default) fits stage 1 on every variant, unchanged.
+    Not available with ``denominator="spectral"`` (its per-variant factors
+    exist only for model SNPs) or with the LDpred3 stage 1.
+
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
     elastic-net statistic): with strong structure, U and T are multiplied by
     the structure-aware factors kappa_j of the weighted ridge model, T is
@@ -1278,10 +1296,22 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("loco_folds exceeds the number of samples")
     if weighted:
         sample_weights = _normalize_weights(sample_weights, gt.n_samples)
+    if model_snps is not None:
+        if denominator == "spectral":
+            raise ValueError("model_snps is not available with denominator='spectral'")
+        if stage1 != "enet":
+            raise ValueError("model_snps applies to the elastic-net stage 1 (stage1='enet')")
+    elif model_snps_options is not None:
+        raise ValueError("model_snps_options needs model_snps='auto'")
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
                 sample_weights=sample_weights, trait=trait)
     n = st.lg.n
+    st_test = st  # stage 2 always tests every variant
+    model_info = None
+    if model_snps is not None:
+        st, model_info = _model_snp_setup(st_test, gt, model_snps, model_snps_options,
+                                          n_threads)
     if linalg.norm(st.y_p) <= 10 * np.finfo(float).eps * linalg.norm(st.y):
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     sy = float(np.sqrt(np.sum(st.y_p**2) / st.n_eff))
@@ -1336,11 +1366,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if "stage1_selection" in scores:
             scores["stage1_selection"]["heldout_mse_enet"] *= weight_scale
             scores["stage1_selection"]["heldout_mse_ldpred3"] *= weight_scale
+    resid = scores.pop("resid")
     if binary and not (struct["strong"] and h2 > 0):
         rsU, U = None, None  # step 2 is logistic; no working-model statistic needed
-        scores.pop("resid")
     else:
-        rsU = _retro_stats(st, scores.pop("resid"), retrospective=weighted and not binary)
+        rsU = _retro_stats(st_test, resid, retrospective=weighted and not binary)
         U = rsU["chi2"]
 
     extra = {"method": "hratt", "denominator": denominator, "alpha": vc["alpha"], "h2": h2,
@@ -1367,16 +1397,28 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if weighted:
         kish = float(np.sum(st.w) ** 2 / np.sum(st.w * st.w))
         extra.update({"kish_n": kish, "design_effect": n / kish})
+    if model_info is not None:
+        extra["model_snps"] = model_info
     lam = 1.0
     if struct["strong"] and h2 > 0:
         # At the HE residual-zero boundary, use the same declared noise
         # floor for ridge calibration as for VB. A zero ridge would leave
         # the projected LOCO operator singular in the covariate directions.
         residual_variance = s2e if heritability_method == "he" else 1.0 - h2
-        lam, U, lam_extra = _hratt_lambda(st, ys, U, h2, residual_variance, w, vc["basis"],
-                                          n_calibration, denominator, n_spectral, cg_tol, rng)
+        if st is st_test:
+            lam, U, lam_extra = _hratt_lambda(st, ys, U, h2, residual_variance, w, vc["basis"],
+                                              n_calibration, denominator, n_spectral, cg_tol, rng)
+        else:
+            # lambda is a stage-1 quantity: calibrated on the model SNPs'
+            # own statistics, then applied to every tested variant.
+            U_model = _retro_stats(st, resid)["chi2"]
+            lam, _, lam_extra = _hratt_lambda(st, ys, U_model, h2, residual_variance, w,
+                                              vc["basis"], n_calibration, denominator,
+                                              n_spectral, cg_tol, rng)
         extra.update(lam_extra)
+    del resid
     extra["lambda"] = lam
+    st = st_test
     if binary:
         return _hratt_binary_step2(st, gt, scores.pop("prediction"), sy, lam, spa_threshold,
                                    n_threads, extra, crossfit=folds is not None,
@@ -1398,6 +1440,37 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         se_z = (np.sqrt(lam * rsU["V"]) / rsU["zz"] * sy if weighted else
                 np.abs(beta_z) / np.sqrt(chi2))
     return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
+
+
+def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int) -> tuple:
+    """The stage-1 working model on the model SNPs, and its record.
+
+    The subset's LocoGenotypes keeps the panel's group of every variant and
+    the panel's group count, so LOCO score column g excludes exactly the
+    model SNPs of the panel's group g. Allele frequencies for thinning come
+    from the prepared moments (no genotype pass).
+    """
+    from mixmogam._thin import resolve_model_snps
+
+    half = st.lg.mean / 2.0
+    maf = np.minimum(half, 1.0 - half)
+    idx, source, settings = resolve_model_snps(gt, model_snps, maf, options)
+    if idx.size < 2:
+        raise ValueError(f"model_snps selected {idx.size} variants; stage 1 needs at least two")
+    groups = st.lg.groups[idx]
+    per_group = np.bincount(groups, minlength=st.lg.n_groups)
+    if np.count_nonzero(per_group) < 2:
+        raise ValueError("model_snps must cover at least two LOCO groups")
+    if idx.size == st.lg.m:
+        sub = gt  # every variant: the same calls, no copy
+    else:
+        sub = gt.variant_mask(idx)
+    lg = LocoGenotypes(sub, groups, st.lg.Q, block=st.lg.block, dtype=st.lg.dtype,
+                       n_threads=st.lg.n_threads, row_scale=st.lg.row_scale,
+                       n_groups=st.lg.n_groups)
+    info = {"n": int(idx.size), "source": source, "options": settings,
+            "per_group": per_group, "indices": idx}
+    return replace(st, lg=lg), info
 
 
 def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritability_method: str,
