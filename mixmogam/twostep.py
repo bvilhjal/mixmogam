@@ -114,7 +114,7 @@ def _normalize_weights(sample_weights, n: int) -> Optional[np.ndarray]:
 
 def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None,
            trait: str = "quantitative", mu_clip: float = 1e-4,
-           readahead: Optional[int] = None) -> _Setup:
+           readahead: Optional[int] = None, prefetch: str = "advise") -> _Setup:
     """The (row-scaled) working model shared by the two-step steps.
 
     Without weights and for quantitative traits this is the phenotype, the
@@ -166,7 +166,7 @@ def _setup(y, gt, X, max_loco_groups, block, n_threads=1, *, sample_weights=None
     if len(labels) < 2:
         raise ValueError("LOCO needs variants on at least two chromosomes/groups")
     lg = LocoGenotypes(gt, groups, Q, block=block, n_threads=n_threads, row_scale=s,
-                       readahead=readahead)
+                       readahead=readahead, prefetch=prefetch)
     ys = y_work if s is None else s * y_work
     y_p = ys - Q @ (Q.T @ ys)
     q = Xd.shape[1]
@@ -1374,7 +1374,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     rng = np.random.default_rng(random_state)
     st = _setup(y, gt, X, max_loco_groups, block, n_threads=n_threads,
                 sample_weights=sample_weights, trait=trait,
-                readahead=None if stream is None else stream["window_bytes"])
+                readahead=None if stream is None else stream["window_bytes"],
+                prefetch="advise" if stream is None else stream["prefetch"])
     n = st.lg.n
     st_test = st  # stage 2 always tests every variant
     model_info = None
@@ -1575,7 +1576,8 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
     lg = LocoGenotypes(sub, groups, st.lg.Q, block=st.lg.block, dtype=st.lg.dtype,
                        n_threads=st.lg.n_threads, row_scale=st.lg.row_scale,
                        n_groups=st.lg.n_groups, moments=moments,
-                       readahead=stream["window_bytes"] if streaming else None)
+                       readahead=stream["window_bytes"] if streaming else None,
+                       prefetch=stream["prefetch"] if streaming else "advise")
     info = {"n": int(idx.size), "source": source, "options": settings,
             "per_group": per_group, "indices": idx}
     if stream is not None:

@@ -28,14 +28,16 @@ import json
 import mmap
 import os
 import tempfile
+import threading
 import time
+import weakref
 from typing import Optional
 
 import numpy as np
 
 from mixmogam._packed import PackedCalls
 
-__all__ = ["Readahead", "stream_options", "open_subset_cache",
+__all__ = ["Prefetcher", "Readahead", "stream_options", "open_subset_cache",
            "panel_fingerprint"]
 
 VERSION = 1
@@ -47,14 +49,108 @@ DEFAULT_THRESHOLD = 8 * 1024**3
 _PAGE = mmap.PAGESIZE
 
 
+class _PrefetchState:
+    def __init__(self, fd, chunk):
+        self.fd, self.chunk = fd, chunk
+        self.cv = threading.Condition()
+        self.pos = self.target = 0
+        self.last_lo = -1
+        self.gen = 0
+        self.stop = False
+        self.bytes = 0
+        self.restarts = 0
+        self.seconds = 0.0
+
+
+def _prefetch_loop(st: _PrefetchState) -> None:
+    buf = memoryview(bytearray(st.chunk))
+    while True:
+        with st.cv:
+            while not st.stop and st.pos >= st.target:
+                st.cv.wait()
+            if st.stop:
+                return
+            pos, gen = st.pos, st.gen
+            n = min(st.chunk, st.target - pos)
+        t0 = time.perf_counter()
+        try:
+            got = os.preadv(st.fd, [buf[:n]], pos)
+        except OSError:
+            got = 0
+        dt = time.perf_counter() - t0
+        with st.cv:
+            st.seconds += dt
+            st.bytes += got
+            if gen == st.gen:
+                st.pos = pos + got
+                if not got:  # end of file or error: wait for the next request
+                    st.target = st.pos
+
+
+def _prefetch_stop(st: _PrefetchState, close_fd: bool) -> None:
+    with st.cv:
+        st.stop = True
+        st.cv.notify_all()
+    if close_fd:
+        try:
+            os.close(st.fd)
+        except OSError:
+            pass
+
+
+class Prefetcher:
+    """A background thread that reads a file range ahead of the consumer.
+
+    ``request(lo, hi, upto)`` (file offsets) says the consumer is about to
+    read [lo, hi) and wants the page cache filled up to ``upto``. The thread
+    reads with ``os.preadv`` into one reused buffer (the GIL is released
+    during the read), so the consumer's faults on the mapping are page-cache
+    hits instead of synchronous disk reads. It never touches the consumer's
+    data, so values are unchanged by construction. A consumer that jumps
+    back (a new pass) or overtakes the thread restarts it at the consumer's
+    position. The thread stops when the object is collected.
+    """
+
+    def __init__(self, fd: int, chunk: int = 4 * 1024**2, close: bool = False):
+        self._st = _PrefetchState(fd, max(int(chunk), _PAGE))
+        self._thread = threading.Thread(target=_prefetch_loop, args=(self._st,),
+                                        name="mixmogam-prefetch", daemon=True)
+        self._thread.start()
+        self._finalizer = weakref.finalize(self, _prefetch_stop, self._st, close)
+
+    @property
+    def stats(self) -> dict:
+        st = self._st
+        return {"bytes": st.bytes, "restarts": st.restarts, "read_seconds": st.seconds}
+
+    def close(self) -> None:
+        self._finalizer()
+        self._thread.join(timeout=5)
+
+    def request(self, lo: int, hi: int, upto: int) -> None:
+        st = self._st
+        with st.cv:
+            if lo < st.last_lo or st.pos < hi:
+                if st.pos and lo >= st.last_lo:
+                    st.restarts += 1  # the consumer overtook the thread
+                st.pos = hi
+                st.gen += 1
+            st.last_lo = lo
+            st.target = upto
+            if st.target > st.pos:
+                st.cv.notify()
+
+
 class Readahead:
     """madvise read-ahead / drop-behind over the rows of a mapped 2-D array.
 
     ``begin()`` starts a sequential pass; ``at(rows)`` is called with the
     ascending row indices about to be decoded."""
 
-    def __init__(self, mm: mmap.mmap, base: int, row_bytes: int, n_rows: int, window: int):
+    def __init__(self, mm: mmap.mmap, base: int, row_bytes: int, n_rows: int, window: int,
+                 prefetcher: Optional[Prefetcher] = None, file_offset: int = 0):
         self.mm, self.base, self.row_bytes, self.n_rows = mm, base, row_bytes, n_rows
+        self.prefetcher, self.file_offset = prefetcher, file_offset
         self.window = max(int(window), _PAGE)
         self.end = base + row_bytes * n_rows
         self.calls = 0
@@ -62,8 +158,12 @@ class Readahead:
         self._last = -1
 
     @classmethod
-    def for_array(cls, data, window: int) -> Optional["Readahead"]:
-        """For a C-contiguous 2-D ``numpy.memmap`` (or a view of one), else None."""
+    def for_array(cls, data, window: int, prefetch: str = "advise") -> Optional["Readahead"]:
+        """For a C-contiguous 2-D ``numpy.memmap`` (or a view of one), else None.
+        ``prefetch="thread"`` adds a :class:`Prefetcher` reading the file
+        ahead (the mapped file's descriptor: one kept by
+        :func:`open_subset_cache`, or the file reopened by name); otherwise
+        only kernel advice (``MADV_WILLNEED``) asks for the window."""
         if not isinstance(data, np.memmap) or data.ndim != 2 or not data.flags.c_contiguous:
             return None
         owner = data
@@ -74,7 +174,21 @@ class Readahead:
             return None
         start = np.frombuffer(mm, dtype=np.uint8).ctypes.data
         base = data.ctypes.data - start
-        return cls(mm, base, int(data.strides[0]), int(data.shape[0]), window)
+        pre, file_offset = None, 0
+        if prefetch == "thread":
+            offset = int(getattr(owner, "offset", 0) or 0)
+            file_offset = offset - offset % mmap.ALLOCATIONGRANULARITY
+            fd = getattr(owner, "_mixmogam_fd", None)
+            close = False
+            if fd is None and getattr(owner, "filename", None):
+                try:
+                    fd, close = os.open(owner.filename, os.O_RDONLY), True
+                except OSError:
+                    fd = None
+            if fd is not None:
+                pre = Prefetcher(fd, close=close)
+        return cls(mm, base, int(data.strides[0]), int(data.shape[0]), window,
+                   prefetcher=pre, file_offset=file_offset)
 
     def _advise(self, flag, lo: int, hi: int) -> None:
         lo = max(lo - lo % _PAGE, 0)
@@ -106,9 +220,13 @@ class Readahead:
             self._behind = cut
         # keep about one window requested beyond the slice, re-advised in
         # half-window steps (the kernel reads it while this slice is decoded)
+        target = min(hi + self.window, self.end)
+        if self.prefetcher is not None:
+            fo = self.file_offset
+            self.prefetcher.request(fo + lo, fo + hi, fo + target)
+            return
         if self._ahead < hi:
             self._ahead = lo
-        target = min(hi + self.window, self.end)
         if target > self._ahead and (target - self._ahead >= self.window // 2 or self._ahead < hi):
             self._advise(mmap.MADV_WILLNEED, self._ahead, target)
             self._ahead = target
@@ -126,14 +244,17 @@ def stream_options(value) -> Optional[dict]:
         value = {"mode": value}
     if not isinstance(value, dict):
         raise ValueError("model_snps_stream must be True, False, 'on', 'off', 'auto' or a dict")
-    known = {"mode", "cache_dir", "threshold_bytes", "window_bytes", "verify"}
+    known = {"mode", "cache_dir", "threshold_bytes", "window_bytes", "verify", "prefetch"}
     unknown = set(value) - known
     if unknown:
         raise ValueError(f"unknown model_snps_stream keys: {sorted(unknown)}")
     out = {"mode": value.get("mode", "on"), "cache_dir": value.get("cache_dir"),
            "threshold_bytes": float(value.get("threshold_bytes", DEFAULT_THRESHOLD)),
            "window_bytes": int(value.get("window_bytes", DEFAULT_WINDOW)),
-           "verify": bool(value.get("verify", False))}
+           "verify": bool(value.get("verify", False)),
+           "prefetch": value.get("prefetch", "thread")}
+    if out["prefetch"] not in ("thread", "advise"):
+        raise ValueError("model_snps_stream prefetch must be 'thread' or 'advise'")
     if out["mode"] not in ("on", "off", "auto"):
         raise ValueError("model_snps_stream mode must be 'on', 'off' or 'auto'")
     if out["mode"] == "off":
@@ -233,8 +354,11 @@ def open_subset_cache(gt, idx: np.ndarray, mean: np.ndarray, sd: np.ndarray,
     info["extract_seconds"] = time.perf_counter() - t0
     info["cache_hit"] = hit
     mm = np.memmap(path, dtype=np.uint8, mode="r", offset=HEADER_BYTES, shape=(k, nb))
+    fd = os.open(path, os.O_RDONLY)  # for a prefetch thread; closed with the mapping
+    mm._mixmogam_fd = fd
+    weakref.finalize(mm, os.close, fd)
     if not keep:
-        os.unlink(path)  # the mapping keeps the data until it goes
+        os.unlink(path)  # the mapping (and fd) keep the data until they go
     return PackedCalls(mm, n), info
 
 

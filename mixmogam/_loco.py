@@ -118,6 +118,10 @@ class LocoGenotypes:
         ``readahead`` bytes while the current slice is decoded and to drop the
         mapping of the slices already passed, so resident file pages stay
         bounded by about one window whatever the number of variants.
+    prefetch : ``"advise"`` (kernel read-ahead advice only) or ``"thread"``
+        (a background thread reads the window into the page cache, so the
+        decode's page faults do not wait for the disk); see
+        :class:`mixmogam._stream.Prefetcher`. Values are unchanged either way.
     n_threads : positive integer, default 1
         Above one, prepare and decode independent variants with Numba
         workers. Preparation sums each variant's samples in order in every
@@ -129,7 +133,8 @@ class LocoGenotypes:
     def __init__(self, gt, groups, Q: Optional[np.ndarray] = None,
                  block: int = 4096, dtype=np.float32, n_threads: int = 1,
                  row_scale: Optional[np.ndarray] = None, n_groups: Optional[int] = None,
-                 moments: Optional[tuple] = None, readahead: Optional[int] = None):
+                 moments: Optional[tuple] = None, readahead: Optional[int] = None,
+                 prefetch: str = "advise"):
         if (isinstance(n_threads, (int, np.integer))
                 and not isinstance(n_threads, (bool, np.bool_)) and n_threads == 1):
             self.n_threads = 1
@@ -189,6 +194,7 @@ class LocoGenotypes:
         self.sd = np.zeros(self.m)
         self._projection = np.zeros((self.m, self.Q.shape[1]))
         self.zz = np.zeros(self.m)
+        self._readahead = None
         if moments is not None:
             mean, sd, projection, zz = (np.asarray(a, dtype=np.float64) for a in moments)
             if (mean.shape != (self.m,) or sd.shape != (self.m,) or zz.shape != (self.m,)
@@ -196,8 +202,7 @@ class LocoGenotypes:
                 raise ValueError("moments must hold (mean, sd, projection, zz) for every variant")
             self.mean[:], self.sd[:], self._projection[:], self.zz[:] = mean, sd, projection, zz
         else:
-            self._readahead = None
-            if readahead is not None and self.set_readahead(readahead):
+            if readahead is not None and self.set_readahead(readahead, prefetch):
                 self._readahead.begin()
             for idx, _ in self._blocks:
                 self._prepare(idx)
@@ -210,11 +215,10 @@ class LocoGenotypes:
         divisor = np.where(self.sd > 0, self.sd, 1.0)
         self._lut = np.zeros((self.m, 4), dtype=self.dtype)
         self._lut[:, :3] = (np.arange(3.0)[None, :] - self.mean[:, None]) / divisor[:, None]
-        self._readahead = None
-        if readahead is not None:
-            self.set_readahead(readahead)  # (again: preparation may have been skipped)
+        if readahead is not None and self._readahead is None:  # moments were given
+            self.set_readahead(readahead, prefetch)
 
-    def set_readahead(self, window: Optional[int]) -> bool:
+    def set_readahead(self, window: Optional[int], prefetch: str = "advise") -> bool:
         """Advise read-ahead/drop-behind on memory-mapped two-bit calls for
         sequential passes (see ``readahead``); None turns it off. Returns
         whether the storage is a mapping it applies to."""
@@ -224,7 +228,7 @@ class LocoGenotypes:
         G = self.gt.G
         if window is None or not isinstance(G, PackedCalls):
             return False
-        self._readahead = Readahead.for_array(G.data, int(window))
+        self._readahead = Readahead.for_array(G.data, int(window), prefetch=prefetch)
         return self._readahead is not None
 
     # ------------------------------------------------------------------

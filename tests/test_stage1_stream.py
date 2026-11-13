@@ -224,3 +224,60 @@ def test_cli_stream_flags(tmp_path):
     assert (tmp_path / "a.csv").read_bytes() == (tmp_path / "c.csv").read_bytes()
     assert main([*base, "--model-snps-stream", "on", "--out", str(tmp_path / "d.csv")]) != 0
     assert main([*base, *sel, "--model-snps-cache", str(cache), "--out", str(tmp_path / "e.csv")]) != 0
+
+
+@pytest.mark.parametrize("n_threads", [1, 2])
+def test_prefetch_thread_and_advice_bitwise(tmp_path, n_threads):
+    gt, y, idx = _panel(missing=0.02)
+    a = gwas(y, gt, method="hratt", model_snps=idx, n_threads=n_threads)
+    for mode in ("thread", "advise"):
+        b = gwas(y, gt, method="hratt", model_snps=idx, n_threads=n_threads,
+                 model_snps_stream={"mode": "on", "cache_dir": str(tmp_path), "prefetch": mode,
+                                    "window_bytes": 8192})
+        _same(a, b)
+    with pytest.raises(ValueError, match="prefetch"):
+        _stream.stream_options({"prefetch": "magic"})
+
+
+def test_prefetcher_reads_ahead_restarts_and_stops(tmp_path):
+    import gc
+    import threading
+    import time
+
+    path = tmp_path / "f.bin"
+    path.write_bytes(bytes(range(256)) * 4096)  # 1 MiB
+    fd = os.open(path, os.O_RDONLY)
+    p = _stream.Prefetcher(fd, chunk=65536, close=True)
+    p.request(0, 4096, 1 << 20)
+    for _ in range(200):
+        if p.stats["bytes"] >= (1 << 20) - 4096:
+            break
+        time.sleep(0.01)
+    assert p.stats["bytes"] >= (1 << 20) - 4096
+    p.request(0, 4096, 65536)          # a new pass: restarts at the consumer
+    time.sleep(0.05)
+    assert p.stats["restarts"] == 0
+    n0 = threading.active_count()
+    del p
+    gc.collect()
+    time.sleep(0.1)
+    assert threading.active_count() <= n0 - 1
+    with pytest.raises(OSError):
+        os.fstat(fd)                   # closed with the prefetcher
+
+
+def test_readahead_thread_on_temp_cache(tmp_path, monkeypatch):
+    gt, y, idx = _panel(n=4001, m=303, seed=2)
+    monkeypatch.setattr("tempfile.tempdir", str(tmp_path))
+    calls, info = _stream.open_subset_cache(gt, idx, np.zeros(idx.size), np.zeros(idx.size),
+                                            {"cache_dir": None})
+    assert not os.path.exists(info["path"])            # unlinked, still readable by fd
+    ra = _stream.Readahead.for_array(calls.data, 1 << 16, prefetch="thread")
+    assert ra.prefetcher is not None and ra.file_offset == _stream.HEADER_BYTES
+    ra.begin()
+    for s in range(0, idx.size, 9):
+        ra.at(np.arange(s, min(idx.size, s + 9)))
+    import time
+    time.sleep(0.1)
+    assert ra.prefetcher.stats["bytes"] > 0
+    assert np.array_equal(np.asarray(calls.data), gt.G.data[idx])
