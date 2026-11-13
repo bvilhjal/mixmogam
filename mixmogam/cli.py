@@ -119,6 +119,16 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--model-snps-stream-threshold", type=float, metavar="GB",
                       help="--model-snps-stream auto: stream when the subset needs more than GB "
                            "gigabytes (n k / 4 bytes; default 8 GiB)")
+    gwas.add_argument("--relatedness", metavar="FILE|auto",
+                      help="hratt: close relatives for the kappa_g correction: a KING / PLINK 2 .kin0 "
+                           "table, a GCTA sparse GRM prefix (.grm.sp + .grm.id), or 'auto' (KING-robust "
+                           "on common non-model variants, n <= 50,000)")
+    gwas.add_argument("--relatedness-threshold", type=float, metavar="PHI",
+                      help="--relatedness: keep pairs with KING kinship > PHI (default 0.025; 'auto' "
+                           "raises it to 4 x the KING noise SD)")
+    gwas.add_argument("--relatedness-correction", choices=("auto", "kappa", "lambda", "none", "gls"),
+                      help="hratt: kappa (default with --relatedness), lambda (default without), none, "
+                           "or gls (sparse family covariance, opt-in, unweighted quantitative)")
     gwas.add_argument("--thin-min-maf", type=float, help="--model-snps auto: MAF threshold (default 0.01)")
     gwas.add_argument("--thin-max-r2", type=float, help="--model-snps auto: r2 threshold (default 0.5)")
     gwas.add_argument("--thin-window-kb", type=float, help="--model-snps auto: window in kb (default 100)")
@@ -355,6 +365,12 @@ def _cmd_gwas(args) -> int:
           or args.model_snps_stream_threshold is not None):
         raise ValueError("--thin-*, --hm3-*, --model-snps-include, --no-model-snps-h2-check and "
                          "--model-snps-stream/-cache/-stream-threshold need --model-snps")
+    if args.relatedness is not None:
+        kwargs["relatedness"] = args.relatedness
+    if args.relatedness_threshold is not None:
+        kwargs["relatedness_threshold"] = args.relatedness_threshold
+    if args.relatedness_correction is not None:
+        kwargs["relatedness_correction"] = args.relatedness_correction
     result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
                   genome_build=args.genome_build, **kwargs)
     info = result.extra.get("model_snps")

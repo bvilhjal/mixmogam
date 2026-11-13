@@ -35,7 +35,12 @@ import numpy as np
 from scipy import linalg, sparse
 from scipy.sparse.csgraph import connected_components
 
-__all__ = ["Relatedness", "pedigree_relatedness", "king_relatedness", "as_relatedness"]
+__all__ = ["Relatedness", "pedigree_relatedness", "king_relatedness", "king_pairs",
+           "as_relatedness", "read_kin0", "read_grm_sparse", "align_pairs", "unrelated_set",
+           "covariate_factor", "resolve_relatedness"]
+
+import os
+import warnings
 
 # KING kinship boundaries (Manichaikul et al. 2010): 3rd degree from 2^-4.5.
 KING_THIRD_DEGREE = 0.0442
@@ -87,6 +92,14 @@ class Relatedness:
         u = self.upper.tocoo()
         k = u.data >= min_r
         return Relatedness(self.n, u.row[k], u.col[k], u.data[k], source=f"{self.source}>={min_r:g}")
+
+    def threshold_phi(self, phi: float) -> "Relatedness":
+        """Pairs with phi = r / 2 > ``phi``."""
+        u = self.upper.tocoo()
+        k = u.data / 2.0 > phi
+        if k.all():
+            return self
+        return Relatedness(self.n, u.row[k], u.col[k], u.data[k], source=self.source)
 
     def quad(self, W: np.ndarray) -> np.ndarray:
         """w' offdiag(r) w for each column of W (n, k)."""
@@ -258,7 +271,248 @@ def king_relatedness(gt, variants=None, *, min_phi: float = KING_THIRD_DEGREE,
 
 
 RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5000,
-                       "keep_lambda": False}
+                       "king_max_variants": 50_000, "king_min_maf": 0.05, "king_max_n": 50_000,
+                       "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
+                       "kappa_floor": 0.2}
+
+# KING-robust from a sample block against all samples, keeping pairs above a
+# threshold: O(block x n) memory, never the n x n matrix.
+
+
+def _king_indicators(G: np.ndarray):
+    """float32 het / hom-ref / hom-alt indicators of int8 calls (-1 missing)."""
+    return ((G == 1).astype(np.float32), (G == 0).astype(np.float32),
+            (G == 2).astype(np.float32))
+
+
+def _king_variants(gt, mean, exclude, min_maf: float, cap: int) -> np.ndarray:
+    """Common variants (MAF >= min_maf from the prepared means) not in
+    ``exclude``, at most ``cap`` evenly spread."""
+    half = np.asarray(mean, dtype=np.float64) / 2.0
+    ok = np.minimum(half, 1.0 - half) >= min_maf
+    if exclude is not None:
+        ok[np.asarray(exclude, dtype=np.int64)] = False
+    idx = np.flatnonzero(ok)
+    if idx.size > cap:
+        idx = idx[np.unique(np.linspace(0, idx.size - 1, cap).round().astype(np.int64))]
+    return idx
+
+
+def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int = 4096,
+               noise_pairs: int = 30_000, noise_sd_multiple: float = 4.0, rng=None) -> dict:
+    """KING-robust kinship (Manichaikul et al. 2010, between-family
+    estimator) of every sample pair on ``variants``, blockwise: sample rows
+    in blocks of ``block`` against all samples, variants in chunks of
+    ``chunk`` (memory O(block x n + n x chunk)). The noise floor is the
+    robust SD (1.4826 MAD) of phi over ``noise_pairs`` random pairs; the
+    kept pairs have phi > max(threshold, noise_sd_multiple x SD). Each row
+    block decodes the KING variants once: ceil(n / block) reads of them,
+    3 n^2 k flops (float32 GEMM; the symmetric half is not exploited).
+
+    Returns {"i", "j", "r" (= 2 phi), "threshold", "threshold_requested",
+    "noise_sd", "n_variants", "seconds"}. Missing calls count as neither
+    het nor hom (KING-robust ignores them; heterozygote counts per sample
+    use the called variants only)."""
+    import time
+
+    t0 = time.perf_counter()
+    rng = np.random.default_rng(0) if rng is None else rng
+    n = gt.n_samples
+    idx = np.asarray(variants, dtype=np.int64)
+    if idx.size == 0:
+        raise ValueError("KING: no common variants to compute kinship on")
+    chunks = [idx[c:c + chunk] for c in range(0, idx.size, chunk)]
+
+    def calls(take):
+        return np.asarray(gt.G[:, take]).astype(np.int8, copy=False)
+
+    # Random pairs for the noise floor, read off the block products (no
+    # extra pass). Heterozygote counts complete during the first row block,
+    # whose chunk sweep decodes every sample. Pairs above the requested
+    # threshold are kept; the floor-raised threshold filters them at the end.
+    k = int(noise_pairs)
+    ra = rng.integers(0, n, k)
+    rb = rng.integers(0, n, k)
+    keep = ra != rb
+    ra, rb = ra[keep], rb[keep]
+    phi_r = np.empty(ra.size)
+    nhet = np.zeros(n)
+    I, J, V = [], [], []
+    for s in range(0, n, block):
+        e = min(n, s + block)
+        hh = np.zeros((e - s, n), dtype=np.float64)
+        opp = np.zeros((e - s, n), dtype=np.float64)
+        for take in chunks:
+            H, A, B = _king_indicators(calls(take))
+            if s == 0:
+                nhet += H.sum(1)
+            hh += H[s:e] @ H.T
+            opp += A[s:e] @ B.T + B[s:e] @ A.T
+        if s == 0:
+            nhet = np.maximum(nhet, 1.0)
+        nm = np.minimum(nhet[s:e, None], nhet[None, :])
+        phi = (hh - 2 * opp) / (2 * nm) + 0.5 - (nhet[s:e, None] + nhet[None, :]) / (4 * nm)
+        inb = (ra >= s) & (ra < e)
+        phi_r[inb] = phi[ra[inb] - s, rb[inb]]
+        r, c = np.nonzero(phi > threshold)
+        r = r + s
+        up = c > r
+        I.append(r[up]); J.append(c[up]); V.append(phi[r[up] - s, c[up]])
+    sd = float(1.4826 * np.median(np.abs(phi_r - np.median(phi_r)))) if phi_r.size else 0.0
+    thr = float(max(threshold, noise_sd_multiple * sd))
+    I, J, V = np.concatenate(I), np.concatenate(J), np.concatenate(V)
+    ok = V > thr
+    I, J, V = I[ok], J[ok], V[ok]
+    return {"i": I, "j": J, "r": 2.0 * V,
+            "threshold": thr, "threshold_requested": float(threshold), "noise_sd": sd,
+            "n_variants": int(idx.size), "seconds": time.perf_counter() - t0}
+
+
+def align_pairs(id1, id2, r, sample_ids, *, source: str = "pairs") -> tuple:
+    """Map ID pairs to row indices of ``sample_ids``. Pairs with a sample
+    outside the analysis set are dropped and counted; a pair listed twice
+    (either order) is an error. Returns (Relatedness, n_dropped)."""
+    pos = {str(s): i for i, s in enumerate(np.asarray(sample_ids).astype(str))}
+    id1 = np.asarray(id1).astype(str)
+    id2 = np.asarray(id2).astype(str)
+    a = np.array([pos.get(x, -1) for x in id1], dtype=np.int64)
+    b = np.array([pos.get(x, -1) for x in id2], dtype=np.int64)
+    ok = (a >= 0) & (b >= 0) & (a != b)
+    dropped = int(np.count_nonzero(~ok))
+    a, b, r = a[ok], b[ok], np.asarray(r, dtype=np.float64)[ok]
+    lo, hi = np.minimum(a, b), np.maximum(a, b)
+    key = lo * len(pos) + hi
+    if np.unique(key).size != key.size:
+        raise ValueError(f"{source}: a sample pair is listed more than once")
+    return Relatedness(len(pos), lo, hi, r, source=source), dropped
+
+
+def read_kin0(path: str, sample_ids) -> tuple:
+    """A KING ``.kin0`` / ``.kin`` or PLINK 2 ``.kin0`` table (header with
+    ID1/IID1, ID2/IID2 and Kinship/KINSHIP); relatedness 2 x Kinship.
+    Returns (Relatedness, n_dropped)."""
+    with open(path) as fh:
+        head = fh.readline().lstrip("#").split()
+        rows = [ln.split() for ln in fh if ln.strip()]
+    up = [h.upper() for h in head]
+
+    def col(*names):
+        for nm in names:
+            if nm in up:
+                return up.index(nm)
+        raise ValueError(f"{path}: no column {' / '.join(names)} in the header")
+
+    c1, c2, ck = col("IID1", "ID1"), col("IID2", "ID2"), col("KINSHIP")
+    if not rows:
+        return Relatedness(len(sample_ids), [], [], [], source=os.path.basename(path)), 0
+    arr = np.array(rows, dtype=object)
+    return align_pairs(arr[:, c1], arr[:, c2], 2.0 * arr[:, ck].astype(float), sample_ids,
+                       source=os.path.basename(path))
+
+
+def read_grm_sparse(prefix: str, sample_ids) -> tuple:
+    """A GCTA sparse GRM (``prefix.grm.sp``: 0-based index pairs into
+    ``prefix.grm.id`` and the relatedness; diagonal entries are ignored).
+    Returns (Relatedness, n_dropped)."""
+    if prefix.endswith(".grm.sp"):
+        prefix = prefix[:-len(".grm.sp")]
+    ids = np.array([ln.split()[1] for ln in open(prefix + ".grm.id") if ln.strip()])
+    sp = np.loadtxt(prefix + ".grm.sp", ndmin=2)
+    if sp.size == 0:
+        return Relatedness(len(sample_ids), [], [], [], source=os.path.basename(prefix)), 0
+    a, b = sp[:, 0].astype(np.int64), sp[:, 1].astype(np.int64)
+    off = a != b
+    return align_pairs(ids[a[off]], ids[b[off]], sp[off, 2], sample_ids,
+                       source=os.path.basename(prefix) + ".grm.sp")
+
+
+def unrelated_set(rel: Relatedness) -> np.ndarray:
+    """A maximal unrelated set: greedily drop the sample in the most
+    remaining pairs until no pair is left (ties: the higher index).
+    Returns the kept row indices, sorted."""
+    K = (rel.Koff != 0).astype(np.int8).tocsr()
+    deg = np.diff(K.indptr).astype(np.int64)
+    alive = np.ones(rel.n, dtype=bool)
+    import heapq
+
+    heap = [(-d, -i) for i, d in enumerate(deg) if d > 0]
+    heapq.heapify(heap)
+    while heap:
+        d, i = heapq.heappop(heap)
+        d, i = -d, -i
+        if not alive[i] or deg[i] == 0:
+            continue
+        if d != deg[i]:
+            heapq.heappush(heap, (-deg[i], -i))
+            continue
+        alive[i] = False
+        nb = K.indices[K.indptr[i]:K.indptr[i + 1]]
+        nb = nb[alive[nb]]
+        deg[nb] -= 1
+        deg[i] = 0
+    return np.flatnonzero(alive)
+
+
+def covariate_factor(rel: Relatedness, Q: np.ndarray, n_eff: float) -> tuple:
+    """c_X = n_eff / (n - tr(Q' Phi Q)), Phi = I + offdiag(r), Q the
+    orthonormal covariate basis: tr(Q'PhiQ) = q + sum_{i != k} r_ik (QQ')_ik.
+    Returns (c_X, tr(Q' Phi Q))."""
+    q = Q.shape[1]
+    u = rel.upper.tocoo()
+    tr = float(q + 2.0 * np.sum(u.data * np.einsum("ij,ij->i", Q[u.row], Q[u.col]))) if q else 0.0
+    den = rel.n - tr
+    return (float(n_eff / den) if den > 0 else 1.0), tr
+
+
+def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options: dict,
+                        rng=None) -> tuple:
+    """The analysis' Relatedness from ``relatedness=`` (see :func:`hratt`),
+    with its record. Precedence is the caller's: a pedigree / register
+    Relatedness or pairs as given; a KING ``.kin0`` or GCTA ``.grm.sp`` path;
+    ``"auto"``: KING-robust on common non-model variants (all variants
+    without a subset), capped and noise-floor guarded."""
+    n = gt.n_samples
+    info = {"dropped_pairs": 0}
+    if isinstance(spec, str) and spec == "auto":
+        if n > options["king_max_n"]:
+            raise ValueError(
+                f"relatedness='auto' computes KING-robust kinship over all {n:,}^2/2 pairs; "
+                f"above {options['king_max_n']:,} samples pass external pairs instead (KING "
+                "--related, PLINK 2 --make-king-table, or GCTA --make-bK-sparse) as a "
+                ".kin0 / .grm.sp path or (i, j, r) arrays")
+        idx = _king_variants(gt, mean, model_idx, options["king_min_maf"],
+                             options["king_max_variants"])
+        on = "non-model variants" if model_idx is not None else "all variants"
+        if idx.size < 1000 and model_idx is not None:
+            warnings.warn(f"relatedness='auto': only {idx.size} common non-model variants; "
+                          "KING on few variants has a high noise floor", RuntimeWarning,
+                          stacklevel=3)
+        res = king_pairs(gt, idx, threshold, noise_pairs=options["king_noise_pairs"],
+                         noise_sd_multiple=options["king_noise_sd_multiple"], rng=rng)
+        if res["threshold"] > threshold:
+            warnings.warn(
+                f"relatedness='auto': the KING noise SD on {res['n_variants']:,} variants is "
+                f"{res['noise_sd']:.4f}, so pairs with phi <= {res['threshold']:.4f} "
+                f"({options['king_noise_sd_multiple']:g} SD) are dropped instead of <= "
+                f"{threshold:g}; pass pedigree or external KING pairs for distant relatives",
+                RuntimeWarning, stacklevel=3)
+        rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
+        info.update({"source": "king-auto", "king": {k: res[k] for k in (
+            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds")},
+            "king_on": on})
+        return rel, info
+    if isinstance(spec, (str, os.PathLike)):
+        path = os.fspath(spec)
+        if path.endswith(".grm.sp") or os.path.exists(path + ".grm.sp"):
+            rel, dropped = read_grm_sparse(path, gt.sample_ids)
+        else:
+            rel, dropped = read_kin0(path, gt.sample_ids)
+        rel = rel.threshold_phi(threshold)
+        info.update({"source": rel.source, "dropped_pairs": dropped})
+        return rel, info
+    rel = as_relatedness(spec, n)
+    info["source"] = rel.source or "pairs"
+    return rel, info
 
 
 def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact",
