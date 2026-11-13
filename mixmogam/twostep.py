@@ -1245,6 +1245,33 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     keep the LOCO rule (scores for chromosome c never contain them when
     they lie on c).
 
+    ``relatedness`` (Spec A of the SG's relatedness specs) corrects for
+    close relatives exactly instead of through lambda. For a null variant
+    in LOCO group g the statistic's expectation given the residual a_g is
+    kappa_g = a_g' Phi a_g / a_g'a_g (Phi = I + 2 x kinship off the
+    diagonal), so ``relatedness_correction="kappa"`` (the default when
+    ``relatedness`` is given) reports U / (kappa_g c_X), with c_X = n_eff /
+    (n - tr(Q' Phi Q)) for the covariates Q; weighted tests multiply their
+    retrospective variance by kappa_g, binary tests that of w (y - mu_g),
+    and the saddlepoint takes lambda_g = 1 / kappa_g as its per-group
+    variance ratio. lambda is then 1. ``relatedness`` takes (i, j, r = 2
+    phi) arrays or a :class:`mixmogam._relatedness.Relatedness` (e.g. a
+    pedigree's, :func:`~mixmogam._relatedness.pedigree_relatedness`: no
+    genotype pass; preferred), a KING / PLINK 2 ``.kin0`` path or a GCTA
+    ``.grm.sp`` prefix (IDs aligned to ``gt.sample_ids``; pairs outside are
+    dropped and counted; files keep phi > ``relatedness_threshold``), or
+    ``"auto"``: KING-robust on at most 50,000 common (MAF >= 0.05) variants
+    that are not model SNPs (model SNPs bias kappa_g down through the fit),
+    for n <= 50,000 only, keeping phi > max(``relatedness_threshold``, 4 x
+    the KING noise SD from random pairs). The structure test is repeated on
+    a maximal unrelated set, which then decides the LOCO refit and the
+    ancestry-PC warning (relatives alone trip the all-sample test; both are
+    in ``extra["structure"]``). ``"gls"`` (opt-in, unweighted quantitative)
+    whitens the residual with a sparse family covariance instead;
+    ``"lambda"`` is the behaviour without ``relatedness``, ``"none"`` no
+    correction. ``extra["relatedness"]`` records the pairs, kappa_g, c_X
+    and the KING settings.
+
     A subset's stage 1 sees only the polygenic signal its SNPs tag. In
     simulated nuclear families (n = 2,000) the median null chi-square
     (lambda_GC) rose from 1.016 with every variant to 1.040, 1.101 and

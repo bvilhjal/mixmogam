@@ -3,9 +3,7 @@ import warnings
 
 import numpy as np
 import pytest
-from scipy import sparse
 
-from mixmogam import Genotypes
 from mixmogam._relatedness import (Relatedness, align_pairs, covariate_factor, king_pairs,
                                    read_grm_sparse, read_kin0, unrelated_set)
 from mixmogam.twostep import hratt

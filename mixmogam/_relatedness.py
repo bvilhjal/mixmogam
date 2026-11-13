@@ -29,7 +29,6 @@ over random calibration variants (GRAMMAR-Gamma style; Svishcheva et al.
 
 from __future__ import annotations
 
-from typing import Optional
 
 import numpy as np
 from scipy import linalg, sparse
