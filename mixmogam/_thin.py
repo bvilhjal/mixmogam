@@ -281,7 +281,8 @@ def resolve_model_snps(gt, model_snps, maf=None, options: Optional[dict] = None)
                 raise ValueError(f"unknown model_snps_options: {sorted(unknown)}")
             hopt = {**HM3_OPTIONS, **{k: v for k, v in options.items() if k in HM3_OPTIONS}}
             idx, rep = match_hm3(gt, build=hopt["build"], map=hopt["map"], maf=maf,
-                                 min_maf=hopt["min_maf"], drop_ambiguous=hopt["drop_ambiguous"])
+                                 min_maf=hopt["min_maf"], drop_ambiguous=hopt["drop_ambiguous"],
+                                 min_chrom_frac=hopt["min_frac"])
             text = format_report(rep)
             settings = {"hm3": rep, "hm3_options": hopt, "log": text}
             low = (idx.size < hopt["min_frac"] * rep["n_hm3_on_panel_chromosomes"]

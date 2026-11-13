@@ -8,7 +8,7 @@ import numpy as np
 import pytest
 
 from mixmogam import twostep
-from mixmogam._hm3 import (DEFAULT_HM3_MAP, HM3_MAPS, build_hm3_map, load_hm3, match_hm3,
+from mixmogam._hm3 import (DEFAULT_HM3_MAP, HM3_MAPS, build_hm3_map, format_report, load_hm3, match_hm3,
                            normalize_chromosome, resolve_hm3_map)
 from mixmogam._thin import _ld_sample_set, resolve_include, resolve_model_snps, thin_variants
 from mixmogam.association import gwas
@@ -348,22 +348,42 @@ def _kinds(r):
     return [w["kind"] for w in r.extra["model_snps"]["warnings"]]
 
 
-def test_h2_warning_fires_and_not():
+def test_h2_ratio_is_a_note_at_the_full_panel_alpha(monkeypatch):
+    """A low HE h2 ratio is informational (notes, no warning), and both HE
+    fits use the alpha HE selects on the full panel (SG HM3 recheck)."""
     G, gt = ld_panel(800, 1200, rho=0.0, seed=21)      # no LD: a subset tags only itself
     rng = np.random.default_rng(1)
     g = _std(G.astype(float)) @ rng.normal(size=1200)
     y = g / g.std() + rng.standard_normal(800)
-    with pytest.warns(RuntimeWarning, match="tag .* by HE"):
+    calls = []
+    orig = twostep._he_alpha
+
+    def spy(st, f, alphas, *a, **k):
+        calls.append((st.lg.m, list(alphas)))
+        out = orig(st, f, alphas, *a, **k)
+        calls[-1] += (out["alpha"],)
+        return out
+
+    with warnings.catch_warnings(record=True) as wl:
+        warnings.simplefilter("always")
+        monkeypatch.setattr(twostep, "_he_alpha", spy)
         r = gwas(y, gt, method="hratt", model_snps=np.arange(0, 1200, 20))
+        monkeypatch.setattr(twostep, "_he_alpha", orig)
+    assert not any("by HE" in str(w.message) for w in wl)
     c = r.extra["model_snps"]["h2_check"]
-    assert "h2" in _kinds(r) and c["ratio"] < 0.85 and c["h2_he_full"] > 0.2
+    assert c["ratio"] < 0.85 and c["h2_he_full"] > 0.2 and "h2" not in _kinds(r)
+    assert [n["kind"] for n in r.extra["model_snps"]["notes"]] == ["h2"]
+    # the last two _he_alpha calls are the check: full panel over the grid, then the subset at its alpha
+    (m_full, grid, a_full), (m_sub, one, _) = calls[-2], calls[-1]
+    assert m_full == 1200 and grid == list(twostep.HRATT_ALPHAS) and m_sub == 60
+    assert one == [a_full] and c["alpha"] == a_full and c["alpha_rule"] == "full-panel HE"
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         r2 = gwas(y, gt, method="hratt", model_snps=np.arange(0, 1200, 20), model_snps_h2_check=False)
         r3 = gwas(y, gt, method="hratt", model_snps=np.arange(1150))
-    assert "h2" not in _kinds(r2) and "h2_check" not in r2.extra["model_snps"]
+    assert "h2_check" not in r2.extra["model_snps"] and not r2.extra["model_snps"]["notes"]
     assert np.array_equal(r.p, r2.p)                    # the check changes no result
-    assert "h2" not in _kinds(r3) and r3.extra["model_snps"]["h2_check"]["ratio"] > 0.85
+    assert not r3.extra["model_snps"]["notes"] and r3.extra["model_snps"]["h2_check"]["ratio"] > 0.85
 
 
 def _sibs(n_pairs, m, seed):
@@ -378,30 +398,87 @@ def _sibs(n_pairs, m, seed):
     return G, Genotypes(G, chromosome=gt.chromosome, position=gt.position, variant_ids=gt.variant_ids)
 
 
-def test_related_warning_fires_and_not(monkeypatch):
+def test_related_warning_gated_on_predicted_inflation(monkeypatch):
     G, gt = _sibs(400, 1200, 31)
     rng = np.random.default_rng(2)
     g = _std(G[:, rng.choice(1200, 50, replace=False)].astype(float)) @ rng.normal(size=50)
     y = g / g.std() + rng.standard_normal(G.shape[0])
     sub = np.arange(0, 1200, 4)
-    with pytest.warns(RuntimeWarning, match="relatedness or residual structure"):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
         r = gwas(y, gt, method="hratt", model_snps=sub)
     sig = r.extra["model_snps"]["relatedness_signal"]
-    assert sig["flag"] and sig["structure_excess"] > 0.05 and "related" in _kinds(r)
-    assert sig["predicted_inflation"] >= 0
-    # unrelated samples: no flag
+    pred = sig["predicted_inflation"]
+    assert sig["flag"] and sig["structure_excess"] > 0.05 and pred > 0
+    assert ("related" in _kinds(r)) == (pred > twostep.PREDICTED_INFLATION_WARN)
+    # the gate is the predicted inflation, not the flag or the subset size
+    monkeypatch.setattr(twostep, "PREDICTED_INFLATION_WARN", pred / 2)
+    with pytest.warns(RuntimeWarning, match="predicted rise of the null mean chi-square"):
+        r1 = gwas(y, gt, method="hratt", model_snps=sub)
+    w = [w_ for w_ in r1.extra["model_snps"]["warnings"] if w_["kind"] == "related"][0]
+    assert w["predicted_inflation"] == pred
+    monkeypatch.setattr(twostep, "PREDICTED_INFLATION_WARN", pred * 2)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r2 = gwas(y, gt, method="hratt", model_snps=sub)
+    assert r2.extra["model_snps"]["relatedness_signal"]["flag"] and "related" not in _kinds(r2)
+    # without the h2 check there is no prediction and no warning; the flag stays recorded
+    monkeypatch.setattr(twostep, "PREDICTED_INFLATION_WARN", 0.0)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r3 = gwas(y, gt, method="hratt", model_snps=sub, model_snps_h2_check=False)
+    sig3 = r3.extra["model_snps"]["relatedness_signal"]
+    assert sig3["flag"] and "predicted_inflation" not in sig3 and "related" not in _kinds(r3)
+    # unrelated samples: no flag, no warning
     G0, gt0 = ld_panel(800, 1200, seed=31)
     y0 = rng.standard_normal(800)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         r0 = gwas(y0, gt0, method="hratt", model_snps=sub)
-    assert not r0.extra["model_snps"]["relatedness_signal"]["flag"] and "related" not in _kinds(r0)
-    # related but a large subset: no warning
-    monkeypatch.setattr(twostep, "SMALL_SUBSET", (0.2, 100))
+    assert not r0.extra["model_snps"]["relatedness_signal"]["flag"]
+
+
+def test_structure_test_runs_on_the_panel(monkeypatch):
+    """The structure test reads the panel stage 2 tests, not the subset."""
+    G, gt = ld_panel(300, 900, seed=5)
+    y = np.random.default_rng(0).standard_normal(300)
+    seen = []
+    orig = twostep.structure_test
+
+    def spy(st, *a, **k):
+        seen.append(st.lg.m)
+        return orig(st, *a, **k)
+
+    monkeypatch.setattr(twostep, "structure_test", spy)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        r1 = gwas(y, gt, method="hratt", model_snps=sub)
-    assert r1.extra["model_snps"]["relatedness_signal"]["flag"] and "related" not in _kinds(r1)
+        r = gwas(y, gt, method="hratt", model_snps=np.arange(0, 900, 6))
+        gwas(y, gt, method="hratt")
+    assert seen == [900, 900] and r.extra["model_snps"]["structure_test_on"] == "panel"
+
+
+def test_per_chromosome_match_fraction_warning(hm3map):
+    hm = load_hm3(hm3map)
+    _, gt, y = _hm3_trait_panel(hm)
+    idx, rep = match_hm3(gt, build="GRCh37", map=hm3map, min_maf=0)
+    assert rep["low_chromosomes"] == [] and set(rep["per_chromosome"]) == {1, 2, 3}
+    # chromosome 2 under other IDs and shifted positions: it no longer matches
+    chrom = np.asarray(gt.chromosome).astype(int)
+    on2 = chrom == 2
+    vid = np.asarray(gt.variant_ids).astype(object)
+    vid[on2] = [f"v{j}" for j in range(on2.sum())]
+    pos = np.asarray(gt.position).copy()
+    pos[on2] += 7
+    gt2 = Genotypes(gt.G, chromosome=gt.chromosome, position=pos, variant_ids=vid.astype(str))
+    idx2, rep2 = match_hm3(gt2, build="GRCh37", map=hm3map, min_maf=0)
+    assert rep2["low_chromosomes"] == [2] and rep2["per_chromosome"][2]["matched"] == 0
+    assert "WARNING: matched under 50% of the map on chr2" in format_report(rep2)
+    opts = {"map": hm3map, "min_snps": 100, "min_frac": 0.5, "build": "GRCh37"}
+    with pytest.warns(RuntimeWarning, match="chromosome\\(s\\) chr2 0/"):
+        r = gwas(y, gt2, method="hratt", model_snps="hm3", model_snps_options=opts)
+    assert "hm3_chromosome" in _kinds(r)
+    assert [w["chromosomes"] for w in r.extra["model_snps"]["warnings"]
+            if w["kind"] == "hm3_chromosome"] == [[2]]
 
 
 def test_auto_keeps_most_warning():

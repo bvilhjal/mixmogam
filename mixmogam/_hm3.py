@@ -187,6 +187,7 @@ def _position_hits(hm, build, chrom, pos, valid):
 
 
 def match_hm3(gt, *, build: str = "auto", map=None, maf=None, min_maf: float = 0.01,
+              min_chrom_frac: float = 0.5,
               drop_ambiguous: bool = False) -> tuple:
     """(indices, report) of the panel's HapMap3 variants.
 
@@ -203,6 +204,9 @@ def match_hm3(gt, *, build: str = "auto", map=None, maf=None, min_maf: float = 0
     variant (duplicates, split multi-allelic sites with the same bases)
     keep the first. Variants with MAF at or below ``min_maf`` (``maf``
     over all samples; computed when None and ``min_maf`` > 0) are dropped.
+    ``report["per_chromosome"]`` gives map, panel and matched counts per
+    autosome the panel has, and ``report["low_chromosomes"]`` those matched
+    below ``min_chrom_frac`` of their map count (HRATT warns about them).
     """
     hm = load_hm3(map)
     m = gt.n_variants
@@ -336,6 +340,22 @@ def match_hm3(gt, *, build: str = "auto", map=None, maf=None, min_maf: float = 0
     report["frac_hm3"] = float(cand.size / n_hm) if n_hm else 0.0
     denom = report["n_hm3_on_panel_chromosomes"]
     report["frac_hm3_panel_chromosomes"] = float(cand.size / denom) if denom else 0.0
+    # Per autosome: the global fractions cannot see one chromosome lost (e.g.
+    # one file on another build or naming scheme).
+    per, low = {}, []
+    matched_chr = chrom[cand]
+    for c in range(1, 23):
+        n_map = int(np.count_nonzero(hm["chr"] == c))
+        n_pan = int(np.count_nonzero(chrom == c))
+        if not n_map or not n_pan:
+            continue
+        got = int(np.count_nonzero(matched_chr == c))
+        per[c] = {"map": n_map, "panel": n_pan, "matched": got, "frac": got / n_map}
+        if got < min_chrom_frac * n_map:
+            low.append(c)
+    report["per_chromosome"] = per
+    report["min_chrom_frac"] = float(min_chrom_frac)
+    report["low_chromosomes"] = low
     return np.sort(cand).astype(np.int64), report
 
 
@@ -356,6 +376,12 @@ def format_report(rep: dict) -> str:
         lines.append("  dropped: none")
     if rep["panel_non_autosomal"]:
         lines.append(f"  panel variants on X/Y/MT (not in the map): {rep['panel_non_autosomal']:,}")
+    if rep.get("low_chromosomes"):
+        per = rep["per_chromosome"]
+        lines.append(f"  WARNING: matched under {100 * rep['min_chrom_frac']:.0f}% of the map on "
+                     + ", ".join(f"chr{c} ({per[c]['matched']:,}/{per[c]['map']:,})"
+                                 for c in rep["low_chromosomes"])
+                     + " although the panel has variants there")
     if rep["panel_chromosomes_unrecognized"]:
         lines.append(f"  panel variants on unrecognized chromosomes: {rep['panel_chromosomes_unrecognized']:,}")
     return "\n".join(lines)

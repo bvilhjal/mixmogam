@@ -1225,19 +1225,29 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     1.237 with subsets of 50%, 20% and 5% of the variants: the LOCO scores
     removed less of the relatives' shared polygenic signal (their slope
     stayed calibrated). So ``extra["model_snps"]["warnings"]`` (also
-    issued as RuntimeWarnings) records: (a) the subset's randomized-HE h2
-    below 0.85 times the same estimate on every variant (one extra pass
-    over the panel and one over the subset with ``he_probes`` probes;
-    ``model_snps_h2_check=False`` skips it); (b) relatedness or residual
-    structure (structure-test excess above 0.05 with z > 3; for relatives
-    the excess is about sum_{j != i} K_ij^2 averaged over samples, e.g.
-    0.25 times the fraction of samples with one full sibling, so distant
-    relatives alone rarely reach it) together with a small subset (below
-    20% of the variants or 500,000); the null mean chi-square then rises by
-    about excess x (h2 missed by the subset), reported as
-    ``predicted_inflation`` when the h2 check ran; (c)
+    issued as RuntimeWarnings) records: (a) a predicted rise of the null
+    mean chi-square above 0.02, the structure-test excess (for relatives
+    about sum_{j != i} K_ij^2 averaged over samples, e.g. 0.25 times the
+    fraction of samples with one full sibling) times the h2 the subset
+    misses by randomized HE (``predicted_inflation``; the h2 check costs one
+    extra pass over the panel and one over the subset with ``he_probes``
+    probes, and ``model_snps_h2_check=False`` skips it and this warning);
+    (b) with ``model_snps="hm3"``, an autosome on which matching kept under
+    half of the map's variants although the panel has variants there; (c)
     ``"auto"`` keeping more than 80% of the variants (the subset copy then
-    costs memory for little time).
+    costs memory for little time). Informational, in
+    ``extra["model_snps"]["notes"]``: an HE h2 ratio (subset / every
+    variant) below 0.85. Both HE fits use the alpha that HE selects on the
+    full panel (``h2_check["alpha"]``). The ratio measures tagging, not
+    inflation risk: HapMap3-like sets sit near 0.7 and are calibrated in
+    unrelated samples. ``relatedness_signal["flag"]`` (excess > 0.05 with
+    z > 3) is recorded as a relatedness-detector trigger, not a warning.
+    The structure test (and so lambda calibration and the LOCO refit) is
+    run on every variant, not on the subset. HapMap3+ (the bundled
+    default) roughly halves the inflation of HapMap3 in dense families and
+    40% full-sib samples (simulated, n = 2,000), but does not remove it
+    (nuclear families with low-frequency causal variants: +0.044 in the null
+    mean chi-square); there a 20% 'auto' subset or every variant is safer.
 
     ``model_snps_stream`` keeps the subset on disk instead of in RAM (n k / 4
     bytes, 180 GB for HapMap3+ at n = 5e5): one pass writes the subset's
@@ -1379,7 +1389,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         raise ValueError("phenotype has no residual variation after covariate adjustment")
     ys = st.y_p / sy
 
-    struct = structure_test(st, structure_snps, rng)
+    # The structure test reads structure_snps rows of the panel that stage 2
+    # tests (every variant), not of a model-SNP subset: on HapMap3-like
+    # subsets it flagged "strong structure" that the full panel does not
+    # show, and the resulting lambda inflated every statistic (SG HM3
+    # recheck). Calibration then runs on the subset when this test is strong.
+    struct = structure_test(st_test, structure_snps, rng)
     if struct["strong"] and (weighted or trait == "binary"):
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
@@ -1392,7 +1407,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if model_info is not None:
         model_info["warnings"] = _model_snp_warnings(
             st, st_test, struct, vc["alpha"], model_info, he_probes, random_state,
-            model_snps_h2_check, design)
+            model_snps_h2_check, design, alphas=alphas)
+        model_info["structure_test_on"] = "panel"
+
     h2j = w * h2 / float(np.sum(w))
     s2e = max(1.0 - h2, 1e-3)
 
@@ -1571,18 +1588,32 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
     return replace(st, lg=lg), info
 
 
-H2_RATIO_WARN = 0.85
+H2_RATIO_NOTE = 0.85
 RELATED_EXCESS = 0.05
-SMALL_SUBSET = (0.2, 500_000)
+PREDICTED_INFLATION_WARN = 0.02
+CHROM_MATCH_WARN = 0.5
 AUTO_KEEP_WARN = 0.8
 
 
 def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float, info: dict,
-                        he_probes: int, random_state, h2_check: bool, design) -> list:
-    """Warnings (a)-(c) of a model-SNP subset (see :func:`hratt`); each is
-    issued as a RuntimeWarning and returned as a dict. The h2 check uses its
-    own random stream, so it changes no other result."""
+                        he_probes: int, random_state, h2_check: bool, design,
+                        alphas=HRATT_ALPHAS) -> list:
+    """Warnings of a model-SNP subset (see :func:`hratt`); each is issued as
+    a RuntimeWarning and returned as a dict. Informational findings go to
+    ``info["notes"]`` without a warning. The h2 check uses its own random
+    stream, so it changes no other result.
+
+    The h2 check picks alpha by randomized HE on the full panel (one pass
+    serves every alpha) and evaluates the subset at that alpha, so both
+    estimates share one weighting (a subset picks more negative alphas,
+    which made ratios incomparable across maps). The ratio itself measures
+    tagging, not inflation risk: below 0.85 it is a note. The calibration
+    warning is driven by the predicted inflation (structure-test excess x h2
+    missed by the subset) above 0.02; excess > 0.05 with z > 3 is recorded
+    as the relatedness-detector trigger only.
+    """
     out = []
+    notes = info.setdefault("notes", [])
     m, k = st_full.lg.m, st.lg.m
     frac = k / m
 
@@ -1590,45 +1621,69 @@ def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float,
         warnings.warn(f"model_snps: {text}", RuntimeWarning, stacklevel=4)
         out.append({"kind": kind, "message": text, **fields})
 
+    hm3 = (info.get("options") or {}).get("hm3") or {}
+    low = hm3.get("low_chromosomes") if str(info["source"]) == "hm3" else None
+    if low:
+        per = hm3.get("per_chromosome", {})
+        detail = ", ".join(f"chr{c} {per[c]['matched']:,}/{per[c]['map']:,}" for c in low)
+        emit("hm3_chromosome", f"HapMap3 matching kept under {100 * CHROM_MATCH_WARN:.0f}% of the "
+                               f"map's variants on chromosome(s) {detail} (matched/map) although the "
+                               "panel has variants there; a chromosome with few model SNPs "
+                               "leaves its relatives' polygenic signal in the LOCO scores. "
+                               "Check that chromosome's build, naming and variant IDs.",
+             chromosomes=list(low))
     if h2_check and k < m:
         seed = 0 if random_state is None else random_state
-        est = {}
-        for name, s_ in (("subset", st), ("full", st_full)):
-            f = np.clip(s_.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+        est, alpha_full = {}, float("nan")
+        try:
+            f = np.clip(st_full.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+            grid = list(alphas)
+            he = _he_alpha(st_full, f, grid, he_probes, np.random.default_rng([seed, 0x6832]),
+                           design_weights=design)
+            alpha_full = float(he["alpha"])
+            est["full"] = float(np.asarray(he["h2_he"])[grid.index(he["alpha"])])
+        except ValueError:
+            est["full"] = float("nan")
+        if np.isfinite(alpha_full):
             try:
-                he = _he_alpha(s_, f, [alpha], he_probes, np.random.default_rng([seed, 0x6832]),
-                               design_weights=design)
-                est[name] = float(he["h2_he"][0])
+                f = np.clip(st.lg.mean / 2.0, 1e-6, 1 - 1e-6)
+                he = _he_alpha(st, f, [alpha_full], he_probes,
+                               np.random.default_rng([seed, 0x6832]), design_weights=design)
+                est["subset"] = float(he["h2_he"][0])
             except ValueError:
-                est[name] = float("nan")
+                est["subset"] = float("nan")
+        else:
+            est["subset"] = float("nan")
         ratio = est["subset"] / est["full"] if est["full"] > 0 else float("nan")
         info["h2_check"] = {"h2_he_subset": est["subset"], "h2_he_full": est["full"],
-                            "ratio": ratio, "alpha": float(alpha)}
-        if np.isfinite(ratio) and est["full"] > 0.05 and ratio < H2_RATIO_WARN:
-            emit("h2", f"the {k:,} model SNPs tag {est['subset']:.3f} of the trait by HE against "
-                       f"{est['full']:.3f} on all {m:,} variants (ratio {ratio:.2f} < "
-                       f"{H2_RATIO_WARN}); stage 1 misses polygenic signal, and with related "
-                       "samples the tests are inflated. Enlarge model_snps (or use every variant).",
-                 ratio=ratio)
+                            "ratio": ratio, "alpha": alpha_full, "alpha_rule": "full-panel HE",
+                            "alpha_stage1": float(alpha)}
+        if np.isfinite(ratio) and est["full"] > 0.05 and ratio < H2_RATIO_NOTE:
+            notes.append({"kind": "h2", "ratio": ratio, "message": (
+                f"the {k:,} model SNPs tag {est['subset']:.3f} of the trait by HE against "
+                f"{est['full']:.3f} on all {m:,} variants (ratio {ratio:.2f}, alpha {alpha_full:g}); "
+                "usual for HapMap3-like sets and harmless in unrelated samples; it costs some "
+                "stage-1 power")})
     related = struct["excess"] > RELATED_EXCESS and struct["z"] > 3.0
-    small = frac < SMALL_SUBSET[0] or k < SMALL_SUBSET[1]
     info["relatedness_signal"] = {"structure_excess": float(struct["excess"]),
-                                  "z": float(struct["z"]), "flag": bool(related)}
+                                  "z": float(struct["z"]), "flag": bool(related),
+                                  "flag_rule": f"excess > {RELATED_EXCESS} and z > 3 (detector trigger)"}
     pred = None
     if "h2_check" in info and np.isfinite(info["h2_check"]["ratio"]):
         c = info["h2_check"]
         pred = float(max(struct["excess"], 0.0) * max(c["h2_he_full"] - c["h2_he_subset"], 0.0))
         info["relatedness_signal"]["predicted_inflation"] = pred
-    if related and small:
-        extra_txt = ("" if pred is None else
-                     f" Expected rise of the null mean chi-square: about {pred:.3f} "
-                     "(excess x h2 missed by the subset).")
-        emit("related", f"relatedness or residual structure (structure-test excess "
-                        f"{struct['excess']:.3f}, z {struct['z']:.1f}) with a small subset ({k:,} "
-                        f"variants, {100 * frac:.1f}% of {m:,}).{extra_txt} In simulated families a 20% "
-                        "subset gave lambda_GC 1.10 and a 5% subset 1.24 (1.02 with every "
-                        "variant); compare lambda_GC or the LD-score intercept with a full "
-                        "stage-1 run on one trait.", excess=float(struct["excess"]))
+    if pred is not None and pred > PREDICTED_INFLATION_WARN:
+        emit("related", f"predicted rise of the null mean chi-square {pred:.3f} > "
+                        f"{PREDICTED_INFLATION_WARN} (structure-test excess {struct['excess']:.3f}, "
+                        f"z {struct['z']:.1f}, x h2 missed by the {k:,} model SNPs "
+                        f"{info['h2_check']['h2_he_full'] - info['h2_check']['h2_he_subset']:.3f}). "
+                        "Relatives share polygenic signal the subset's LOCO scores miss. Enlarge "
+                        "model_snps (a 20% 'auto' subset or every variant) or compare lambda_GC / "
+                        "the LD-score intercept with a full stage-1 run on one trait. Under "
+                        "population stratification the excess also reflects structure, so the "
+                        "prediction is then an upper bound.",
+             predicted_inflation=pred, excess=float(struct["excess"]))
     if str(info["source"]).startswith("auto") and frac > AUTO_KEEP_WARN:
         emit("auto_keeps_most", f"'auto' kept {k:,} of {m:,} variants ({100 * frac:.0f}%); the "
                                 "subset copy costs memory for little time. Use "
