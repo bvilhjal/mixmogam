@@ -68,12 +68,22 @@ gwas(y, gt, X, method="hratt", model_snps="hm3",
 ```
 mixmogam gwas --geno imputed --pheno y.txt --out r.csv --model-snps hm3 [--hm3-build GRCh38]
 mixmogam hm3 match --geno imputed                       # the match report only
+mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenance
 ```
 
 **Human data: `"hm3"`, the documented default.**
-- Uses the 1,054,330 HapMap3 variants of LDpred2 (Privé et al. 2020; figshare
-  [10.6084/m9.figshare.19213299](https://doi.org/10.6084/m9.figshare.19213299), CC BY 4.0).
-  They are bundled in 5.9 MB and need no network ([provenance](mixmogam/data/README.md)).
+- By default it uses the 1,444,196 HapMap3+ variants of ldpred3's UK Biobank European LD
+  reference (Privé's `map_hm3_plus.rds`, figshare
+  [10.6084/m9.figshare.21305061](https://doi.org/10.6084/m9.figshare.21305061), CC BY 4.0).
+  This is a superset of LDpred2's 1,054,330 HapMap3 variants, plus 389,866 mostly
+  low-frequency ones.
+- LDpred2's set (figshare
+  [10.6084/m9.figshare.19213299](https://doi.org/10.6084/m9.figshare.19213299), CC BY 4.0) is
+  also bundled. Select it with `model_snps_options={"map": "hm3-ldpred2"}` or
+  `--hm3-map hm3-ldpred2`.
+- Both maps are bundled (8.4 MB and 5.9 MB) and need no network
+  ([provenance](mixmogam/data/README.md)). `"map"` also accepts a file written by
+  `mixmogam hm3 build`.
 - Variants are matched by rsID and/or chromosome:position, in GRCh37 or GRCh38. The build is
   detected from the overlap unless `build=` (`--hm3-build`) or `genome_build=` says otherwise.
 - Chromosome names `chr1`, `1`, `X` and `23` are all accepted.

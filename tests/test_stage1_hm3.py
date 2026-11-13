@@ -8,7 +8,8 @@ import numpy as np
 import pytest
 
 from mixmogam import twostep
-from mixmogam._hm3 import build_hm3_map, load_hm3, match_hm3, normalize_chromosome
+from mixmogam._hm3 import (DEFAULT_HM3_MAP, HM3_MAPS, build_hm3_map, load_hm3, match_hm3,
+                           normalize_chromosome, resolve_hm3_map)
 from mixmogam._thin import _ld_sample_set, resolve_include, resolve_model_snps, thin_variants
 from mixmogam.association import gwas
 from mixmogam.cli import main
@@ -23,7 +24,7 @@ COMP = {"A": "T", "C": "G", "G": "C", "T": "A"}
 def hm3map(tmp_path_factory):
     path = tmp_path_factory.mktemp("hm3") / "fixture.npz"
     out = build_hm3_map(FIXTURE, path, name="fixture")
-    assert out == {"n": 451, "skipped": 0, "no_grch38": 0}
+    assert out == {"n": 451, "skipped": 0, "no_grch38": 0, "no_rsid": 0, "duplicated_rsids": 0}
     return str(path)
 
 
@@ -56,9 +57,10 @@ def _panel_on(hm, build, n=60, extra=0, seed=0, ids="rs", chrom_style="plain", a
 
 
 def test_map_bundled_and_fixture(hm3map):
-    hm = load_hm3()
+    hm = load_hm3("hm3-ldpred2")
     assert hm["chr"].size == 1_054_330 and hm["meta"]["source_md5"] == "b6172d75f580a0d1bb2fa7686837c825"
     assert np.count_nonzero(hm["pos38"] < 0) == 536
+    assert not hm["siblings"] and np.all(hm["rsid"] > 0)
     fx = load_hm3(hm3map)
     # fixture rows are the bundled map's own rows (bar the synthetic A/T one)
     i = np.searchsorted(hm["rsid"][np.argsort(hm["rsid"])], fx["rsid"][:450])
@@ -421,3 +423,113 @@ def test_option_off_unchanged_by_new_arguments():
     a = gwas(y, gt, method="hratt")
     b = gwas(y, gt, method="hratt", model_snps=None, model_snps_include=None, model_snps_h2_check=True)
     assert np.array_equal(a.p, b.p) and np.array_equal(a.beta, b.beta) and "model_snps" not in b.extra
+
+
+# ---------------------------------------------------------------- bundled maps: ldpred3 (default), LDpred2
+
+def test_default_map_is_ldpred3_hm3plus():
+    assert DEFAULT_HM3_MAP == "hm3-ldpred3" and set(HM3_MAPS) == {"hm3-ldpred3", "hm3-ldpred2"}
+    hm = load_hm3()
+    assert hm is load_hm3("hm3-ldpred3") is load_hm3("ldpred3") is load_hm3("HM3plus")
+    assert hm["chr"].size == 1_444_196
+    assert hm["meta"]["source_md5"] == "c653ad7210f8921846466b350830eded"
+    assert hm["meta"]["source_sha256"].startswith("28bcebc2212c05ba")
+    assert "CC BY 4.0" in hm["meta"]["licence"] and hm["meta"]["ldpred3_panel"] == "ukb-eur-hm3plus"
+    assert np.count_nonzero(hm["rsid"] < 0) == 408
+    assert np.count_nonzero(hm["pos38"] < 0) == 1006
+    assert len(hm["siblings"]) == 8  # four sites with two variants each
+    assert set(np.unique(hm["chr"])) == set(range(1, 23))
+    a0, a1 = hm["a0"], hm["a1"]
+    assert not np.any(a0 == 3 - a1)  # no strand-ambiguous SNPs
+
+
+def test_ldpred2_map_is_a_subset_of_ldpred3():
+    a, b = load_hm3(), load_hm3("map_hm3")
+    key = lambda h: ((h["chr"].astype(np.int64) * 2**29 + h["pos37"]) * 16
+                     + h["a0"].astype(np.int64) * 4 + h["a1"])
+    ka, kb = key(a), key(b)
+    assert np.isin(kb, ka).all() and ka.size - kb.size == 389_866
+    ia = np.searchsorted(np.sort(ka), kb)
+    order = np.argsort(ka)
+    j = order[ia]
+    assert np.array_equal(a["rsid"][j], b["rsid"]) and np.array_equal(a["pos38"][j], b["pos38"])
+
+
+def test_resolve_map_names_and_paths(hm3map):
+    assert resolve_hm3_map(None).endswith("hm3_ldpred3.npz")
+    assert resolve_hm3_map("hm3-ldpred2").endswith("hm3_ldpred2.npz")
+    assert resolve_hm3_map(hm3map) == hm3map
+    with pytest.raises(FileNotFoundError, match="neither a bundled map"):
+        resolve_hm3_map("hm3-ldpred9")
+
+
+def _rows_panel(hm, rows, al=None, ids=None, n=40, seed=0):
+    rng = np.random.default_rng(seed)
+    a0, a1 = _bases(hm)
+    m = len(rows)
+    al1, al2 = (a1[rows], a0[rows]) if al is None else al
+    vid = ids if ids is not None else np.array([f"rs{hm['rsid'][r]}" for r in rows])
+    G = rng.binomial(2, 0.3, size=(n, m)).astype(np.int8)
+    return Genotypes(G, chromosome=hm["chr"][rows].astype(str), position=hm["pos37"][rows],
+                     variant_ids=vid, allele1=al1, allele2=al2)
+
+
+def test_hm3plus_multiallelic_sites_matched_by_alleles():
+    hm = load_hm3()
+    rows = np.array(sorted(hm["siblings"]))
+    assert rows.size == 8
+    for ids in ("rs", "pos"):
+        vid = (None if ids == "rs" else
+               np.array([f"{hm['chr'][r]}:{hm['pos37'][r]}" for r in rows]))
+        gt = _rows_panel(hm, rows, ids=vid)
+        idx, rep = match_hm3(gt, build="GRCh37", min_maf=0)
+        assert idx.size == 8 and not rep["dropped"], rep  # each allele pair its own variant
+    # strand-flipped and swapped second record still finds its own row
+    a0, a1 = _bases(hm)
+    al1 = np.array([COMP[x] for x in a0[rows]]); al2 = np.array([COMP[x] for x in a1[rows]])
+    idx, rep = match_hm3(_rows_panel(hm, rows, al=(al1, al2)), build="GRCh37", min_maf=0)
+    assert idx.size == 8 and rep["alleles"]["strand flip, swapped"] == 8
+    # another pair of bases at the site (here a0 and its complement) matches neither record
+    bad = np.array([COMP[x] for x in a0[rows]])
+    idx, rep = match_hm3(_rows_panel(hm, rows, al=(bad, a0[rows])), build="GRCh37", min_maf=0)
+    assert idx.size == 0 and sum(rep["dropped"].values()) == 8
+
+
+def test_hm3plus_variants_without_rsid_match_by_position(tmp_path):
+    hm = load_hm3()
+    rows = np.flatnonzero(hm["rsid"] < 0)[:30]
+    ids = np.array([f"var{j}" for j in range(rows.size)])
+    idx, rep = match_hm3(_rows_panel(hm, rows, ids=ids), build="GRCh37", min_maf=0)
+    assert idx.size == 30 and rep["matched_by"]["position only"] == 30
+    # build keeps non-rs IDs (as no rsID) unless require_rsid
+    t = {"chr": ["1", "1", "2"], "pos": ["100", "200", "300"], "pos_hg38": ["NA", "250", "350"],
+         "a0": ["A", "C", "G"], "a1": ["G", "T", "A"], "rsid": ["rs5", "1:200_C_T", "rs5"]}
+    out = build_hm3_map(t, tmp_path / "m.npz")
+    assert out == {"n": 3, "skipped": 0, "no_grch38": 1, "no_rsid": 1, "duplicated_rsids": 1}
+    m2 = load_hm3(str(tmp_path / "m.npz"))
+    assert list(m2["rsid"]) == [5, -1, 5]
+    out = build_hm3_map(t, tmp_path / "m2.npz", require_rsid=True)
+    assert out["n"] == 2 and out["skipped"] == 1
+
+
+def test_option_map_selects_ldpred2():
+    hm2 = load_hm3("hm3-ldpred2")
+    hm3p = load_hm3()
+    extra = np.flatnonzero(~np.isin(hm3p["rsid"], hm2["rsid"]) & (hm3p["rsid"] > 0))[:200]
+    shared = np.flatnonzero(np.isin(hm3p["rsid"], hm2["rsid"]))[:200]
+    rows = np.r_[shared, extra]
+    gt = _rows_panel(hm3p, rows)
+    i3, r3 = match_hm3(gt, build="GRCh37", min_maf=0)
+    i2, r2 = match_hm3(gt, build="GRCh37", map="hm3-ldpred2", min_maf=0)
+    assert i3.size == 400 and i2.size == 200 and r2["map"].startswith("LDpred2")
+    idx, how, settings = resolve_model_snps(gt, "hm3", options={"map": "hm3-ldpred2", "min_snps": 10,
+                                                                "min_frac": 0, "min_maf": 0})
+    assert how == "hm3" and idx.size == 200
+
+
+def test_cli_hm3_info_bundled(capsys):
+    assert main(["hm3", "info"]) == 0
+    out = capsys.readouterr().out
+    assert "1,444,196 variants" in out and "408 without an rsID" in out and "hm3-ldpred3" in out
+    assert main(["hm3", "info", "--map", "hm3-ldpred2"]) == 0
+    assert "1,054,330 variants" in capsys.readouterr().out

@@ -11,8 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - HRATT `model_snps=` / `--model-snps` fits stage 1 on a subset of variants. Stage 2 still
   tests every variant against LOCO scores, and the LOCO groups are those of the full panel.
-  - `"hm3"`: the bundled LDpred2 HapMap3 map (1,054,330 variants, CC BY 4.0), matched by
-    rsID and/or GRCh37/GRCh38 position, with a match report. It falls back to `"auto"` below
+  - `"hm3"`: matched by rsID and/or GRCh37/GRCh38 position, with a match report.
+    - The default map is ldpred3's HapMap3+ set (`hm3-ldpred3`): 1,444,196 variants from
+      Privé's `map_hm3_plus.rds`, figshare 21305061, CC BY 4.0.
+    - LDpred2's HapMap3 map is also bundled (`hm3-ldpred2`): 1,054,330 variants, figshare
+      19213299, CC BY 4.0. It is a subset of the default.
+    - Multi-allelic HapMap3+ sites are resolved by alleles, and variants without an rsID are
+      matched by position. It falls back to `"auto"` below
     50% (on the panel's chromosomes) or below 300,000 matches. This is the documented choice
     for human data.
   - `"auto"`: MAF/LD thinning, with r² estimated on seeded random samples.
@@ -25,8 +30,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `model_snps_h2_check=False` turns it off);
   - relatedness or residual structure combined with a small subset;
   - `"auto"` keeps more than 80% of the variants.
-- `mixmogam hm3 info|match|build`: show, match or rebuild the HapMap3 map (for example
-  HapMap3+).
+- `mixmogam hm3 info|match|build`: show, match or rebuild a HapMap3 map. `--map` takes a
+  bundled name or a file.
 - `gwas_by_group(y, gt, groups, X)` runs `gwas` separately in two
   non-overlapping groups and returns both results plus a Wald test of the
   effect difference b1 - b0. The per-group effects show whether a GxE

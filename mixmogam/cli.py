@@ -84,7 +84,8 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--model-snps", metavar="FILE|hm3|auto",
                       help="hratt stage-1 model SNPs; stage 2 tests every variant; implies --method "
                            "hratt. 'hm3' (recommended for human data): the panel's HapMap3 variants "
-                           "(LDpred2's 1,054,330, bundled), matched by rsID and/or position, falling "
+                           "(ldpred3's 1,444,196 HapMap3+, bundled; --hm3-map hm3-ldpred2 for LDpred2's "
+                           "1,054,330), matched by rsID and/or position, falling "
                            "back to 'auto' when fewer than half of those on the panel's chromosomes "
                            "(or 300,000) match; 'auto': MAF/LD "
                            "thinning (non-human or unspecified data); or a file of variant IDs, one "
@@ -93,8 +94,10 @@ def _parser() -> argparse.ArgumentParser:
                       help="--model-snps hm3: coordinate build for position matching (default: "
                            "--genome-build when it names GRCh37/38, else detected from the overlap; "
                            "'rsid' matches rsIDs only)")
-    gwas.add_argument("--hm3-map", metavar="NPZ", help="--model-snps hm3: another map written by "
-                                                       "'mixmogam hm3 build' (e.g. HapMap3+)")
+    gwas.add_argument("--hm3-map", metavar="NAME|NPZ",
+                      help="--model-snps hm3: a bundled map, 'hm3-ldpred3' (default; ldpred3's "
+                           "HapMap3+) or 'hm3-ldpred2' (LDpred2's map_hm3), or a map written by "
+                           "'mixmogam hm3 build'")
     gwas.add_argument("--hm3-min-frac", type=float,
                       help="--model-snps hm3: fall back to auto below this matched fraction of the map's "
                            "variants on the panel's chromosomes (default 0.5)")
@@ -151,10 +154,12 @@ def _parser() -> argparse.ArgumentParser:
                                      "chr, pos (GRCh37), pos_hg38, a0, a1, rsid.")
     hsub = hm3.add_subparsers(dest="hm3_command", required=True)
     h_info = hsub.add_parser("info", help="provenance and size of the map")
-    h_info.add_argument("--map", help="a map written by 'mixmogam hm3 build' (default: bundled)")
+    h_info.add_argument("--map", help="hm3-ldpred3 (default), hm3-ldpred2, or a map written by "
+                                      "'mixmogam hm3 build'")
     h_match = hsub.add_parser("match", help="match a genotype panel and print the report")
     _genotype_args(h_match)
-    h_match.add_argument("--map", help="a map written by 'mixmogam hm3 build' (default: bundled)")
+    h_match.add_argument("--map", help="hm3-ldpred3 (default), hm3-ldpred2, or a map written by "
+                                       "'mixmogam hm3 build'")
     h_match.add_argument("--build", default="auto", choices=("auto", "GRCh37", "GRCh38", "rsid"))
     h_match.add_argument("--min-maf", type=float, default=0.01,
                          help="drop matches at or below this sample MAF (default 0.01; 0 keeps all)")
@@ -165,6 +170,9 @@ def _parser() -> argparse.ArgumentParser:
     h_build.add_argument("--name", default="custom", help="map name recorded in the file")
     h_build.add_argument("--source", default="", help="source URL/description recorded in the file")
     h_build.add_argument("--licence", default="", help="licence recorded in the file")
+    h_build.add_argument("--require-rsid", action="store_true",
+                         help="skip rows whose ID is not rs<digits> (default: keep them, matched by "
+                              "position only)")
 
     plot = sub.add_parser("plot", help="Manhattan and QQ plots of a result CSV",
                           description="Read a result CSV/TSV (optional .gz) written by "
@@ -351,15 +359,20 @@ def _cmd_hm3(args) -> int:
         hm = _hm3.load_hm3(args.map)
         print(f"{hm['chr'].size:,} variants on chromosomes "
               f"{', '.join(str(c) for c in np.unique(hm['chr']))}; "
-              f"{int(np.count_nonzero(hm['pos38'] < 0)):,} without a GRCh38 position")
+              f"{int(np.count_nonzero(hm['pos38'] < 0)):,} without a GRCh38 position, "
+              f"{int(np.count_nonzero(hm['rsid'] < 0)):,} without an rsID, "
+              f"{len(hm['siblings']):,} at multi-variant sites")
+        print(f"file: {_hm3.resolve_hm3_map(args.map)}")
+        print(f"bundled maps: {', '.join(_hm3.HM3_MAPS)} (default {_hm3.DEFAULT_HM3_MAP})")
         for k, v in hm["meta"].items():
             print(f"{k}: {v}")
         return 0
     if args.hm3_command == "build":
         out = _hm3.build_hm3_map(args.input, args.out, name=args.name, source=args.source,
-                                 licence=args.licence)
+                                 licence=args.licence, require_rsid=args.require_rsid)
         print(f"wrote {out['n']:,} variants to {args.out} ({out['skipped']:,} rows skipped, "
-              f"{out['no_grch38']:,} without a GRCh38 position)")
+              f"{out['no_grch38']:,} without a GRCh38 position, {out['no_rsid']:,} without an "
+              f"rsID, {out['duplicated_rsids']:,} duplicated rsIDs)")
         return 0
     gt = _read_genotypes(args)
     idx, rep = _hm3.match_hm3(gt, build=args.build, map=args.map, min_maf=args.min_maf)

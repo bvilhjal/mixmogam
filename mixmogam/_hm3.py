@@ -1,15 +1,28 @@
 """HapMap3 model SNPs for HRATT's stage 1 (``model_snps="hm3"``).
 
-The bundled map (``mixmogam/data/hm3_ldpred2.npz``) is a compact copy of
-the 1,054,330 HapMap3 variants of LDpred2 (Privé et al. 2020; the
-``map_hm3.rds`` of figshare item 19213299, "European LD reference (with
-blocks)", CC BY 4.0, file https://figshare.com/ndownloader/files/36360900):
-chromosome (1-22), GRCh37 and GRCh38 positions, the rsID and the two
-alleles (a0, a1). LDpred2 already removed strand-ambiguous (A/T, C/G)
-SNPs from it. The UK Biobank frequencies, LD scores and block IDs of the
-original are not bundled. ``mixmogam hm3 build`` writes the same format
-from another table (e.g. LDpred2's HapMap3+ ``map_hm3_plus.rds``) for
-``model_snps_options={"map": path}``.
+Two maps are bundled, as compact copies of chromosome (1-22), GRCh37 and
+GRCh38 positions, rsID and the two alleles (a0, a1) of their sources; the
+UK Biobank frequencies, LD scores and block IDs are not bundled:
+
+- ``"hm3-ldpred3"`` (default; ``mixmogam/data/hm3_ldpred3.npz``): the
+  1,444,196 HapMap3+ variants of ldpred3's current UK Biobank European LD
+  reference (``ukb-eur-hm3plus``), i.e. Privé's ``map_hm3_plus.rds``
+  (figshare item 21305061, "LD reference for HapMap3+", CC BY 4.0, file
+  https://ndownloader.figshare.com/files/37802721). It contains every
+  variant of the LDpred2 map below, with identical positions and alleles,
+  plus 389,866 more (80% of them with UK Biobank MAF < 5%). 408 variants
+  have no rsID (IDs ``chr:pos_a0_a1``; matched by position only) and four
+  rsIDs name two variants each (multi-allelic sites, told apart by alleles).
+- ``"hm3-ldpred2"`` (``mixmogam/data/hm3_ldpred2.npz``): the 1,054,330
+  HapMap3 variants of LDpred2 (Privé et al. 2020; ``map.rds`` of figshare
+  item 19213299, "European LD reference (with blocks)", CC BY 4.0, file
+  https://figshare.com/ndownloader/files/36360900), loaded as
+  ``map_hm3.rds`` by LDpred2. ldpred3's legacy ``hm3`` panel uses exactly
+  this file.
+
+Neither has strand-ambiguous (A/T, C/G) SNPs. ``model_snps_options={"map":
+...}`` (``--hm3-map``) takes a bundled name or the path of a map written by
+``mixmogam hm3 build``.
 
 Matching a panel (:func:`match_hm3`) uses rsIDs (variant IDs of the form
 ``rs<digits>``) and chromosome:position in a build (GRCh37 or GRCh38;
@@ -29,7 +42,8 @@ from typing import Optional
 
 import numpy as np
 
-__all__ = ["HM3_OPTIONS", "load_hm3", "match_hm3", "normalize_chromosome", "build_hm3_map"]
+__all__ = ["HM3_OPTIONS", "HM3_MAPS", "DEFAULT_HM3_MAP", "load_hm3", "match_hm3",
+           "normalize_chromosome", "build_hm3_map", "resolve_hm3_map"]
 
 HM3_OPTIONS = {"build": "auto", "map": None, "min_frac": 0.5, "min_snps": 300_000,
                "min_maf": 0.01, "drop_ambiguous": False}
@@ -42,9 +56,36 @@ _BUILD_ALIAS = {"grch37": "GRCh37", "hg19": "GRCh37", "b37": "GRCh37", "37": "GR
 _RS = re.compile(r"^rs(\d+)$", re.IGNORECASE)
 
 
+HM3_MAPS = {"hm3-ldpred3": "hm3_ldpred3.npz", "hm3-ldpred2": "hm3_ldpred2.npz"}
+DEFAULT_HM3_MAP = "hm3-ldpred3"
+_MAP_ALIAS = {"ldpred3": "hm3-ldpred3", "hm3plus": "hm3-ldpred3", "hm3+": "hm3-ldpred3",
+              "hm3-plus": "hm3-ldpred3", "ldpred2": "hm3-ldpred2", "map_hm3": "hm3-ldpred2"}
+
+
 def _default_map_path():
+    return _bundled_path(DEFAULT_HM3_MAP)
+
+
+def _bundled_path(name: str):
     from importlib.resources import files
-    return files("mixmogam") / "data" / "hm3_ldpred2.npz"
+    return files("mixmogam") / "data" / HM3_MAPS[name]
+
+
+def resolve_hm3_map(map=None) -> str:
+    """Path of a map: None (the default, ``"hm3-ldpred3"``), a bundled name
+    (``"hm3-ldpred3"``, ``"hm3-ldpred2"``; aliases ``ldpred3``, ``hm3plus``,
+    ``ldpred2``, ``map_hm3``) or a file written by :func:`build_hm3_map`."""
+    if map is None:
+        return str(_default_map_path())
+    key = str(map).strip()
+    name = _MAP_ALIAS.get(key.lower(), key.lower())
+    if name in HM3_MAPS:
+        return str(_bundled_path(name))
+    import os
+    if not os.path.exists(key):
+        raise FileNotFoundError(f"HM3 map {map!r} is neither a bundled map "
+                                f"({', '.join(HM3_MAPS)}) nor an existing file")
+    return key
 
 
 @lru_cache(maxsize=4)
@@ -55,17 +96,32 @@ def _load(path: str) -> dict:
         d38 = z["d38"].astype(np.int64)
         pos38 = np.where(d38 == np.iinfo(np.int32).min, _NA38, pos37 + d38)
         al = z["alleles"]
+        rsid = z["rsid"].astype(np.int64)
         meta = {k[5:]: str(z[k]) for k in z.files if k.startswith("meta_")}
-        return {"chr": chrom, "pos37": pos37, "pos38": pos38,
-                "rsid": z["rsid"].astype(np.int64), "a0": (al >> 2).astype(np.int8),
-                "a1": (al & 3).astype(np.int8), "meta": meta}
+    rsid[rsid == 0] = -1  # 0: no rsID
+    # rows sharing a GRCh37 site (multi-allelic sites of HapMap3+): row -> rows at its site
+    keys = _site_keys(chrom, pos37)
+    srt = np.argsort(keys, kind="stable")
+    ks = keys[srt]
+    dup = np.flatnonzero(ks[1:] == ks[:-1])
+    siblings = {}
+    for j in dup:
+        group = [int(r) for r in srt[(ks == ks[j])]]
+        for r in group:
+            siblings[r] = group
+    return {"chr": chrom, "pos37": pos37, "pos38": pos38, "rsid": rsid,
+            "a0": (al >> 2).astype(np.int8), "a1": (al & 3).astype(np.int8),
+            "siblings": siblings, "meta": meta}
 
 
 def load_hm3(path=None) -> dict:
     """The HapMap3 map as arrays: ``chr`` (1-22), ``pos37``, ``pos38``
-    (-1 where GRCh38 has no position), ``rsid`` (the number after 'rs'),
-    allele codes ``a0``/``a1`` (A, C, G, T = 0-3) and its provenance ``meta``."""
-    return _load(str(_default_map_path() if path is None else path))
+    (-1 where GRCh38 has no position), ``rsid`` (the number after 'rs', -1
+    when the variant has none), allele codes ``a0``/``a1`` (A, C, G, T =
+    0-3), ``siblings`` (row -> the rows at the same GRCh37 site, for sites
+    with several variants) and its provenance ``meta``. ``path`` is None (the
+    default map), a bundled map name or a file (:func:`resolve_hm3_map`)."""
+    return _load(resolve_hm3_map(path))
 
 
 def normalize_chromosome(chrom) -> np.ndarray:
@@ -201,28 +257,41 @@ def match_hm3(gt, *, build: str = "auto", map=None, maf=None, min_maf: float = 0
     drop(wrong_chr & (pos_hit < 0), "rsID is on another chromosome in HM3")
     rs_hit[wrong_chr] = -1
     both = (rs_hit >= 0) & (pos_hit >= 0)
-    conflict = both & (rs_hit != pos_hit)
+    rs0, ps0 = np.maximum(rs_hit, 0), np.maximum(pos_hit, 0)
+    same_site = (hm["chr"][rs0] == hm["chr"][ps0]) & (hm["pos37"][rs0] == hm["pos37"][ps0])
+    conflict = both & (rs_hit != pos_hit) & ~same_site
     drop(conflict, "rsID and position name different HM3 variants")
     hit = np.where(rs_hit >= 0, rs_hit, pos_hit)
     hit[conflict] = -1
-    by = np.full(m, "", dtype=object)
     report["matched_by"] = {
         "rsid+position": int(np.count_nonzero(both & ~conflict)),
         "rsid only": int(np.count_nonzero((rs_hit >= 0) & (pos_hit < 0))),
         "position only": int(np.count_nonzero((rs_hit < 0) & (pos_hit >= 0))),
     }
-    del by
     report["panel_with_rsid"] = int(np.count_nonzero(has_rs))
 
     # alleles
     cand = np.flatnonzero(hit >= 0)
     h = hit[cand]
+    has_alleles = gt.allele1 is not None and gt.allele2 is not None
+    if has_alleles:
+        p1 = _allele_codes(np.asarray(gt.allele1)[cand])
+        p2 = _allele_codes(np.asarray(gt.allele2)[cand])
+        sib = hm["siblings"]
+        if sib:  # a multi-allelic HM3 site: take the variant with the panel's bases
+            for i in np.flatnonzero(np.isin(h, np.fromiter(sib, dtype=np.int64))):
+                if p1[i] < 0 or p2[i] < 0:
+                    continue
+                pair, comp = {int(p1[i]), int(p2[i])}, {3 - int(p1[i]), 3 - int(p2[i])}
+                fits = [r for r in sib[int(h[i])] if {int(hm["a0"][r]), int(hm["a1"][r])} == pair]
+                fits = fits or [r for r in sib[int(h[i])]
+                                if {int(hm["a0"][r]), int(hm["a1"][r])} == comp]
+                if fits:
+                    h[i] = fits[0]
     a0, a1 = hm["a0"][h], hm["a1"][h]
     ambiguous = a0 == 3 - a1
     allele_report = {}
-    if gt.allele1 is not None and gt.allele2 is not None:
-        p1 = _allele_codes(np.asarray(gt.allele1)[cand])
-        p2 = _allele_codes(np.asarray(gt.allele2)[cand])
+    if has_alleles:
         snp = (p1 >= 0) & (p2 >= 0)
         same = snp & (p1 == a1) & (p2 == a0)
         swap = snp & (p1 == a0) & (p2 == a1)
@@ -325,12 +394,15 @@ def _read_table(path):
 
 
 def build_hm3_map(table, out, *, name: str = "custom", source: str = "", licence: str = "",
-                  extra_meta: Optional[dict] = None) -> dict:
+                  extra_meta: Optional[dict] = None, require_rsid: bool = False) -> dict:
     """Write a map in the bundled format from a table with columns ``chr``,
     ``pos`` (GRCh37), ``pos_hg38`` (optional, NA allowed), ``a0``, ``a1``
-    and ``rsid`` (``rs<digits>``); ``table`` is a dict of columns or a path
-    (.rds, or delimited text with a header). Rows that are not single-base
-    SNPs on chromosomes 1-26 with an rsID are skipped. Returns a summary."""
+    and ``rsid``; ``table`` is a dict of columns or a path (.rds, or
+    delimited text with a header). Rows that are not single-base SNPs on
+    chromosomes 1-26 are skipped. IDs that are not ``rs<digits>`` (e.g.
+    HapMap3+'s ``1:13379625_A_G``) are stored as "no rsID" (matched by
+    position only) unless ``require_rsid`` skips them; a duplicated rsID
+    (HapMap3+'s multi-allelic sites) keeps every row. Returns a summary."""
     t = _read_table(table) if not isinstance(table, dict) else table
     chrom = normalize_chromosome(t["chr"])
     pos37 = np.asarray(t["pos"]).astype(np.float64)
@@ -340,7 +412,12 @@ def build_hm3_map(table, out, *, name: str = "custom", source: str = "", licence
                        for x in np.asarray(p38, dtype=object)]))
     a0, a1 = _allele_codes(t["a0"]), _allele_codes(t["a1"])
     rs = _rs_numbers(t["rsid"])
-    ok = (chrom > 0) & np.isfinite(pos37) & (a0 >= 0) & (a1 >= 0) & (a0 != a1) & (rs >= 0)
+    ok = (chrom > 0) & np.isfinite(pos37) & (a0 >= 0) & (a1 >= 0) & (a0 != a1)
+    if require_rsid:
+        ok &= rs >= 0
+    no_rsid = int(np.count_nonzero(ok & (rs < 0)))
+    _, rs_counts = np.unique(rs[ok & (rs >= 0)], return_counts=True)
+    rs = np.where(rs >= 0, rs, 0)  # 0: no rsID
     chrom, pos37, pos38, a0, a1, rs = chrom[ok], pos37[ok], pos38[ok], a0[ok], a1[ok], rs[ok]
     order = np.lexsort((pos37, chrom))
     chrom, pos37, pos38, a0, a1, rs = (x[order] for x in (chrom, pos37, pos38, a0, a1, rs))
@@ -355,4 +432,5 @@ def build_hm3_map(table, out, *, name: str = "custom", source: str = "", licence
                         **{f"meta_{k}": np.array(v) for k, v in meta.items()})
     _load.cache_clear()
     return {"n": int(chrom.size), "skipped": int(np.count_nonzero(~ok)),
-            "no_grch38": int(np.count_nonzero(~np.isfinite(pos38)))}
+            "no_grch38": int(np.count_nonzero(~np.isfinite(pos38))), "no_rsid": no_rsid,
+            "duplicated_rsids": int(np.count_nonzero(rs_counts > 1))}

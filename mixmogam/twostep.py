@@ -1196,8 +1196,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     greedy r2 < 0.5 pruning within 100 kb, both settable through
     ``model_snps_options``, e.g. ``{"min_maf": 0.05, "max_r2": 0.2,
     "window_bp": 250_000, "ld_samples": 10_000, "max_snps": 1_000_000}``),
-    ``"hm3"`` (the panel's HapMap3 variants: the 1,054,330 of LDpred2's map,
-    matched by rsID and/or chromosome:position in GRCh37 or GRCh38,
+    ``"hm3"`` (the panel's HapMap3 variants: by default the 1,444,196
+    HapMap3+ variants of ldpred3's UK Biobank LD reference, a superset of
+    LDpred2's 1,054,330, which ``{"map": "hm3-ldpred2"}`` selects; matched by rsID and/or chromosome:position in GRCh37 or GRCh38,
     :func:`mixmogam._hm3.match_hm3`; options ``build``, ``map``,
     ``min_frac``, ``min_snps``, ``min_maf``, ``drop_ambiguous``; when fewer
     than half of the map's variants on the panel's chromosomes, or fewer
