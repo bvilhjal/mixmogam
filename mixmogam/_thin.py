@@ -26,7 +26,7 @@ if HAS_NUMBA:
 __all__ = ["THIN_DEFAULTS", "thin_variants", "resolve_model_snps"]
 
 THIN_DEFAULTS = {"min_maf": 0.01, "max_r2": 0.5, "window_bp": 100_000,
-                 "ld_samples": 10_000, "max_snps": None, "chunk": 2048}
+                 "ld_samples": 10_000, "max_snps": None, "chunk": 256}
 
 
 def _greedy(pos, ok, prev_pos, prev_r2, cur_r2, max_r2, window):
@@ -57,11 +57,45 @@ if HAS_NUMBA:
     _greedy = njit(cache=True)(_greedy)
 
 
+def _ld_rows_packed(data, idx, s, out):
+    """Compiled two-bit route of :func:`_ld_rows`: decode, centre and scale
+    the first ``s`` samples of each row in one sweep over its bytes."""
+    calls = np.empty(s, dtype=np.int8)
+    for r in range(idx.size):
+        row = data[idx[r]]
+        total = 0
+        cnt = 0
+        for i in range(s):
+            g = CODE_CALLS[(row[i >> 2] >> (2 * (i & 3))) & 3]
+            calls[i] = g
+            if g >= 0:
+                total += g
+                cnt += 1
+        mean = total / max(cnt, 1)
+        ss = 0.0
+        for i in range(s):
+            if calls[i] >= 0:
+                d = calls[i] - mean
+                ss += d * d
+        sd = np.sqrt(ss / max(cnt, 1))
+        inv = 1.0 / sd if sd > 0 else 1.0
+        for i in range(s):
+            out[r, i] = np.float32((calls[i] - mean) * inv) if calls[i] >= 0 else np.float32(0.0)
+
+
+if HAS_NUMBA:
+    _ld_rows_packed = njit(cache=True)(_ld_rows_packed)
+
+
 def _ld_rows(gt, idx, ld_samples):
     """Standardized float32 calls (k, s) of variants ``idx`` on the first
     ``s`` samples; no-calls at the mean (0)."""
     n = gt.n_samples
     s = n if ld_samples is None else min(int(ld_samples), n)
+    if HAS_NUMBA and isinstance(gt.G, PackedCalls):
+        z = np.empty((idx.size, s), dtype=np.float32)
+        _ld_rows_packed(gt.G.data, np.ascontiguousarray(idx, dtype=np.int64), s, z)
+        return z, s
     if isinstance(gt.G, PackedCalls):
         nb = (s + 3) // 4
         raw = np.asarray(gt.G.data[idx, :nb])  # only the first nb bytes of each row
@@ -84,7 +118,7 @@ def _ld_rows(gt, idx, ld_samples):
 def thin_variants(gt, maf: Optional[np.ndarray] = None, *, min_maf: float = 0.01,
                   max_r2: float = 0.5, window_bp: int = 100_000,
                   ld_samples: Optional[int] = 10_000, max_snps: Optional[int] = None,
-                  chunk: int = 2048) -> np.ndarray:
+                  chunk: int = 256) -> np.ndarray:
     """Sorted indices of an LD-thinned set of common variants.
 
     ``maf`` (m,) is the minor allele frequency over all samples (computed
