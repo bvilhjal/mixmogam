@@ -254,3 +254,20 @@ def test_cli_model_snps(panel, tmp_path):
         str(tmp_path / "api2.csv"))
     assert (tmp_path / "b.csv").read_bytes() == (tmp_path / "api2.csv").read_bytes()
     assert main([*base, "--thin-max-r2", "0.3", "--out", str(tmp_path / "c.csv")]) != 0
+
+
+@pytest.mark.parametrize("kw", [dict(trait="binary"), dict(loco_folds=5),
+                                dict(heritability_method="he"), "weighted"])
+def test_subset_runs_on_other_paths(panel, kw):
+    """Binary (SPA), cross-fitted, HE and weighted fits accept a subset and
+    test every variant."""
+    G, gt, y, _ = panel
+    if kw == "weighted":
+        kw = dict(sample_weights=np.exp(np.random.default_rng(2).normal(0, 0.3, y.size)))
+    yy = (y > np.quantile(y, 0.8)).astype(float) if kw.get("trait") == "binary" else y
+    sub = np.arange(0, gt.n_variants, 3)
+    r = gwas(yy, gt, method="hratt", model_snps=sub, **kw)
+    full = gwas(yy, gt, method="hratt", **kw)
+    assert r.p.size == gt.n_variants and np.all(np.isfinite(r.p))
+    assert r.extra["model_snps"]["n"] == sub.size
+    assert np.corrcoef(-np.log10(r.p), -np.log10(full.p))[0, 1] > 0.9
