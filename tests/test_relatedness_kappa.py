@@ -495,8 +495,10 @@ def test_carrier_families_column_and_flag(tmp_path):
 def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
     """auto + sample_weights + relatives falls back to enet, keeps the
     relcal-decided LOCO refit, and applies λ_g = 1/(κ_g c_X) once."""
-    G, gt, y, pairs, causal = family_panel(n_fam=40, kids=2, m=1200, n_chrom=4,
-                                           n_causal=40, h2=0.5, seed=4)
+    # Use a panel that has close relatives but does not trip the structure
+    # test (a smaller panel can), so loco_refit_reason is "relatives".
+    G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4,
+                                           n_causal=80, h2=0.5, seed=3)
     w = np.random.default_rng(3).uniform(0.5, 2.0, y.size)
     sub = np.sort(np.random.default_rng(5).choice(gt.n_variants, gt.n_variants // 4,
                                                   replace=False))
@@ -505,6 +507,7 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
     sel = kap.extra["stage1_selection"]
     assert sel["chosen"] == "enet" and sel["reason"].startswith("sample_weights")
     assert kap.extra.get("stage1", "enet") == "enet"
+    assert not kap.extra["structure"]["strong"]
     assert kap.extra["loco_refit"] and kap.extra["loco_refit_reason"] == "relatives"
     base = _run(y, gt, model_snps=sub, relatedness=pairs, relatedness_correction="none",
                 sample_weights=w, stage1="auto", loco_folds=2)

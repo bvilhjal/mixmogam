@@ -590,12 +590,14 @@ def test_hardcall_needs_no_private_projection(ldp, monkeypatch):
 def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
     """Explicit LDpred3 + relatives: no LOCO refit (block-exact LOCO), and
     λ_g = 1/(κ_g c_X) is applied a single time. Family folds are skipped."""
-    G, gt, y, pairs, causal = family_panel(n_fam=40, kids=2, m=800, n_chrom=4,
-                                           n_causal=20, h2=0.4, seed=4)
+    # Same construction as test_model_snps_and_relatedness_with_ldpred3:
+    # relatives, but not strong structure (so the LDpred3 gate does not fire).
+    G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
     kw = dict(stage1="ldpred3-inf", stage1_kwargs={"block_size": 200})
     r = _hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "family"},
                **kw)
     assert r.extra["stage1"] == "ldpred3-inf"
+    assert not r.extra["structure"]["strong"]
     assert r.extra["loco_refit"] is False
     assert r.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"
     assert r.extra["crossfit_folds"] == "random"
