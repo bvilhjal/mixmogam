@@ -70,7 +70,7 @@ took 1.55 times as long as HRATT-HE against a target of 1.3. On the
 \emph{Arabidopsis thaliana} RegMap panel every method found six of seven
 known major genes; none found MOT1 on the prespecified raw scale, so the
 check failed (an exploratory log-scale rerun ranked MOT1 first). At 100,000 samples and 20,000 markers, 2.0.0.dev8 took a
-median 25.84 seconds for HRATT-HE and 101.77 for BOLT-inf. Apart from the RegMap check all evidence is simulated, the new
+median 25.84 seconds for HRATT-HE and 101.77 for mixmogam's BOLT-style infinitesimal path. Apart from the RegMap check all evidence is simulated, the new
 timings come from one workstation, and some variational fits did not
 converge under strong confounding.
 \end{abstract}
@@ -464,8 +464,10 @@ For mixture-prior and elastic-net residuals, an infinitesimal spectral
 factor is transferred before further calibration. Once the residual is
 a nonlinear, data-adaptive function of $\y$, the proof of
 Equation~\eqref{eq:score} no longer supplies its null law, and the
-transfer is a heuristic. ``BOLT-style'' and HRATT below denote mixmogam
-methods inspired by BOLT-LMM and LDAK-KVIK, not the reference programs.
+transfer is a heuristic. ``BOLT-style inf'' and ``BOLT-style mixture''
+(\code{bolt-inf} and \code{bolt}; labelled ``(mixmogam)'' in tables and
+figures) and HRATT below denote mixmogam methods inspired by BOLT-LMM and
+LDAK-KVIK, not the reference programs.
 
 \subsection{Environmental mean misspecification}
 \label{sec:environment}
@@ -992,7 +994,7 @@ Four analysis cells comprise unstructured data, structured data without
 environmental effects, structured data with the exposure, and the same
 confounded phenotype adjusted for the two leading genotype PCs. PCs are
 computed without phenotypes and supplied identically to all methods.
-Every analysis includes an intercept. Exact LOCO EMMAX, BOLT-inf and
+Every analysis includes an intercept. Exact LOCO EMMAX, BOLT-style inf and
 HRATT use their default fitting and calibration settings with explicit
 seeds and one thread; their priors and tuning searches differ. Versions
 up to commit e4089d8 called HRATT KVIK, and archived runs keep that name.
@@ -1203,7 +1205,7 @@ Host conditions matter: the original 20,000-marker runs' frozen source,
 labelled 2.0.0.dev3, equals 2.0.0.dev4 (commit 0fa3da8) apart from its version
 string, and that identical code took 33.22 seconds on 3 October and 24.1
 seconds on 4 October for the same fit. On 6 October exact LOCO and
-BOLT-inf, whose results did not change, took 1.07--1.16 times as long as in
+BOLT-style inf, whose results did not change, took 1.07--1.16 times as long as in
 the reruns with commit e4089d8 of 5 October. On one host and day, alternating
 the versions on one 800-sample case, 2.0.0.dev6 took 1.07 (exact LOCO) and
 1.03 (HRATT) times as long as e4089d8 (archive
@@ -1292,8 +1294,8 @@ one of which also had incomplete LOCO fits (two in the original runs).
 These remain in the summaries. In the original archive, an independently
 regenerated structured/PC-adjusted case reproduced the serialized inputs
 and all methods' p-values exactly using frozen source snapshots.
-Exact LOCO and BOLT-inf reproduce every rejection rate of the earlier
-reruns with commit e4089d8: BOLT-inf's p-values are identical, and exact
+Exact LOCO and BOLT-style inf reproduce every rejection rate of the earlier
+reruns with commit e4089d8: BOLT-style inf's p-values are identical, and exact
 LOCO's moved by at most $1.3\times10^{-6}$ in $\log_{10}p$, from the
 refined REML search of 2.0.0.dev6. HRATT's cross-fitted scores
 (Section~\ref{sec:crossfit}) changed 0.26\% of its decisions at 1\%, its
@@ -1308,7 +1310,7 @@ null-chromosome rejection is 0.98--1.27\% without local LD and
 1.00--1.20\% with LD.
 
 Omitting the environmental mean shift produces the largest departures.
-With LD, exact LOCO and BOLT-inf give 1.34\% and 1.25\% genetic-null
+With LD, exact LOCO and BOLT-style inf give 1.34\% and 1.25\% genetic-null
 rejection at 1\% ($\lgc=1.115$ and 1.114), and HRATT gives 0.64\%
 ($\lgc=0.947$; Table~\ref{tab:phensim}). Neither the inflation nor HRATT's
 deflation meets nominal calibration.
@@ -1316,7 +1318,7 @@ deflation meets nominal calibration.
 Adding the same two PCs reduces LD global-null rejection to 0.92--0.94\%
 for the three methods, and mixed-trait null-chromosome rejection to
 1.00--1.17\%. HRATT detects 29 of the 60 causal markers, exact LOCO and
-BOLT-inf 24 each; ten causal markers per panel cannot resolve a power
+BOLT-style inf 24 each; ten causal markers per panel cannot resolve a power
 difference. In these panels, explicit mean adjustment changes calibration
 more than the choice of method does.
 
@@ -1509,7 +1511,7 @@ matter at this size.
 Figure~\ref{fig:phensim-scaling} and Table~\ref{tab:phensim-scaling} extend the
 controlled LD workloads to 4,000 samples and 24,000 markers. Dense exact
 scans become substantially more expensive, although at 4,000 samples they
-now take about 31 seconds instead of 91; BOLT-inf and HRATT take 5.3--8.4
+now take about 31 seconds instead of 91; BOLT-style inf and HRATT take 5.3--8.4
 seconds. Because n and m both increase, the slopes
 do not identify a sample-size complexity exponent.
 
@@ -1843,7 +1845,7 @@ different whitening. Peak RSS fell from 1.14 to 0.80 GiB. MLMM ran five
 times faster and selected the same cofactors under all three criteria;
 its new float32 default accounts for part of that gain.
 
-The two-step paths gained less, 1.8-fold for BOLT-LMM-inf and 1.5-fold for
+The two-step paths gained less, 1.8-fold for BOLT-style inf and 1.5-fold for
 HRATT with REML, because their genotype passes were already batched. Their
 heritability estimate moved from 0.4440 to 0.4369 with the new Lanczos
 probes. With new calibration markers, $\log_{10}p$ moved by up to 0.07 at
@@ -1905,7 +1907,7 @@ average was below 5.
 
 The two-step paths need 2.4 to 2.8 times less memory with int8 calls and 3.1
 to 4.2 times less with two-bit calls. HRATT-HE ran 4\% faster than dev5 on one
-thread and 14\% faster on four. BOLT-LMM-inf, BOLT-LMM and HRATT with REML took
+thread and 14\% faster on four. BOLT-style inf, BOLT-style mixture and HRATT with REML took
 1.19 to 1.23 times as long, since every pass now decodes the calls, and 1.14 to
 1.18 times with two-bit calls. Exact LOCO and MLMM, whose code did not change,
 took the same time. Every repetition returned identical arrays, two-bit and int8
@@ -1922,7 +1924,7 @@ The steps between the two versions are archived separately:
 \code{20261004-}\allowbreak\code{genotype-streaming} (12aa504, covariates no
 longer projected per marker), \code{20261004-}\allowbreak\code{gram-cache}
 (Gram matrices stored in float32 and cached in part, which made
-cross-validation 1.5 and 2.5 times faster for BOLT-LMM and HRATT where float64
+cross-validation 1.5 and 2.5 times faster for BOLT-style mixture and HRATT where float64
 Grams had exceeded the budget) and \code{20261004-}\allowbreak\code{packed-calls}
 (two-bit calls, no float cache).
 
@@ -2163,7 +2165,7 @@ large effect is known (Table~\ref{tab:atwell}). Before the first fit we
 fixed the controls, raw phenotype values, a window of 50~kb around each
 TAIR10 gene body, the threshold $0.05/m$ and two criteria (archive
 \code{20261017-}\allowbreak\code{atwell-controls}). A1 required exact LOCO
-to find all seven genes; it failed. A2 required BOLT-LMM-inf and HRATT to
+to find all seven genes; it failed. A2 required BOLT-style inf and HRATT to
 find every gene exact LOCO found; it passed.
 
 All four methods found the same six genes. The best window variant ranked
@@ -2198,7 +2200,7 @@ The check covers data handling and power at large effects.
  \label{tab:atwell}
  \begin{tabular}{@{}llrllll@{}}
  \toprule
- Trait & Gene & $n$ & Exact & BOLT-inf & HRATT & OLS+PCs \\
+ Trait & Gene & $n$ & Exact & \begin{tabular}[b]{@{}l@{}}BOLT-style inf\\(mixmogam)\end{tabular} & HRATT & OLS+PCs \\
  \midrule
  \tabinput{tables/atwell_controls.tex}
  \bottomrule
@@ -2223,11 +2225,14 @@ drivers observed load but did not forward their load limit to fit workers.
 Table~\ref{tab:dev8-ladder} fixes the marker count at 20,000 and varies
 the number of samples. Each entry is one run on a synthetic mixed trait.
 The panels share a 100-marker founder-block design but are distinct
-realizations, and the number of founders changes with sample size. HRATT-HE
-is the fastest tested method from 5,000 to 100,000 samples. At 100,000,
+realizations, and the number of founders changes with sample size. From
+5,000 samples up HRATT-HE had the shortest single-run time of the four
+mixmogam methods, 3.27 against 4.00--4.13 seconds at 5,000 and 25.75
+against 47.07--102.20 at 100,000; at 1,000 and 2,500 samples BOLT-style
+inf was quicker. External programs are not compared. At 100,000,
 three further balanced-order repetitions on the same input gave median
 [minimum, maximum] seconds of 25.836 [25.565, 26.307] for HRATT-HE
-and 101.770 [101.540, 102.395] for BOLT-inf. Median peak RSS was 2.491
+and 101.770 [101.540, 102.395] for BOLT-style inf. Median peak RSS was 2.491
 and 3.598~GiB, respectively. Each method's p-values exactly matched its own first run.
 These repetitions measure timing variability on one input.
 
@@ -2238,7 +2243,7 @@ These repetitions measure timing variability on one input.
  \label{tab:dev8-ladder}
  \begin{tabular}{@{}rrrrr@{}}
  \toprule
- Samples & HRATT-HE & HRATT-REML & BOLT-inf & Exact \\
+ Samples & HRATT-HE & HRATT-REML & BOLT-style inf (mixmogam) & Exact \\
  \midrule
  \tabinput{tables/dev8_sample_ladder.tex}
  \bottomrule
@@ -2246,7 +2251,7 @@ These repetitions measure timing variability on one input.
 \end{table}
 
 On a separate 50,000-sample HAPNEST panel with longer-range LD, single
-runs took 17.48 seconds for HRATT-HE and 76.25 for BOLT-inf.
+runs took 17.48 seconds for HRATT-HE and 76.25 for BOLT-style inf.
 
 Table~\ref{tab:dev8-paired} compares the previous and current HRATT-HE
 implementations on two 50,000-sample HAPNEST panels. Each entry uses three
@@ -2286,23 +2291,23 @@ timings cannot show a cache-budget speedup.
 The 308-fit scale study includes ten independent replicates for each of
 five methods in each of five calibration cells. In the unstructured pure
 null, mean fractions below $p=0.05$ were 0.0509--0.0512 across methods;
-in the structured null they were 0.0417--0.0483. BOLT-inf's structured-null
+in the structured null they were 0.0417--0.0483. BOLT-style inf's structured-null
 fractions ranged from 0.0279 to 0.0703 across replicates. Variant-level
 binomial intervals in the original summary assume independence despite LD
 and do not describe uncertainty in the overall rate.
-In the confounded cell, BOLT mixture, HRATT-HE and HRATT-REML each had at
+In the confounded cell, BOLT-style mixture, HRATT-HE and HRATT-REML each had at
 least one non-converged stage in 10/10 replicates; with two PCs the counts
 were 7/10, 8/10 and 7/10. The aggregate summaries include those fits.
 
 All finite masks matched in the configuration study. At 5,000 samples and
-400,000 variants, unpinned-BLAS BOLT mixture exceeded the $10^{-6}$
+400,000 variants, unpinned-BLAS BOLT-style mixture exceeded the $10^{-6}$
 absolute log-p tolerance at 8 of 400,000 variants, with maximum $8.39\times
 10^{-6}$; other configurations met it. A paused worker's original parent
 wall time includes the pause and is not a runtime measurement; an isolated
 repeat matched its stored arrays exactly.
 
 The Atwell control rerun again recovered six of seven controls with every
-method: A1 failed on Mo98/MOT1 and A2 passed because HRATT and BOLT-inf
+method: A1 failed on Mo98/MOT1 and A2 passed because HRATT and BOLT-style inf
 recovered all controls found by exact LOCO. Four of eight HRATT scans had a
 non-converged stage; A2 does not exclude such fits. The earlier archive did
 not record comparable convergence fields, so we cannot tell whether
@@ -2524,7 +2529,7 @@ speed gained by reusing matrix products.
 balanced order, CPU time and complete-fit boundaries. Vary
 sample size and marker density separately and report peak memory per
 genotype for int8 and two-bit calls, with setup, variance fitting,
-prediction and testing timed apart; REML and BOLT-LMM still take 1.14 to
+prediction and testing timed apart; REML and BOLT-style mixture still take 1.14 to
 1.23 times as long as with dev5's cache. Before accepting a looser
 numerical tolerance, test high LD, small residual variance and phenotypes
 near decision thresholds. HRATT's case-control and weighted tests need

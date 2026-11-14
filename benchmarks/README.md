@@ -74,9 +74,11 @@ older drivers keep their own copies so their archives stay byte-reproducible.
 `scaling_ladder.py` separates sample size, LD structure and iteration counts
 by measuring the archived 50,000-sample HAPNEST panel, the same panel
 subsampled to 5,000 samples, and the scale study's 400,000-variant panel. Ten
-times fewer samples made HRATT-HE 7.0 times faster, with iteration counts
-falling too ([25 October run](results/20261025T190534Z-scaling-ladder/README.md)).
-The early-October archives were measured on a slower host.
+times fewer samples made HRATT-HE 7.0 times and BOLT-style inf (mixmogam) 17.3 times
+faster, with iteration counts falling too
+([25 October run](results/20261025T190534Z-scaling-ladder/README.md)). Early-October
+timings are not comparable: on the archived panel HRATT-HE took 27.2 s against
+the archived 43.9 s (2.0.0.dev6), which mixes code changes with host conditions.
 
 ```sh
 python benchmarks/scaling_ladder.py --ldak ~/bin/ldak63 \
@@ -99,14 +101,14 @@ After the 26 October speed branch
 ([review](results/20261026-hratt-speed-review/README.md)) the benchmarks were
 rerun on master `6a63f215` with the same panels, seeds and threads; lambda_GC
 reproduced to four decimals and the same causal variants were detected. At one
-thread HRATT-HE took 29 s (22 s under the null) and BOLT-LMM-inf 35 s
+thread HRATT-HE took 29 s (22 s under the null) and BOLT-style inf (mixmogam) 35 s
 ([1 thread](results/20261026T143800Z-kvik-scale/README.md),
 [4 threads](results/20261026T144700Z-kvik-scale-blas4/README.md)).
 
 The same driver at m = 20,000 and n from 1,000 to 50,000 gives the
 [sample-size ladder](results/20261026T161500Z-kvik-sample-scaling/README.md).
 Both HRATT paths scale approximately linearly (local exponents 0.86 and 0.96),
-BOLT-LMM-inf superlinearly (1.21, its CG count growing from 10 to 22), and
+BOLT-style inf (mixmogam) superlinearly (1.21, its CG count growing from 10 to 22), and
 `exact` cubically, so it stops at n = 2,500.
 
 With `--structured`, the driver runs four populations with
@@ -115,7 +117,7 @@ principal components (two is deliberately one short). With three components
 every mixmogam method converged and they agreed (lambda_GC 1.06-1.10 on null
 variants). Without covariates, or with two components leaving 58% of the
 environment in the trait, mixmogam's variational methods did not converge,
-while `exact` and BOLT-LMM-inf did
+while `exact` and BOLT-style inf (mixmogam) did
 ([1,000 x 10,000](results/20261025T201718Z-kvik-covariates-small/README.md),
 [400,000 variants](results/20261025T201847Z-kvik-covariates-large/README.md);
 reruns [small](results/20261026T152200Z-kvik-covariates-small/README.md),
@@ -145,7 +147,7 @@ python benchmarks/atwell_controls.py
 
 ## Matched phensim simulations
 
-`ldak_kvik_comparison.py` runs exact LOCO, BOLT-inf and HRATT on phensim data
+`ldak_kvik_comparison.py` runs exact LOCO, BOLT-style inf (mixmogam) and HRATT on phensim data
 (Balding-Nichols populations with optional AR(1) LD and explicit environmental
 exposures). The [protocol](ldak_kvik_comparison_plan.md) separates
 genetic-null calibration, null-chromosome rejection and causal-marker power.
@@ -226,7 +228,7 @@ the old float genotype cache (zero measures repeated decoding;
 
 `efficiency_paired.py` compares labelled source trees (`--source LABEL=PATH`,
 oldest first; the last is the reference) on seeded synthetic workloads for
-every path: exact LOCO, MLMM, BOLT-LMM-inf, BOLT-LMM, HRATT-REML, HRATT-HE on
+every path: exact LOCO, MLMM, BOLT-style inf (mixmogam), BOLT-style mixture (mixmogam), HRATT-REML, HRATT-HE on
 one and four threads, and HRATT-HE at 10,000 samples and 10,000-80,000
 variants. A capability probe skips workloads a source cannot run (`*-streamed`
 disable the cache of sources up to dev5, `*-packed` fit two-bit calls; sources
@@ -353,13 +355,13 @@ OPENBLAS_NUM_THREADS=4 VECLIB_MAXIMUM_THREADS=4 \
   both; scan throughput across shapes; batched permutations.
 - `sim_study.py`: phensim coalescent datasets crossed with method variants
   (exact vs SLQ fits; exact scans with and without LOCO; K-free
-  BOLT-LMM-inf; the truncated-spectrum scan; LM vs LMM; batched
+  BOLT-style inf (mixmogam); the truncated-spectrum scan; LM vs LMM; batched
   permutations). Power and false discoveries are counted per locus, each LD
   block (ldpred3's LD split of the coalescent segment) being its own
   "chromosome". The confounding scenario (S2) samples two demes with msprime
   and puts the confounder on an environment that differs between them.
 - `structure_calibration.py`: per-SNP calibration of the two-step statistics
-  (BOLT-LMM-inf, BOLT-LMM, HRATT, each with and without the spectral
+  (BOLT-style inf (mixmogam), BOLT-style mixture (mixmogam), HRATT, each with and without the spectral
   denominator) against exact LOCO EMMAX on SNPs null by construction, binned
   by loading on the top kinship eigenvectors, for simulated genotypes with and
   without structure and the bundled *A. thaliana* RegMap genotypes.

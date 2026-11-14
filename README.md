@@ -5,18 +5,19 @@ leave-one-chromosome-out (LOCO) testing by default. Quantitative traits work
 with every method; HRATT also handles case-control outcomes and sampling
 weights. The core needs only NumPy and SciPy. Numba accelerates the optional
 kernels, and the two-step methods warn without it because their Python
-fallbacks are much slower (on one 1,000 x 20,000 panel, 4.8 times for
-BOLT-LMM-inf, 68 times for HRATT-HE and 187 times for the BOLT-LMM mixture).
+fallbacks are much slower (single fits on one 1,000 x 20,000 panel: 4.8 times
+the fit time for BOLT-style inf (mixmogam), 68 times for HRATT-HE and 187 times for
+BOLT-style mixture (mixmogam)).
 
 Development version 2.0.2.dev1. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
-[research report](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/report/README.md).
+[research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 
 | `gwas(..., method=)` | Implementation |
 |---|---|
 | `"exact"` | EMMAX with an exact REML refit per LOCO group, by Cholesky factorizations |
-| `"bolt-inf"` | BOLT-LMM-inf-style CG solves and retrospective calibration |
-| `"bolt"` | Two-Gaussian mixture, variational fitting and cross-validation |
+| `"bolt-inf"` | BOLT-style inf (mixmogam): an infinitesimal model after BOLT-LMM-inf, with CG solves and retrospective calibration |
+| `"bolt"` | BOLT-style mixture (mixmogam): a two-Gaussian mixture after BOLT-LMM, with variational fitting and cross-validation |
 | `"hratt"` | HRATT: cross-fitted elastic-net LOCO scores and structure-dependent calibration; quantitative or case-control, optionally sampling-weighted |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
 
@@ -44,9 +45,9 @@ frequencies and assumes conditional Hardy-Weinberg equilibrium, so include
 ancestry covariates when weights or case fractions vary with ancestry. Binary
 effects are one-step approximations, not fitted logistic effects. The weighted
 and binary paths are experimental: the
-[first validation](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261005-hratt-weights-binary/README.md)
+[first validation](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261005-hratt-weights-binary/README.md)
 passed two of seven criteria and the
-[follow-up](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261006-hratt-followups/README.md) five.
+[follow-up](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261006-hratt-followups/README.md) five.
 Cross-fitted effects were within 2% of the population slopes (in-sample
 scores: 28-36% low), except weighted effects under selection on the outcome
 (5.4% low), and weighted fits took 1.55 times as long as HRATT-HE against a
@@ -183,25 +184,29 @@ explicit hard-call threshold. For repeated analyses, PLINK BED with
 `genome_build="GRCh38"` (CLI `--genome-build`) labels the assembly in the
 output without converting coordinates. LOCO needs at least two chromosomes,
 and phenotype and covariate rows must follow the genotype sample order. The
-[quickstart](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/quickstart.md) covers the rest of the API, including
+[quickstart](https://github.com/bvilhjal/mixmogam/blob/master/docs/quickstart.md) covers the rest of the API, including
 threads, two-bit storage and memory budgets for large HRATT fits, and
-[file formats](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/formats.md) the input contracts.
+[file formats](https://github.com/bvilhjal/mixmogam/blob/master/docs/formats.md) the input contracts.
 
 ## Performance
 
-On one simulated 100,000 x 20,000 founder-block panel, three balanced-order
-repetitions gave:
+On one simulated 100,000 x 20,000 founder-block panel (2.0.0.dev8, one thread,
+Apple M2 Pro), three balanced-order repetitions of each mixmogam method gave:
 
 | Method | Median wall time | Median peak RSS |
 |---|---:|---:|
 | HRATT-HE | 25.84 s | 2.49 GiB |
-| BOLT-LMM-inf | 101.77 s | 3.60 GiB |
+| BOLT-style inf (mixmogam) | 101.77 s | 3.60 GiB |
 
 Each method reproduced its own p-values exactly across repetitions. In the
-20,000-variant sample-size ladder HRATT-HE was the fastest method from 5,000
-through 100,000 samples; at 2,500 samples the default `exact` path took
-9.45 s against 2.60-3.19 s for BOLT-LMM-inf and HRATT. The
-[evidence bundle](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261029-report-evidence/README.md) has
+20,000-variant sample-size ladder (one run per method and size, the same panel
+within each size), HRATT-HE took 3.27 s at 5,000 samples and 25.75 s at
+100,000, against 4.00 s and 102.20 s for BOLT-style inf (mixmogam) and 4.13 s and
+47.07 s for HRATT-REML. At 1,000 and 2,500 samples BOLT-style inf (mixmogam) was
+quicker (2.03 and 2.60 s against 2.57 and 2.77 s), and at 2,500 the default
+`exact` path took 9.45 s. These compare mixmogam's own methods on one host;
+no external program is compared. The
+[evidence bundle](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/README.md) has
 the ladder, a longer-range-LD panel, 400,000- and 800,000-variant fits and the
 measurement details.
 
@@ -215,9 +220,9 @@ measurement details.
   that needs covariates spanning the ancestry structure (K - 1 principal
   components for K populations). In a four-population panel, three PCs made
   every method converge and agree (lambda_GC 1.06-1.10 on null variants).
-  With none, or two, the BOLT mixture and both HRATT paths did not converge,
-  while `exact` and BOLT-LMM-inf stayed near calibration
-  ([archive](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
+  With none, or two, BOLT-style mixture (mixmogam) and both HRATT paths did not converge,
+  while `exact` and BOLT-style inf (mixmogam) stayed near calibration
+  ([archive](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
   Check `extra["cv_converged"]` and `extra["loco_converged"]`.
 - Only HRATT models binary outcomes and weights. A 0/1 phenotype passed
   without `trait="binary"` is fitted as Gaussian, without a warning.
@@ -232,7 +237,7 @@ measurement details.
 
 Cite the software with [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff) and the papers for the
 methods you use. Each paper's PMID and lookup URL is in
-[report/references.json](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/report/references.json).
+[report/references.json](https://github.com/bvilhjal/mixmogam/blob/master/report/references.json).
 
 | If you use | Cite |
 |---|---|
@@ -248,15 +253,15 @@ methods you use. Each paper's PMID and lookup URL is in
 | residual-coordinate permutations | Abney M (2015). Permutation testing in the presence of polygenic variation. *Genet Epidemiol* **39**(4). [doi:10.1002/gepi.21893](https://doi.org/10.1002/gepi.21893) |
 | the spectral and streaming LMM solvers | Lippert C et al. (2011). *Nat Methods* **8**(10). [doi:10.1038/nmeth.1681](https://doi.org/10.1038/nmeth.1681); Listgarten J et al. (2012). *Nat Methods* **9**(6). [doi:10.1038/nmeth.2037](https://doi.org/10.1038/nmeth.2037); Svishcheva GR et al. (2012). *Nat Genet* **44**(10). [doi:10.1038/ng.2410](https://doi.org/10.1038/ng.2410); Loya H et al. (2025). *Nat Genet* **57**(2). [doi:10.1038/s41588-024-02044-7](https://doi.org/10.1038/s41588-024-02044-7) |
 | lambda_GC, confounding and mixed-model pitfalls | Yang J et al. (2014). Advantages and pitfalls in the application of mixed-model association methods. *Nat Genet* **46**(2). [doi:10.1038/ng.2876](https://doi.org/10.1038/ng.2876); Sul JH et al. (2018). Population structure in genetic studies: confounding factors and mixed models. *PLoS Genet* **14**(12). [doi:10.1371/journal.pgen.1007309](https://doi.org/10.1371/journal.pgen.1007309) |
-| the bundled *A. thaliana* panel in [`at_data/`](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/at_data/README.md) | Atwell S et al. (2010). Genome-wide association study of 107 phenotypes in *Arabidopsis thaliana* inbred lines. *Nature* **465**(7298). [doi:10.1038/nature08800](https://doi.org/10.1038/nature08800); Horton MW et al. (2012). *Nat Genet* **44**(2). [doi:10.1038/ng.1042](https://doi.org/10.1038/ng.1042); Baxter I et al. (2008). *PLoS Genet* **4**(2). [doi:10.1371/journal.pgen.1000004](https://doi.org/10.1371/journal.pgen.1000004) |
+| the bundled *A. thaliana* panel in [`at_data/`](https://github.com/bvilhjal/mixmogam/blob/master/at_data/README.md) | Atwell S et al. (2010). Genome-wide association study of 107 phenotypes in *Arabidopsis thaliana* inbred lines. *Nature* **465**(7298). [doi:10.1038/nature08800](https://doi.org/10.1038/nature08800); Horton MW et al. (2012). *Nat Genet* **44**(2). [doi:10.1038/ng.1042](https://doi.org/10.1038/ng.1042); Baxter I et al. (2008). *PLoS Genet* **4**(2). [doi:10.1371/journal.pgen.1000004](https://doi.org/10.1371/journal.pgen.1000004) |
 | the simulated benchmark panels | Wharrie S et al. (2023). HAPNEST. *Bioinformatics* **39**(9). [doi:10.1093/bioinformatics/btad535](https://doi.org/10.1093/bioinformatics/btad535); Baumdicker F et al. (2022). msprime 1.0. *Genetics* **220**(3). [doi:10.1093/genetics/iyab229](https://doi.org/10.1093/genetics/iyab229); Kelleher J et al. (2016). *PLoS Comput Biol* **12**(5). [doi:10.1371/journal.pcbi.1004842](https://doi.org/10.1371/journal.pcbi.1004842) |
 
 Citing a paper does not transfer its validation to this implementation.
 
 Also available: stepwise MLMM, GxE, genotypic tests, residual-coordinate
 permutations, two-kinship fits and Manhattan/QQ plots. The
-[tutorial](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/tutorial.md) walks through one simulated analysis. Dated
-reviews ([3 October](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/review-2026-10-03.md),
-[25 October](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/review-2026-10-25.md),
-[29 October](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/docs/review-2026-10-29.md)) record corrections, measurements and
+[tutorial](https://github.com/bvilhjal/mixmogam/blob/master/docs/tutorial.md) walks through one simulated analysis. Dated
+reviews ([3 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-03.md),
+[25 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-25.md),
+[29 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-29.md)) record corrections, measurements and
 release checks. The Python 2 package remains under the `v1.0-legacy` Git tag.

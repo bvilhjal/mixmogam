@@ -546,7 +546,7 @@ kinship eigenvectors), six replicates, from the earlier implementation
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
 | *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 | 0.97-1.03 |
 
-FPR at p < 0.01 follows suit (strong simulated structure: BOLT-LMM-inf
+FPR at p < 0.01 follows suit (strong simulated structure: BOLT-style inf (mixmogam)
 2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through HRATT's lambda
 rule the transferred correction flattens the gradient but leaves about 7%
 overall inflation under strong simulated structure.

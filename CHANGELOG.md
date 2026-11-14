@@ -48,7 +48,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `report/make_phensim_figures.py` and writes nothing into the archives.
   Attribution of HRATT's design to LDAK-KVIK (Hof & Speed 2025) stays. Benchmark
   drivers, protocols and archived results are unchanged; external-program runs in
-  them are kept for provenance only.
+  them are kept for provenance only. The committed `report/mixmogam_report.pdf`
+  is still the 2.0.0 build and keeps the old comparisons until it is rebuilt.
+
+### Changed
+
+- Documentation and report labels: mixmogam's `bolt-inf` and `bolt` methods are
+  shown as "BOLT-style inf (mixmogam)" and "BOLT-style mixture (mixmogam)", so
+  they are not read as the BOLT-LMM program. Speed statements now give the
+  measured times of mixmogam's own methods instead of rankings ("fastest",
+  "cheapest"), and the README links current documentation on `master` instead
+  of the v2.0.1 tag. `report/report_manifest.json` was regenerated.
 
 ## [2.0.2.dev1] - 2026-11-03
 

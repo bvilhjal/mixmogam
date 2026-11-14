@@ -14,8 +14,9 @@ genotype distributions (2.13, 4.12), and a positive-control check on the
 bundled RegMap panel (4.13), which found six of seven known major genes with
 every method and failed its criterion on MOT1. The abstract keeps the failed
 weighted-effect and runtime criteria. Section 4.14 reports the 29 October
-reruns with `2.0.0.dev8` at commit `d550c412`: HRATT-HE was faster at the
-larger sample sizes in the synthetic panels, the default-cache paired
+reruns with `2.0.0.dev8` at commit `d550c412`: in the synthetic panels HRATT-HE
+took 25.75 s at 100,000 samples against 102.20 s for BOLT-style inf (mixmogam)
+(single runs, one thread), the default-cache paired
 comparison did not establish an implementation speedup, and the confounded
 calibration fits and four Atwell HRATT scans had non-converged stages. The
 [evidence bundle](../benchmarks/results/20261029-report-evidence/README.md)
@@ -49,11 +50,11 @@ its earlier name.
 | Cross-fitted scores and covariate-specific genotype distributions | `20261006-hratt-followups` | Prespecified validation on the same samples plus Fst 0.05 cells with and without 10 PCs; 660 cases |
 | Built-in-PC equivalence rerun | `20261008-hratt-followups-builtin-pcs` | The S4 cells re-run with `mixmogam.pca.principal_components`, the exact SVD of the same thinned panels, replacing the driver's randomized iteration; 130 cases, calibration matches within Monte Carlo error |
 | Known major genes on real data | `20261017-atwell-controls` | Prespecified positive controls on the bundled RegMap panel and Atwell phenotypes, four methods; A1 failed (MOT1 on raw values), A2 passed; log-scale and HRATT-convergence follow-ups are exploratory |
-| Genome-scale suite rework | `20261025T135258Z-scale-study`, map in [`benchmarks/DESIGN.md`](../benchmarks/DESIGN.md) | 308 fits under a prespecified plan: configuration invariance (bitwise), the Gram-cache budget cliff, type-I error/power/effect attenuation with intervals, and the pure NumPy fallbacks' cost; the confounded cells exposed a non-convergence the variational methods hit and the exact/BOLT-LMM-inf paths do not |
-| Panel-cost decomposition | `20261025T190534Z-scaling-ladder`, `-t4` | Ten times fewer samples costs ~7x at fixed variants (iteration counts fall with it); short-range LD is cheaper per variant than HAPNEST's; the October archives were measured on a slower host |
-| Covariates under confounding | `20261025T201718Z-kvik-covariates-small`, `-large` | With three ancestry PCs mixmogam methods converge and agree; without them the variational fits do not converge while exact and BOLT-LMM-inf stay near calibration |
+| Genome-scale suite rework | `20261025T135258Z-scale-study`, map in [`benchmarks/DESIGN.md`](../benchmarks/DESIGN.md) | 308 fits under a prespecified plan: configuration invariance (bitwise), the Gram-cache budget cliff, type-I error/power/effect attenuation with intervals, and the pure NumPy fallbacks' cost; the confounded cells exposed a non-convergence the variational methods hit and the exact and BOLT-style inf (mixmogam) paths do not |
+| Panel-cost decomposition | `20261025T190534Z-scaling-ladder`, `-t4` | Ten times fewer samples costs ~7x at fixed variants (iteration counts fall with it); short-range LD needed fewer HRATT sweeps (4 against 8-10) than HAPNEST's; early-October timings are not comparable (HRATT-HE 27.2 s now against 43.9 s archived, with older code and other host conditions) |
+| Covariates under confounding | `20261025T201718Z-kvik-covariates-small`, `-large` | With three ancestry PCs mixmogam methods converge and agree; without them the variational fits do not converge while exact and BOLT-style inf (mixmogam) stay near calibration |
 | Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, stacked HE-alpha GEMM, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
-| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: both HRATT paths approximately linear in n (local exponents 0.86 and 0.96) with bounded sweep counts, BOLT-LMM-inf superlinear (1.21; CG iterations 10 to 22), exact cubic; HRATT-HE cheapest from n = 10,000 up |
+| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: both HRATT paths approximately linear in n (local exponents 0.86 and 0.96) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact cubic; at n = 50,000 single runs took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)) |
 | dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
