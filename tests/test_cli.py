@@ -268,6 +268,37 @@ def test_plink_binary_coding_is_explicit(dataset, tmp_path, monkeypatch):
     assert main([*args, "--trait", "binary"]) == 0
 
 
+@pytest.mark.parametrize("flags", [["--relatedness", "auto"],
+                                   ["--relatedness-threshold", "0.05"],
+                                   ["--relatedness-correction", "lambda"]])
+def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch, flags):
+    """Like --trait, the HRATT-only --relatedness* flags resolve auto to hratt."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+
+    seen = {}
+    def scan(y, subset, **kwargs):
+        seen.update(kwargs)
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--out", str(tmp_path / "out.csv")]
+    assert main(base) == 0
+    assert seen["method"] == "exact"
+    seen.clear()
+    assert main([*base, *flags]) == 0
+    assert seen["method"] == "hratt"
+    key = flags[0].lstrip("-").replace("-", "_")
+    assert seen[key] == (float(flags[1]) if key == "relatedness_threshold" else flags[1])
+
+
+def test_relatedness_auto_runs_without_method(dataset, tmp_path):
+    out = tmp_path / "rel.csv"
+    assert main(["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+                 "--pcs", "3", "--relatedness", "auto", "--out", str(out)]) == 0
+    assert len(out.read_text().splitlines()) == dataset["m"] + 1
+
+
 def test_gzipped_vcf_plink_phenotypes_and_tsv_result_match_api(tmp_path):
     import gzip
     from mixmogam.results import GwasResult

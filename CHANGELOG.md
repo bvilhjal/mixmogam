@@ -170,6 +170,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   14 November 2026. The report PDF and `report/report_manifest.json` were
   regenerated.
 
+### Fixed
+
+- CLI: `--relatedness`, `--relatedness-threshold`, `--relatedness-correction`
+  and `--kinship-variants` now move `--method auto` to HRATT, like `--trait`,
+  `--weights`, `--stage1` and `--model-snps`. Before, `mixmogam gwas
+  --relatedness auto` without `--method hratt` resolved to exact or bolt-inf
+  and exited with "relatedness: options of method='hratt' only".
+
 ## [2.0.2.dev1] - 2026-11-03
 
 ### Fixed
