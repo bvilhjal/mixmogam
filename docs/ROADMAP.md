@@ -75,24 +75,32 @@ the normal root and the ancestry ratio in closed form (binary step 2 about
 (bit-identical); bit-identical thinning kernels; the structure test over
 sample tiles above 131,072 samples.
 
-Open, each a decision:
+Next:
 
-- **The model-SNP h2 check** (`model_snps_h2_check`, on by default) runs
-  randomized HE for every alpha over every variant: 2.4 s against 1.0 s for
-  the variational fits when a tenth of 400,000 variants are model SNPs. It
-  chooses alpha on the full panel on purpose (subset alphas made the ratios
-  incomparable), so a cheaper check changes what it reports.
-- **The moments pass** is 82% of a quantitative step 2. Summing covariate
-  rows over carriers only keeps per-variant sums in sample order (5.4x below
-  1% MAF, 1.7x on a log-uniform spectrum, 0.77x for common variants, so it
-  needs a per-variant switch, in every storage kernel); one GEMV per variant
-  is tile-independent and 2-3.3x faster from 50,000 samples, slower at 5,000.
-  Either changes results at rounding level.
-- **The KING variant cap** (`king_max_variants`, 50,000): KING's time is
-  linear in it.
-- **A thread cap.** A whole HRATT fit gains 1.5x at four threads, nothing more
-  at six and loses at eight on the M2 Pro; the quickstart now recommends four
-  for step 1. A cap at the performance cores would need a portable count.
+- **The moments pass** is 82% of a quantitative step 2. Planned: sum the
+  covariate rows over carriers only, switched per variant on its carrier
+  count, in every storage kernel (5.4x below 1% MAF, 1.7x on a log-uniform
+  spectrum, 0.77x for common variants, hence the switch). Each variant's sums
+  stay in sample order, so step 2 keeps its independence of blocks, threads
+  and storage, but every statistic moves at rounding level. One GEMV per
+  variant was the alternative: also tile-independent, 2-3.3x faster from
+  50,000 samples but slower at 5,000.
+
+Decided on 14 November (kept as they are):
+
+- **The model-SNP h2 check** (`model_snps_h2_check`) stays on by default. It
+  runs randomized HE for every alpha over every variant (2.3 s of a 5.8 s fit,
+  against 1.0 s for the variational fits, when a tenth of 400,000 variants are
+  model SNPs)
+  and drives the predicted-inflation warning; the README gives its cost and
+  the switch. It chooses alpha on the full panel on purpose (subset alphas
+  made the ratios incomparable), so a cheaper check would change what it
+  reports.
+- **The KING variant cap** (`king_max_variants`, 50,000) stays: KING's time
+  is linear in it, and fewer variants raise the noise floor.
+- **No thread cap.** A whole HRATT fit gains 1.5x at four threads, nothing
+  more at six and loses at eight on the M2 Pro; the quickstart recommends four
+  for step 1 instead of capping a requested count.
 
 Measured and refuted: a fused decode-and-multiply Numba kernel for the
 sweeps' forward products (0.27-0.55x at one thread, ahead of one BLAS thread

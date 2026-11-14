@@ -12,7 +12,7 @@ single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
 BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
 ([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
-Development version 2.0.2.dev2. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+Version 2.1.0. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 
@@ -149,8 +149,10 @@ do not correct them; HRATT's strong-structure warnings say so and point to `rela
 docstring (`help(mixmogam.twostep.hratt)`).
 
 **Warnings and notes.** HRATT compares the subset's HE heritability with the same estimate
-on every variant (one extra panel pass; turn it off with `model_snps_h2_check=False` or
-`--no-model-snps-h2-check`). A ratio below 0.85 is only a note in
+on every variant. That is an extra randomized-HE pass over the whole panel, and it can cost
+more than the stage-1 fit: 2.3 s of a 5.8 s fit on 5,000 x 400,000 with every tenth variant as
+a model SNP. `model_snps_h2_check=False` (`--no-model-snps-h2-check`) skips it, and with it
+the predicted-inflation warning below. A ratio below 0.85 is only a note in
 `result.extra["model_snps"]["notes"]`, not a warning: HapMap3-like sets sit near 0.7 and are
 calibrated in unrelated samples. HRATT warns, and records the details in
 `result.extra["model_snps"]["warnings"]`, when:
@@ -323,7 +325,7 @@ methods you use. Each paper's PMID and lookup URL is in
 
 | If you use | Cite |
 |---|---|
-| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.0.2.dev2 |
+| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.1.0 |
 | `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
 | `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
 | `method="hratt"`: its two-step design | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |

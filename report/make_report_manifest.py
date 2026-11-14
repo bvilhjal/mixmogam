@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-14-efficiency",
+        "revision": "2026-11-14-release-2.1.0",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
