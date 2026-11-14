@@ -17,9 +17,11 @@ rows.
 Every later pass decodes through a per-variant table: hard calls 0/1/2 can
 only standardize to three values, computed once in float64, so decoding
 selects them (no-calls are 0) without arithmetic. One M2 Pro thread decodes
-about 0.16 ns per genotype from variant-major int8 (PLINK order), 0.2 ns
-from two-bit codes and 1 ns from sample-major int8. Covariates are
-removed by the consumers, never per variant.
+about 0.16 ns per genotype from variant-major int8 (PLINK order), 0.1-0.14
+ns from two-bit codes of 4,096 samples or more (a per-variant table of each
+byte's four values, copied 8 or 16 bytes at a time; 0.2 ns below) and 1 ns
+from sample-major int8. Covariates are removed by the consumers, never per
+variant.
 """
 
 from __future__ import annotations
@@ -40,6 +42,10 @@ else:  # the NumPy fallbacks below never invoke these kernels
 # Decoded genotypes per NumPy fallback chunk: the table gather needs an
 # intp index per element.
 _NUMPY_DECODE_CELLS = 1 << 22
+# Two-bit rows of at least this many samples decode through a per-variant
+# table of each byte's four values (its 1,024 entries cost more than they
+# save on shorter rows; the values are the same either way).
+_WIDE_DECODE_SAMPLES = 4096
 # Variants per preparation tile; samples and variants per tile of
 # sample-major decoding.
 _TILE = 64
@@ -460,6 +466,47 @@ def _decode_packed_rows(data, idx, lut, out, r0, r1, code_lut):
             out[r, i] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
 
 
+def _decode_packed_wide_rows(data, idx, lut, out, r0, r1, quad):
+    """:func:`_decode_packed_rows` through a table of every byte's four
+    values (256 x 4, built per variant) copied whole: one 16-byte element
+    per stored byte for float32 rows when ``quad`` (rows 8-byte aligned),
+    else two elements of the values' own alignment (8 bytes for float32, 16
+    for float64). ``out`` rows must be C-contiguous. The values are the
+    same."""
+    n = out.shape[1]
+    full = n // 4
+    table = np.empty((256, 4), dtype=out.dtype)
+    wide16 = table.reshape(1024).view(np.complex128)
+    wide8 = table.reshape(1024).view(np.complex64)
+    code_lut = np.empty(4, dtype=out.dtype)
+    for r in range(r0, r1):
+        code_lut[0], code_lut[1], code_lut[2], code_lut[3] = lut[r, 2], lut[r, 3], lut[r, 1], lut[r, 0]
+        for v in range(256):
+            table[v, 0] = code_lut[v & 3]
+            table[v, 1] = code_lut[(v >> 2) & 3]
+            table[v, 2] = code_lut[(v >> 4) & 3]
+            table[v, 3] = code_lut[v >> 6]
+        row = data[idx[r]]
+        if out.itemsize == 8:  # float64: two 16-byte elements per byte
+            dest = out[r, : 4 * full].view(np.complex128)
+            for b in range(full):
+                j = 2 * np.int64(row[b])
+                dest[2 * b] = wide16[j]
+                dest[2 * b + 1] = wide16[j + 1]
+        elif quad:  # float32, 8-byte aligned rows: one 16-byte element per byte
+            dest = out[r, : 4 * full].view(np.complex128)
+            for b in range(full):
+                dest[b] = wide16[row[b]]
+        else:  # float32: two 8-byte elements per byte
+            dest = out[r, : 4 * full].view(np.complex64)
+            for b in range(full):
+                j = 2 * np.int64(row[b])
+                dest[2 * b] = wide8[j]
+                dest[2 * b + 1] = wide8[j + 1]
+        for i in range(4 * full, n):
+            out[r, i] = code_lut[(row[i >> 2] >> (2 * (i & 3))) & 3]
+
+
 def _decode_packed_span(data, idx, lut, out, r0, r1, code_lut, start):
     """Rows r0:r1 of samples start:start + out.shape[1] from two-bit codes.
     Whole bytes serve four samples; a range that starts or ends inside a
@@ -493,6 +540,16 @@ def _decode_packed_parallel(data, idx, lut, out):
     for t in prange((idx.size + _TILE - 1) // _TILE):
         _decode_packed_rows(data, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, idx.size),
                             np.empty(4, dtype=out.dtype))
+
+
+def _decode_packed_wide(data, idx, lut, out, quad):
+    _decode_packed_wide_rows(data, idx, lut, out, 0, idx.size, quad)
+
+
+def _decode_packed_wide_parallel(data, idx, lut, out, quad):
+    for t in prange((idx.size + _TILE - 1) // _TILE):
+        _decode_packed_wide_rows(data, idx, lut, out, t * _TILE, min(t * _TILE + _TILE, idx.size),
+                                 quad)
 
 
 def _decode_packed_span_all(data, idx, lut, out, start):
@@ -676,6 +733,9 @@ if HAS_NUMBA:
     _decode_packed_span = njit(cache=True)(_decode_packed_span)
     _decode_packed = njit(cache=True, nogil=True)(_decode_packed)
     _decode_packed_parallel = njit(parallel=True, cache=True)(_decode_packed_parallel)
+    _decode_packed_wide_rows = njit(cache=True)(_decode_packed_wide_rows)
+    _decode_packed_wide = njit(cache=True, nogil=True)(_decode_packed_wide)
+    _decode_packed_wide_parallel = njit(parallel=True, cache=True)(_decode_packed_wide_parallel)
     _decode_packed_span_all = njit(cache=True, nogil=True)(_decode_packed_span_all)
     _decode_packed_span_parallel = njit(parallel=True, cache=True)(_decode_packed_span_parallel)
     _project_rows = njit(cache=True)(_project_rows)
@@ -734,6 +794,16 @@ def prepare_moments(G, idx, Q, n_threads=1, sq_weights=None):
     return mean, sd, coefficients, zz
 
 
+def _wide_rows(out):
+    """None, or whether float32 rows are 8-byte aligned (``quad``), when
+    ``out`` takes the table-of-bytes two-bit decoder: aligned float rows of
+    at least :data:`_WIDE_DECODE_SAMPLES` samples, each contiguous."""
+    if not (out.dtype in (np.float32, np.float64) and out.ndim == 2 and out.flags.aligned
+            and out.shape[1] >= _WIDE_DECODE_SAMPLES and out.strides[1] == out.itemsize):
+        return None
+    return bool(out.itemsize == 4 and out.strides[0] % 8 == 0 and out.ctypes.data % 8 == 0)
+
+
 def decode_table(G, idx, lut, out, n_threads=1, compiled=True, start=0):
     """Decode variants ``idx`` into rows of ``out`` from their lookup rows.
 
@@ -755,14 +825,20 @@ def decode_table(G, idx, lut, out, n_threads=1, compiled=True, start=0):
         return out
     if isinstance(G, PackedCalls):
         whole = start == 0 and out.shape[1] == G.shape[0]  # the tight full-width kernels
+        quad = _wide_rows(out) if whole else None
+        wide = quad is not None
         if n_threads > 1:
             with _numba_thread_limit(min(_validate_n_threads(n_threads), max(idx.size, 1))):
-                if whole:
+                if wide:
+                    _decode_packed_wide_parallel(G.data, idx, lut, out, quad)
+                elif whole:
                     _decode_packed_parallel(G.data, idx, lut, out)
                 else:
                     _decode_packed_span_parallel(G.data, idx, lut, out, start)
         else:
-            if whole:
+            if wide:
+                _decode_packed_wide(G.data, idx, lut, out, quad)
+            elif whole:
                 _decode_packed(G.data, idx, lut, out)
             else:
                 _decode_packed_span_all(G.data, idx, lut, out, start)

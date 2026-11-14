@@ -50,6 +50,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `in_memory`.
 - `iter_bgen_dosages` and `read_bgen` share their input checks; the decode
   and Gram packing kernels release the GIL.
+- KING-robust kinship (`relatedness="auto"`, `king_pairs`) takes two float32
+  products per row block instead of three, against the samples from the
+  block's first row on instead of all samples, with the indicators decoded
+  straight from the stored calls (the opposite homozygotes are
+  (SS' - DD') / 2 with D = hom-ref - hom-alt; missing calls add three
+  products). Every count is an exact integer, so pairs, kinship values,
+  noise floor and diagnostics are identical. On 20,000 samples and 40,000
+  KING variants (one thread): 117 to 35 s, 175 to 78 s with 0.5% missing
+  calls; the traced peak allocation at 20,000 samples is 1.9 instead of
+  3.9 GiB (2.9 instead of 5.4 with missing calls). A whole HRATT-HE fit with
+  `relatedness="auto"` takes 46 s instead of 132.
+- Saddlepoint tails (binary traits and sampling weights) find the
+  saddlepoint by Newton's method from the normal approximation's root,
+  evaluating K' and K'' only until the root: about four cumulant passes per
+  tail instead of eight. Scores near zero and near a support boundary keep
+  the bracket search. The covariate-specific variance ratio of the
+  retrospective tests (`_ancestry_ratio`) is a closed-form quadratic in the
+  covariate coefficients, O(q^2) per variant instead of O(n q), wherever no
+  predicted frequency reaches a clip limit. On 20,000 x 40,000 (one thread,
+  with the decoding change below): binary HRATT with ten covariates 27.0 to
+  19.0 s, intercept-only binary 25.4 to 19.0 s, weighted quantitative 29.3 to
+  19.1 s; a streamed binary step 2 takes 7.5 s instead of 15.1 (4.0 instead
+  of 8.3 at eight threads). log10 p moves by at most 3.4e-13 and no call at
+  0.05/m changes.
+- Two-bit calls of 4,096 samples or more decode through a per-variant table
+  of each stored byte's four values, copied 8 or 16 bytes at a time: 0.10 to
+  0.14 ns per call instead of 0.20 (one thread). Results are bit-identical.
+  One-thread HRATT-HE takes 20.4 s instead of 21.6 on 5,000 x 400,000 and
+  10.2 s instead of 11.5 on 50,000 x 20,000; BOLT-style inf 22.0 s instead
+  of 23.5 on 20,000 x 40,000. At four threads, where decoding is already
+  parallel, the gain is within noise.
+- `model_snps="auto"` thinning standardizes its LD rows without a branch per
+  sample, with the same arithmetic (bit-identical rows and kept sets): 8.2 to
+  6.2 s on 5,000 x 400,000 (a whole fit 33.4 to 26.8 s with the decoding
+  change).
+- The structure test accumulates its correlations over sample tiles once its
+  512 rows would exceed 512 MiB (from 131,072 samples): about 64 MiB of rows
+  at a time instead of 2 GB of float64 rows at 500,000 samples, and up to
+  twice that with `relatedness=`. The statistic then changes by rounding
+  only; below that size it is unchanged. `LocoGenotypes.rows` takes a sample
+  range.
+- The quickstart's thread advice: a whole HRATT fit gains 1.5x at four
+  threads, nothing more at six and loses at eight on an M2 Pro (six
+  performance cores), so step 1's examples use four threads; step 2 is
+  parallel throughout.
 
 ## [2.0.2.dev2] - 2026-11-14
 

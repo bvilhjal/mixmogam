@@ -180,6 +180,9 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None, cache=None) -> dict
                        "Xr": Xg.T @ resid, "q": Xg.shape[1]})
     A = np.column_stack([w * (y - fit["mu"]) for fit in fits])
     A2 = A * A
+    from mixmogam.twostep import _ancestry_moments
+    for g, G_ in enumerate(groups):  # sums of the closed-form ancestry ratio
+        G_["ancestry"] = _ancestry_moments(Q, A2[:, g])
     if cache is not None:
         cache["score_groups"] = (groups, A, A2, Q)
     return _score_scan(lg, groups, A, A2, Q, X.shape)
@@ -203,5 +206,6 @@ def _score_scan(lg, groups, A, A2, Q, shape) -> dict:
         U[idx] = zr - MH @ G_["Xr"]
         J[idx] = S[:, 0] - np.einsum("ij,ij->i", MH, H)
         zvar[idx] = (S[:, 1] - np.einsum("ij,ij->i", cu, cu)) / (n - q)
-        rho[idx] = _ancestry_ratio(cu, S[:, 1], Q, lg.mean[idx], lg.sd[idx], A2[:, g])
+        rho[idx] = _ancestry_ratio(cu, S[:, 1], Q, lg.mean[idx], lg.sd[idx], A2[:, g],
+                                   moments=G_["ancestry"])
     return {"U": U, "J": J, "zvar": zvar, "rho": rho, "A": A}

@@ -272,8 +272,18 @@ def _allele_probabilities(cu, zz, Q, mean, sd):
     return p
 
 
+def _ancestry_moments(Q: np.ndarray, a2: np.ndarray) -> dict:
+    """The sums over samples that :func:`_ancestry_ratio`'s closed form
+    needs for one residual (``a2`` = a_i^2): computed once per residual,
+    O(n q^2)."""
+    n = Q.shape[0]
+    return {"qmax": float(np.sqrt(np.max(np.einsum("ij,ij->i", Q, Q)))) if n else 0.0,
+            "a2sum": float(np.sum(a2)), "v": Q.T @ a2, "M": (Q * a2[:, None]).T @ Q,
+            "qbar": Q.mean(axis=0), "QtQn": (Q.T @ Q) / max(n, 1)}
+
+
 def _ancestry_ratio(cu: np.ndarray, zz: np.ndarray, Q: np.ndarray, mean: np.ndarray,
-                    sd: np.ndarray, a2: np.ndarray) -> np.ndarray:
+                    sd: np.ndarray, a2: np.ndarray, moments: Optional[dict] = None) -> np.ndarray:
     """Covariate-specific genotype variance of retrospective scores, as a
     ratio to the pooled one (rows: variants).
 
@@ -291,12 +301,44 @@ def _ancestry_ratio(cu: np.ndarray, zz: np.ndarray, Q: np.ndarray, mean: np.ndar
     zvar_j |a|^2 when allele frequencies follow the covariates (ancestry
     principal components among them) and ``a2`` (a_i^2) varies with
     ancestry.
+
+    p_ij = b_j + s_j Q_i'c_j is linear in the covariates, so unless a
+    frequency is clipped both sums are quadratics in c_j: with v = Q'a2 and
+    M = Q' diag(a2) Q (``moments``, :func:`_ancestry_moments`; computed here
+    if not given), O(q^2) per variant instead of O(n q). A variant whose
+    frequencies could reach a clip limit (|Q_i'c| <= |Q_i| |c|) takes the
+    per-sample sums; one whose covariates predict nothing (s_j = 0) has
+    rho_j = 1. Equal to the per-sample sums up to rounding.
     """
     if Q.shape[1] < 2:
         return np.ones(cu.shape[0])
-    p = _allele_probabilities(cu, zz, Q, mean, sd)
-    p *= 1.0 - p
-    return (p @ a2) / (float(np.sum(a2)) * np.mean(p, axis=1))
+    n, q = Q.shape
+    fit2 = np.einsum("ij,ij->i", cu, cu)
+    with np.errstate(divide="ignore", invalid="ignore"):
+        F = fit2 * (n - q) / ((q - 1) * np.maximum(zz - fit2, 0.0))
+        shrink = np.where(np.isfinite(F), np.clip(1.0 - 1.0 / F, 0.0, 1.0), 1.0)
+    shrink[~(fit2 > 0)] = 0.0
+    b = 0.5 * mean
+    s = 0.5 * sd * shrink
+    out = np.ones(cu.shape[0])
+    if moments is None:
+        moments = _ancestry_moments(Q, a2)
+    spread = np.abs(s) * np.sqrt(fit2) * moments["qmax"]
+    live = s != 0
+    closed = live & (b - spread >= 0.5 / n) & (b + spread <= 1.0 - 0.5 / n)
+    if closed.any():
+        c, bb, ss = cu[closed], b[closed], s[closed]
+        base, lin, quad = bb * (1.0 - bb), ss * (1.0 - 2.0 * bb), ss * ss
+        num = (base * moments["a2sum"] + lin * (c @ moments["v"])
+               - quad * np.einsum("ij,jk,ik->i", c, moments["M"], c))
+        den = base + lin * (c @ moments["qbar"]) - quad * np.einsum("ij,jk,ik->i", c, moments["QtQn"], c)
+        out[closed] = num / (moments["a2sum"] * den)
+    rest = live & ~closed
+    if rest.any():
+        p = _allele_probabilities(cu[rest], zz[rest], Q, mean[rest], sd[rest])
+        p *= 1.0 - p
+        out[rest] = (p @ a2) / (moments["a2sum"] * np.mean(p, axis=1))
+    return out
 
 
 def _projected_residuals(st: _Setup, W: np.ndarray, cache: Optional[dict] = None) -> np.ndarray:
@@ -341,6 +383,7 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False,
         A2 = A * A
         inv_s = None if st.s is None else 1.0 / st.s
         zvar, rho = np.zeros(m), np.zeros(m)
+        anc = {} if cache is None else cache.setdefault("ancestry_moments", {})
     scorer = None if retrospective else getattr(st.lg, "score_numerators", None)
     fused = None if scorer is None else scorer(Wp)
     if fused is not None:
@@ -355,7 +398,10 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False,
             cu = z @ st.Q_raw
             zsq = np.einsum("ij,ij->i", z, z)
             zvar[idx] = (zsq - np.einsum("ij,ij->i", cu, cu)) / st.n_eff
-            rho[idx] = _ancestry_ratio(cu, zsq, st.Q_raw, st.lg.mean[idx], st.lg.sd[idx], A2[:, g])
+            if g not in anc:
+                anc[g] = _ancestry_moments(st.Q_raw, A2[:, g])
+            rho[idx] = _ancestry_ratio(cu, zsq, st.Q_raw, st.lg.mean[idx], st.lg.sd[idx], A2[:, g],
+                                       moments=anc[g])
     wg = wn[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2 = st.n_eff * num * num / (zz * wg)
@@ -961,6 +1007,11 @@ def _kappa_guard(kap: np.ndarray, floor: float) -> np.ndarray:
     return kap
 
 
+# Above this many bytes of float64 rows the structure test accumulates its
+# correlations over sample tiles (512 rows: from 131,072 samples on).
+_STRUCTURE_WORK_BYTES = 512 * 1024**2
+
+
 def structure_test(st: _Setup, n_snps: int = 512, rng=None, samples=None) -> dict:
     """LDAK-KVIK's test for strong structure (operation 1a).
 
@@ -974,6 +1025,10 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None, samples=None) -> dic
     sample size is the Kish size of the working weights, less q.
     ``samples`` (row indices) restricts the correlations to those samples,
     e.g. a maximal unrelated set; the reference size scales with them.
+    Rows of more than ``_STRUCTURE_WORK_BYTES`` (512 SNPs at 131,072
+    samples) are not formed at once: the cross-products and the samples'
+    row sums are accumulated over sample tiles, and the centring is
+    applied to the sums. The statistic then differs only by rounding.
     """
     rng = np.random.default_rng(0) if rng is None else rng
     m = st.lg.m
@@ -981,16 +1036,40 @@ def structure_test(st: _Setup, n_snps: int = 512, rng=None, samples=None) -> dic
     base = np.linspace(0, m - 1, k)
     jitter = rng.uniform(-0.5, 0.5, k) * (m / k)
     sel = np.unique(np.clip(np.round(base + jitter), 0, m - 1).astype(np.int64))
-    Z = st.lg.rows(sel)
+    n = st.lg.n
     n_ref = st.n_eff if st.n_struct is None else st.n_struct
     if samples is not None:
         samples = np.asarray(samples, dtype=np.int64)
-        Z = Z[:, samples]
-        Z = Z - Z.mean(axis=1, keepdims=True)
-        n_ref = n_ref * samples.size / st.lg.n
-    norms = np.sqrt(np.einsum("ij,ij->i", Z, Z))
+        n_ref = n_ref * samples.size / n
+    if 8 * sel.size * n <= _STRUCTURE_WORK_BYTES:
+        Z = st.lg.rows(sel)
+        if samples is not None:
+            Z = Z[:, samples]
+            Z -= Z.mean(axis=1, keepdims=True)
+        norms = np.sqrt(np.einsum("ij,ij->i", Z, Z))
+        cross = Z @ Z.T
+        del Z
+    else:
+        tile = max(1, (_STRUCTURE_WORK_BYTES // 8) // (8 * sel.size))  # an eighth of the budget
+        keep = None
+        if samples is not None:
+            keep = np.zeros(n, dtype=bool)
+            keep[samples] = True
+        cross = np.zeros((sel.size, sel.size))
+        sums = np.zeros(sel.size)
+        for start in range(0, n, tile):
+            stop = min(n, start + tile)
+            Z = st.lg.rows(sel, start=start, stop=stop)
+            if keep is not None:
+                Z = Z[:, keep[start:stop]]
+                sums += Z.sum(axis=1)
+            cross += Z @ Z.T
+        del Z
+        if keep is not None:
+            cross -= np.outer(sums, sums) / samples.size
+        norms = np.sqrt(np.maximum(np.diag(cross), 0.0))
     norms[norms == 0] = 1.0
-    R = (Z @ Z.T) / np.outer(norms, norms)
+    R = cross / np.outer(norms, norms)
     chrom = np.asarray(st.lg.gt.chromosome)[sel]
     diff = chrom[:, None] != chrom[None, :]
     r2 = np.where(diff, R * R, np.nan)

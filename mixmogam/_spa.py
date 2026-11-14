@@ -10,7 +10,9 @@ Frequencies may be pooled empirical frequencies or sample-specific
 probabilities conditional on covariates (as in SPAmix). Each tail is the Barndorff-Nielsen
 form p = Phi(-r*), r* = w + log(v / w) / w, with w = sign(t) sqrt(2 (t x -
 K(t))) and v = t sqrt(K''(t)) at the saddlepoint K'(t) = x, found by
-Newton's method inside a bracket (K' is increasing). This is the same order
+Newton's method from the normal approximation's root x / K''(0), kept inside
+a bracket (K' is increasing) and using K' and K'' only until the root is
+found. This is the same order
 as Lugannani-Rice, cannot go negative, and yields log p directly. It
 corrects the skew of low-frequency variants and of heavy-tailed residuals
 (rare outcomes, variable weights), where a few samples carry the score.
@@ -61,6 +63,37 @@ def _cgf(t, a, v, p):
         k1 += a[i] * mean
         k2 += a[i] * a[i] * (s2 / s0 - mean * mean)
     return k0, k1, k2
+
+
+def _cgf12(t, a, v, p):
+    """K' and K'' of :func:`_cgf` (no logarithm: K itself is needed only at
+    the root)."""
+    k1 = 0.0
+    k2 = 0.0
+    for i in range(a.size):
+        pi = p[i] if p.ndim == 2 else p
+        center = 0.0
+        if p.ndim == 2:
+            for k in range(v.size):
+                center += pi[k] * v[k]
+        top = -math.inf
+        for k in range(v.size):
+            if pi[k] > 0 and t * a[i] * (v[k] - center) > top:
+                top = t * a[i] * (v[k] - center)
+        s0 = 0.0
+        s1 = 0.0
+        s2 = 0.0
+        for k in range(v.size):
+            if pi[k] > 0:
+                vk = v[k] - center
+                e = pi[k] * math.exp(t * a[i] * vk - top)
+                s0 += e
+                s1 += e * vk
+                s2 += e * vk * vk
+        mean = s1 / s0
+        k1 += a[i] * mean
+        k2 += a[i] * a[i] * (s2 / s0 - mean * mean)
+    return k1, k2
 
 
 def _support(a, v, p):
@@ -145,6 +178,61 @@ def _rstar(cgf, support, a, v, p, x):
     return w + math.log(t * math.sqrt(k2) / w) / w
 
 
+def _rstar_newton(cgf, cgf12, support, a, v, p, x, t0):
+    """:func:`_rstar` with the root of K'(t) = x found by Newton's method
+    from ``t0`` (the normal approximation's root x / K''(0)), evaluating K'
+    and K'' only (``cgf12``) until the root and the full ``cgf`` once there:
+    about three evaluations per tail instead of seven. A step that leaves
+    the bracket bisects it, or doubles t while the bracket is open. The root
+    is the same to rounding; the tail formula is :func:`_rstar`'s."""
+    lo_sup, hi_sup = support(a, v, p)
+    if x >= hi_sup:
+        return math.inf
+    if x <= lo_sup:
+        return -math.inf
+    lo, hi = (0.0, math.inf) if x > 0 else (-math.inf, 0.0)
+    t = t0
+    for _ in range(200):
+        k1, k2 = cgf12(t, a, v, p)
+        f = k1 - x
+        if f == 0.0:
+            break
+        if f > 0:
+            hi = t
+        else:
+            lo = t
+        newton = False
+        new = t
+        if k2 > 0:
+            new = t - f / k2
+            if new == t:  # the step is below one unit in the last place
+                break
+            newton = lo < new < hi
+        if not newton:
+            new = 2.0 * t if (math.isinf(lo) or math.isinf(hi)) else 0.5 * (lo + hi)
+        # After a Newton step this small the error is of the order of its
+        # square; a bisection or doubling step needs the bracket closed.
+        done = abs(new - t) <= (1e-9 if newton else 1e-15) * abs(new)
+        t = new
+        if done:
+            break
+    k0, k1, k2 = cgf(t, a, v, p)
+    inner = t * x - k0
+    if inner <= 0 or k2 <= 0:
+        return math.nan
+    w = math.copysign(math.sqrt(2.0 * inner), t)
+    return w + math.log(t * math.sqrt(k2) / w) / w
+
+
+def _tail(cgf, cgf12, support, a, v, p, x, k2_0, newton):
+    """r* of one tail: :func:`_rstar_newton` from x / K''(0) (``k2_0``), or
+    :func:`_rstar`'s bracket search when ``newton`` is False."""
+    if not newton:
+        return _rstar(cgf, support, a, v, p, x)
+    t0 = x / k2_0 if k2_0 > 0 and math.isfinite(k2_0) else math.copysign(1.0, x)
+    return _rstar_newton(cgf, cgf12, support, a, v, p, x, t0)
+
+
 def _binomial_cgf(t, a, af, called):
     """Centred CGF for independent Binomial(2, af), conditional on calls."""
     k0 = k1 = k2 = 0.0
@@ -185,6 +273,35 @@ def _binomial_cgf(t, a, af, called):
     return k0, k1, k2
 
 
+def _binomial_cgf12(t, a, af, called):
+    """K' and K'' of :func:`_binomial_cgf` (the same terms, no logarithm)."""
+    k1 = k2 = 0.0
+    for i in range(a.size):
+        if not called[i]:
+            continue
+        p = af[i]
+        x = t * a[i]
+        if x > 30.0:
+            e = math.exp(-x)
+            denom = p + (1.0 - p) * e
+            diff = p / denom - p
+            curvature = p * (1.0 - p) * e / (denom * denom)
+        elif x < -30.0:
+            e = math.exp(x)
+            denom = (1.0 - p) + p * e
+            diff = p * e / denom - p
+            curvature = p * (1.0 - p) * e / (denom * denom)
+        else:
+            e = math.expm1(x)
+            denom = 1.0 + p * e
+            prob = p * (1.0 + e) / denom
+            diff = p * (1.0 - p) * e / denom
+            curvature = prob * (1.0 - prob)
+        k1 += 2.0 * a[i] * diff
+        k2 += 2.0 * a[i] * a[i] * curvature
+    return k1, k2
+
+
 def _binomial_support(a, af, called):
     lo = hi = 0.0
     for i in range(a.size):
@@ -212,31 +329,35 @@ def _binomial_boundary(a, af, called, x, both):
     return out
 
 
-def _rows(cgf, support, a, values, freqs, x, out_up, out_lo, both):
+def _rows(cgf, cgf12, support, a, values, freqs, x, k2_0, out_up, out_lo, both, newton):
     for r in range(values.shape[0]):
         if both:
-            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], abs(x[r]))
-            out_lo[r] = _rstar(cgf, support, a, values[r], freqs[r], -abs(x[r]))
+            out_up[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], abs(x[r]), k2_0[r], newton)
+            out_lo[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], -abs(x[r]), k2_0[r], newton)
         else:
-            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], x[r])
+            out_up[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], x[r], k2_0[r], newton)
 
 
-def _rows_parallel(cgf, support, a, values, freqs, x, out_up, out_lo, both):
+def _rows_parallel(cgf, cgf12, support, a, values, freqs, x, k2_0, out_up, out_lo, both, newton):
     for r in prange(values.shape[0]):
         if both:
-            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], abs(x[r]))
-            out_lo[r] = _rstar(cgf, support, a, values[r], freqs[r], -abs(x[r]))
+            out_up[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], abs(x[r]), k2_0[r], newton)
+            out_lo[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], -abs(x[r]), k2_0[r], newton)
         else:
-            out_up[r] = _rstar(cgf, support, a, values[r], freqs[r], x[r])
+            out_up[r] = _tail(cgf, cgf12, support, a, values[r], freqs[r], x[r], k2_0[r], newton)
 
 
 if HAS_NUMBA:
     _cgf = njit(cache=True)(_cgf)
+    _cgf12 = njit(cache=True)(_cgf12)
     _support = njit(cache=True)(_support)
     _binomial_cgf = njit(cache=True)(_binomial_cgf)
+    _binomial_cgf12 = njit(cache=True)(_binomial_cgf12)
     _binomial_support = njit(cache=True)(_binomial_support)
     _binomial_boundary = njit(cache=True)(_binomial_boundary)
     _rstar = njit(cache=True)(_rstar)
+    _rstar_newton = njit(cache=True)(_rstar_newton)
+    _tail = njit(cache=True)(_tail)
     _rows = njit(cache=True)(_rows)
     _rows_parallel = njit(parallel=True, cache=True)(_rows_parallel)
 
@@ -274,13 +395,16 @@ def _binomial_spa(u, a, af, called, missing_mean, *, var_ratio=1.0,
         probs = af if all_good else af[good]
         masks = called if all_good else called[good]
         scores_good = x if all_good else x[good]
+        k2_0 = np.ascontiguousarray(variance if all_good else variance[good], dtype=np.float64)
         up, lo = np.empty(scores_good.size), np.empty(scores_good.size)
+        args = (_binomial_cgf, _binomial_cgf12, _binomial_support, a, probs, masks, scores_good,
+                k2_0, up, lo, both, True)
         if n_threads > 1 and HAS_NUMBA:
             from mixmogam._vb import _numba_thread_limit
             with _numba_thread_limit(min(n_threads, scores_good.size)):
-                _rows_parallel(_binomial_cgf, _binomial_support, a, probs, masks, scores_good, up, lo, both)
+                _rows_parallel(*args)
         else:
-            _rows(_binomial_cgf, _binomial_support, a, probs, masks, scores_good, up, lo, both)
+            _rows(*args)
         if both:
             log_good = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
         else:
@@ -295,12 +419,13 @@ def _binomial_spa(u, a, af, called, missing_mean, *, var_ratio=1.0,
         values = np.column_stack([np.zeros(count), np.ones(count), np.full(count, 2.),
                                   missing_mean[near]])
         p[near], log_p[near] = spa_pvalue(scores[near], a, values, freqs, var_ratio=ratio[near],
-                                         two_sided=two_sided, n_threads=n_threads)
+                                         two_sided=two_sided, n_threads=n_threads,
+                                         _newton=False)
     return p, log_p
 
 
 def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance",
-               n_threads: int = 1) -> tuple[np.ndarray, np.ndarray]:
+               n_threads: int = 1, _newton: bool = True) -> tuple[np.ndarray, np.ndarray]:
     """Two-sided saddlepoint p-values (and their logs) of scores ``u``.
 
     ``a`` (n,) holds the coefficients shared by the scores and ``u`` (k,)
@@ -319,6 +444,9 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
     the tail beyond u (at most one), LDAK's default, which puts half the
     level in each tail of a skewed null. ``n_threads`` > 1 evaluates the
     variants on up to that many Numba workers, with unchanged values.
+    ``_newton=False`` keeps the earlier bracket search for the saddlepoint;
+    :func:`_binomial_spa` uses it for scores near zero and support
+    boundaries, where the tail formula amplifies rounding.
     """
     if two_sided not in ("distance", "doubled"):
         raise ValueError("two_sided must be 'distance' or 'doubled'")
@@ -336,21 +464,28 @@ def spa_pvalue(u, a, values, freqs, *, var_ratio=1.0, two_sided: str = "distance
         raise ValueError("genotype frequencies must be nonnegative with a positive total")
     freqs = freqs / total
     scores = np.broadcast_to(np.asarray(u, dtype=np.float64), (k,))
+    a2 = a * a
     if conditional:
         scores = scores - np.einsum("ris,rs,i->r", freqs, values, a)
+        # K''(0), the score's variance: only the root search's start.
+        mean = np.einsum("ris,rs->ri", freqs, values)
+        k2_0 = (np.einsum("ris,rs->ri", freqs, values * values) - mean * mean) @ a2
     else:
         values = values - np.sum(values * freqs, axis=1, keepdims=True)
+        k2_0 = np.sum(freqs * values * values, axis=1) * float(np.sum(a2))
     values = np.ascontiguousarray(values)
+    k2_0 = np.ascontiguousarray(k2_0, dtype=np.float64)
     x = np.ascontiguousarray(scores * np.sqrt(
         np.broadcast_to(np.asarray(var_ratio, dtype=np.float64), (k,))))
     up, lo = np.empty(k), np.empty(k)
     both = two_sided == "distance"
+    args = (_cgf, _cgf12, _support, a, values, freqs, x, k2_0, up, lo, both, bool(_newton))
     if n_threads > 1 and HAS_NUMBA:
         from mixmogam._vb import _numba_thread_limit
         with _numba_thread_limit(min(n_threads, max(k, 1))):
-            _rows_parallel(_cgf, _support, a, values, freqs, x, up, lo, both)
+            _rows_parallel(*args)
     else:
-        _rows(_cgf, _support, a, values, freqs, x, up, lo, both)
+        _rows(*args)
     if both:
         log_p = np.logaddexp(log_ndtr(-up), log_ndtr(lo))
     else:  # r* carries the sign of u: the tail beyond u is Phi(-|r*|)

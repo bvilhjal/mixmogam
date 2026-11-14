@@ -177,7 +177,7 @@ mixmogam step2 --step1 height.npz --geno chr{1..22}.bgen --dosage --out height.t
 ```python
 from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
 
-hratt_step1(y, hm3, X, n_threads=8).save("height.npz")  # takes any hratt option
+hratt_step1(y, hm3, X, n_threads=4).save("height.npz")  # takes any hratt option
 files = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
 hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.gz")
 ```

@@ -349,7 +349,13 @@ cross-fitted fits (up to four worker threads, each with about 20 bytes of
 scratch per sample and block variant: 0.5 GB at 200,000 samples, at most
 2 GiB in all), the step-2 scores and independent model updates while
 keeping the SNP order within each model. Preparation gives the same values at
-every thread count; parallel residual products may change rounding. Detected
+every thread count; parallel residual products may change rounding. A whole
+HRATT fit gains little beyond four threads (1.5x at four on an M2 Pro, no more
+at six, slower at eight): the variational products, the residual refresh and
+HE's alpha selection stay serial, and on CPUs with performance and efficiency
+cores every parallel region waits for the slowest core. Keep step 1 at four
+threads, or at most the number of performance cores; step 2 is parallel
+throughout and uses more. Detected
 BLAS pools are limited internally, but Apple Accelerate needs the
 `VECLIB_MAXIMUM_THREADS` setting above, and the count cannot exceed Numba's
 configured limit. The first use of each kernel pays Numba's compilation.
@@ -398,7 +404,7 @@ from mixmogam.io.bgen import iter_bgen_dosages
 from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
 
 hm3 = Genotypes.load_plink("hm3", mmap=True).filter_samples(keep)  # stays mapped
-step1 = hratt_step1(y, hm3, X, heritability_method="he", n_threads=8)
+step1 = hratt_step1(y, hm3, X, heritability_method="he", n_threads=4)
 step1.save("height.npz")  # arrays and JSON, no pickles
 
 step1 = HrattStep1.load("height.npz")

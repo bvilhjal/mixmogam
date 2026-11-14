@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-14-scalability",
+        "revision": "2026-11-14-efficiency",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -49,8 +49,9 @@ def main():
                            "removed, mixmogam's BOLT-style methods labelled as such and comparative "
                            "claims audited. The report's evidence is the archived benchmarks above; "
                            "the stage-1 and relatedness code changes, including the subsequent "
-                           "cache identity and pairwise missing-call fixes, and the two-step "
-                           "(streamed step 2) interface with its kernels, are documented in "
+                           "cache identity and pairwise missing-call fixes, the two-step "
+                           "(streamed step 2) interface with its kernels, and the 14 November "
+                           "efficiency changes (KING, saddlepoint, decoding), are documented in "
                            "README.md, docs/ and CHANGELOG.md, not re-benchmarked in the report. "
                            "The delivered PDF was rebuilt with Tectonic from this revision's "
                            "LaTeX source and displays."),

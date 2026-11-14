@@ -303,6 +303,40 @@ def test_structure_test_negative_without_structure(small):
     assert abs(out["excess"]) < 0.5
 
 
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("weighted", [False, True])
+def test_structure_test_over_sample_tiles_matches_whole_rows(monkeypatch, packed, weighted):
+    """Above the work budget the structure test sums its cross-products and
+    the subset's row sums over sample tiles; the statistic is the same up
+    to rounding, with and without a sample subset, covariates and row
+    scaling, for tiles that do not divide the samples."""
+    G = simulate_genotypes(n=603, m=800, n_pop=2, pop_fst=0.1, seed=17)
+    gt = Genotypes(np.ascontiguousarray(G.T), chromosome=np.repeat(np.arange(1, 5), 200),
+                   position=np.tile(np.arange(200) * 1000, 4), packed=packed)
+    rng = np.random.default_rng(18)
+    X = rng.normal(size=(603, 2))
+    st = _setup(rng.normal(size=603), gt, X, 25, 256,
+                sample_weights=np.exp(rng.normal(0, 0.5, 603)) if weighted else None)
+    subset = np.sort(rng.choice(603, 401, replace=False))
+    for samples in (None, subset):
+        whole = structure_test(st, 300, np.random.default_rng(5), samples=samples)
+        with monkeypatch.context() as m:
+            m.setattr(twostep, "_STRUCTURE_WORK_BYTES", 8 * 300 * 70)  # tiles of 8 samples
+            tiled = structure_test(st, 300, np.random.default_rng(5), samples=samples)
+        assert tiled["strong"] == whole["strong"] and tiled["n_snps"] == whole["n_snps"]
+        assert tiled["excess"] == pytest.approx(whole["excess"], rel=1e-9, abs=1e-12)
+        assert tiled["z"] == pytest.approx(whole["z"], rel=1e-9)
+
+
+def test_loco_rows_of_a_sample_range_match_whole_rows(small):
+    gt, y, st = small
+    idx = np.array([5, 900, 3, 3])
+    whole = st.lg.rows(idx)
+    np.testing.assert_array_equal(st.lg.rows(idx, start=17, stop=203), whole[:, 17:203])
+    with pytest.raises(IndexError):
+        st.lg.rows(idx, start=10, stop=st.lg.n + 1)
+
+
 def test_loco_eigh_matches_dense_loco_spectrum():
     """Structure separates the leading eigenvalues; a flat Marchenko-Pastur
     top (no structure) would make subspace iteration converge slowly."""

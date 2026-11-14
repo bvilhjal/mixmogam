@@ -417,7 +417,7 @@ def test_unit_weights_reproduce_the_unweighted_he_step_one(weighted_gwas_problem
     _, gt, y, X, _ = weighted_gwas_problem
     # Up to the covariate-specific variance factor (random covariates here,
     # near one; tested against its oracle elsewhere).
-    monkeypatch.setattr(twostep, "_ancestry_ratio", lambda cu, *args: np.ones(cu.shape[0]))
+    monkeypatch.setattr(twostep, "_ancestry_ratio", lambda cu, *args, **kwargs: np.ones(cu.shape[0]))
     plain = twostep.hratt(y, gt, X, heritability_method="he", **OPTIONS)
     unit = twostep.hratt(y, gt, X, sample_weights=np.ones(y.size), **OPTIONS)
     for key in ("h2", "alpha", "cv_mse", "cv_best", "loco_iterations", "lambda"):

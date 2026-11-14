@@ -63,60 +63,74 @@ if HAS_NUMBA:
     _greedy = njit(cache=True)(_greedy)
 
 
+# Two-bit code -> the call it stores and whether it is called (code 1 is a
+# no-call; 0, 2 and 3 are calls 2, 1 and 0).
+_CODE_VALUE = np.array([2.0, 0.0, 1.0, 0.0])
+_CODE_COUNT = np.array([2, 0, 1, 0], dtype=np.int64)
+_CODE_CALLED = np.array([1, 0, 1, 1], dtype=np.int64)
+
+
+def _ld_standardize(codes, s, out_row):
+    """Centre and scale one variant's ``s`` two-bit codes into ``out_row``
+    (float32; no-calls 0): the integer call sum and count, the squared
+    deviations summed in sample order, one value per code. The arithmetic
+    of a branch per sample, so the same float32 values."""
+    total = 0
+    cnt = 0
+    for t in range(s):
+        c = codes[t]
+        total += _CODE_COUNT[c]
+        cnt += _CODE_CALLED[c]
+    mean = total / max(cnt, 1)
+    dev = np.empty(4)
+    for c in range(4):
+        dev[c] = _CODE_VALUE[c] - mean if _CODE_CALLED[c] else 0.0
+    ss = 0.0
+    for t in range(s):
+        d = dev[codes[t]]
+        ss += d * d  # a no-call adds +0.0, which leaves the sum unchanged
+    sd = np.sqrt(ss / max(cnt, 1))
+    inv = 1.0 / sd if sd > 0 else 1.0
+    value = np.empty(4, dtype=np.float32)
+    for c in range(4):
+        value[c] = np.float32(dev[c] * inv) if _CODE_CALLED[c] else np.float32(0.0)
+    for t in range(s):
+        out_row[t] = value[codes[t]]
+
+
 def _ld_rows_packed(data, idx, s, out):
-    """Compiled two-bit route of :func:`_ld_rows`: decode, centre and scale
-    the first ``s`` samples of each row in one sweep over its bytes."""
-    calls = np.empty(s, dtype=np.int8)
+    """Compiled two-bit route of :func:`_ld_rows`: the first ``s`` samples'
+    codes of each row unpacked a byte at a time, then
+    :func:`_ld_standardize`."""
+    codes = np.empty(s + 3, dtype=np.uint8)
+    full = s // 4
     for r in range(idx.size):
         row = data[idx[r]]
-        total = 0
-        cnt = 0
-        for i in range(s):
-            g = CODE_CALLS[(row[i >> 2] >> (2 * (i & 3))) & 3]
-            calls[i] = g
-            if g >= 0:
-                total += g
-                cnt += 1
-        mean = total / max(cnt, 1)
-        ss = 0.0
-        for i in range(s):
-            if calls[i] >= 0:
-                d = calls[i] - mean
-                ss += d * d
-        sd = np.sqrt(ss / max(cnt, 1))
-        inv = 1.0 / sd if sd > 0 else 1.0
-        for i in range(s):
-            out[r, i] = np.float32((calls[i] - mean) * inv) if calls[i] >= 0 else np.float32(0.0)
+        for b in range(full):
+            byte = row[b]
+            codes[4 * b] = byte & 3
+            codes[4 * b + 1] = (byte >> 2) & 3
+            codes[4 * b + 2] = (byte >> 4) & 3
+            codes[4 * b + 3] = byte >> 6
+        for i in range(4 * full, s):
+            codes[i] = (row[i >> 2] >> (2 * (i & 3))) & 3
+        _ld_standardize(codes, s, out[r])
 
 
 def _ld_rows_packed_at(data, idx, samples, out):
     """:func:`_ld_rows_packed` on the samples ``samples`` (sorted)."""
     s = samples.size
-    calls = np.empty(s, dtype=np.int8)
+    codes = np.empty(s, dtype=np.uint8)
     for r in range(idx.size):
         row = data[idx[r]]
-        total = 0
-        cnt = 0
         for t in range(s):
             i = samples[t]
-            g = CODE_CALLS[(row[i >> 2] >> (2 * (i & 3))) & 3]
-            calls[t] = g
-            if g >= 0:
-                total += g
-                cnt += 1
-        mean = total / max(cnt, 1)
-        ss = 0.0
-        for t in range(s):
-            if calls[t] >= 0:
-                d = calls[t] - mean
-                ss += d * d
-        sd = np.sqrt(ss / max(cnt, 1))
-        inv = 1.0 / sd if sd > 0 else 1.0
-        for t in range(s):
-            out[r, t] = np.float32((calls[t] - mean) * inv) if calls[t] >= 0 else np.float32(0.0)
+            codes[t] = (row[i >> 2] >> (2 * (i & 3))) & 3
+        _ld_standardize(codes, s, out[r])
 
 
 if HAS_NUMBA:
+    _ld_standardize = njit(cache=True)(_ld_standardize)
     _ld_rows_packed = njit(cache=True)(_ld_rows_packed)
     _ld_rows_packed_at = njit(cache=True)(_ld_rows_packed_at)
 

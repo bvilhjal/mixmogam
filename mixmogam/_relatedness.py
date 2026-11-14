@@ -302,15 +302,6 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "carrier_families_p": 1e-4, "carrier_families_max": 3,
                        "carrier_families_max_maf": 0.05}
 
-# KING-robust from a sample block against all samples, keeping pairs above a
-# threshold: O(block x n) memory, never the n x n matrix.
-
-
-def _king_indicators(G: np.ndarray):
-    """float32 het / hom-ref / hom-alt indicators of int8 calls (-1 missing)."""
-    return ((G == 1).astype(np.float32), (G == 0).astype(np.float32),
-            (G == 2).astype(np.float32))
-
 
 def _king_phi(hh, opp, het_i, het_j):
     """Between-family KING from counts restricted to jointly called loci.
@@ -322,6 +313,25 @@ def _king_phi(hh, opp, het_i, het_j):
     den = np.maximum(nmin, 1.0)
     phi = (hh - 2 * opp) / (2 * den) + 0.5 - (het_i + het_j) / (4 * den)
     return np.where(nmin > 0, phi, 0.0)
+
+
+def _king_phi_inplace(hh, opp, het_i, het_j):
+    """:func:`_king_phi` by the same operations, in place: the result
+    overwrites ``hh`` (float64) and ``opp`` is used as scratch; two more
+    arrays of that shape instead of about eight temporaries."""
+    nmin = np.minimum(het_i, het_j)
+    den = np.maximum(nmin, 1.0)
+    opp *= 2.0
+    np.subtract(hh, opp, out=hh)  # hh - 2 opp
+    np.multiply(den, 2.0, out=opp)
+    hh /= opp
+    hh += 0.5
+    np.add(het_i, het_j, out=opp)
+    den *= 4.0
+    opp /= den
+    hh -= opp
+    np.putmask(hh, ~(nmin > 0), 0.0)
+    return hh
 
 
 def _king_variants(gt, mean, exclude, min_maf: float, cap: int) -> np.ndarray:
@@ -337,12 +347,21 @@ def _king_variants(gt, mean, exclude, min_maf: float, cap: int) -> np.ndarray:
     return idx
 
 
+def _king_tables(chunk: int) -> tuple:
+    """Decoding tables (call 0, 1, 2, no-call) of the KING indicators:
+    heterozygote, hom-ref minus hom-alt, and no-call."""
+    def table(row):
+        return np.tile(np.array(row, dtype=np.float32), (chunk, 1))
+    return table([0, 1, 0, 0]), table([1, 0, -1, 0]), table([0, 0, 0, 1])
+
+
 def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int = 4096,
                noise_pairs: int = 1_000_000, noise_sd_multiple: float = 4.0, rng=None) -> dict:
     """KING-robust kinship (Manichaikul et al. 2010, between-family
     estimator) of every sample pair on ``variants``, blockwise: sample rows
-    in blocks of ``block`` against all samples, variants in chunks of
-    ``chunk`` (memory O(block x n + n x chunk)). The noise floor is the
+    in blocks of ``block`` against the samples from the block's first row
+    on, variants in chunks of ``chunk`` (memory O(block x n + n x chunk)).
+    The noise floor is the
     robust scale of phi over a seeded random subsample of
     at most ``noise_pairs`` pairs (default 1e6), taken from the same
     block products (no extra genotype pass, O(K) memory). When
@@ -368,19 +387,32 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     ``r_prefloor``) so the LOCO-refit trigger can count them even if
     the floor would drop them. ``noise_tail_ratio`` is then recomputed
     at the chosen location and scale, for a heavier-than-Gaussian tail
-    check on the trigger. Each row block decodes the KING
-    variants once: ceil(n / block) reads of them, 3 n^2 k flops (float32
-    GEMM; the symmetric half is not exploited).
+    check on the trigger.
+
+    One pass over the variants counts each sample's heterozygotes and
+    no-calls. Then each row block decodes, straight from the stored calls
+    and only for the samples from its first row on, the heterozygote
+    indicators H and D = hom-ref - hom-alt, and takes two float32 products,
+    HH' and DD'. With S = 1 - H - M the homozygote indicators (M: no-call),
+    SS' = k - (h + m)_i - (h + m)_j + (H + M)(H + M)', and the opposite
+    homozygotes are (SS' - DD') / 2. Missing calls add three products (HM',
+    MH' and MM'). Every count is an integer below 2^24, exact in float32,
+    so phi is the same number however the products are split: about n^2 k
+    flops instead of the 3 n^2 k of three products against all samples.
+    phi is symmetric, so subsample pairs are read at (min, max). Every
+    pair's counts, including its two heterozygote counts, exclude markers
+    missing in either sample.
 
     Returns {"i", "j", "r" (= 2 phi, Phi floor), "i_prefloor",
     "j_prefloor", "r_prefloor" (pairs with phi > threshold, before the
     floor), "threshold", "threshold_requested", "noise_sd" (the scale used for the floor),
     "noise_sd_mad", "noise_location", "noise_median", "noise_tail_ratio",
-    "noise_scale_from_structure", "noise_tail_ratio_mad", "noise_n_pairs", "n_variants", "seconds"}. Every pair's counts, including its two
-    heterozygote counts, exclude markers missing in either sample.
-    Missing calls require two extra block products and accumulators;
-    complete calls use the three-product path above."""
+    "noise_scale_from_structure", "noise_tail_ratio_mad", "noise_n_pairs", "n_variants", "seconds"}."""
     import time
+
+    from mixmogam._fast import HAS_NUMBA
+    from mixmogam._packed import PackedCalls
+    from mixmogam._standardize import decode_table
 
     t0 = time.perf_counter()
     rng = np.random.default_rng(0) if rng is None else rng
@@ -394,9 +426,8 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         return np.asarray(gt.G[:, take]).astype(np.int8, copy=False)
 
     # Random pairs for the noise floor, read off the block products (no
-    # extra pass). Heterozygote counts complete during the first row block,
-    # whose chunk sweep decodes every sample. Pairs above the requested
-    # threshold are kept; the floor-raised threshold filters them at the end.
+    # extra pass). Pairs above the requested threshold are kept; the
+    # floor-raised threshold filters them at the end.
     n_unord = n * (n - 1) // 2 if n > 1 else 0
     if n_unord and n_unord <= int(noise_pairs):
         ra, rb = np.triu_indices(n, k=1)
@@ -407,50 +438,88 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         rb = rng.integers(0, n, k)
         keep = ra != rb
         ra, rb = ra[keep], rb[keep]
+    first, second = np.minimum(ra, rb), np.maximum(ra, rb)
     phi_r = np.empty(ra.size)
+    # Per-sample counts over the KING variants.
     nhet = np.zeros(n)
+    nmis = np.zeros(n)
     hexp = np.zeros(n)  # expected heterozygotes per sample under HWE
     n_hom_alt = 0
     n_called = 0
+    for take in chunks:
+        Gc = calls(take)
+        called = Gc >= 0
+        nhet += np.count_nonzero(Gc == 1, axis=1)
+        nmis += np.count_nonzero(~called, axis=1)
+        f = np.where(called, Gc, 0).sum(0) / np.maximum(2 * called.sum(0), 1)
+        hexp += called.astype(np.float32) @ (2 * f * (1 - f)).astype(np.float32)
+        n_hom_alt += int(np.count_nonzero(Gc == 2))
+        n_called += int(called.sum())
+        del Gc, called
+    # Inbreeding F = 1 - observed / expected heterozygosity per sample;
+    # KING-robust assumes outbred diploid calls (0/1/2).
+    with np.errstate(divide="ignore", invalid="ignore"):
+        F = 1.0 - nhet / hexp
+    F_med = float(np.nanmedian(F)) if np.isfinite(F).any() else 0.0
+    missing = bool(nmis.any())
+    hom = float(idx.size) - (nhet + nmis)  # k - h - m: called homozygotes per sample
+    compiled = HAS_NUMBA and isinstance(gt.G, (np.ndarray, PackedCalls))
+    lut_h, lut_d, lut_m = _king_tables(max(len(c) for c in chunks))
+    # Below 2^24 variants every count is an exact float32 integer.
+    total = np.float32 if idx.size < 2**24 else np.float64
     I, J, V = [], [], []
     for s in range(0, n, block):
         e = min(n, s + block)
-        hh = np.zeros((e - s, n), dtype=np.float64)
-        opp = np.zeros((e - s, n), dtype=np.float64)
-        lost_i = lost_j = None
+        b, width = e - s, n - s
+        Hc = np.empty((min(chunk, idx.size), width), dtype=np.float32)
+        Dc = np.empty_like(Hc)
+        Mc = np.empty_like(Hc) if missing else None
+        hh = np.zeros((b, width), dtype=total)
+        dd = np.zeros_like(hh)
+        product = np.empty((b, width), dtype=np.float32)
+        if missing:
+            hm, mh, mm = np.zeros_like(hh), np.zeros_like(hh), np.zeros_like(hh)
         for take in chunks:
-            Gc = calls(take)
-            H, A, B = _king_indicators(Gc)
-            if s == 0:
-                nhet += H.sum(1)
-                called = (Gc >= 0)
-                f = np.where(called, Gc, 0).sum(0) / np.maximum(2 * called.sum(0), 1)
-                hexp += called.astype(np.float32) @ (2 * f * (1 - f)).astype(np.float32)
-                n_hom_alt += int(B.sum())
-                n_called += int(called.sum())
-            hh += H[s:e] @ H.T
-            opp += A[s:e] @ B.T + B[s:e] @ A.T
-            if np.any(Gc < 0):
-                if lost_i is None:
-                    lost_i, lost_j = np.zeros_like(hh), np.zeros_like(hh)
-                missing = (Gc < 0).astype(np.float32)
-                lost_i += H[s:e] @ missing.T
-                lost_j += missing[s:e] @ H.T
-        if s == 0:
-            # Inbreeding F = 1 - observed / expected heterozygosity per
-            # sample; KING-robust assumes outbred diploid calls (0/1/2).
-            with np.errstate(divide="ignore", invalid="ignore"):
-                F = 1.0 - nhet / hexp
-            F_med = float(np.nanmedian(F)) if np.isfinite(F).any() else 0.0
-        het_i = nhet[s:e, None] if lost_i is None else nhet[s:e, None] - lost_i
-        het_j = nhet[None, :] if lost_j is None else nhet[None, :] - lost_j
-        phi = _king_phi(hh, opp, het_i, het_j)
-        inb = (ra >= s) & (ra < e)
-        phi_r[inb] = phi[ra[inb] - s, rb[inb]]
+            k = take.size
+            H = decode_table(gt.G, take, lut_h[:k], Hc[:k], compiled=compiled, start=s)
+            D = decode_table(gt.G, take, lut_d[:k], Dc[:k], compiled=compiled, start=s)
+            hh += np.matmul(H[:, :b].T, H, out=product)
+            dd += np.matmul(D[:, :b].T, D, out=product)
+            if missing:
+                M = decode_table(gt.G, take, lut_m[:k], Mc[:k], compiled=compiled, start=s)
+                hm += np.matmul(H[:, :b].T, M, out=product)
+                mh += np.matmul(M[:, :b].T, H, out=product)
+                mm += np.matmul(M[:, :b].T, M, out=product)
+        del Hc, Dc, Mc, product
+        # Opposite homozygotes (SS' - DD') / 2, every term an exact integer.
+        opp = hh.astype(np.float64)
+        if missing:
+            opp += hm
+            opp += mh
+            opp += mm
+            del mm
+        opp += hom[s:e, None]
+        opp += hom[None, s:]
+        opp -= float(idx.size)
+        opp -= dd
+        opp *= 0.5
+        del dd
+        hh = hh.astype(np.float64)
+        if missing:
+            het_i = nhet[s:e, None] - hm
+            del hm
+            het_j = nhet[None, s:] - mh
+            del mh
+        else:
+            het_i, het_j = nhet[s:e, None], nhet[None, s:]
+        phi = _king_phi_inplace(hh, opp, het_i, het_j)
+        del hh, opp, het_i, het_j
+        inb = (first >= s) & (first < e)
+        phi_r[inb] = phi[first[inb] - s, second[inb] - s]
         r, c = np.nonzero(phi > threshold)
-        r = r + s
-        up = c > r
-        I.append(r[up]); J.append(c[up]); V.append(phi[r[up] - s, c[up]])
+        up = c > r  # columns start at sample s, rows at s too
+        I.append(r[up] + s); J.append(c[up] + s); V.append(phi[r[up], c[up]])
+        del phi
     loc, sd, sd_mad, med, tail_ratio, from_structure, tail_mad = _king_noise_scale(
         phi_r, n_variants=int(idx.size))
     # Floor is an absolute phi cut. A between-population median is

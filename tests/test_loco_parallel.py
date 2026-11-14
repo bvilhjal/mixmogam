@@ -104,7 +104,8 @@ def test_serial_default_decodes_serially_and_matches_threads(monkeypatch, order)
         raise AssertionError("serial default invoked a parallel kernel")
 
     for name in ("_decode_variants_parallel", "_decode_samples_parallel", "_decode_packed_parallel",
-                 "_moments_columns_parallel", "_moments_packed_parallel"):
+                 "_decode_packed_wide_parallel", "_moments_columns_parallel",
+                 "_moments_packed_parallel"):
         monkeypatch.setattr(_standardize, name, forbidden)
     default = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64)
     explicit = LocoGenotypes(gt, groups, Q, block=9, dtype=np.float64, n_threads=1)
@@ -276,7 +277,8 @@ def test_parallel_decode_failure_restores_thread_mask(monkeypatch):
     def fail(*args):
         raise RuntimeError("injected decode failure")
 
-    for name in ("_decode_variants_parallel", "_decode_samples_parallel", "_decode_packed_parallel"):
+    for name in ("_decode_variants_parallel", "_decode_samples_parallel", "_decode_packed_parallel",
+                 "_decode_packed_wide_parallel"):
         monkeypatch.setattr(_standardize, name, fail)
     with pytest.raises(RuntimeError, match="injected decode"):
         next(streamed.blocks())
@@ -353,3 +355,47 @@ def test_sample_ranges_decode_the_same_values_in_float64(order, n_threads, weigh
     unscaled = lg._decode(np.array([5, 0, 11]), scaled=False, start=3, stop=10)
     full = lg._decode(np.array([5, 0, 11]), scaled=False)
     np.testing.assert_array_equal(unscaled, full[:, 3:10])
+
+
+@pytest.mark.parametrize("n", [4095, 4096, 4097, 4098, 4099, 8195])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+@pytest.mark.parametrize("n_threads", [1, 2])
+def test_wide_two_bit_decoder_matches_int8_decoding(monkeypatch, n, dtype, n_threads):
+    """The table-of-bytes decoder of two-bit rows (4,096 samples or more)
+    writes the values the int8 decoder writes, for every row width,
+    precision and thread count, whether float32 rows are 8-byte aligned
+    (16-byte copies) or not (8-byte copies); a strided output takes the
+    per-sample kernel with the same values."""
+    if n_threads > 1:
+        require_threads(n_threads)
+    from mixmogam import _standardize
+    from mixmogam._packed import PackedCalls
+
+    rng = np.random.default_rng(n)
+    G = rng.choice([-1, 0, 1, 2], p=[0.05, 0.5, 0.3, 0.15], size=(n, 70)).astype(np.int8)
+    G = np.asfortranarray(G)
+    packed = PackedCalls.pack(G)
+    idx = np.array([69, 0, 5, 33, 33, 12], dtype=np.int64)
+    lut = rng.normal(size=(idx.size, 4)).astype(np.float32)
+    lut[:, 3] = rng.normal(size=idx.size).astype(np.float32)  # the no-call value is used as given
+    expected = _standardize.decode_table(G, idx, lut, np.empty((idx.size, n), dtype=dtype), n_threads)
+    calls = []
+    for name in ("_decode_packed_wide", "_decode_packed_wide_parallel"):
+        kernel = getattr(_standardize, name)
+        monkeypatch.setattr(_standardize, name,
+                            lambda *args, kernel=kernel, name=name: calls.append(name) or kernel(*args))
+    out = _standardize.decode_table(packed, idx, lut, np.empty((idx.size, n), dtype=dtype), n_threads)
+    np.testing.assert_array_equal(out, expected)
+    assert len(calls) == (n >= _standardize._WIDE_DECODE_SAMPLES)
+    # A float32 buffer offset by one value is not 8-byte aligned.
+    flat = np.empty(idx.size * n + 1, dtype=dtype)
+    shifted = flat[1:].reshape(idx.size, n)
+    calls.clear()
+    _standardize.decode_table(packed, idx, lut, shifted, n_threads)
+    np.testing.assert_array_equal(shifted, expected)
+    assert len(calls) == (n >= _standardize._WIDE_DECODE_SAMPLES)
+    strided = np.empty((idx.size, 2 * n), dtype=dtype)[:, ::2]
+    calls.clear()
+    _standardize.decode_table(packed, idx, lut, strided, n_threads)
+    np.testing.assert_array_equal(strided, expected)
+    assert not calls

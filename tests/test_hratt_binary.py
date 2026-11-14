@@ -488,3 +488,32 @@ def test_two_valued_quantitative_y_warns():
         twostep.hratt(yb, gt, trait="binary", **kw)
     assert sum("two values" in str(w.message) for w in rec) == 0
 
+
+
+def test_ancestry_ratio_closed_form_matches_per_sample_sums():
+    """rho_j from the quadratic in the covariates equals the per-sample sums
+    with clipped covariate-predicted frequencies: for variants whose
+    frequencies stay inside the clip limits (closed form), reach them (the
+    per-sample sums) or are not predicted by the covariates (rho = 1)."""
+    rng = np.random.default_rng(77)
+    n, q, k = 400, 4, 300
+    Q = np.linalg.qr(np.column_stack([np.ones(n), rng.normal(size=(n, q - 1))]))[0]
+    mean = 2 * np.r_[rng.uniform(0.002, 0.02, 100), rng.uniform(0.05, 0.5, 200)]
+    sd = np.sqrt(mean * (1 - mean / 2))
+    cu = rng.normal(size=(k, q)) * np.r_[np.full(150, 3.0), np.full(100, 30.0), np.zeros(50)][:, None]
+    cu[:, 0] = 0.0
+    zz = np.einsum("ij,ij->i", cu, cu) + rng.uniform(n / 2, n, k)
+    a2 = rng.exponential(size=n)
+
+    def oracle(j):
+        p = twostep._allele_probabilities(cu[j:j + 1], zz[j:j + 1], Q, mean[j:j + 1], sd[j:j + 1])[0]
+        pi = p * (1 - p)
+        return (pi @ a2) / (a2.sum() * pi.mean()), bool(np.any(p <= 0.5 / n) or np.any(p >= 1 - 0.5 / n))
+
+    rho = twostep._ancestry_ratio(cu, zz, Q, mean, sd, a2)
+    expected, clipped = zip(*(oracle(j) for j in range(k)))
+    np.testing.assert_allclose(rho, expected, rtol=1e-13, atol=0)
+    assert 0 < sum(clipped) < k  # both routes are exercised
+    assert np.all(rho[-50:] == 1.0)
+    shared = twostep._ancestry_moments(Q, a2)
+    np.testing.assert_array_equal(twostep._ancestry_ratio(cu, zz, Q, mean, sd, a2, moments=shared), rho)

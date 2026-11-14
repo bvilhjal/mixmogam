@@ -337,7 +337,9 @@ def test_conditional_binomial_uses_four_point_oracle_at_support_boundary(two_sid
             for offset in (-1e-12, 0., 1e-12):
                 score = [center + boundary + offset]
                 with np.errstate(invalid="ignore"):
-                    expected = spa_pvalue(score, a, values, freqs, two_sided=two_sided)
+                    # Boundary rows keep the bracket search of the saddlepoint.
+                    expected = spa_pvalue(score, a, values, freqs, two_sided=two_sided,
+                                          _newton=False)
                     actual = _binomial_spa(score, a, af, called, missing, two_sided=two_sided)
                 if two_sided == "distance" or i < 2:
                     np.testing.assert_array_equal(actual, expected)

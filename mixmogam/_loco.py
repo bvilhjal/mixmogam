@@ -425,34 +425,38 @@ class LocoGenotypes:
             out[idx] = part
         return out
 
-    def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray) -> np.ndarray:
-        """out = z - c Q' for the rows of ``idx``: float64 arithmetic, one
-        storage rounding (``out`` may be ``z``).
+    def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray,
+                      start: int = 0) -> np.ndarray:
+        """out = z - c Q' for the rows of ``idx`` (``z`` holding samples
+        start:start + z.shape[1]): float64 arithmetic, one storage rounding
+        (``out`` may be ``z``).
 
         The q-term correction is summed elementwise in a fixed order, so a
-        row's result does not depend on the tiling (BLAS would let the
-        product shape change the rounding): compiled row by row with Numba,
-        otherwise in bounded NumPy row tiles with the same operations.
+        value does not depend on the tiling of rows or samples (BLAS would
+        let the product shape change the rounding): compiled row by row with
+        Numba, otherwise in bounded NumPy row tiles with the same operations.
         """
         q = self.Q.shape[1]
         if not q:
             if out is not z:
                 out[:] = z
             return out
+        stop = start + z.shape[1]
         if HAS_NUMBA and idx.size:
             from mixmogam._standardize import _project_rows
             if self._Qt is None:
                 self._Qt = np.ascontiguousarray(self.Q.T)
-            _project_rows(z, np.ascontiguousarray(self._projection[idx]), self._Qt, out)
+            _project_rows(z, np.ascontiguousarray(self._projection[idx]), self._Qt[:, start:stop], out)
             return out
-        rows = max(1, _PROJECT_WORK_BYTES // (8 * max(self.n, 1)))
-        for start in range(0, idx.size, rows):
-            take = idx[start : start + rows]
+        Q = self.Q[start:stop]
+        rows = max(1, _PROJECT_WORK_BYTES // (8 * max(Q.shape[0], 1)))
+        for first in range(0, idx.size, rows):
+            take = idx[first : first + rows]
             c = self._projection[take]
-            corr = c[:, :1] * self.Q[:, 0]
+            corr = c[:, :1] * Q[:, 0]
             for k in range(1, q):
-                corr += c[:, k : k + 1] * self.Q[:, k]
-            out[start : start + take.size] = z[start : start + take.size] - corr
+                corr += c[:, k : k + 1] * Q[:, k]
+            out[first : first + take.size] = z[first : first + take.size] - corr
         return out
 
     def blocks(self):
@@ -467,9 +471,10 @@ class LocoGenotypes:
             out = np.empty((idx.size, self.n), dtype=self.dtype)
             yield idx, g, self._project_into(idx, self._decode(idx, out=out), out)
 
-    def rows(self, variant_idx: np.ndarray) -> np.ndarray:
-        """Projected rows (k, n) as float64, equal to those of :meth:`blocks`
-        (storage precision), preserving order and repeated indices; only the
+    def rows(self, variant_idx: np.ndarray, start: int = 0, stop: Optional[int] = None) -> np.ndarray:
+        """Projected rows (k, stop - start) of samples start:stop (default
+        all) as float64, equal to those of :meth:`blocks` (storage
+        precision), preserving order and repeated indices; only the
         requested variants are decoded."""
         self._check_source()
         variant_idx = np.asarray(variant_idx)
@@ -478,12 +483,15 @@ class LocoGenotypes:
         if np.any(variant_idx < 0) or np.any(variant_idx >= self.m):
             raise IndexError("variant index out of range")
         variant_idx = variant_idx.astype(np.int64, copy=False)
-        out = np.empty((variant_idx.size, self.n), dtype=np.float64)
+        stop = self.n if stop is None else int(stop)
+        if not 0 <= start <= stop <= self.n:
+            raise IndexError("sample range out of bounds")
+        out = np.empty((variant_idx.size, stop - start), dtype=np.float64)
         tile = self._tile_size()
-        for start in range(0, variant_idx.size, tile):
-            take = variant_idx[start : start + tile]
-            z = self._decode(take)
-            out[start : start + take.size] = self._project_into(take, z, z)
+        for first in range(0, variant_idx.size, tile):
+            take = variant_idx[first : first + tile]
+            z = self._decode(take, start=start, stop=stop)
+            out[first : first + take.size] = self._project_into(take, z, z, start=start)
         return out
 
     # ------------------------------------------------------------------
