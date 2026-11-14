@@ -1639,9 +1639,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             A_rel = rsU["A"] if weighted else st_test.lg.project(resid)
             kap_g = _kappa_guard(rel.kappa(A_rel), rel_opt["kappa_floor"])
             del A_rel
-            if not weighted:
-                c_X, trq = covariate_factor(rel, st_test.lg.Q, st_test.n_eff)
-                rel_info["trace_QPhiQ"] = trq
+            # c_X: the genotype variance after covariates (z'Pz / n_eff, or
+            # zvar of the retrospective test on the unscaled design Q_raw)
+            # has expectation sigma^2 (n - tr(Q' Phi Q)) / n_eff, not sigma^2.
+            c_X, trq = covariate_factor(rel, st_test.Q_raw if weighted else st_test.lg.Q,
+                                        st_test.n_eff)
+            rel_info["trace_QPhiQ"] = trq
         elif relatedness_correction == "gls":
             Wp = st_test.lg.project(resid)
             gls = gls_stats(st_test.lg, Wp, rel, denominator=rel_opt["denominator"],
@@ -1687,7 +1690,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # threshold.
         # kappa_g multiplies the retrospective variance (lambda_g = 1/kappa_g,
         # also the saddlepoint's variance ratio, per LOCO group)
-        lam_g = np.full(st.lg.n_groups, lam) if kap_g is None else 1.0 / kap_g
+        lam_g = np.full(st.lg.n_groups, lam) if kap_g is None else 1.0 / (kap_g * c_X)
         lam_j = lam_g[st.lg.groups]
         p, chi2, n_spa = _genotype_tails(st, rsU["A"], rsU["num"], rsU["V"],
                                          lam_j * rsU["chi2_retro"], lam_g if kap_g is not None
@@ -2199,11 +2202,15 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     lam_spa = lam
     lam_j = lam
     if rel is not None:
-        # Spec A: kappa_g of a_g = w (y - mu_g) multiplies V; the saddlepoint
-        # takes lambda_g = 1 / kappa_g as its per-group variance ratio.
+        # Spec A: kappa_g of a_g = w (y - mu_g) and c_X (zvar's covariate
+        # bias, on the unscaled design) multiply V; the saddlepoint takes
+        # lambda_g = 1 / (kappa_g c_X) as its per-group variance ratio.
+        from mixmogam._relatedness import covariate_factor
+
         kap = _kappa_guard(rel.kappa(A), kappa_floor)
-        extra["relatedness"]["kappa"] = kap
-        lam_spa = 1.0 / kap
+        c_X, trq = covariate_factor(rel, st.Q_raw, st.n_eff)
+        extra["relatedness"].update({"kappa": kap, "c_X": c_X, "trace_QPhiQ": trq})
+        lam_spa = 1.0 / (kap * c_X)
         lam_j = lam_spa[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2_normal = np.where(valid, lam_j * U * U / V, np.nan)

@@ -93,7 +93,30 @@ def test_binary_kappa_and_spa():
     base_n = _run(y, gt, trait="binary", model_snps=sub, relatedness=pairs,
                   relatedness_correction="none", spa_threshold=1e6)
     g = gt.chromosome - 1
-    np.testing.assert_allclose(plain.f_stat, base_n.f_stat / k[g], rtol=1e-12)
+    cx = plain.extra["relatedness"]["c_X"]
+    assert 1.0 < cx < 1.01  # intercept only: c_X = (n - 1) / (n - tr(Q'PhiQ)) slightly above 1
+    np.testing.assert_allclose(plain.f_stat, base_n.f_stat / (k[g] * cx), rtol=1e-12)
+
+
+# P2: c_X on the binary and weighted paths (family-level covariates make it large)
+@pytest.mark.parametrize("path", ["binary", "weighted"])
+def test_cx_on_binary_and_weighted_paths(path):
+    G, gt, y, pairs, causal = family_panel(seed=2, prevalence=0.2 if path == "binary" else None)
+    fam_id = np.repeat(np.arange(200), 6)
+    X = np.c_[np.random.default_rng(1).standard_normal(200)[fam_id],
+              np.random.default_rng(2).standard_normal(200)[fam_id]]
+    kw = dict(trait="binary") if path == "binary" else dict(
+        sample_weights=np.random.default_rng(3).uniform(0.5, 2.0, y.size))
+    kap = _run(y, gt, X=X, relatedness=pairs, spa_threshold=1e6, **kw)
+    base = _run(y, gt, X=X, relatedness=pairs, relatedness_correction="none", spa_threshold=1e6,
+                **kw)
+    rel = kap.extra["relatedness"]
+    cx, k = rel["c_X"], rel["kappa"]
+    Q = np.linalg.qr(np.c_[np.ones(y.size), X])[0]
+    ref, _ = covariate_factor(Relatedness(y.size, *pairs), Q, y.size - 3)
+    assert cx > 1.002 and abs(cx - ref) < 1e-12
+    np.testing.assert_allclose(kap.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx), rtol=1e-10)
+    assert 0.95 <= _null_mean(kap, causal) <= 1.05
 
 
 # 5. household environment (unascertained)
