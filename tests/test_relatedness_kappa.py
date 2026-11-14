@@ -502,15 +502,17 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
     w = np.random.default_rng(3).uniform(0.5, 2.0, y.size)
     sub = np.sort(np.random.default_rng(5).choice(gt.n_variants, gt.n_variants // 4,
                                                   replace=False))
+    # spa_threshold=1e6 disables the saddlepoint so the statistic is the
+    # uncorrected retrospective chi-square scaled by 1/(kappa_g c_X) once.
     kap = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
-               stage1="auto", loco_folds=2)
+               stage1="auto", loco_folds=2, spa_threshold=1e6)
     sel = kap.extra["stage1_selection"]
     assert sel["chosen"] == "enet" and sel["reason"].startswith("sample_weights")
     assert kap.extra.get("stage1", "enet") == "enet"
     assert not kap.extra["structure"]["strong"]
     assert kap.extra["loco_refit"] and kap.extra["loco_refit_reason"] == "relatives"
     base = _run(y, gt, model_snps=sub, relatedness=pairs, relatedness_correction="none",
-                sample_weights=w, stage1="auto", loco_folds=2)
+                sample_weights=w, stage1="auto", loco_folds=2, spa_threshold=1e6)
     k, cx = kap.extra["relatedness"]["kappa"], kap.extra["relatedness"]["c_X"]
     np.testing.assert_allclose(kap.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
                                rtol=1e-10)
