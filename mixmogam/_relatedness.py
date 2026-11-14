@@ -273,7 +273,6 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "king_max_variants": 50_000, "king_min_maf": 0.05, "king_max_n": 50_000,
                        "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
                        "kappa_floor": 0.2, "loco_refit": "auto",
-                       "loco_refit_min_s2": 0.005,
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
                        "king_max_abs_f": 0.5, "kinship_variants": None}
 

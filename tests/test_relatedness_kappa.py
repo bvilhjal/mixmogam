@@ -143,7 +143,9 @@ def test_covariates_cx(fam):
 # 6. unrelated samples
 def test_unrelated_samples_unchanged():
     G, gt, y, pairs, causal = family_panel(seed=6, kids=0, n_fam=600)
-    a = _run(y, gt, relatedness="auto")
+    # Isolate the kappa effect: even unrelated panels can have false KING
+    # pairs; the default must conservatively refit if any are detected.
+    a = _run(y, gt, relatedness="auto", relatedness_options={"loco_refit": False})
     b = _run(y, gt)
     k = a.extra["relatedness"]["kappa"]
     assert np.all(np.abs(k - 1) < 0.01)
@@ -252,7 +254,6 @@ def test_relatives_keep_loco_refit_in_model_nulls_calibrated():
     assert not off.extra["loco_refit"] and off.extra["loco_refit_reason"] is None
     assert not on.extra["structure"]["strong"]  # the unrelated-set test does not fire
     assert on.extra["relatedness"]["n_pairs_above_threshold"] == pairs[0].size
-    assert on.extra["relatedness"]["s2_above_threshold"] > 1.0  # 14 pairs of r=0.5 per 6
     assert _null_mean(off, causal) > 1.03  # every null here is a model SNP
     assert _null_mean(on, causal) < 1.02
 
@@ -264,11 +265,9 @@ def test_loco_refit_option_and_no_close_pairs():
     assert not a.extra["loco_refit"] and a.extra["relatedness"]["n_pairs_above_threshold"] == 0
     b = _run(y, gt, relatedness=far, relatedness_options={"loco_refit": True})
     assert b.extra["loco_refit"] and b.extra["loco_refit_reason"] == "forced"
-    few = (np.array([0]), np.array([1]), np.array([0.5]))  # one pair: s2 = 2 * 0.25 / 600 < 0.005
+    few = (np.array([0]), np.array([1]), np.array([0.5]))
     c = _run(y, gt, relatedness=few)
-    assert not c.extra["loco_refit"] and c.extra["relatedness"]["n_pairs_above_threshold"] == 1
-    d = _run(y, gt, relatedness=few, relatedness_options={"loco_refit_min_s2": 0.0})
-    assert d.extra["loco_refit"] and d.extra["loco_refit_reason"] == "relatives"
+    assert c.extra["loco_refit"] and c.extra["loco_refit_reason"] == "relatives"
     with pytest.raises(ValueError, match="loco_refit"):
         hratt(y, gt, relatedness=far, relatedness_options={"loco_refit": "yes"})
 
