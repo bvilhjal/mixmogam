@@ -204,8 +204,18 @@ Useful `relatedness_options` (defaults in
   LDpred3 stage 1 skips this refit (block-exact LOCO) and records
   `loco_refit_reason` `"n/a (block-exact LOCO)"`.
 - `loco_refit_min_related`: 0.01. For `"auto"` KING pairs, the refit needs at
-  least this fraction of samples in a close pair. A supplied pedigree or file
-  triggers the refit from a single pair above the threshold.
+  least this fraction of samples in a pair above a noise-aware cutoff
+  (median + z σ_eff, with z set so the expected number of null pairs is
+  about 1, and σ_eff inflated if the empirical upper tail of a 1e6-pair
+  subsample is heavier than Gaussian). The cutoff is capped at 0.0884
+  (KING's 2nd/3rd-degree bound); if the noise cutoff would exceed the cap,
+  a warning recommends a pedigree or external pairs (the refit is not
+  disabled). The 4-SD floor that fills Phi still admits a number of noise
+  pairs that grows with n², which at n = 20,000 can exceed 1% of samples
+  (SG p20k §4); the trigger does not count those. A handful of true close
+  pairs below 1% of samples does not fire: the leak is negligible there
+  and the refit is expensive. A supplied pedigree or file triggers the
+  refit from a single pair above the threshold.
 - `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
   the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x).
 - `unrelated_min_phi` / `unrelated_min_n`: the structure test uses a maximal

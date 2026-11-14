@@ -1355,11 +1355,26 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     any supplied pair (pedigree, register, ``.kin0`` / ``.grm.sp`` file or
     arrays) with phi > ``relatedness_threshold``; for ``"auto"`` (KING
     estimated here) at least ``relatedness_options["loco_refit_min_related"]``
-    (1%) of the samples must be in such a pair, since its noise floor
-    passes 0-1 spurious pairs on unrelated panels and the leak grows with
-    the related fraction (paired in-model null excess -0.007 to +0.001 at
-    1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100% in the CW's mixed
-    nuclear-family panels; ``extra["relatedness"]["related_fraction"]``).
+    (1%) of the samples must be in a pair above a noise-aware cutoff, not
+    merely above the 4-SD floor that also fills Phi. The 4-SD floor still
+    admits a number of noise pairs that grows with n² (SG p20k §4: 244
+    pairs, 1.33% of samples, on an unrelated n=20,000 panel with floor
+    0.042, which tripped the older 1% rule). The trigger therefore counts
+    only pairs with phi > max(``relatedness_threshold``, median + z σ_eff),
+    with σ_eff = σ̂ times the empirical-to-Gaussian upper-quantile ratio
+    when the tail is heavier than Gaussian, and z set so the expected
+    number of null pairs among n(n-1)/2 is about 1
+    (``extra["relatedness"]["refit_trigger"]``). The cutoff is capped at
+    KING's 2nd/3rd-degree bound (0.0884); if the noise cutoff would
+    exceed the cap, a warning recommends a pedigree or external pairs
+    (the refit is not disabled). A handful of true close pairs below
+    ``loco_refit_min_related`` does not fire: the leak the refit removes
+    grows with the related fraction (paired in-model null excess -0.007
+    to +0.001 at 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100% in
+    the CW's mixed nuclear-family panels), so below 1% the 1.3-3.8x
+    stage-1 cost is not worth it.
+    ``extra["relatedness"]["related_fraction"]`` is still the fraction in
+    any floor-kept pair.
     Why the refit:
     the folds split families, so a genome-wide fit's chromosome-g model SNPs
     absorb family-shared noise of the test samples' relatives and dropping
@@ -1741,15 +1756,29 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         rel_info["related_fraction"] = n_rel / n
         # (i) Evidence for relatives: supplied pairs (pedigree, register,
         # external KING / GCTA files) count from one pair. KING-auto pairs
-        # need >= loco_refit_min_related (1%) of samples in a close pair: on
-        # unrelated panels its 4-SD floor still passes 0-1 noise pairs (SG,
-        # 2 of 3 seeds at n = 2,000), while the leak the refit removes grows
-        # with the related fraction (paired in-model excess -0.007..+0.001 at
-        # 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100%; CW mixed panels,
-        # specA-fixes-cw.md), so below 1% it is <= ~0.0014 even scaled
-        # linearly from 100%, and the refit's 1.3-3.8x stage-1 CPU buys nothing.
+        # need >= loco_refit_min_related (1%) of samples in a close pair.
+        # For KING-auto, "close" is the n-aware trigger cutoff (median +
+        # z σ̂, E[null pairs] ≈ 1), not the 4-SD floor: that floor already
+        # lets hundreds of noise pairs through at n = 20,000 (SG p20k §4).
+        # Below 1% related the leak is <= ~0.0014 even scaled linearly from
+        # 100%, so the refit's 1.3-3.8x stage-1 CPU buys nothing.
         estimated = str(rel_info.get("source", "")).startswith("king-auto")
-        evidence = n_rel >= rel_opt["loco_refit_min_related"] * n if estimated else n_rel > 0
+        if estimated:
+            from mixmogam._relatedness import king_refit_trigger
+
+            king = rel_info.get("king") or {}
+            trig = king_refit_trigger(
+                n, u.row, u.col, u.data / 2.0,
+                noise_sd=float(king.get("noise_sd", 0.0)),
+                noise_median=float(king.get("noise_median", 0.0)),
+                relatedness_threshold=relatedness_threshold,
+                min_related=rel_opt["loco_refit_min_related"],
+                noise_tail_ratio=float(king.get("noise_tail_ratio", 1.0)),
+                n_variants=king.get("n_variants"))
+            rel_info["refit_trigger"] = trig
+            evidence = bool(trig["evidence"])
+        else:
+            evidence = n_rel > 0
         rel_info["relatives_evidence"] = bool(evidence)
         if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1:
             fam_labels = _family_components(rel, relatedness_threshold)

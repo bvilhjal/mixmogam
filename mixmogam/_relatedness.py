@@ -35,6 +35,7 @@ from scipy import linalg, sparse
 from scipy.sparse.csgraph import connected_components
 
 __all__ = ["Relatedness", "pedigree_relatedness", "king_relatedness", "king_pairs",
+           "king_refit_trigger",
            "as_relatedness", "read_kin0", "read_grm_sparse", "align_pairs", "unrelated_set",
            "covariate_factor", "resolve_relatedness"]
 
@@ -283,7 +284,7 @@ def king_relatedness(gt, variants=None, *, min_phi: float = KING_THIRD_DEGREE,
 
 RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5000,
                        "king_max_variants": 50_000, "king_min_maf": 0.05, "king_max_n": 50_000,
-                       "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
+                       "king_noise_pairs": 1_000_000, "king_noise_sd_multiple": 4.0,
                        "kappa_floor": 0.2, "loco_refit": "auto",
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
                        "king_max_abs_f": 0.5, "kinship_variants": None,
@@ -316,18 +317,24 @@ def _king_variants(gt, mean, exclude, min_maf: float, cap: int) -> np.ndarray:
 
 
 def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int = 4096,
-               noise_pairs: int = 30_000, noise_sd_multiple: float = 4.0, rng=None) -> dict:
+               noise_pairs: int = 1_000_000, noise_sd_multiple: float = 4.0, rng=None) -> dict:
     """KING-robust kinship (Manichaikul et al. 2010, between-family
     estimator) of every sample pair on ``variants``, blockwise: sample rows
     in blocks of ``block`` against all samples, variants in chunks of
     ``chunk`` (memory O(block x n + n x chunk)). The noise floor is the
-    robust SD (1.4826 MAD) of phi over ``noise_pairs`` random pairs; the
-    kept pairs have phi > max(threshold, noise_sd_multiple x SD). Each row
-    block decodes the KING variants once: ceil(n / block) reads of them,
-    3 n^2 k flops (float32 GEMM; the symmetric half is not exploited).
+    robust SD (1.4826 MAD) of phi over a seeded random subsample of
+    ``noise_pairs`` pairs (default 1e6, or all pairs if fewer exist),
+    taken from the same block products (no extra genotype pass, O(K)
+    memory). The kept pairs have phi > max(threshold, noise_sd_multiple x
+    SD). An empirical upper-quantile / Gaussian ratio on that subsample
+    (``noise_tail_ratio``) is also returned, for a heavier-than-Gaussian
+    tail check on the LOCO-refit trigger. Each row block decodes the KING
+    variants once: ceil(n / block) reads of them, 3 n^2 k flops (float32
+    GEMM; the symmetric half is not exploited).
 
     Returns {"i", "j", "r" (= 2 phi), "threshold", "threshold_requested",
-    "noise_sd", "n_variants", "seconds"}. Missing calls count as neither
+    "noise_sd", "noise_median", "noise_tail_ratio", "noise_n_pairs",
+    "n_variants", "seconds"}. Missing calls count as neither
     het nor hom (KING-robust ignores them; heterozygote counts per sample
     use the called variants only)."""
     import time
@@ -347,7 +354,7 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     # extra pass). Heterozygote counts complete during the first row block,
     # whose chunk sweep decodes every sample. Pairs above the requested
     # threshold are kept; the floor-raised threshold filters them at the end.
-    k = int(noise_pairs)
+    k = min(int(noise_pairs), n * (n - 1) if n > 1 else 0)
     ra = rng.integers(0, n, k)
     rb = rng.integers(0, n, k)
     keep = ra != rb
@@ -389,15 +396,137 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         r = r + s
         up = c > r
         I.append(r[up]); J.append(c[up]); V.append(phi[r[up] - s, c[up]])
-    sd = float(1.4826 * np.median(np.abs(phi_r - np.median(phi_r)))) if phi_r.size else 0.0
+    med = float(np.median(phi_r)) if phi_r.size else 0.0
+    sd = float(1.4826 * np.median(np.abs(phi_r - med))) if phi_r.size else 0.0
+    tail_ratio = _king_tail_ratio(phi_r, med, sd)
     thr = float(max(threshold, noise_sd_multiple * sd))
     I, J, V = np.concatenate(I), np.concatenate(J), np.concatenate(V)
     ok = V > thr
     I, J, V = I[ok], J[ok], V[ok]
     return {"i": I, "j": J, "r": 2.0 * V,
             "threshold": thr, "threshold_requested": float(threshold), "noise_sd": sd,
+            "noise_median": med, "noise_tail_ratio": tail_ratio,
+            "noise_n_pairs": int(phi_r.size),
             "n_variants": int(idx.size), "seconds": time.perf_counter() - t0,
             "median_F": F_med, "hom_alt_fraction": n_hom_alt / max(n_called, 1)}
+
+
+def _king_tail_ratio(phi_r, med: float, sd: float) -> float:
+    """Empirical upper-quantile / Gaussian ratio on a pair subsample.
+
+    KING-robust noise is not exactly Gaussian (it depends on MAF, LD and
+    ancestry). A ratio > 1 means a heavier-than-Gaussian upper tail; the
+    LOCO-refit trigger then inflates σ̂ by this factor. The quantile is
+    taken at a moderately central alpha (2%, ~2.05 σ under a Gaussian)
+    so a few percent of true related pairs in the subsample cannot inflate
+    it, while a heavier-than-Gaussian noise tail still can. Returns 1 when
+    the subsample is too small or σ̂ is 0.
+    """
+    from scipy.stats import norm
+
+    phi_r = np.asarray(phi_r, dtype=np.float64)
+    if phi_r.size < 1_000 or sd <= 0.0:
+        return 1.0
+    alpha = 0.02
+    q_emp = float(np.quantile(phi_r, 1.0 - alpha))
+    z_a = float(norm.isf(alpha))
+    den = z_a * sd
+    if den <= 0.0:
+        return 1.0
+    return float((q_emp - med) / den)
+
+
+def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: float = 0.0,
+                       relatedness_threshold: float = 0.025, min_related: float = 0.01,
+                       expected_null: float = 1.0, noise_tail_ratio: float = 1.0,
+                       n_variants: int | None = None) -> dict:
+    """Whether KING-auto pairs are evidence of relatives for the LOCO refit.
+
+    The pairs that enter Phi are not changed. For the trigger only, a pair
+    counts as related if ``phi > max(relatedness_threshold, median + z σ_eff)``,
+    with σ_eff = σ̂ · max(1, tail_ratio) (the empirical-to-Gaussian upper
+    quantile ratio, so heavier-than-Gaussian tails raise the cutoff) and
+    z the standard-normal upper quantile at which the expected number of
+    null pairs among n(n-1)/2 is ``expected_null`` (default 1; z is about
+    √(2 ln(n²/2))). The cutoff is capped at ``KING_SECOND_DEGREE`` (0.0884,
+    the 2nd/3rd-degree boundary) so 2nd-degree relatives still count; if
+    the uncapped noise cutoff would exceed the cap, a warning is issued
+    that KING-auto has too few markers to distinguish 3rd-degree relatives
+    from noise, and a pedigree or external pairs should be supplied. The
+    refit itself is not disabled.
+
+    Evidence then uses the same ``min_related`` sample-fraction rule as
+    before (default 1%), applied to this quieter set. A handful of true
+    close pairs below that fraction does not fire: the in-model leak is
+    negligible there (≤ ~0.0014 at 1% related, ≤ 0.006 at 10%, in the
+    CW mixed-family panels), so the 1.3-3.8x stage-1 cost of a refit is
+    not worth it. n² growth of 4-SD-floor noise pairs is what this
+    cutoff stops from tripping the 1% rule (SG p20k §4: 244 pairs, 1.33%
+    of samples, on an unrelated n=20,000 panel).
+    """
+    from scipy.stats import norm
+
+    n = int(n)
+    i = np.asarray(i)
+    j = np.asarray(j)
+    phi = np.asarray(phi, dtype=np.float64)
+    n_pairs_all = n * (n - 1) // 2
+    sd = float(noise_sd)
+    med = float(noise_median)
+    tail_ratio = float(noise_tail_ratio) if np.isfinite(noise_tail_ratio) else 1.0
+    sd_eff = sd * max(1.0, tail_ratio)
+    cap = float(KING_SECOND_DEGREE)
+    floor = float(relatedness_threshold)
+    cutoff_uncapped = floor
+    capped = False
+    if n < 2 or n_pairs_all < 1:
+        z = 0.0
+        cutoff = floor
+        n_exp = 0.0
+    else:
+        # P(Z > z) = expected_null / N, so E[null exceedances] = expected_null
+        # under the (possibly tail-inflated) Gaussian.
+        p = min(max(float(expected_null) / n_pairs_all, 0.0), 1.0)
+        z = 0.0 if p >= 1.0 else (float("inf") if p <= 0.0 else float(norm.isf(p)))
+        if not np.isfinite(z) or sd_eff <= 0.0:
+            cutoff_uncapped = floor
+        else:
+            cutoff_uncapped = float(max(floor, med + z * sd_eff))
+        capped = cutoff_uncapped > cap and floor < cap
+        cutoff = cutoff_uncapped if not capped else cap
+        z_eff = (cutoff - med) / sd_eff if sd_eff > 0.0 else float("inf")
+        n_exp = float(n_pairs_all * norm.sf(z_eff)) if np.isfinite(z_eff) else 0.0
+        if capped:
+            markers = f" on {n_variants:,} variants" if n_variants else ""
+            warnings.warn(
+                f"relatedness='auto': the n-aware KING-auto refit-trigger cutoff would be "
+                f"phi {cutoff_uncapped:.4f} (median + z·σ̂{markers}, σ̂={sd:.4f}"
+                + (f", tail ratio {tail_ratio:.2f}" if tail_ratio > 1.0 else "")
+                + f"), above KING's 2nd/3rd-degree bound ({cap:g}). The trigger is "
+                f"capped at {cap:g} and may not distinguish 3rd-degree relatives from "
+                "noise; pass a pedigree or external KING / GCTA pairs. The LOCO refit "
+                "is not disabled",
+                RuntimeWarning, stacklevel=2)
+    ok = phi > cutoff if phi.size else np.zeros(0, dtype=bool)
+    n_pairs = int(np.count_nonzero(ok))
+    if n_pairs:
+        n_rel = int(np.unique(np.r_[i[ok], j[ok]]).size)
+    else:
+        n_rel = 0
+    frac = n_rel / n if n else 0.0
+    evidence = n_rel >= float(min_related) * n if n else False
+    reason = (f"{n_pairs} pair(s) above trigger cutoff {cutoff:.4f}"
+              + (f" (capped from {cutoff_uncapped:.4f})" if capped else "")
+              + f" (median {med:.4f} + z={z:.2f}·σ_eff, σ̂={sd:.4f}"
+              + (f", tail ratio {tail_ratio:.2f}" if tail_ratio != 1.0 else "")
+              + f"; expected null {n_exp:.2f} of {n_pairs_all:,} pairs; "
+              f"{n_rel} samples, {frac:.2%} of n={n:,}; "
+              f"{'evidence' if evidence else 'no evidence'} at min_related={min_related:g})")
+    return {"noise_sd": sd, "noise_median": med, "noise_tail_ratio": tail_ratio,
+            "sd_eff": sd_eff, "z": z, "cutoff": cutoff,
+            "cutoff_uncapped": float(cutoff_uncapped), "capped": bool(capped),
+            "n_pairs": n_pairs, "n_expected_null": n_exp, "n_related": n_rel,
+            "related_fraction": frac, "evidence": bool(evidence), "reason": reason}
 
 
 def align_pairs(id1, id2, r, sample_ids, *, source: str = "pairs") -> tuple:
@@ -597,8 +726,9 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                 RuntimeWarning, stacklevel=3)
         rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
         info.update({"source": "king-auto", "king": {k: res[k] for k in (
-            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds",
-            "median_F", "hom_alt_fraction")},
+            "threshold", "threshold_requested", "noise_sd", "noise_median",
+            "noise_tail_ratio", "noise_n_pairs", "n_variants",
+            "seconds", "median_F", "hom_alt_fraction")},
             "king_on": on})
         return rel, info
     if isinstance(spec, (str, os.PathLike)):

@@ -9,6 +9,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- KING-auto's LOCO-refit trigger is noise-aware at large n. The 4-SD floor
+  that fills Phi is unchanged, but the trigger counts only pairs with
+  phi > max(`relatedness_threshold`, median + z σ_eff). σ̂ is the 1.4826
+  MAD of a seeded random subsample of 1e6 pairs (or all pairs if fewer),
+  taken from the KING block products at no extra pass; σ_eff inflates σ̂
+  when that subsample's upper quantile is heavier than Gaussian. z is set
+  so the expected number of null pairs among n(n-1)/2 is about 1. The
+  cutoff is capped at KING's 2nd/3rd-degree bound (0.0884); if the noise
+  cutoff would exceed the cap, a warning recommends a pedigree or external
+  pairs and the refit is not disabled. The older 1% sample rule, applied
+  at the 4-SD floor, fired on an unrelated n=20,000 panel (SG p20k §4:
+  244 pairs, 1.33% of samples, floor 0.042). A handful of true close pairs
+  below 1% of samples still does not fire: the in-model leak is negligible
+  there. Pedigree and pair-file sources are unchanged.
+  `extra["relatedness"]["refit_trigger"]` records σ̂, the tail ratio, the
+  cutoff, the observed and expected null counts, and the reason.
 - `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
   Spec A relatedness (kappa_g) follow-ups, and the LDpred3 / int8 stage-1
   seam. A supplied pedigree or pair file is assumed complete: relatives
