@@ -222,8 +222,10 @@ BLAS pools are limited internally, but Apple Accelerate needs the
 configured limit. The first use of each kernel pays Numba's compilation.
 During parallel sweeps the workers spin between launches instead of sleeping
 at once (as OpenMP does on Apple silicon): in the 26 October speed review whole HRATT
-runs at four threads were 1.12-1.24x faster on a 5,000 x 40,000 panel than with
-sleeping workers, for 1.5-2x the process CPU time; set `KMP_BLOCKTIME` or
+runs at four threads were 1.12-1.24x faster than with sleeping workers on a
+5,000 x 40,000 panel, 1.55x on 1,000 x 10,000 (a strong-structure refit) and
+1.01-1.03x on 20,000 x 10,000, for 1.5-2x the process CPU time; two threads
+gained 1.06x and one thread is unchanged; set `KMP_BLOCKTIME` or
 `OMP_WAIT_POLICY` to keep the runtime's own policy.
 
 No float copy of the genotypes is kept; every pass decodes them. For large

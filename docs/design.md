@@ -334,8 +334,8 @@ implementations: REML instead of MC REML for BOLT-LMM; HRATT's
 single-component HE rather than LDAK-KVIK's partitioned HE with large-effect
 exclusions, followed by REML h2 by default (`alpha_method="reml"` scans REML
 likelihoods instead); no LD thinning in the LDAK-Thin weights; a 1% relative
-CV R^2 margin before BOLT-LMM uses the mixture (BOLT's threshold is
-unpublished); median matching instead of the LDSC intercept when LD scores do
+CV R^2 margin before BOLT-style mixture (mixmogam) uses the mixture (BOLT-LMM's
+threshold is unpublished); median matching instead of the LDSC intercept when LD scores do
 not vary (coefficient of variation < 0.2). As in BOLT-LMM, mixture p-values
 come with the infinitesimal model's effects and standard errors; slopes
 against in-sample mixture residuals were attenuated, and calibrating their

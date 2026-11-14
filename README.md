@@ -115,10 +115,11 @@ pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet arch
 | 20% subset | 1.101 ± 0.008 |
 | 5% subset | 1.237 ± 0.010 |
 
-The LOCO scores removed less of the relatives' shared signal. In the same study's unrelated,
-unstratified samples the subsets stayed calibrated within Monte Carlo error; with population
-stratification the HM3 subset added 0.02-0.05 to the null mean chi-square, because the
-structure test run on the subset flagged strong structure.
+The LOCO scores removed less of the relatives' shared signal. A separate pre-merge
+coalescent simulation (n = 2,000, 3-5 replicates per cell, also unarchived) tested only the
+HapMap3 subset: it stayed calibrated in unrelated, unstratified samples, and with population
+stratification it added 0.02-0.05 to the null mean chi-square, because the structure test run
+on the subset flagged strong structure.
 
 **Warnings.** HRATT therefore warns, and records the details in
 `result.extra["model_snps"]["warnings"]`, when:
@@ -193,8 +194,8 @@ threads, two-bit storage and memory budgets for large HRATT fits, and
 
 ## Performance
 
-On one simulated 100,000 x 20,000 founder-block panel (2.0.0.dev8, one thread,
-Apple M2 Pro), three balanced-order repetitions of each mixmogam method gave:
+On one simulated 100,000 x 20,000 founder-block panel (2.0.0.dev8, one requested thread,
+Apple M2 Pro; the Accelerate thread pool itself could not be observed), three balanced-order repetitions of each mixmogam method gave:
 
 | Method | Median wall time | Median peak RSS |
 |---|---:|---:|

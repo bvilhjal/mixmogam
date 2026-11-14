@@ -742,7 +742,7 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
              denominator: str = "constant", n_spectral="auto",
              cg_tol: float = 1e-6, slq_tol: float = 1e-6, random_state: int = 0,
              block: int = 4096) -> GwasResult:
-    """BOLT-LMM-inf: infinitesimal mixed-model association with LOCO.
+    """BOLT-style inf (mixmogam): infinitesimal mixed-model association with LOCO, after BOLT-LMM-inf.
 
     Steps 1a-1b of Loh et al. (2015): variance components on all SNPs (not
     refitted per LOCO group, BOLT's default), V_{-g}^{-1} y for every LOCO
@@ -839,7 +839,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     # predictions and masks are not needed once its scores are taken.
     del cv, pred
     if not use_mixture:
-        extra["note"] = "mixture did not beat the infinitesimal model in CV; BOLT-LMM-inf statistics"
+        extra["note"] = "mixture did not beat the infinitesimal model in CV; BOLT-style inf (mixmogam) statistics"
         return _result(st, gt, inf["chi2"], inf["beta_z"], inf["se_z"], extra)
 
     # Step 2b: LOCO posterior-mean residuals and LD Score calibration

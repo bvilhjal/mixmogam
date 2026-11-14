@@ -59,6 +59,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   measured times of mixmogam's own methods instead of rankings ("fastest",
   "cheapest"), and the README links current documentation on `master` instead
   of the v2.0.1 tag. `report/report_manifest.json` was regenerated.
+- Package metadata: the description no longer says "super-efficient" (pyproject,
+  CITATION.cff title, package docstring), and the development status is 4 - Beta.
+  `gwas(method="bolt")` without a mixture now notes "BOLT-style inf (mixmogam)
+  statistics" in `extra["note"]`.
 
 ## [2.0.2.dev1] - 2026-11-03
 

@@ -1,4 +1,4 @@
-"""Super-efficient mixed linear models for genome-wide association mapping."""
+"""Mixed linear models for genome-wide association mapping (research implementation)."""
 
 __version__ = "2.0.2.dev1"
 

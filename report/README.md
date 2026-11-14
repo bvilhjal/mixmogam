@@ -1,6 +1,8 @@
 # Research report
 
-The [manuscript PDF](mixmogam_report.pdf) sets out the statistical argument
+The [manuscript PDF](mixmogam_report.pdf) (**stale**: the committed PDF is the
+2.0.0 build, which predates the removal of the external-program comparisons and
+the claims audit; it will be rebuilt from the LaTeX source) sets out the statistical argument
 behind mixmogam, the evidence for it and six research priorities; the
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. The
 [design notes](../docs/design.md) describe the methods and the
@@ -54,7 +56,7 @@ its earlier name.
 | Panel-cost decomposition | `20261025T190534Z-scaling-ladder`, `-t4` | Ten times fewer samples costs ~7x at fixed variants (iteration counts fall with it); short-range LD needed fewer HRATT sweeps (4 against 8-10) than HAPNEST's; early-October timings are not comparable (HRATT-HE 27.2 s now against 43.9 s archived, with older code and other host conditions) |
 | Covariates under confounding | `20261025T201718Z-kvik-covariates-small`, `-large` | With three ancestry PCs mixmogam methods converge and agree; without them the variational fits do not converge while exact and BOLT-style inf (mixmogam) stay near calibration |
 | Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, stacked HE-alpha GEMM, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
-| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: both HRATT paths approximately linear in n (local exponents 0.86 and 0.96) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact cubic; at n = 50,000 single runs took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)) |
+| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000: both HRATT paths approximately linear in n (local exponents 0.86 and 0.96) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact cubic; in that 26 October run (master `798518e5`, before dev8) single runs at n = 50,000 took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)); the dev8 ladder gives 13.25, 22.94 and 45.10 s |
 | dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
