@@ -1264,9 +1264,21 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     that are not model SNPs (model SNPs bias kappa_g down through the fit),
     for n <= 50,000 only, keeping phi > max(``relatedness_threshold``, 4 x
     the KING noise SD from random pairs). The structure test is repeated on
-    a maximal unrelated set, which then decides the LOCO refit and the
-    ancestry-PC warning (relatives alone trip the all-sample test; both are
-    in ``extra["structure"]``). ``"gls"`` (opt-in, unweighted quantitative)
+    a maximal unrelated set, which then decides the ancestry-PC warning
+    (relatives alone trip the all-sample test; both are in
+    ``extra["structure"]``). The cross-fitted LOCO scores are refitted per
+    group (k x groups fits) when relatives are present (pairs with phi >
+    ``relatedness_threshold`` whose load (2/n) sum r^2 is at least
+    ``relatedness_options["loco_refit_min_s2"]``, default 0.005, about 2% of
+    samples in full-sib pairs) as well as under strong structure
+    (``extra["loco_refit_reason"]``):
+    the folds split families, so a genome-wide fit's chromosome-g model SNPs
+    absorb family-shared noise of the test samples' relatives and dropping
+    their share leaves it in the residual (null model SNPs read a mean
+    chi-square of 1.06-1.19 with household c2 = 0.2 in the SG's simulations,
+    rising with n; refitted 0.99-1.04). ``relatedness_options={"loco_refit":
+    False}`` turns this off (cheaper; not-in-model variants are unaffected),
+    ``True`` forces it. ``"gls"`` (opt-in, unweighted quantitative)
     whitens the residual with a sparse family covariance instead;
     ``"lambda"`` is the behaviour without ``relatedness``, ``"none"`` no
     correction. ``extra["relatedness"]`` records the pairs, kappa_g, c_X
@@ -1441,6 +1453,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if unknown:
             raise ValueError(f"unknown relatedness_options: {sorted(unknown)}")
         rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
+        if rel_opt["loco_refit"] not in ("auto", True, False):
+            raise ValueError("relatedness_options['loco_refit'] must be 'auto', True or False")
         if rel_opt["denominator"] not in ("exact", "gamma"):
             raise ValueError("relatedness_options['denominator'] must be 'exact' or 'gamma'")
     else:
@@ -1503,6 +1517,29 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                           "covariates; kappa_g corrects for relatives, not for structure, so "
                           "include ancestry principal components among the covariates",
                           RuntimeWarning, stacklevel=2)
+    # The LOCO refit (k x groups fits, each without its group's variants).
+    # Strong structure needs it; so do relatives (SG specA-benchmark §2b):
+    # cross-fit folds split families, so fold f's genome-wide fit lets
+    # group g's model SNPs absorb family-shared noise of the test samples'
+    # relatives, and dropping g's share afterwards leaves it in the residual
+    # (in-model null mean chi2 1.06-1.19 at c2 = 0.2, growing with n).
+    refit, refit_reason = bool(struct["strong"]), ("structure" if struct["strong"] else None)
+    if rel is not None:
+        mode = rel_opt["loco_refit"]
+        # "Relatives present": pairs above the threshold carrying a load
+        # s2 = (2/n) sum r^2 of at least loco_refit_min_s2 (0.005: about 2%
+        # of samples in full-sib pairs), so a few KING noise pairs (r ~ 0.1,
+        # s2 ~ 1e-4) do not cost k x groups fits.
+        close = rel.upper.data[rel.upper.data / 2.0 > relatedness_threshold]
+        s2_close = float(2.0 * np.sum(close ** 2) / n)
+        rel_info.update({"n_pairs_above_threshold": int(close.size),
+                         "s2_above_threshold": s2_close})
+        if mode is True:
+            refit, refit_reason = True, refit_reason or "forced"
+        elif mode is False:
+            refit, refit_reason = False, None
+        elif not refit and close.size and s2_close >= rel_opt["loco_refit_min_s2"]:
+            refit, refit_reason = True, "relatives"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
@@ -1528,7 +1565,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
     if stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
                                     keep_prediction=binary, **(stage1_kwargs or {}))
@@ -1542,7 +1579,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         scores["stage1_name"] = pick
     elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         scores["stage1_name"] = "enet"
     else:
@@ -1568,7 +1605,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "cv_grid": scores.get("cv_grid", list(grid)), "cv_mse": scores["mse"],
              "cv_best": scores.get("cv_best", grid[scores["best"]]),
              "cv_converged": scores["cv_converged"],
-             "loco_folds": int(loco_folds), "loco_refit": bool(folds is not None and struct["strong"]),
+             "loco_folds": int(loco_folds),
+             "loco_refit": bool(folds is not None and refit and scores["stage1_name"] == "enet"),
+             "loco_refit_reason": (refit_reason if folds is not None and refit
+                                   and scores["stage1_name"] == "enet" else None),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
     if scores["stage1_name"] != "enet" or "stage1_selection" in scores:

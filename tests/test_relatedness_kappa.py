@@ -217,3 +217,34 @@ def test_gls_is_opt_in_and_api_errors(fam):
     with pytest.raises(ValueError, match="gls"):
         hratt((y > 0).astype(float), gt, trait="binary", relatedness=pairs,
               relatedness_correction="gls")
+
+
+# P1 (SG specA-benchmark §2b): relatives keep the per-group LOCO refit; without
+# it the joint cross-fit leaks into in-model null SNPs (household c2).
+def test_relatives_keep_loco_refit_in_model_nulls_calibrated():
+    G, gt, y, pairs, causal = family_panel(seed=0, n_fam=200, kids=4, m=8000, c2=0.3, h2=0.5)
+    on = _run(y, gt, relatedness=pairs)
+    off = _run(y, gt, relatedness=pairs, relatedness_options={"loco_refit": False})
+    assert on.extra["loco_refit"] and on.extra["loco_refit_reason"] == "relatives"
+    assert not off.extra["loco_refit"] and off.extra["loco_refit_reason"] is None
+    assert not on.extra["structure"]["strong"]  # the unrelated-set test does not fire
+    assert on.extra["relatedness"]["n_pairs_above_threshold"] == pairs[0].size
+    assert on.extra["relatedness"]["s2_above_threshold"] > 1.0  # 14 pairs of r=0.5 per 6
+    assert _null_mean(off, causal) > 1.03  # every null here is a model SNP
+    assert _null_mean(on, causal) < 1.02
+
+
+def test_loco_refit_option_and_no_close_pairs():
+    G, gt, y, pairs, causal = family_panel(seed=6, kids=0, n_fam=300, m=4000)
+    far = (np.array([0, 2]), np.array([1, 3]), np.array([0.04, 0.03]))  # phi <= 0.025
+    a = _run(y, gt, relatedness=far)
+    assert not a.extra["loco_refit"] and a.extra["relatedness"]["n_pairs_above_threshold"] == 0
+    b = _run(y, gt, relatedness=far, relatedness_options={"loco_refit": True})
+    assert b.extra["loco_refit"] and b.extra["loco_refit_reason"] == "forced"
+    few = (np.array([0]), np.array([1]), np.array([0.5]))  # one pair: s2 = 2 * 0.25 / 600 < 0.005
+    c = _run(y, gt, relatedness=few)
+    assert not c.extra["loco_refit"] and c.extra["relatedness"]["n_pairs_above_threshold"] == 1
+    d = _run(y, gt, relatedness=few, relatedness_options={"loco_refit_min_s2": 0.0})
+    assert d.extra["loco_refit"] and d.extra["loco_refit_reason"] == "relatives"
+    with pytest.raises(ValueError, match="loco_refit"):
+        hratt(y, gt, relatedness=far, relatedness_options={"loco_refit": "yes"})
