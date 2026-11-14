@@ -121,6 +121,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   source (47 pages, was 51), so it no longer carries the external-program
   comparisons or the old labels; the stale-PDF notes in `report/README.md` and
   `report_manifest.json` were removed.
+- `docs/quickstart.md`: unarchived simulation figures in the Relatives
+  section (weighted lambda 0.70-1.92, family-fold QTL 0.66-0.92x, rare-binary
+  1.2-2.3x / 3.5x, and the n=20,000 KING noise count) are labelled as estimates
+  with their source docs; they are not archived under `benchmarks/results/`.
+  `report/report_manifest.json` hashes for CHANGELOG.md and README.md were
+  refreshed after the merge into `integrate/stage1`; the PDF is unchanged.
 
 ## [2.0.2.dev1] - 2026-11-03
 

@@ -178,8 +178,10 @@ lambda to 1.
 This is the supported path for related samples, and it is required when
 `sample_weights` are also used. Without `relatedness=`, weighted tests in
 simulated families ranged from conservative to badly inflated (lambda
-0.70-1.92). Unweighted tests without it leave close relatives to the
-structure lambda, which is only a partial correction.
+0.70-1.92 in a 3-seed simulation, not archived under
+`benchmarks/results/`; stage1-int8-ldpred-epi.md). Unweighted tests
+without it leave close relatives to the structure lambda, which is only
+a partial correction.
 
 Limits:
 
@@ -212,12 +214,15 @@ Useful `relatedness_options` (defaults in
   a warning recommends a pedigree or external pairs (the refit is not
   disabled). The 4-SD floor that fills Phi still admits a number of noise
   pairs that grows with n², which at n = 20,000 can exceed 1% of samples
-  (SG p20k §4); the trigger does not count those. A handful of true close
-  pairs below 1% of samples does not fire: the leak is negligible there
-  and the refit is expensive. A supplied pedigree or file triggers the
-  refit from a single pair above the threshold.
+  (estimate from stage1-int8-ldpred-p20k-sg.md §4, not archived under
+  `benchmarks/results/`); the trigger does not count those. A handful of
+  true close pairs below 1% of samples does not fire: the leak is
+  negligible there and the refit is expensive. A supplied pedigree or
+  file triggers the refit from a single pair above the threshold.
 - `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
-  the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x).
+  the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x the
+  refit's in simulations at n = 2,000, not archived under
+  `benchmarks/results/`; specA-benchmark-sg.md §9b).
 - `unrelated_min_phi` / `unrelated_min_n`: the structure test uses a maximal
   set with no pair closer than 3rd degree (phi 0.0442), and falls back to every
   sample if that set is under 100.
@@ -233,9 +238,10 @@ The command line accepts `--relatedness FILE|auto`, `--relatedness-threshold`,
 With related samples, binary tests of variants with MAF below about 5% can be
 anti-conservative even after the kappa_g correction: in simulated families,
 null rare variants read 1.2-2.3x the nominal rate at p = 1e-3 (up to about
-3.5x at 1e-4), worst when the carriers sit in one to three families, at every
-minor-allele count. The saddlepoint assumes independent carriers; a minimum
-allele count does not fix it. Variants with p <
+3.5x at 1e-4), worst when the carriers sit in one to three families, at
+every minor-allele count (estimate from simulations, not archived under
+`benchmarks/results/`; specA-benchmark-sg.md §9c). The saddlepoint assumes
+independent carriers; a minimum allele count does not fix it. Variants with p <
 `relatedness_options["carrier_families_p"]` (1e-4) and MAF < 5% get a
 `carrier_families` column (distinct families among the minor-allele carriers,
 from the close-pair graph) and `few_carrier_families` (three or fewer);
