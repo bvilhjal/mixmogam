@@ -1184,6 +1184,51 @@ def test_king_auto_9010_null_does_not_underestimate_or_fire():
         assert not trig["evidence"], f"seed {seed} fired: {trig['reason']}"
 
 
+def test_king_auto_7030_switch_caps_false_pairs_and_warns():
+    """70/30 two-pop Fst 0.05, n=2000, m=4000, 20 planted half-sibs.
+
+    The sep-guarded upper-half switch must fire and keep 2nd-degree
+    pairs in Phi (>= 70%). False pairs and the total KING phi-sum
+    stay within seed-robust caps from five review seeds on this
+    panel (observed maxima: 46 false pairs, total phi-sum / pedigree
+    1.982). The switch warning mentions that the lower floor may add
+    false related pairs.
+
+    Caps: n_false <= 80, total phi-sum / pedigree <= 2.5 (margin
+    over those maxima). Seeds include the review seed with the most
+    false pairs (seed 5).
+    """
+    n, m, n_pairs = 2000, 4000, 20
+    for seed in (1, 4, 5):
+        gt, i_t, j_t = _bn_counts_panel(n, m, fst=0.05, k_pops=2,
+                                        props=(0.70, 0.30), n_pairs=n_pairs,
+                                        seed=seed)
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always", RuntimeWarning)
+            trig, rel, info = _live_trigger(gt, seed=seed)
+        king = info["king"]
+        stats = _phi_false_and_true(rel, i_t, j_t)
+        assert king.get("noise_scale_from_structure"), (
+            f"seed {seed} did not switch; sd={king['noise_sd']:.4f} "
+            f"MAD={king['noise_sd_mad']:.4f} loc={king['noise_location']:.4f}")
+        assert stats["n_rec"] >= 0.70 * stats["n_true"], (
+            f"seed {seed}: recovered {stats['n_rec']}/{stats['n_true']}; "
+            f"floor={king['threshold']:.4f}")
+        assert stats["n_false"] <= 80, (
+            f"seed {seed}: {stats['n_false']} false Phi pairs; "
+            f"floor={king['threshold']:.4f}")
+        ped = stats["ped"]
+        ratio = stats["total_sum"] / ped if ped else 0.0
+        assert ratio <= 2.5, (
+            f"seed {seed}: phi-sum ratio {ratio:.3f} > 2.5 "
+            f"(total={stats['total_sum']:.3f} ped={ped:.3f})")
+        texts = " ".join(str(w.message) for w in rec
+                         if issubclass(w.category, RuntimeWarning))
+        assert "false related pairs" in texts, (
+            f"seed {seed}: missing switch false-pair warning: {texts!r}")
+
+
+
 def test_king_auto_unrelated_null_n3000_few_false_pairs():
     """A negative loc must not pull the floor down on an unstructured
     null. n=3000 should have about as many false Phi pairs as master's

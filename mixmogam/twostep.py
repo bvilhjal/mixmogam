@@ -1356,12 +1356,14 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     two-population mixture, not a 90/10 split), or when that ratio
     is still above 1.27 and σ̂ √n_variants ≥ 0.765 (smaller two-pop
     Fst 0.05 panels, where sep alone can sit in (1.27, 1.35]). A
+    warning fires when the switch engages, because the lower floor
+    may add false related pairs. A
     negative location
     does not pull the floor or the trigger cutoff down. With K ≥ 3
     populations or weak structure, σ̂ may stay inflated (up to ~2.3×
     within-population), the trigger cutoff may cap at 0.0884, and
-    3rd-degree relatives may not count; supply PC-based clusters, a
-    pedigree or external pairs.
+    3rd-degree relatives may not count; supply a pedigree or pairs
+    (e.g. KING run within ancestry groups).
     The structure test is repeated on
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in

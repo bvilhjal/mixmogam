@@ -205,7 +205,9 @@ Limits:
   the square root of the number of KING variants is at least 0.765). The
   separation check keeps a 90/10 split or a single population from
   underestimating the SD. With the switch, two-population structure no
-  longer drops 2nd-degree pairs; without it, the floor is also never below
+  longer drops 2nd-degree pairs; a warning fires when the switch
+  engages, because the lower floor may add false related pairs. Without
+  the switch, the floor is also never below
   the location-free bound max(threshold, 4 x 1.4826 x MAD) that `master`
   uses. With three or more
   populations or weak structure the switch often stays off, the SD can stay

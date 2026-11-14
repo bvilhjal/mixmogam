@@ -45,11 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   upper_MAD > 1.35, so a 90/10 split no longer underestimates σ̂;
   when that ratio is still above 1.27 and σ̂ √n_variants ≥ 0.765
   the switch is still accepted, which keeps 2nd-degree pairs on
-  smaller two-pop Fst 0.05 panels. With
+  smaller two-pop Fst 0.05 panels. A warning fires when the switch
+  engages, because the lower floor may add false related pairs. With
   K ≥ 3 populations or weak structure, σ̂ may stay inflated (up to
   ~2.3× within-population), the trigger cutoff may cap at 0.0884, and
-  3rd-degree relatives may not count; supply PC-based clusters, a
-  pedigree or external pairs.
+  3rd-degree relatives may not count; supply a pedigree or pairs
+  (e.g. KING run within ancestry groups).
 - `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
   Spec A relatedness (kappa_g) follow-ups, and the LDpred3 / int8 stage-1
   seam. A supplied pedigree or pair file is assumed complete: relatives

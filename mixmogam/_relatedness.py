@@ -359,15 +359,16 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     populations or weak / unbalanced structure the switch often stays
     off and σ̂ stays inflated (up to ~2.3× within-population); the
     trigger cutoff may then cap at 0.0884 and 3rd-degree relatives may
-    not count. Supply PC-based clusters, a pedigree or external pairs
-    in that case. The Phi floor and the trigger cutoff both use
+    not count. Supply a pedigree or pairs (e.g. KING run within
+    ancestry groups) in that case. The Phi floor and the trigger cutoff both use
     location max(0, loc): a between-population median is negative and
     must not pull either one down. When the switch does not fire, the
     floor is also at least master's bound max(threshold,
     noise_sd_multiple x MAD) (cdd6530a), so the robust scale may only
     raise that bound. The sep-guarded switch may lower σ̂, with loc
     still ≥ 0, which is what keeps 2nd-degree pairs under two-pop
-    Fst 0.05. The Phi floor is therefore max(threshold, max(0, loc) +
+    Fst 0.05. When the switch fires a warning notes that this lower
+    floor may also add false related pairs. The Phi floor is therefore max(threshold, max(0, loc) +
     noise_sd_multiple x SD) and, without the switch, master's 4·MAD
     bound. Pairs above ``threshold`` are
     also returned unfiltered (``i_prefloor``, ``j_prefloor``,
@@ -532,7 +533,9 @@ def _king_noise_scale(phi_r, n_variants=None):
     MAD is typically > 0.8, so the switch stays off and σ̂ stays
     inflated (up to ~2.3× within-population). The trigger cutoff may
     then cap at 0.0884 and 3rd-degree relatives may not count; supply
-    PC-based clusters, a pedigree or external pairs.
+    a pedigree or pairs (e.g. KING run within ancestry groups). When
+    the switch is accepted, a warning notes that the lower floor may
+    add false related pairs.
 
     Returns ``(location, scale, mad_scale, overall_median, tail_ratio,
     from_structure, tail_ratio_mad)``. ``tail_ratio`` is recomputed at
@@ -908,15 +911,16 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
             # upper tail than the MAD, the signature of a within- vs
             # between-population mixture (not LD, which scales the
             # whole distribution). The floor and trigger already use
-            # the upper-half MAD; this only flags that KING-auto
-            # ignores ancestry.
+            # the upper-half MAD; this flags that KING-auto ignores
+            # ancestry and that the lower floor may add false pairs.
             warnings.warn(
                 f"relatedness='auto': the pairwise KING phi distribution looks like an "
                 f"ancestry mixture (MAD σ̂ {mad:.4f} is {mad / sd:.1f}× the within-component "
                 f"scale {sd:.4f}). The noise floor and refit trigger use the "
-                "within-component scale so 2nd-degree pairs are not dropped. KING-auto "
-                "does not use ancestry PCs; pass a pedigree or external PC-aware pairs "
-                "if close relatives might be missed",
+                "within-component scale so 2nd-degree pairs are not dropped; this may "
+                "also add false related pairs. KING-auto does not use ancestry PCs; "
+                "pass a pedigree or pairs (e.g. KING run within ancestry groups) if "
+                "close relatives might be missed or false pairs are a concern",
                 RuntimeWarning, stacklevel=3)
         if res["threshold"] > threshold:
             # Population structure used to inflate 1.4826·MAD (the SG's
