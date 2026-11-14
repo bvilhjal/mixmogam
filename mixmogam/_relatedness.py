@@ -274,7 +274,8 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
                        "kappa_floor": 0.2, "loco_refit": "auto",
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
-                       "king_max_abs_f": 0.5, "kinship_variants": None}
+                       "king_max_abs_f": 0.5, "kinship_variants": None,
+                       "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn"}
 
 # KING-robust from a sample block against all samples, keeping pairs above a
 # threshold: O(block x n) memory, never the n x n matrix.
@@ -546,10 +547,48 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
             rel, dropped = read_kin0(path, gt.sample_ids)
         rel = rel.threshold_phi(threshold)
         info.update({"source": rel.source, "dropped_pairs": dropped})
-        return rel, info
-    rel = as_relatedness(spec, n)
-    info["source"] = rel.source or "pairs"
+    else:
+        rel = as_relatedness(spec, n)
+        info["source"] = rel.source or "pairs"
+    info.update(_kinship_overlap(gt, options, model_idx))
     return rel, info
+
+
+def _kinship_overlap(gt, options: dict, model_idx) -> dict:
+    """P4: external kinship estimated on the stage-1 model SNPs under-corrects
+    (KING on model SNPs left the null mean chi-square at up to 1.09 in the
+    SG's grid: the fit anti-correlates the residuals of pairs that look
+    related on its own SNPs). With ``options["kinship_variants"]`` (the
+    variants the pairs were estimated on: indices, a mask, IDs, or a path
+    to a file of IDs, e.g. PLINK ``.prune.in``) the overlap with the model
+    SNPs is recorded and a warning issued above ``kinship_max_model_overlap``
+    of them. Without it nothing can be checked (recorded as None)."""
+    kv = options.get("kinship_variants")
+    if kv is None:
+        return {"kinship_model_overlap": None}
+    from mixmogam._thin import _resolve_indices
+
+    if isinstance(kv, (str, os.PathLike)):
+        with open(os.fspath(kv)) as fh:
+            kv = np.array([ln.split()[0] for ln in fh if ln.strip()])
+    kidx = _resolve_indices(gt, kv, "kinship_variants", strict=False)
+    model = (np.arange(gt.n_variants) if model_idx is None
+             else np.asarray(model_idx, dtype=np.int64))
+    if kidx.size == 0:
+        warnings.warn("relatedness_options['kinship_variants'] matched no panel variant; the "
+                      "kinship-vs-model-SNP overlap was not checked", RuntimeWarning, stacklevel=4)
+        return {"kinship_model_overlap": None, "kinship_variants_matched": 0}
+    frac = float(np.isin(kidx, model).mean())
+    # Full stage 1 (no subset): every variant is a model SNP and KING on the
+    # whole panel calibrated in the SG grid; only subsets are guarded.
+    if model_idx is not None and frac > options["kinship_max_model_overlap"]:
+        warnings.warn(
+            f"relatedness: {frac:.0%} of the {kidx.size:,} variants the kinship was estimated "
+            "on are stage-1 model SNPs; kinship from model SNPs biases kappa_g down (null mean "
+            "chi-square up to 1.09 in simulation, worst with small subsets). Estimate it on "
+            "common variants that are not model SNPs, or use a pedigree", RuntimeWarning,
+            stacklevel=4)
+    return {"kinship_model_overlap": frac, "kinship_variants_matched": int(kidx.size)}
 
 
 def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact",

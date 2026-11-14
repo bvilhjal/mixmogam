@@ -1278,9 +1278,29 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     False}`` disables this safety rule for research comparisons only (in-model
     nulls can be inflated; not recommended),
     ``True`` forces it. ``"gls"`` (opt-in, unweighted quantitative)
-    whitens the residual with a sparse family covariance instead;
-    ``"lambda"`` is the behaviour without ``relatedness``, ``"none"`` no
-    correction. ``extra["relatedness"]`` records the pairs, kappa_g, c_X
+    whitens the residual with a sparse family covariance instead. It gains
+    power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
+    families with a 5% subset) but is prospective: under families ascertained
+    on the trait with a household effect its null mean chi-square read 1.017
+    (kappa 0.998), so it is never the default. ``"lambda"`` is the behaviour
+    without ``relatedness``, ``"none"`` no correction.
+
+    The maximal unrelated set of the structure test splits only pairs with
+    phi > ``relatedness_options["unrelated_min_phi"]`` (default 0.0442, 3rd
+    degree); below ``"unrelated_min_n"`` (100) samples the test falls back to
+    every sample, with a warning. Strong structure among the unrelated with
+    no covariates warns that kappa_g has replaced lambda
+    (``"structure_without_pcs": "error"`` raises instead). ``"auto"``
+    refuses haploid / 0-1-coded or inbred calls (median |F| >
+    ``"king_max_abs_f"``, 0.5; KING-robust assumes outbred diploids) and
+    warns at |F| > 0.05 or more than 5 n pairs. External kinship must not
+    be estimated on the stage-1 model SNPs (kappa_g is biased down: up to
+    1.09 in simulation with small subsets); pass the variants it was
+    estimated on as ``"kinship_variants"`` (indices, a mask, IDs or a path to
+    an ID list such as PLINK ``.prune.in``) and HRATT warns when more than
+    ``"kinship_max_model_overlap"`` (10%) of them are model SNPs; a ``.kin0``
+    file alone carries no variant list, so this cannot be checked otherwise.
+    ``extra["relatedness"]`` records the pairs, kappa_g, c_X, the checks
     and the KING settings.
 
     A subset's stage 1 sees only the polygenic signal its SNPs tag. In
@@ -1454,6 +1474,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
         if rel_opt["loco_refit"] not in ("auto", True, False):
             raise ValueError("relatedness_options['loco_refit'] must be 'auto', True or False")
+        if rel_opt["structure_without_pcs"] not in ("warn", "error"):
+            raise ValueError("relatedness_options['structure_without_pcs'] must be 'warn' or 'error'")
         if rel_opt["denominator"] not in ("exact", "gamma"):
             raise ValueError("relatedness_options['denominator'] must be 'exact' or 'gamma'")
     else:
@@ -1526,10 +1548,25 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                          "s2": float(2.0 * np.sum(rel.upper.data ** 2) / n),
                          "n_unrelated": int(keep.size)})
         if struct["strong"] and kappa_on:
-            warnings.warn("strong population structure remains among unrelated samples after the "
-                          "covariates; kappa_g corrects for relatives, not for structure, so "
-                          "include ancestry principal components among the covariates",
-                          RuntimeWarning, stacklevel=2)
+            no_cov = st_test.lg.Q.shape[1] <= 1  # intercept only
+            rel_info["structure_without_covariates"] = bool(no_cov)
+            if no_cov:
+                # P5: kappa_g replaces lambda, so with no covariates nothing
+                # corrects the structure (SG grid, no PCs: null mean chi2
+                # 1.05-1.08 against <= 1.013 with lambda).
+                msg = ("strong population structure among unrelated samples and no covariates: "
+                       "with relatedness= kappa_g replaces lambda, which corrected part of it, "
+                       "so structured variants can be inflated (null mean chi-square 1.05-1.08 "
+                       "in simulation against <= 1.013 with lambda); include ancestry principal "
+                       "components among the covariates")
+                if rel_opt["structure_without_pcs"] == "error":
+                    raise ValueError(msg)
+                warnings.warn(msg, RuntimeWarning, stacklevel=2)
+            else:
+                warnings.warn("strong population structure remains among unrelated samples "
+                              "after the covariates; kappa_g corrects for relatives, not for "
+                              "structure, so include ancestry principal components among the "
+                              "covariates", RuntimeWarning, stacklevel=2)
     # The LOCO refit (k x groups fits, each without its group's variants).
     # Strong structure needs it; so do relatives (SG specA-benchmark §2b):
     # cross-fit folds split families, so fold f's genome-wide fit lets

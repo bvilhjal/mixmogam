@@ -310,3 +310,50 @@ def test_king_auto_records_inbreeding_on_outbred(fam):
     a = _run(y, gt, model_snps=sub, relatedness="auto")
     k = a.extra["relatedness"]["king"]
     assert abs(k["median_F"]) < 0.05 and k["hom_alt_fraction"] > 0.05
+
+
+# P4: external kinship estimated on model SNPs is flagged when its variants are given
+def test_external_kinship_on_model_snps_warns(tmp_path, fam):
+    G, gt, y, pairs, causal, sub = fam
+    ids = np.asarray(gt.variant_ids)
+    (tmp_path / "k.prune.in").write_text("\n".join(ids[sub]) + "\n")
+    with pytest.warns(RuntimeWarning, match="stage-1 model SNPs"):
+        a = hratt(y, gt, model_snps=sub, relatedness=pairs, random_state=1,
+                  model_snps_h2_check=False,
+                  relatedness_options={"kinship_variants": str(tmp_path / "k.prune.in")})
+    assert a.extra["relatedness"]["kinship_model_overlap"] == 1.0
+    other = np.setdiff1d(np.arange(gt.n_variants), sub)[:2000]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        b = hratt(y, gt, model_snps=sub, relatedness=pairs, random_state=1,
+                  model_snps_h2_check=False, relatedness_options={"kinship_variants": other})
+    assert b.extra["relatedness"]["kinship_model_overlap"] == 0.0
+    assert _run(y, gt, model_snps=sub, relatedness=pairs).extra["relatedness"][
+        "kinship_model_overlap"] is None
+
+
+# P5: strong structure, kappa active, no covariates -> louder warning / opt-in error
+def test_structure_without_pcs_warns_or_errors():
+    rng = np.random.default_rng(5)
+    n, m = 800, 4000
+    pop = np.repeat([0, 1], n // 2)
+    p0 = rng.uniform(0.1, 0.9, m)
+    shift = rng.normal(0, 0.15, m)
+    pf = np.clip(np.stack([p0 - shift, p0 + shift]), 0.02, 0.98)
+    G = rng.binomial(2, pf[pop]).astype(np.int8)
+    from mixmogam import Genotypes
+    gt = Genotypes(G, chromosome=np.repeat([1, 2, 3, 4], m // 4), position=np.arange(m) * 10_000 + 1)
+    y = 0.8 * pop + rng.standard_normal(n)
+    empty = (np.array([0]), np.array([1]), np.array([0.01]))  # below threshold: no refit by relatives
+    with pytest.warns(RuntimeWarning, match="no covariates"):
+        r = hratt(y, gt, relatedness=empty, random_state=1)
+    assert r.extra["structure"]["strong"] and r.extra["relatedness"]["structure_without_covariates"]
+    with pytest.raises(ValueError, match="no covariates"):
+        hratt(y, gt, relatedness=empty, random_state=1,
+              relatedness_options={"structure_without_pcs": "error"})
+    pcs = np.linalg.svd(G - G.mean(0), full_matrices=False)[0][:, :2]
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        hratt(y, gt, X=pcs, relatedness=empty, random_state=1,
+              relatedness_options={"structure_without_pcs": "error"})
+    assert not any("no covariates" in str(x.message) for x in w)

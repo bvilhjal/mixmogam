@@ -30,6 +30,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `model_snps_h2_check=False` turns it off);
   - relatedness or residual structure combined with a small subset;
   - `"auto"` keeps more than 80% of the variants.
+- HRATT `relatedness=` (Spec A, kappa_g): follow-up fixes from the SG benchmark.
+  - Relatives above `relatedness_threshold` keep the per-group LOCO refit
+    (`extra["loco_refit_reason"]`). Without it in-model null SNPs were inflated
+    (1.06-1.19 at household c² = 0.2). The refit costs k × groups VB columns.
+  - c_X (covariate factor) now also applies on the binary/SPA and weighted paths.
+  - The unrelated-set structure test splits only pairs with phi > 0.0442. It falls back,
+    with a warning, below 100 samples. KING `"auto"` refuses haploid or inbred calls.
+  - Warnings for external kinship estimated on model SNPs (`kinship_variants`)
+    and for strong structure without covariates under kappa.
 - `mixmogam hm3 info|match|build`: show, match or rebuild a HapMap3 map. `--map` takes a
   bundled name or a file.
 - `gwas_by_group(y, gt, groups, X)` runs `gwas` separately in two

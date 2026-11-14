@@ -220,6 +220,14 @@ every thread count; parallel residual products may change rounding. Detected
 BLAS pools are limited internally, but Apple Accelerate needs the
 `VECLIB_MAXIMUM_THREADS` setting above, and the count cannot exceed Numba's
 configured limit. The first use of each kernel pays Numba's compilation.
+Compiled kernels are cached on disk (`cache=True`), by default next to the
+package's sources. When several processes or checkouts run at once (batch
+jobs, benchmark grids, several worktrees on one environment), give each run
+a writable cache of its own, e.g. `NUMBA_CACHE_DIR=$TMPDIR/numba-$JOB`:
+a shared or stale cache was behind intermittent `ReferenceError: underlying
+object has vanished` crashes while Numba saved a kernel in concurrent
+simulation runs, which a per-run `NUMBA_CACHE_DIR` stopped. Results do not
+depend on the cache, only the first-call compile time does.
 During parallel sweeps the workers spin between launches instead of sleeping
 at once (as OpenMP does on Apple silicon), 1.1-1.25x faster at four threads on
 a wide panel for 1.5-2x the CPU time; set `KMP_BLOCKTIME` or
