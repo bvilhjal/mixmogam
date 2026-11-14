@@ -193,34 +193,22 @@ Limits:
   pair file.
 - Phi keeps only pairs above `relatedness_threshold` (default 0.025). With
   `"auto"` the floor is max(threshold, max(0, location) + 4 SD) of the KING
-  noise, from up to 1e6 random pairs (every pair when n(n-1)/2 <= 1e6). By
-  default the location is their median and the SD is 1.4826 x their MAD; a
-  negative location (a between-population median) does not lower the floor.
-  On a two-population panel that MAD is inflated by the gap between within-
-  and between-population pairs, so the upper half of the pairs (phi at or
-  above the median) sets the location and SD instead when two checks pass:
-  the MAD's upper tail is lighter than Gaussian (ratio below 0.8), and the
-  upper half is separated from the median ((upper median - median) /
-  upper-half SD above 1.35, or above 1.27 when the upper-half SD times
-  the square root of the number of KING variants is at least 0.765). The
-  separation check keeps a 90/10 split or a single population from
-  underestimating the SD. With the switch, two-population structure no
-  longer drops 2nd-degree pairs, and a RuntimeWarning says so, because the
-  lower floor may also add false related pairs. Without the switch, the
-  floor is also never below the location-free bound max(threshold, 4 x
-  1.4826 x MAD) that `master` uses. With three or more populations or weak
-  structure the switch often stays off, the SD can stay
-  inflated (up to about 2.3x the within-population SD), the trigger cutoff
-  may cap at 0.0884 and 3rd-degree relatives may not count; supply a
-  pedigree or a pair file (for example KING run within ancestry groups).
-  More distant relatedness is left to the structure test, so include
-  ancestry PCs among the covariates.
-- `"auto"` can miss 2nd-degree relatives. With an 80/20 two-population
-  split and no PCs, it recovered only 6-17 of 20 2nd-degree pairs, and
-  under strong LD (m_eff around 800) 2nd-degree pairs could not be reliably
-  separated from KING noise (simulation estimates from internal review
-  runs, not archived in this repo). In those settings supply a pedigree or
-  a pair file through `relatedness=` instead of `"auto"`.
+  noise, and is never below master's bound max(threshold, 4 x 1.4826 x MAD),
+  from up to 1e6 random pairs (every pair when n(n-1)/2 <= 1e6). The
+  location is their median and the SD is 1.4826 x their MAD; a negative
+  location (a between-population median) does not lower the floor. There
+  is no upper-half structure switch. `"auto"` is reliable without
+  population structure. Under structure that MAD is inflated by the gap
+  between within- and between-population pairs, so the 4-SD floor can sit
+  above 0.0625 or 0.125 and drop 3rd- or 2nd-degree relatives from Phi; a
+  warning says so. The LOCO-refit trigger still counts pre-floor pairs
+  against z = isf(1/N) around max(0, location), with the 0.0884 cap, the
+  0.0625 warning and the 1% rule, so a refit can fire even when Phi is
+  empty. When relatives are detected but not modeled in Phi, a warning
+  recommends a pedigree or pairs (e.g. KING run within ancestry groups).
+  Supply a pedigree or a pair file through `relatedness=` instead of
+  `"auto"` under structure. More distant relatedness is left to the
+  structure test, so include ancestry PCs among the covariates.
 - kappa_g replaces the structure lambda. With strong structure and no PCs,
   that can leave structured variants inflated; pass PCs, or set
   `relatedness_options["structure_without_pcs"] = "error"` to refuse the run.

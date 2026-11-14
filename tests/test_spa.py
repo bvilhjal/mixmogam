@@ -5,6 +5,13 @@ import itertools
 
 import numpy as np
 import pytest
+
+def _require_numba_threads(n=2):
+    numba = pytest.importorskip("numba")
+    if numba.config.NUMBA_NUM_THREADS < n:
+        pytest.skip(f"requires NUMBA_NUM_THREADS >= {n} before Python starts")
+    return n
+
 from scipy import stats
 
 from mixmogam._spa import _cgf, spa_pvalue
@@ -240,6 +247,7 @@ def test_ancestry_specific_tails_against_exact_null_convolution():
 
 
 def test_individual_probabilities_are_parallel_invariant_and_condition_on_missing_calls():
+    _require_numba_threads(2)
     rng = np.random.default_rng(49)
     a = rng.normal(size=80)
     af = np.tile(np.linspace(.05, .5, 80), (3, 1))
@@ -257,6 +265,8 @@ def test_individual_probabilities_are_parallel_invariant_and_condition_on_missin
 @pytest.mark.parametrize("two_sided", ["distance", "doubled"])
 @pytest.mark.parametrize("n_threads", [1, 2])
 def test_conditional_binomial_spa_matches_four_point_oracle(two_sided, n_threads):
+    if n_threads > 1:
+        _require_numba_threads(n_threads)
     from mixmogam._spa import _binomial_spa
     rng = np.random.default_rng(1309)
     n, k = 120, 24

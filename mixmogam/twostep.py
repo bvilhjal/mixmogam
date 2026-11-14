@@ -1348,22 +1348,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     that are not model SNPs (model SNPs bias kappa_g down through the fit),
     for n <= 50,000 only, keeping phi above the noise floor (the max of
     ``relatedness_threshold``, max(0, location) + 4 x the KING noise SD,
-    and, unless a sep-guarded upper-half switch lowers σ̂, master's
-    4·MAD bound). The
-    SD is 1.4826·MAD of a seeded pair subsample, or the MAD of the
-    upper half when that MAD's upper-tail ratio is below 0.8 *and*
-    (upper_median - median) / upper_MAD > 1.35 (a well-separated
-    two-population mixture, not a 90/10 split), or when that ratio
-    is still above 1.27 and σ̂ √n_variants ≥ 0.765 (smaller two-pop
-    Fst 0.05 panels, where sep alone can sit in (1.27, 1.35]). A
-    warning fires when the switch engages, because the lower floor
-    may add false related pairs. A
+    and master's 4·MAD bound). There is no upper-half structure
+    switch. The SD is 1.4826·MAD of a seeded pair subsample. A
     negative location
-    does not pull the floor or the trigger cutoff down. With K ≥ 3
-    populations or weak structure, σ̂ may stay inflated (up to ~2.3×
-    within-population), the trigger cutoff may cap at 0.0884, and
-    3rd-degree relatives may not count; supply a pedigree or pairs
-    (e.g. KING run within ancestry groups).
+    does not pull the floor or the trigger cutoff down.
+    ``relatedness='auto'`` is reliable without population structure.
+    Under structure the MAD can be inflated, the 4-SD floor can sit
+    above 0.0625 or 0.125, and 3rd- or 2nd-degree relatives may drop
+    out of Phi; supply a pedigree or pairs (e.g. KING run within
+    ancestry groups). The LOCO-refit trigger still counts pre-floor
+    pairs, so a refit can fire even when Phi is empty; a warning then
+    says relatives were detected but not modeled in Phi.
     The structure test is repeated on
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in
@@ -1760,8 +1755,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                         msg += (f". The structure also raised the KING-auto noise floor to phi "
                                 f"{king['threshold']:.3f} (requested {king['threshold_requested']:g}), "
                                 f"which can drop {lost} from kappa_g; PCs do not lower it "
-                                "(KING runs on genotypes), so pass pedigree or external "
-                                "PC-aware kinship pairs")
+                                "(KING runs on genotypes), so supply a pedigree or pairs "
+                                "(e.g. KING run within ancestry groups)")
                 if rel_opt["structure_without_pcs"] == "error":
                     raise ValueError(msg)
                 warnings.warn(msg, RuntimeWarning, stacklevel=2)
@@ -1792,39 +1787,47 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # (i) Evidence for relatives: supplied pairs (pedigree, register,
         # external KING / GCTA files) count from one pair. KING-auto pairs
         # need >= loco_refit_min_related (1%) of samples in a close pair.
-        # For KING-auto, "close" is the n-aware trigger cutoff (median +
-        # z σ̂, E[null pairs] ≈ 1), not the 4-SD floor: that floor already
-        # lets hundreds of noise pairs through at n = 20,000 (internal review simulation).
+        # For KING-auto, "close" is the n-aware trigger cutoff
+        # (max(0, loc) + z σ̂, E[null pairs] ≈ 1), not the 4-SD floor:
+        # that floor already lets hundreds of noise pairs through at
+        # n = 20,000 (internal review simulation).
         # Below 1% related the leak is estimated as <= ~0.0014 even
         # scaled linearly from 100% (review simulations, n = 2,000,
         # not archived), so the refit's 1.3-3.8x stage-1 CPU buys nothing.
         estimated = str(rel_info.get("source", "")).startswith("king-auto")
         if estimated:
-            from mixmogam._relatedness import king_refit_trigger
+            # resolve_relatedness already ran the trigger on pre-floor
+            # pairs and recorded detected vs modeled counts. Reuse that
+            # result so the 0.0625-cutoff warning is not emitted twice.
+            # Never count only post-floor Phi pairs (M9).
+            trig = rel_info.get("refit_trigger")
+            if trig is None:
+                from mixmogam._relatedness import king_refit_trigger
 
-            king = rel_info.get("king") or {}
-            # Count KING phi over the trigger cutoff, not the 4-SD Phi
-            # floor: under structure the floor used to drop 2nd-degree
-            # pairs before the trigger saw them.
-            pre = rel_info.get("king_prefloor") or {}
-            if pre.get("i") is not None and np.size(pre["i"]):
-                ti, tj, tphi = pre["i"], pre["j"], np.asarray(pre["r"], dtype=np.float64) / 2.0
-            else:
-                ti, tj, tphi = u.row, u.col, u.data / 2.0
-            loc = king.get("noise_location", king.get("noise_median", 0.0))
-            trig = king_refit_trigger(
-                n, ti, tj, tphi,
-                noise_sd=float(king.get("noise_sd", 0.0)),
-                noise_median=float(king.get("noise_median", 0.0)),
-                noise_location=None if loc is None else float(loc),
-                relatedness_threshold=relatedness_threshold,
-                min_related=rel_opt["loco_refit_min_related"],
-                noise_tail_ratio=float(king.get("noise_tail_ratio", 1.0)),
-                n_variants=king.get("n_variants"))
-            rel_info["refit_trigger"] = trig
+                king = rel_info.get("king") or {}
+                pre = rel_info.get("king_prefloor") or {}
+                if pre.get("i") is not None and np.size(pre["i"]):
+                    ti, tj, tphi = pre["i"], pre["j"], np.asarray(pre["r"], dtype=np.float64) / 2.0
+                else:
+                    ti, tj, tphi = u.row, u.col, u.data / 2.0
+                loc = king.get("noise_location", king.get("noise_median", 0.0))
+                trig = king_refit_trigger(
+                    n, ti, tj, tphi,
+                    noise_sd=float(king.get("noise_sd", 0.0)),
+                    noise_median=float(king.get("noise_median", 0.0)),
+                    noise_location=None if loc is None else float(loc),
+                    relatedness_threshold=relatedness_threshold,
+                    min_related=rel_opt["loco_refit_min_related"],
+                    noise_tail_ratio=float(king.get("noise_tail_ratio", 1.0)),
+                    n_variants=king.get("n_variants"))
+                rel_info["refit_trigger"] = trig
             evidence = bool(trig["evidence"])
+            rel_info["n_pairs_detected"] = int(trig["n_pairs"])
+            rel_info["n_pairs_modeled"] = int(close.sum())
         else:
             evidence = n_rel > 0
+            rel_info["n_pairs_detected"] = int(close.sum())
+            rel_info["n_pairs_modeled"] = int(close.sum())
         rel_info["relatives_evidence"] = bool(evidence)
         if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1:
             fam_labels = _family_components(rel, relatedness_threshold)

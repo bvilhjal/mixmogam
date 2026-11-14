@@ -6,6 +6,13 @@ import os
 import numpy as np
 import pytest
 
+def _require_numba_threads(n=2):
+    numba = pytest.importorskip("numba")
+    if numba.config.NUMBA_NUM_THREADS < n:
+        pytest.skip(f"requires NUMBA_NUM_THREADS >= {n} before Python starts")
+    return n
+
+
 from mixmogam import _stream
 from mixmogam._loco import LocoGenotypes
 from mixmogam._packed import PackedCalls
@@ -52,6 +59,8 @@ def _same(a, b):
 @pytest.mark.parametrize("kw", [{}, {"block": 1}, {"block": 7}, {"block": 100000},
                                 {"trait": "binary"}, {"weights": True}, {"n_threads": 2}])
 def test_stream_bitwise_equals_in_memory(kw, tmp_path):
+    if kw.get("n_threads", 1) and kw.get("n_threads", 1) > 1:
+        _require_numba_threads(int(kw["n_threads"]))
     gt, y, idx = _panel(missing=0.02)
     kw = dict(kw)
     if kw.pop("weights", False):
@@ -228,6 +237,8 @@ def test_cli_stream_flags(tmp_path):
 
 @pytest.mark.parametrize("n_threads", [1, 2])
 def test_prefetch_thread_and_advice_bitwise(tmp_path, n_threads):
+    if n_threads > 1:
+        _require_numba_threads(n_threads)
     gt, y, idx = _panel(missing=0.02)
     a = gwas(y, gt, method="hratt", model_snps=idx, n_threads=n_threads)
     for mode in ("thread", "advise"):

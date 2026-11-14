@@ -4,6 +4,13 @@ whitening in eigen coordinates: faster paths with unchanged values."""
 import numpy as np
 import pytest
 
+def _require_numba_threads(n=2):
+    numba = pytest.importorskip("numba")
+    if numba.config.NUMBA_NUM_THREADS < n:
+        pytest.skip(f"requires NUMBA_NUM_THREADS >= {n} before Python starts")
+    return n
+
+
 from mixmogam import LMM, gwas
 from mixmogam._fast import HAS_NUMBA, _standardize_numpy, convert_block, standardize_block
 from mixmogam.genotypes import Genotypes
@@ -25,6 +32,8 @@ def _calls(n=257, k=41, seed=3):
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("threads", [1, pytest.param(2, marks=[needs_numba, pytest.mark.numba])])
 def test_fused_standardization_matches_numpy(dtype, threads):
+    if threads > 1:
+        _require_numba_threads(threads)
     g = _calls()
     Z = standardize_block(g, dtype, n_threads=threads)
     assert Z.dtype == dtype and Z.flags.f_contiguous and Z.shape == g.shape
@@ -40,6 +49,7 @@ def test_fused_standardization_matches_numpy(dtype, threads):
 @pytest.mark.numba
 @pytest.mark.parametrize("impute", ["mean", "zero"])
 def test_parallel_block_conversion_is_identical(impute):
+    _require_numba_threads(2)
     g = _calls(seed=4)
     np.testing.assert_array_equal(convert_block(g, np.float32, impute, n_threads=2),
                                   convert_block(g, np.float32, impute))
@@ -79,6 +89,7 @@ def test_eigen_coordinates_scan_equals_sample_space(model, dtype, tol):
 @needs_numba
 @pytest.mark.numba
 def test_exact_gwas_threads_change_nothing():
+    _require_numba_threads(2)
     G = simulate_genotypes(n=200, m=600, n_pop=2, pop_fst=0.1, seed=12)
     gt = Genotypes(G.T, chromosome=np.repeat([1, 2, 3], 200))
     y = simulate_traits(G, h2=0.4, n_causal=10, seed=13)["y"]

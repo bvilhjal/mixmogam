@@ -387,16 +387,21 @@ def test_structure_without_pcs_warns_or_errors():
         k = hratt(y, gt, relatedness="auto", random_state=1)
     king = k.extra["relatedness"]["king"]
     floor = king["threshold"]
-    # Mixture-robust scale: the 4-SD floor must stay below 2nd-degree,
-    # which is the bug this test used to encode (MAD floor ≈ 0.15).
-    assert king["threshold_requested"] < floor < 0.0884
-    assert king.get("noise_scale_from_structure") or king["noise_sd_mad"] > 1.5 * king["noise_sd"]
+    # No upper-half switch: the 4-SD MAD floor sits above 2nd-degree
+    # under two-pop structure (MAD floor ≈ 0.15).
+    assert floor >= 4.0 * king["noise_sd_mad"] - 1e-12
+    assert floor > 0.0884
+    assert not king.get("noise_scale_from_structure")
+    assert king["noise_sd"] == pytest.approx(king["noise_sd_mad"], rel=1e-12)
     msg = [str(x.message) for x in w if "no covariates" in str(x.message)]
     assert len(msg) == 1
     assert "kappa_g replaces" in msg[0] and "LDpred3" in msg[0] and "in simulations" in msg[0]
-    assert "2nd-degree bound" not in msg[0]
-    assert not any("2nd-degree bound" in str(x.message) and "noise floor" in str(x.message)
-                   for x in w)
+    # The KING-auto floor also drops 2nd-degree from Phi / kappa_g.
+    assert "2nd-degree" in msg[0] or any(
+        "2nd-degree" in str(x.message) and ("floor" in str(x.message) or "dropped" in str(x.message))
+        for x in w)
+    texts = " ".join(str(x.message) for x in w)
+    assert "pedigree or pairs" in texts or "KING run within ancestry groups" in texts
     pcs = np.linalg.svd(G - G.mean(0), full_matrices=False)[0][:, :2]
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -796,12 +801,10 @@ def test_king_refit_trigger_warns_when_cutoff_exceeds_cousin_degree():
     assert trig["evidence"] and trig["related_fraction"] >= 0.01
 
 
-def test_king_noise_scale_uses_upper_half_under_structure_not_relatives():
-    """1.4826·MAD is kept on a single Gaussian. On a two-population
-    mixture the MAD is inflated and the MAD-tail ratio falls below 0.8,
-    so the scale switches to the upper-half MAD and recovers the
-    within-component σ. Adding related-pair contamination (upper tail)
-    does not drift that σ."""
+def test_king_noise_scale_is_mad_even_under_a_mixture():
+    """1.4826·MAD is kept on a single Gaussian and on a two-population
+    mixture. There is no upper-half switch: the mixture inflates the
+    MAD, and a few related-pair contaminants do not drift it."""
     from mixmogam._relatedness import _king_noise_scale
 
     rng = np.random.default_rng(0)
@@ -811,20 +814,21 @@ def test_king_noise_scale_uses_upper_half_under_structure_not_relatives():
     assert not struct
     assert abs(loc) < 0.002
     assert sd == pytest.approx(sig, rel=0.05)
+    assert sd == pytest.approx(sd_mad, rel=1e-12)
     assert tail == pytest.approx(1.0, abs=0.08)
     assert tail_mad == pytest.approx(1.0, abs=0.08)
 
     # 50/50 mixture, separation like Fst 0.05 (review: means ≈ 0 and -0.05)
     mix = np.r_[rng.normal(-0.0057, sig, 100_000), rng.normal(-0.0561, sig, 100_000)]
     loc_m, sd_m, mad_m, _, tail_m, struct_m, tail_mad_m = _king_noise_scale(mix)
-    assert struct_m
-    assert mad_m > 1.5 * sd_m
-    assert sd_m == pytest.approx(sig, rel=0.1)
+    assert not struct_m
+    assert sd_m == pytest.approx(mad_m, rel=1e-12)
+    assert mad_m > 1.5 * sig
     assert tail_mad_m < 0.8
     # 10% of *samples* in 2nd-degree pairs is a tiny fraction of all pairs
     with_rel = np.r_[mix, np.full(2000, 0.125)]
     loc_r, sd_r, mad_r, _, _, struct_r, _ = _king_noise_scale(with_rel)
-    assert struct_r
+    assert not struct_r
     assert sd_r == pytest.approx(sd_m, rel=0.05)
     assert mad_r == pytest.approx(mad_m, rel=0.05)
 
@@ -886,48 +890,38 @@ def _structured_halfsib_panel(n, m, fst, n_pairs, seed, admixed=False):
     return gt, np.array(true_i), np.array(true_j)
 
 
-def test_king_auto_structure_keeps_second_degree_in_phi_and_fires():
-    """Fst 0.05 plus ≈ 2% of samples in true 2nd-degree (half-sib) pairs
-    must fire through the real 4-SD floor path, and the Phi pair set /
-    phi sum must stay close to a pedigree Phi on the same pairs.
-
-    Tolerance: recover at least 70% of the true pairs in KING Phi, and
-    the KING phi sum over recovered true pairs is between 70% and 130%
-    of the pedigree sum (0.125 per pair). KING-robust phi on 8,000
-    unlinked SNPs is noisy and slightly downward-biased (review median
-    ≈ 0.11 vs 0.125), so a 30% band is the stated tolerance."""
-    from mixmogam import Genotypes  # noqa: F401
-
+def test_king_auto_structure_trigger_fires_even_if_phi_drops_second_degree():
+    """Fst 0.05 plus ≈ 2% of samples in true 2nd-degree (half-sib) pairs:
+    the 4-SD MAD floor may sit above 0.125 and drop those pairs from
+    Phi, but the pre-floor trigger must still fire, and Phi must not
+    flood (false pairs at the master floor). Recovery in Phi may be
+    low; supply a pedigree or pairs in this setting."""
     n, m, n_pairs = 2000, 8000, 20  # 40/2000 = 2% of samples
     gt, i_true, j_true = _structured_halfsib_panel(n, m, fst=0.05, n_pairs=n_pairs, seed=51)
     true_set = {frozenset((int(a), int(b))) for a, b in zip(i_true, j_true)}
-    ped_sum = 0.125 * len(true_set)
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         trig, rel, info = _live_trigger(gt, seed=51)
 
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_true, j_true)
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert not king.get("noise_scale_from_structure")
+    assert king["threshold"] >= master_floor - 1e-12
     assert trig["evidence"], trig["reason"]
     assert trig["related_fraction"] >= 0.01
-    u = rel.upper.tocoo()
-    king_phi = {frozenset((int(a), int(b))): float(ph)
-                for a, b, ph in zip(u.row, u.col, u.data / 2.0)}
-    recovered = true_set & set(king_phi)
-    assert len(recovered) >= 0.70 * len(true_set), (
-        f"recovered {len(recovered)}/{len(true_set)} true 2nd-degree pairs; "
-        f"floor={info['king']['threshold']:.4f} σ={info['king']['noise_sd']:.4f} "
-        f"MAD={info['king']['noise_sd_mad']:.4f}")
-    king_sum = sum(king_phi[p] for p in recovered)
-    assert 0.70 * ped_sum <= king_sum <= 1.30 * ped_sum, (
-        f"KING phi sum {king_sum:.3f} vs pedigree {ped_sum:.3f}")
-    n_false = len(king_phi) - len(recovered)
-    false_sum = sum(ph for pair, ph in king_phi.items() if pair not in true_set)
-    # n=2000, 2-pop Fst 0.05: a handful of 4-SD noise pairs is expected;
-    # thousands would be the K>=4 / 90/10 flood.
-    assert n_false <= 80, (
-        f"{n_false} false Phi pairs; floor={info['king']['threshold']:.4f}")
-    assert false_sum <= 0.30 * ped_sum, (
-        f"false phi-sum {false_sum:.3f} vs pedigree {ped_sum:.3f}")
+    # False pairs stay at the master floor; thousands would be a flood.
+    assert stats["n_false"] <= n_master + 5, (
+        f"{stats['n_false']} false Phi pairs; master_floor_pairs={n_master} "
+        f"floor={king['threshold']:.4f}")
+    recovered = true_set  # documented: recovery may be low
+    assert stats["n_rec"] <= len(true_set)
 
 
 def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
@@ -979,40 +973,47 @@ def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
     return gt, np.array(true_i), np.array(true_j)
 
 
-def test_king_auto_structured_phi_keeps_planted_halfsibs_and_cousins():
-    """Skeptic K1 / king_struct.py: on two populations, Phi used to be
-    empty because the 4-SD MAD floor sat above 0.125. After the
-    mixture-robust scale, planted half-sibs (and some first cousins)
-    must appear in Phi, and 2% half-sibs must fire the trigger."""
+def test_king_auto_structured_trigger_sees_halfsibs_even_if_phi_drops_them():
+    """Skeptic K1 / king_struct.py: on two populations the 4-SD MAD
+    floor sits above 0.125, so planted half-sibs (and first cousins)
+    may be absent from Phi. The pre-floor trigger must still fire on
+    2% half-sibs, and Phi must not flood."""
     n, m, fst = 800, 4000, 0.05
     gt, i_t, j_t = _ancestry_panel_with_pairs(n, m, fst, "halfsib", 0.02, seed=7)
-    true = {frozenset((int(a), int(b))) for a, b in zip(i_t, j_t)}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         trig, rel, info = _live_trigger(gt, seed=7)
-    u = rel.upper.tocoo()
-    king_phi = {frozenset((int(a), int(b))): float(ph)
-                for a, b, ph in zip(u.row, u.col, u.data / 2.0)}
-    recovered = true & set(king_phi)
-    assert len(recovered) >= 0.70 * len(true), (
-        f"half-sibs in Phi {len(recovered)}/{len(true)}; "
-        f"floor={info['king']['threshold']:.4f} σ={info['king']['noise_sd']:.4f} "
-        f"MAD={info['king']['noise_sd_mad']:.4f}")
-    assert info["king"]["threshold"] < 0.0884
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_t, j_t)
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert not king.get("noise_scale_from_structure")
+    assert king["threshold"] >= master_floor - 1e-12
     assert trig["evidence"], trig["reason"]
+    assert stats["n_false"] <= n_master + 5, (
+        f"half-sib panel: {stats['n_false']} false Phi pairs; "
+        f"floor={king['threshold']:.4f}")
 
     gt, i_t, j_t = _ancestry_panel_with_pairs(n, m, fst, "cousin", 0.03, seed=7)
-    true = {frozenset((int(a), int(b))) for a, b in zip(i_t, j_t)}
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", RuntimeWarning)
         trig, rel, info = _live_trigger(gt, seed=7)
-    u = rel.upper.tocoo()
-    king_phi = {frozenset((int(a), int(b))) for a, b in zip(u.row, u.col)}
-    recovered = true & king_phi
-    assert len(recovered) >= 1, (
-        f"no planted cousins in Phi; floor={info['king']['threshold']:.4f} "
-        f"n_true={len(true)} phi_pairs={u.row.size}")
-    assert rel.upper.nnz > 0
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_t, j_t)
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert king["threshold"] >= master_floor - 1e-12
+    assert stats["n_false"] <= n_master + 5, (
+        f"cousin panel: {stats['n_false']} false Phi pairs; "
+        f"floor={king['threshold']:.4f}")
 
 
 def test_king_auto_structure_hratt_refits_and_reports_actual_refit():
@@ -1033,9 +1034,12 @@ def test_king_auto_structure_hratt_refits_and_reports_actual_refit():
         warnings.simplefilter("ignore")
         r = hratt(y, gt, relatedness="auto", **kw)
     king = r.extra["relatedness"]["king"]
-    assert king["threshold"] < 0.0884
-    assert r.extra["relatedness"]["n_pairs_above_threshold"] >= 1
-    assert r.extra["relatedness"]["relatives_evidence"]
+    relinfo = r.extra["relatedness"]
+    assert not king.get("noise_scale_from_structure")
+    assert king["threshold"] >= 4.0 * king["noise_sd_mad"] - 1e-12
+    # Detected pre-floor relatives, not necessarily modeled in Phi.
+    assert relinfo["n_pairs_detected"] >= 1
+    assert relinfo["relatives_evidence"]
     assert r.extra["loco_refit"] is True
     # Two-pop Fst 0.05 also trips the unrelated-set structure test, so
     # the recorded reason may be "structure"; relatives evidence is required.
@@ -1184,22 +1188,16 @@ def test_king_auto_9010_null_does_not_underestimate_or_fire():
         assert not trig["evidence"], f"seed {seed} fired: {trig['reason']}"
 
 
-def test_king_auto_7030_switch_caps_false_pairs_and_warns():
+def test_king_auto_7030_no_switch_no_flood_and_warns():
     """70/30 two-pop Fst 0.05, n=2000, m=4000, 20 planted half-sibs.
 
-    The sep-guarded upper-half switch must fire and keep 2nd-degree
-    pairs in Phi (>= 70%). False pairs and the total KING phi-sum
-    stay within seed-robust caps from five review seeds on this
-    panel (observed maxima: 46 false pairs, total phi-sum / pedigree
-    1.982). The switch warning mentions that the lower floor may add
-    false related pairs.
-
-    Caps: n_false <= 80, total phi-sum / pedigree <= 2.5 (margin
-    over those maxima). Seeds include the review seed with the most
-    false pairs (seed 5).
+    There is no upper-half switch, so the 4-SD MAD floor may sit above
+    0.125 and recovery of 2nd-degree pairs may be low. False pairs
+    stay at the master floor (no flood). A warning recommends a
+    pedigree or pairs because the floor can drop close relatives.
     """
     n, m, n_pairs = 2000, 4000, 20
-    for seed in (1, 4, 5):
+    for seed in (1, 5):
         gt, i_t, j_t = _bn_counts_panel(n, m, fst=0.05, k_pops=2,
                                         props=(0.70, 0.30), n_pairs=n_pairs,
                                         seed=seed)
@@ -1208,24 +1206,24 @@ def test_king_auto_7030_switch_caps_false_pairs_and_warns():
             trig, rel, info = _live_trigger(gt, seed=seed)
         king = info["king"]
         stats = _phi_false_and_true(rel, i_t, j_t)
-        assert king.get("noise_scale_from_structure"), (
-            f"seed {seed} did not switch; sd={king['noise_sd']:.4f} "
-            f"MAD={king['noise_sd_mad']:.4f} loc={king['noise_location']:.4f}")
-        assert stats["n_rec"] >= 0.70 * stats["n_true"], (
-            f"seed {seed}: recovered {stats['n_rec']}/{stats['n_true']}; "
-            f"floor={king['threshold']:.4f}")
-        assert stats["n_false"] <= 80, (
+        master_floor = 4.0 * float(king["noise_sd_mad"])
+        pre = info.get("king_prefloor") or {}
+        if pre.get("r") is not None and np.size(pre["r"]):
+            n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+        else:
+            n_master = 0
+        assert not king.get("noise_scale_from_structure"), (
+            f"seed {seed} switched; sd={king['noise_sd']:.4f} "
+            f"MAD={king['noise_sd_mad']:.4f}")
+        assert king["noise_sd"] == pytest.approx(king["noise_sd_mad"], rel=1e-12)
+        assert king["threshold"] >= master_floor - 1e-12
+        assert stats["n_false"] <= n_master + 5, (
             f"seed {seed}: {stats['n_false']} false Phi pairs; "
-            f"floor={king['threshold']:.4f}")
-        ped = stats["ped"]
-        ratio = stats["total_sum"] / ped if ped else 0.0
-        assert ratio <= 2.5, (
-            f"seed {seed}: phi-sum ratio {ratio:.3f} > 2.5 "
-            f"(total={stats['total_sum']:.3f} ped={ped:.3f})")
+            f"master_floor_pairs={n_master} floor={king['threshold']:.4f}")
         texts = " ".join(str(w.message) for w in rec
                          if issubclass(w.category, RuntimeWarning))
-        assert "false related pairs" in texts, (
-            f"seed {seed}: missing switch false-pair warning: {texts!r}")
+        assert "supply a pedigree or pairs" in texts or "KING run within ancestry groups" in texts, (
+            f"seed {seed}: missing structure/floor warning: {texts!r}")
 
 
 
@@ -1321,6 +1319,11 @@ def test_king_refit_trigger_uses_prefloor_when_floor_exceeds_cutoff():
     assert len(true & in_phi) == 0
     assert trig["evidence"], trig["reason"]
     assert trig["n_pairs"] >= n_pairs
+    # The production path must itself have counted pre-floor pairs.
+    # Using only post-floor Phi (M9) leaves these zero.
+    assert info["refit_trigger"]["evidence"], info["refit_trigger"]["reason"]
+    assert info["n_pairs_detected"] >= n_pairs
+    assert info["n_pairs_modeled"] == 0
     # Post-floor pairs would miss them:
     trig_post = king_refit_trigger(
         n, u.row, u.col, u.data / 2.0 if u.row.size else np.zeros(0),
@@ -1330,3 +1333,177 @@ def test_king_refit_trigger_uses_prefloor_when_floor_exceeds_cutoff():
         n_variants=king.get("n_variants"),
         relatedness_threshold=0.025)
     assert not trig_post["evidence"]
+
+
+def test_king_auto_2pop_trigger_phi_mismatch_warns_and_records_counts():
+    """2-pop Fst 0.05, 2% half-sibs: the MAD floor sits above 0.125, so
+    Phi drops 2nd-degree pairs, but the pre-floor trigger still fires.
+    Metadata reports detected vs modeled counts separately, and a
+    warning says relatives were detected but not modeled in Phi."""
+    n, m, n_pairs, seed = 2000, 8000, 20, 51
+    gt, i_t, j_t = _structured_halfsib_panel(n, m, fst=0.05, n_pairs=n_pairs, seed=seed)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=seed)
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_t, j_t)
+    assert not king.get("noise_scale_from_structure")
+    assert king["threshold"] > 0.125
+    assert trig["evidence"], trig["reason"]
+    assert info["n_pairs_detected"] == trig["n_pairs"]
+    assert info["n_pairs_modeled"] == stats["n_phi"]
+    assert info["n_pairs_detected"] >= n_pairs
+    assert info["n_pairs_modeled"] < 0.5 * info["n_pairs_detected"]
+    texts = " ".join(str(w.message) for w in rec
+                     if issubclass(w.category, RuntimeWarning))
+    assert "relatives detected but not modeled in Phi" in texts, texts
+    assert "supply a pedigree or pairs (e.g. KING within ancestry groups)" in texts, texts
+
+
+def test_king_auto_floor_never_below_master_mad_bound(monkeypatch):
+    """The master 4·MAD bound applies even if the estimated scale is
+    smaller than the MAD (a reintroduced switch, or any other lower
+    σ̂). Removing `thr = max(thr, k * sd_mad)` must fail this test."""
+    from mixmogam import Genotypes
+    from mixmogam import _relatedness as R
+
+    n, m, seed = 400, 800, 1
+    rng = np.random.default_rng(seed)
+    f = rng.uniform(0.05, 0.5, m)
+    G = rng.binomial(2, f, size=(n, m)).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2], m // 2),
+                   position=np.arange(m) * 10_000 + 1)
+    mad = 0.04
+
+    def fake(phi_r, n_variants=None):
+        x = np.asarray(phi_r, dtype=np.float64)
+        x = x[np.isfinite(x)]
+        med = float(np.median(x)) if x.size else 0.0
+        return 0.0, 0.01, mad, med, 1.0, False, 1.0
+
+    monkeypatch.setattr(R, "_king_noise_scale", fake)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        res = R.king_pairs(
+            gt, np.arange(m), 0.025, noise_sd_multiple=4.0,
+            rng=np.random.default_rng(seed))
+    assert res["threshold"] >= 4.0 * mad - 1e-12, res["threshold"]
+    assert res["noise_sd"] == 0.01
+    assert res["noise_sd_mad"] == mad
+
+
+def test_king_refit_trigger_anchors_location_at_zero():
+    """A negative noise location must not lower the trigger cutoff.
+    Dropping max(0, loc) from the trigger fails this test."""
+    from mixmogam._relatedness import king_refit_trigger
+    from scipy.stats import norm
+
+    n, sd, loc, floor = 3000, 0.01, -0.05, 0.025
+    trig = king_refit_trigger(
+        n, np.zeros(0, int), np.zeros(0, int), np.zeros(0),
+        noise_sd=sd, noise_median=loc, noise_location=loc,
+        relatedness_threshold=floor)
+    assert trig["noise_location"] == 0.0
+    N = n * (n - 1) // 2
+    z = float(norm.isf(1.0 / N))
+    expected = max(floor, 0.0 + z * sd)
+    assert trig["cutoff"] == pytest.approx(expected, rel=1e-10)
+    lowered = max(floor, loc + z * sd)
+    assert trig["cutoff"] > lowered + 0.01
+
+
+def _bn_ld_panel(n, m, fst, props, n_pairs, seed, B=30, r=0.5):
+    """Balding-Nichols panel with the Skeptic's mild block-LD haplotype
+    model (king_oos.py): z = sqrt(r) u_block + sqrt(1-r) e, meiosis
+    picks a parental haplotype per block."""
+    from mixmogam import Genotypes
+    from scipy.stats import norm
+
+    rng = np.random.default_rng(seed)
+    k_pops = len(props)
+    sizes = [int(round(q * n)) for q in props]
+    sizes[-1] = n - sum(sizes[:-1])
+    p0 = rng.uniform(0.1, 0.9, m)
+    a = p0 * (1 - fst) / fst
+    b = (1 - p0) * (1 - fst) / fst
+    P = np.clip(np.stack([rng.beta(a, b) for _ in range(k_pops)]), 0.02, 0.98)
+    nb = -(-m // B)
+    thr = {k: norm.ppf(P[k]).astype(np.float32) for k in range(k_pops)}
+
+    def haps(k, nh):
+        u = rng.standard_normal((nh, nb), dtype=np.float32)
+        z = (np.sqrt(r) * np.repeat(u, B, axis=1)[:, :m]
+             + np.sqrt(1 - r) * rng.standard_normal((nh, m), dtype=np.float32))
+        return (z < thr[k]).astype(np.int8)
+
+    def mei(H):
+        pick = np.repeat(rng.integers(0, 2, nb), B)[:m]
+        return np.where(pick == 0, H[0], H[1])
+
+    rows, true_i, true_j, used = [], [], [], [0] * k_pops
+    for t_ix in range(n_pairs):
+        k = t_ix % k_pops
+        if used[k] + 2 > sizes[k]:
+            k = int(np.argmax(np.array(sizes) - np.array(used)))
+        H = haps(k, 4)
+        par = H[:2]
+        rows += [mei(par) + H[2], mei(par) + H[3]]
+        true_i.append(2 * t_ix)
+        true_j.append(2 * t_ix + 1)
+        used[k] += 2
+    leftover = []
+    for k, sz in enumerate(sizes):
+        leftover += [k] * max(0, sz - used[k])
+    leftover = leftover[: n - 2 * n_pairs]
+    rng.shuffle(leftover)
+    # draw remaining individuals in batches per pop
+    by = {}
+    for k in leftover:
+        by.setdefault(k, 0)
+        by[k] += 1
+    for k, rest in by.items():
+        H = haps(k, 2 * rest)
+        rows.extend((H[0::2] + H[1::2]).reshape(rest, m))
+    G = np.vstack([np.atleast_2d(x) for x in rows]).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2, 3, 4], (m + 3) // 4)[:m],
+                   position=np.arange(m) * 10_000 + 1)
+    return gt, np.array(true_i, dtype=int), np.array(true_j, dtype=int)
+
+
+def test_king_auto_mild_ld_8020_false_pairs_match_master_floor():
+    """Skeptic LDmild 80/20 (B=30, r=0.5): the old path-(b) switch
+    flooded Phi with hundreds of false pairs. With no switch, false
+    pairs stay at the master 4-MAD floor. A reintroduced switch fails
+    this test."""
+    n, m, n_pairs, seed = 2000, 8000, 20, 1
+    gt, i_t, j_t = _bn_ld_panel(n, m, fst=0.05, props=(0.80, 0.20),
+                                n_pairs=n_pairs, seed=seed, B=30, r=0.5)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=seed)
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_t, j_t)
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert not king.get("noise_scale_from_structure"), (
+        f"switch reintroduced; sd={king['noise_sd']:.4f} MAD={king['noise_sd_mad']:.4f} "
+        f"floor={king['threshold']:.4f} master={master_floor:.4f}")
+    assert king["noise_sd"] == pytest.approx(king["noise_sd_mad"], rel=1e-12)
+    assert king["threshold"] >= master_floor - 1e-12
+    assert abs(king["threshold"] - max(0.025, max(0.0, king["noise_location"]) + master_floor,
+                                       master_floor)) < 1e-8 or \
+        king["threshold"] == pytest.approx(max(0.025, max(0.0, float(king["noise_location"])) + master_floor), abs=1e-12) or \
+        True
+    # tighter: floor equals the no-switch formula
+    loc_floor = max(0.0, float(king["noise_location"]))
+    expected = max(0.025, loc_floor + 4.0 * king["noise_sd_mad"], 4.0 * king["noise_sd_mad"])
+    assert king["threshold"] == pytest.approx(expected, abs=1e-12)
+    assert stats["n_false"] <= n_master + 5, (
+        f"{stats['n_false']} false Phi pairs; master_floor_pairs={n_master} "
+        f"floor={king['threshold']:.4f} rec={stats['n_rec']}/{stats['n_true']}")

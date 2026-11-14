@@ -25,32 +25,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   <= ~0.0014 and the refit costs 1.3-3.8x the stage-1 CPU (review
   simulations at n = 2,000, not archived). Pedigree and pair-file sources
   are unchanged.
-- KING-auto noise floor: the noise scale no longer uses a plain pair MAD
-  that population structure inflates. Under a two-population mixture the
-  4-SD floor sat near 0.15 and dropped 2nd-degree pairs from Phi and from
-  the refit trigger. The floor is now location + 4 σ̂, where σ̂ is 1.4826 x
-  the MAD, or the upper-half MAD (and its location) when the MAD's
-  upper-tail ratio is below 0.8. When n(n-1)/2 <= `king_noise_pairs`
-  (default 1e6) every unordered pair is used; otherwise the pairs are drawn
-  with replacement over ordered pairs. KING-auto results are not
-  byte-identical to earlier stage-1 SHAs: raising `king_noise_pairs` from
-  30,000 to 1e6 also shifts the floor slightly on unstructured panels.
+- KING-auto noise floor: location is max(0, median) and the scale is
+  master's 1.4826·MAD of a seeded pair subsample (default 1e6; every
+  unordered pair when n(n-1)/2 <= 1e6). The Phi floor is
+  max(`relatedness_threshold`, max(0, loc) + 4·MAD) and is never below
+  master's 4·MAD bound, so a between-population median cannot collapse
+  the floor and flood Phi with false pairs (K ≥ 4). There is no
+  upper-half structure switch: earlier sep / σ̂√n_variants gates passed
+  under LD and underestimated σ on unbalanced two-population panels.
+  `"auto"` is reliable without population structure. Under structure the
+  MAD is inflated, the floor can sit above 0.0625 or 0.125, and 3rd- or
+  2nd-degree relatives may drop out of Phi; a warning then recommends a
+  pedigree or pairs (e.g. KING run within ancestry groups). The
+  LOCO-refit trigger still counts pre-floor pairs against
+  z = isf(1/N) around max(0, loc), with the 0.0884 cap, the 0.0625
+  warning and the 1% rule, so a refit can fire even when Phi is empty.
+  `extra["relatedness"]` records `n_pairs_detected` (pre-floor pairs
+  above the trigger cutoff) and `n_pairs_modeled` (post-floor Phi
+  pairs) separately; a warning fires when relatives are detected but
+  not modeled in Phi. KING-auto results are not byte-identical to
+  earlier stage-1 SHAs: raising `king_noise_pairs` from 30,000 to 1e6
+  also shifts the floor slightly on unstructured panels.
   `extra["relatedness"]["refit_trigger"]` records σ̂, the tail ratio, the
   cutoff, the observed and expected null counts, and the reason.
-- KING-auto's Phi floor and refit-trigger cutoff are anchored at
-  max(0, location) and, when the structure switch does not fire, never
-  go below master's 4·MAD bound, so a between-population median cannot
-  collapse the floor and flood Phi with false pairs (K ≥ 4). The
-  upper-half MAD switch also requires (upper_median - median) /
-  upper_MAD > 1.35, so a 90/10 split no longer underestimates σ̂;
-  when that ratio is still above 1.27 and σ̂ √n_variants ≥ 0.765
-  the switch is still accepted, which keeps 2nd-degree pairs on
-  smaller two-pop Fst 0.05 panels. A warning fires when the switch
-  engages, because the lower floor may add false related pairs. With
-  K ≥ 3 populations or weak structure, σ̂ may stay inflated (up to
-  ~2.3× within-population), the trigger cutoff may cap at 0.0884, and
-  3rd-degree relatives may not count; supply a pedigree or pairs
-  (e.g. KING run within ancestry groups).
 - `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
   Spec A relatedness (kappa_g) follow-ups, and the LDpred3 / int8 stage-1
   seam. A supplied pedigree or pair file is assumed complete: relatives

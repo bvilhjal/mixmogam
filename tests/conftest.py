@@ -21,3 +21,11 @@ def numpy_fallback(monkeypatch):
             spec.loader.exec_module(copy)
         return copy
     return load
+
+
+def require_numba_threads(n=2):
+    """Skip when the process was started with fewer than ``n`` Numba threads."""
+    numba = pytest.importorskip("numba")
+    if numba.config.NUMBA_NUM_THREADS < n:
+        pytest.skip(f"requires NUMBA_NUM_THREADS >= {n} before Python starts")
+    return n
