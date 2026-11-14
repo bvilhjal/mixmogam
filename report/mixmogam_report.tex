@@ -300,7 +300,7 @@ Variance estimation can dominate a streaming fit even after individual
 matrix products are efficient. HRATT already computes randomized
 Haseman--Elston (HE) quantities \citep{haseman1972,wu2018} to choose the frequency-weight exponent
 $a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}
-(the LDAK-Thin weights of \citealp{speed2012,speed2017}, without LD thinning).
+(the frequency weights of \citealp{speed2017} without LDAK's LD weights, as in LDAK-KVIK).
 The optional \code{heritability\_method="he"} reuses these products to
 estimate the genetic and residual covariance coefficients. The default,
 \code{heritability\_method="auto"}, keeps REML without sampling weights and
@@ -705,7 +705,9 @@ slice, up to 512 MiB, amortizes the per-slice $n\times c$ accumulation at
 larger $n$. Slices and the 128-marker variational subblocks reuse their
 buffers: a fresh allocation per block faulted in every page and doubled
 the decoding time.
-BOLT-LMM's in-sample LD scores stream each chromosome through a sliding
+The in-sample LD scores of mixmogam's BOLT-style mixture (BOLT-LMM by
+default reads a reference LD-score table; its \code{--LDscoresUseChip}
+option estimates them from the analysed SNPs) stream each chromosome through a sliding
 position window and hold only its widest window, rather than every
 projected genotype at four bytes each.
 
@@ -2399,17 +2401,23 @@ ten-point elastic-net grid with a 90/10 hold-out, the calibration factor
 (one without strong structure, otherwise mean-matched to
 GRAMMAR-Gamma-calibrated ridge statistics) and weighted linear regression
 for binary step~1 (all checked against the LDAK-KVIK technical
-documentation, not the paper's Methods). The frequency weights are the
-LDAK-Thin model \citep{speed2012,speed2017}, without LD thinning. HE
-regression \citep{haseman1972}, randomized trace probes
-\citep{hutchinson1990} and their combination \citep{wu2018} predate it.
+documentation, not the paper's Methods). The frequency weights $w_j=\{f_j(1-f_j)\}^{1+a}$ are those of
+\citet{speed2017} without LDAK's LD weights \citep{speed2012} (their GCTA model with a free
+$a$), as in LDAK-KVIK; this is not the LDAK-Thin model \citep{speed2020},
+which thins markers to weights of zero or one and fixes $a=-0.25$. HE
+regression \citep{haseman1972} and randomized HE \citep{wu2018}, which
+draws Gaussian probes, predate it; HRATT uses Rademacher probes
+\citep{hutchinson1990}. A single pass over the genotypes with one probe set
+shared across components is RHE-mc \citep{pazokitoroudi2020}; sharing the
+probes across exponents is common random numbers.
 Out-of-fold whole-genome predictions are REGENIE's level-0 design
 \citep{mbatchou2021}; cross-validated in-cohort predictors for
 mixed-model association are the subject of \citet{mefford2020}. Adjusting
 association tests for a polygenic score as a covariate, which fits its
-coefficient, was studied by \citet{campos2023}. The per-group relatedness factor is the retrospective
-variance of MASTOR \citep{jakobsdottir2013}, also used by BOLT-LMM
-\citep{loh2015}, reduced to one factor per group. Its optional variance
+coefficient, was studied by \citet{campos2023}. The relatedness factor is the retrospective variance of MASTOR
+\citep{jakobsdottir2013}; BOLT-LMM-inf already reduces the
+retrospective/prospective ratio to one constant estimated on random markers
+\citep{loh2015}, and HRATT estimates it per LOCO group. Its optional variance
 component imitates fastGWA's sparse-relatedness model \citep{jiang2019},
 and pairs come from KING \citep{manichaikul2010} or a GCTA sparse GRM
 \citep{yang2011}. The \code{ldpred3-*} stage-1 options rest on LDpred2
@@ -2418,27 +2426,40 @@ heuristic variant of exact eigen-based statistics
 \citep{kang2008,lippert2011,svishcheva2012}. Elsewhere in the package,
 stepwise selection uses EBIC \citep{chen2008}, the polygenic GxE option
 follows \citet{sul2016}, and BOLT-style calibration markers are screened with
-the GRAMMAR statistic \citep{amin2007} as in \citet{loh2015}.
+the GRAMMAR statistic \citep{aulchenko2007}, as in \citet{loh2015}.
 
-Plausibly new, and so far untested by ablation, are: cross-fitting the
-LDAK-KVIK elastic-net predictor (LDAK-KVIK fits its final and LOCO
-predictors on all samples); a per-group least-squares slope clipped to
-$[0,1]$; one-pass HE selection of $a$ with probes shared across exponents;
-the MASTOR factor reduced to one value per LOCO group; and a
+Plausibly new are: cross-fitting the LDAK-KVIK elastic-net predictor
+(LDAK-KVIK fits its final and LOCO predictors on all samples and then adds
+calibration models); a per-group least-squares slope clipped to $[0,1]$;
+the retrospective factor estimated per LOCO group rather than once; and a
 structure-conditional switch between dropping a group's share of a
-genome-wide fit and refitting the group. None of these is shown here to
-improve power or calibration over the published designs. The ablations
-needed are:
+genome-wide fit and refitting the group.
+
+Only cross-fitting has a committed ablation
+(Section~\ref{sec:followup-results}). Against in-sample scores
+(\code{loco\_folds=1}, which is HRATT without LDAK-KVIK's effect
+calibration, not LDAK-KVIK) on identical samples, it removed the
+attenuation of unweighted HRATT's effects (in-sample $-32\%$ to $-36\%$,
+cross-fitted $-2.0\%$ to $+0.9\%$), left power unchanged (ratio
+0.999--1.009) and cost 1.08--1.11 times the time; weighted HRATT stayed
+$5.4\%$ low under selection on the outcome. Official LDAK-KVIK's effects
+were already unbiased on the earlier design ($-4\%$ to $+0.3\%$;
+Section~\ref{sec:weights-binary-results}). Cross-fitting is therefore an
+alternative to LDAK-KVIK's effect calibration, not an improvement shown over
+it, and none of the other items is shown here to improve power or
+calibration. The ablations still needed are below; items 2, 5, 6 and 8 have
+no committed results, and items 4 and 7 only partial ones (one replicate
+on two fixed panels for HE against REML; one sample of 1,500 for the
+spectral denominator):
 \begin{enumerate}
- \item in-sample (LDAK-KVIK-like, \code{loco\_folds=1}) against cross-fitted
- scores, at matched hyperparameters;
+ \setcounter{enumi}{1}
  \item fixed offset (coefficient one) against the fitted slope, with and
  without clipping to $[0,1]$;
  \item drop-share against per-group refit, on a grid of structure strengths
  around the switch threshold, with and without principal components;
  \item single-component HE against REML and against partitioned randomized
  HE for $a$ and $h^2$;
- \item LDAK-Thin weights against unweighted ($a=-1$) and fixed-$a$ kinships;
+ \item fitted $a$ against $a=-1$ and a fixed $a$;
  \item the per-group MASTOR factor against a global factor and against the
  \code{"vc"} variance component, with close relatives present;
  \item the spectral denominator against the constant and exact
@@ -2831,11 +2852,12 @@ Abney M (2015). Permutation testing in the presence of polygenic
 variation. \emph{Genet Epidemiol} 39(4):249--258.
 \href{https://doi.org/10.1002/gepi.21893}{doi:10.1002/gepi.21893}
 
-\bibitem[Amin et~al.(2007)]{amin2007}
-Amin N, van Duijn CM, Aulchenko YS (2007). A genomic background based
-method for association analysis in related individuals. \emph{PLoS One}
-2(12):e1274.
-\href{https://doi.org/10.1371/journal.pone.0001274}{doi:10.1371/journal.pone.0001274}
+\bibitem[Aulchenko et~al.(2007)]{aulchenko2007}
+Aulchenko YS, de Koning DJ, Haley C (2007). Genomewide rapid association
+using mixed model and regression: a fast and simple method for genomewide
+pedigree-based quantitative trait loci association analysis.
+\emph{Genetics} 177(1):577--585.
+\href{https://doi.org/10.1534/genetics.107.075614}{doi:10.1534/genetics.107.075614}
 
 \bibitem[Atwell et~al.(2010)]{atwell2010}
 Atwell S, Huang YS, Vilhj\'almsson BJ, et~al. (2010). Genome-wide
@@ -3003,6 +3025,12 @@ applications of cross-validated genetic predictions to polygenic risk
 scores and linear mixed models. \emph{J Comput Biol} 27(4):599--612.
 \href{https://doi.org/10.1089/cmb.2019.0325}{doi:10.1089/cmb.2019.0325}
 
+\bibitem[Pazokitoroudi et~al.(2020)]{pazokitoroudi2020}
+Pazokitoroudi A, Wu Y, Burch KS, Hou K, Zhou A, Pasaniuc B, Sankararaman S
+(2020). Efficient variance components analysis across millions of genomes.
+\emph{Nat Commun} 11(1):4020.
+\href{https://doi.org/10.1038/s41467-020-17576-9}{doi:10.1038/s41467-020-17576-9}
+
 \bibitem[Price et~al.(2006)]{price2006}
 Price AL, Patterson NJ, Plenge RM, et~al. (2006). Principal components
 analysis corrects for stratification in genome-wide association
@@ -3053,6 +3081,11 @@ Speed D, Cai N, UCLEB Consortium, Johnson MR, Nejentsev S, Balding DJ
 (2017). Reevaluation of SNP heritability in complex human traits.
 \emph{Nat Genet} 49(7):986--992.
 \href{https://doi.org/10.1038/ng.3865}{doi:10.1038/ng.3865}
+
+\bibitem[Speed et~al.(2020)]{speed2020}
+Speed D, Holmes J, Balding DJ (2020). Evaluating and improving heritability
+models using summary statistics. \emph{Nat Genet} 52(4):458--462.
+\href{https://doi.org/10.1038/s41588-020-0600-y}{doi:10.1038/s41588-020-0600-y}
 
 \bibitem[Sul et~al.(2016)]{sul2016}
 Sul JH, Bilow M, Yang W-Y, et~al. (2016). Accounting for population
