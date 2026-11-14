@@ -21,7 +21,8 @@ and in the calibration:
 - HRATT, the Heritability-weighted Residual Association Two-step Test:
   this package's method inspired by LDAK-KVIK (Hof & Speed 2025, Nat
   Genet) and following its design: w = y minus an elastic-net
-  LOCO polygenic score under the LDAK-Thin heritability model, cross-fitted
+  LOCO polygenic score under the LDAK-Thin heritability model (Speed et al.
+  2012, 2017), cross-fitted
   as in REGENIE with each fold's predictor trained on the other folds;
   lambda = 1 unless a test of inter-chromosome correlation finds strong
   structure, in which case lambda is matched to the GRAMMAR-Gamma-calibrated
@@ -441,7 +442,8 @@ CALIBRATION_OVERSAMPLE = 1.25
 def _calibration_draw(st: _Setup, n_cal: int, rng) -> np.ndarray:
     """Calibration candidates, drawn before the LOCO residuals exist.
 
-    BOLT-LMM-inf calibrates on random SNPs whose GRAMMAR chi2, a function of
+    BOLT-LMM-inf (Loh et al. 2015) calibrates on random SNPs whose GRAMMAR
+    (Amin et al. 2007) chi2, a function of
     the residuals, is below 5. Polymorphic SNPs drawn in random order and
     filtered afterwards (rejection sampling: the same distribution) let the
     candidates' prospective solves share the residuals' CG passes. About a
@@ -1039,6 +1041,10 @@ def _he_products(lg: LocoGenotypes, P32: np.ndarray, Wt: np.ndarray):
 def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=False,
               design_weights=None) -> dict:
     """Pick the LDAK-Thin power by randomized Haseman-Elston regression.
+
+    HE regression: Haseman & Elston (1972); randomized trace probes:
+    Hutchinson (1990); randomized HE: Wu & Sankararaman (2018); LDAK-Thin
+    weights: Speed et al. (2012, 2017).
 
     For each alpha, K_alpha = Z' W_alpha Z / sum(W_alpha) with
     W_alpha = [f (1 - f)]^(1 + alpha). HE regresses the off-diagonal

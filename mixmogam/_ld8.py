@@ -55,7 +55,11 @@ The cache (:class:`LDCache`) keeps built covers keyed by the variants (the
 model-SNP set: positions, IDs, alleles, LOCO groups), variant order, block
 size, representation and the format / ldpred3 / quantizer versions -- not by
 samples or covariates, so a cohort cover is reused for trait subsets and
-other covariates (statistically safe per an internal review, not archived).
+other covariates. Whether that is statistically safe is not established: an
+unarchived internal review simulation (3 seeds) found power moved by
+<= 0.03 and calibration by <= 0.002, and did not test reuse across ancestries at
+biobank n. Summary-statistic methods treat LD/statistic mismatch as a failure mode
+(Prive et al. 2022, doi:10.1016/j.xhgg.2022.100136).
 Each reuse records the sample overlap (per-sample call fingerprints), an allele-frequency F_ST
 proxy against the build cohort and whether the reuse is exact (same samples
 and covariates), and warns below 50 % overlap or above F_ST 0.01.
