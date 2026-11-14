@@ -156,7 +156,7 @@ to pass `relatedness=` (`--relatedness`) when the samples include relatives. `gw
 `sample_weights`, `spa_threshold`, `spa_two_sided`, `loco_folds`, `stage1` and
 `stage1_kwargs` with any other method, `auto` included (pass `method="hratt"`;
 only the command line moves `auto` to HRATT when `--trait`, `--weights`, `--stage1`,
-`--model-snps` or a `--relatedness*` option is given). Method-specific keywords raise the same way: `n_threads` belongs to
+`--model-snps`, `--relatedness` or `--relatedness-correction` is given). Method-specific keywords raise the same way: `n_threads` belongs to
 `exact` and `hratt`; `gram_cache_bytes`, `vb_tol` and `vb_max_iter` to `bolt` and
 `hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
 `cv_fraction` to `hratt` alone.

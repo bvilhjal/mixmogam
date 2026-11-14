@@ -269,10 +269,9 @@ def test_plink_binary_coding_is_explicit(dataset, tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize("flags", [["--relatedness", "auto"],
-                                   ["--relatedness-threshold", "0.05"],
                                    ["--relatedness-correction", "lambda"]])
 def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch, flags):
-    """Like --trait, the HRATT-only --relatedness* flags resolve auto to hratt."""
+    """Like --trait, --relatedness and --relatedness-correction resolve auto to hratt."""
     import mixmogam.association as association
     from mixmogam.results import GwasResult
 
@@ -289,7 +288,31 @@ def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch, fl
     assert main([*base, *flags]) == 0
     assert seen["method"] == "hratt"
     key = flags[0].lstrip("-").replace("-", "_")
-    assert seen[key] == (float(flags[1]) if key == "relatedness_threshold" else flags[1])
+    assert seen[key] == flags[1]
+
+
+def test_relatedness_threshold_alone_does_not_switch_auto(dataset, tmp_path, monkeypatch):
+    """The threshold is used only with a relatedness source, so alone it
+    must not move auto to hratt and must warn that it has no effect."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+
+    seen = {}
+    def scan(y, subset, **kwargs):
+        seen.update(kwargs)
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--out", str(tmp_path / "out.csv")]
+    with pytest.warns(RuntimeWarning, match="relatedness-threshold has no effect"):
+        assert main([*base, "--relatedness-threshold", "0.05"]) == 0
+    assert seen["method"] == "exact"
+    assert "relatedness_threshold" not in seen
+    seen.clear()
+    assert main([*base, "--relatedness", "auto", "--relatedness-threshold", "0.05"]) == 0
+    assert seen["method"] == "hratt"
+    assert seen["relatedness"] == "auto"
+    assert seen["relatedness_threshold"] == 0.05
 
 
 def test_relatedness_auto_runs_without_method(dataset, tmp_path):

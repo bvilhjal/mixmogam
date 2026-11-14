@@ -1,4 +1,4 @@
-"""Spec A (SG specs-for-wizard.md): relatedness= kappa_g correction of HRATT."""
+"""Spec A relatedness= kappa_g correction of HRATT."""
 import warnings
 
 import numpy as np
@@ -273,7 +273,7 @@ def test_gls_is_opt_in_and_api_errors(fam):
               relatedness_correction="gls")
 
 
-# P1 (SG specA-benchmark §2b): relatives keep the per-group LOCO refit; without
+# Relatives keep the per-group LOCO refit; without
 # it the joint cross-fit leaks into in-model null SNPs (household c2).
 def test_relatives_keep_loco_refit_in_model_nulls_calibrated():
     G, gt, y, pairs, causal = family_panel(seed=0, n_fam=200, kids=4, m=8000, c2=0.3, h2=0.5)
@@ -548,14 +548,14 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
 
 
 def test_king_refit_trigger_ignores_n2_noise_but_fires_on_true_relatives():
-    """SG p20k §4: 244 4-SD-floor pairs on an unrelated n=20,000 panel
+    """244 4-SD-floor pairs on an unrelated n=20,000 panel
     (floor 0.042, 1.33% of samples) must not fire. First-degree and 10%
     first-cousin pairs at the same noise scale must still fire. Phi is
     unchanged: the trigger only filters which stored pairs count."""
     n, sd, med, floor = 20_000, 0.0418 / 4.0, 0.0, 0.0418
     rng = np.random.default_rng(1)
     # 266 samples in 244 almost-disjoint noise pairs (1.33% of n), phi just
-    # above the 4-SD floor, as in the SG table.
+    # above the 4-SD floor, as on that n=20,000 panel.
     n_noise, n_touch = 244, 266
     samples = rng.choice(n, n_touch, replace=False)
     i_n = samples[:n_noise]
@@ -926,8 +926,7 @@ def test_king_auto_structure_trigger_fires_even_if_phi_drops_second_degree():
 
 def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
     """Balding-Nichols (or admixed) panel with ``frac`` of samples in
-    planted half-sib (phi 1/8) or first-cousin (phi 1/16) pairs, matching
-    the Skeptic repro ``skeptic-repro/king/king_struct.py``.
+    planted half-sib (phi 1/8) or first-cousin (phi 1/16) pairs.
     """
     from mixmogam import Genotypes
 
@@ -974,7 +973,7 @@ def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
 
 
 def test_king_auto_structured_trigger_sees_halfsibs_even_if_phi_drops_them():
-    """Skeptic K1 / king_struct.py: on two populations the 4-SD MAD
+    """On two populations the 4-SD MAD
     floor sits above 0.125, so planted half-sibs (and first cousins)
     may be absent from Phi. The pre-floor trigger must still fire on
     2% half-sibs, and Phi must not flood."""
@@ -1414,8 +1413,8 @@ def test_king_refit_trigger_anchors_location_at_zero():
 
 
 def _bn_ld_panel(n, m, fst, props, n_pairs, seed, B=30, r=0.5):
-    """Balding-Nichols panel with the Skeptic's mild block-LD haplotype
-    model (king_oos.py): z = sqrt(r) u_block + sqrt(1-r) e, meiosis
+    """Balding-Nichols panel with a mild block-LD haplotype
+    model: z = sqrt(r) u_block + sqrt(1-r) e, meiosis
     picks a parental haplotype per block."""
     from mixmogam import Genotypes
     from scipy.stats import norm
@@ -1473,10 +1472,10 @@ def _bn_ld_panel(n, m, fst, props, n_pairs, seed, B=30, r=0.5):
 
 
 def test_king_auto_mild_ld_8020_false_pairs_match_master_floor():
-    """Skeptic LDmild 80/20 (B=30, r=0.5): the old path-(b) switch
-    flooded Phi with hundreds of false pairs. With no switch, false
-    pairs stay at the master 4-MAD floor. A reintroduced switch fails
-    this test."""
+    """80/20 two-population panel with mild block LD (B=30, r=0.5): the
+    old path-(b) switch flooded Phi with hundreds of false pairs. With
+    no switch, false pairs stay at the master 4-MAD floor. A
+    reintroduced switch fails this test."""
     n, m, n_pairs, seed = 2000, 8000, 20, 1
     gt, i_t, j_t = _bn_ld_panel(n, m, fst=0.05, props=(0.80, 0.20),
                                 n_pairs=n_pairs, seed=seed, B=30, r=0.5)

@@ -212,7 +212,8 @@ def gwas(
                         & set(kwargs))
     if hratt_only and method != "hratt":
         raise TypeError(f"{', '.join(hratt_only)}: options of method='hratt' only "
-                        f"(binary outcomes and sampling weights), not of method={method!r}")
+                        f"(binary outcomes, sampling weights, stage-1 options "
+                        f"and relatedness), not of method={method!r}")
     if method == "auto":
         method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
     if method == "exact":
