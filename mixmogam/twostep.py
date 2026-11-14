@@ -1158,7 +1158,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     hold-out (lassosum2 is not a candidate). The LDpred3
     options need the separate ``ldpred3`` package, quantitative traits and
     ``loco_folds >= 2``; ``stage1_kwargs`` (``block_size``, lassosum2's fit
-    keywords) configure them. Variance components and prior selection still
+    keywords) configure them. Opt-in prototypes (stage1-ldpred3-int8):
+    ``stage1="ldpred3-fast"`` (LDpred3-auto on int8 dense sub-blocks plus an
+    int8 landmark factor, in group-pure blocks), ``stage1_kwargs["ld"]`` in
+    ``"f32"`` (default), ``"d8-proj"`` (the float32 blocks rounded to int8
+    D8), ``"d8-hardcall"`` (D8 built from the hard calls with the
+    covariates removed as a rank-q correction; no float rows formed) or
+    ``"f32-hardcall"``, and ``stage1_kwargs["ld_cache"]`` (an
+    :class:`mixmogam._ld8.LDCache` or a directory) to reuse a built cover
+    across traits of one panel, covariates and model-SNP subset;
+    ``extra["stage1_info"]`` records the LD build or cache hit and the fit
+    times. ``model_snps`` and ``relatedness`` combine with every LDpred3
+    option. Variance components and prior selection still
     use the whole trait, and the genome-wide h2 the infinitesimal fit shares
     over its blocks leaks the tested chromosome second-order (documented in
     :mod:`mixmogam.stage1`).
@@ -1412,8 +1423,6 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if model_snps is not None:
         if denominator == "spectral":
             raise ValueError("model_snps is not available with denominator='spectral'")
-        if stage1 != "enet":
-            raise ValueError("model_snps applies to the elastic-net stage 1 (stage1='enet')")
     elif model_snps_options is not None:
         raise ValueError("model_snps_options needs model_snps='auto' or 'hm3'")
     elif model_snps_include is not None:
@@ -1575,6 +1584,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         extra["stage1"] = scores["stage1_name"]
     if "stage1_selection" in scores:
         extra["stage1_selection"] = scores["stage1_selection"]
+    if "stage1_info" in scores:
+        extra["stage1_info"] = scores.pop("stage1_info")
     if "offset_slope" in scores and not binary:
         extra["offset_slope"] = scores["offset_slope"]
     if heritability_method == "he":

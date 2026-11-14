@@ -66,7 +66,17 @@ import numpy as np
 __all__ = ["STAGE1_METHODS", "MarginalFits", "fold_marginals", "column_scale",
            "residualize_score", "ld_blocks", "ldpred3_stage1_scores"]
 
-STAGE1_METHODS = ("enet", "ldpred3-inf", "ldpred3-lassosum2", "auto")
+STAGE1_METHODS = ("enet", "ldpred3-inf", "ldpred3-lassosum2", "ldpred3-fast", "auto")
+
+# stage1_kwargs keys this module consumes (the rest go to the fitter):
+# ``ld`` (see :mod:`mixmogam._ld8`), ``ld_cache`` (None, an LDCache or a
+# directory), ``ld_tile`` (samples per hard-call tile), and for
+# ``ldpred3-fast`` the layout and chain controls below.
+_LD_KEYS = ("ld", "ld_cache", "ld_tile")
+_FAST_KEYS = ("width", "landmarks", "reach", "burn_in", "num_iter", "seed", "fast_block_size",
+              "p_init", "layout_seed")
+_FAST_DEFAULTS = {"width": 2500, "landmarks": 64, "fast_block_size": 6000, "burn_in": 300,
+                  "num_iter": 100, "seed": 0, "p_init": 0.02, "reach": None, "layout_seed": 0}
 
 
 @dataclass
@@ -265,6 +275,13 @@ def _import_ldpred3():
 
 def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs) -> np.ndarray:
     """One LDpred3 fit's standardized effects, in the block cover's order."""
+    if method == "fast":
+        kw = dict(fit_kwargs)
+        return np.asarray(ldpred3.ldpred3_fast(
+            blocks, beta_std, n_eff, h2_init=float(min(max(h2, 1e-3), 0.99)),
+            p_init=kw["p_init"], burn_in=kw["burn_in"], num_iter=kw["num_iter"],
+            seed=kw["seed"], width=kw["width"], landmarks=kw["landmarks"],
+            reach=kw["reach"], layout_seed=kw["layout_seed"]).beta_est, dtype=np.float64)
     if method == "inf":
         if fit_kwargs:
             raise ValueError(f"stage1 'ldpred3-inf' takes no fit keywords, got {sorted(fit_kwargs)}")
@@ -274,23 +291,89 @@ def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs) -> np
         blocks, beta_std, **fit_kwargs).beta_est, dtype=np.float64)
 
 
+def _stage1_blocks(lg, order, scale, method, block_size, ld, ld_cache, ld_tile, fast_opt,
+                   ldpred3, info):
+    """The LD cover a fit reads, from ``ld_cache`` when it holds it."""
+    import time
+
+    from mixmogam import _ld8
+
+    cache = _ld8.resolve_cache(ld_cache)
+    size = int(fast_opt["fast_block_size"]) if method == "ldpred3-fast" else int(block_size)
+    extra = None
+    if method == "ldpred3-fast":
+        extra = ("fast", fast_opt["width"], fast_opt["landmarks"], fast_opt["reach"],
+                 fast_opt["layout_seed"])
+    key = None
+    if cache is not None:
+        key = _ld8.ld_cache_key(lg, order, size, ld, extra)
+        t0 = time.perf_counter()
+        blocks = cache.get(key)
+        if blocks is not None:
+            info.update(ld_cache="hit", ld_key=key, ld_load_s=time.perf_counter() - t0,
+                        ld_bytes=_ld8.cover_nbytes(blocks))
+            return blocks
+    c0, t0, cells0 = time.process_time(), time.perf_counter(), _ld8.COUNTER["cells"]
+    blocks = _ld8.build_blocks(lg, order, scale, size, ld, ld_tile)
+    if method == "ldpred3-fast":
+        blocks = ldpred3.fast_ld_blocks(blocks, width=fast_opt["width"],
+                                        landmarks=fast_opt["landmarks"], reach=fast_opt["reach"],
+                                        seed=fast_opt["layout_seed"])
+    info.update(ld_build_s=time.perf_counter() - t0, ld_build_cpu_s=time.process_time() - c0,
+                ld_cache="miss" if cache is not None else "off",
+                ld_bytes=_ld8.cover_nbytes(blocks),
+                ld_hardcall_cells=_ld8.COUNTER["cells"] - cells0)
+    if cache is not None:
+        t0 = time.perf_counter()
+        cache.put(key, blocks)
+        info.update(ld_key=key, ld_store_s=time.perf_counter() - t0)
+    return blocks
+
+
 def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                           *, method: str, keep_prediction: bool = False,
                           block_size: int = 500, **fit_kwargs) -> dict:
     """Contract dictionary from cross-fitted LDpred3 LOCO scores.
 
     ``method`` is ``"ldpred3-inf"`` (the infinitesimal closed form at the
-    genome-wide ``h2`` of the variance fit) or ``"ldpred3-lassosum2"``
-    (penalty selected per fold by pseudo-validation on that fold's own rows).
-    ``fit_kwargs`` (with ``block_size``) pass to lassosum2. The hold-out MSE
-    of a fit excluding ``held`` is the candidate's model-selection score,
-    on the same samples as the elastic-net candidates'.
+    genome-wide ``h2`` of the variance fit), ``"ldpred3-lassosum2"``
+    (penalty selected per fold by pseudo-validation on that fold's own rows)
+    or ``"ldpred3-fast"`` (LDpred3-auto on the fast layout: int8 dense
+    sub-blocks plus an int8 Nystrom landmark factor, within group-pure
+    blocks of ``fast_block_size`` variants, so the LOCO subtraction stays
+    exact given the shared h2 and p; a seeded Gibbs chain per fold).
+    ``fit_kwargs`` (with ``block_size``) pass to lassosum2, except the LD
+    options: ``ld`` (``"f32"``, the default float32 blocks, or an int8 /
+    hard-call representation of :mod:`mixmogam._ld8`), ``ld_cache``
+    (reuse a cover across traits) and ``ld_tile``; ``ldpred3-fast`` takes
+    ``width``, ``landmarks``, ``reach``, ``burn_in``, ``num_iter``,
+    ``seed``, ``p_init``, ``layout_seed`` and ``fast_block_size``. The
+    hold-out MSE of a fit excluding ``held`` is the candidate's
+    model-selection score, on the same samples as the elastic-net
+    candidates'. ``stage1_info`` in the result records the LD build or
+    cache hit, its bytes and the fit times.
     """
+    import time
+
     lg = st.lg
     k = 0 if folds is None else int(np.max(np.asarray(folds))) + 1
     if not k:
         raise ValueError("stage1 'ldpred3-*' needs cross-fitted scores (loco_folds >= 2)")
     folds = np.asarray(folds, dtype=np.int64)
+    fit_kwargs = dict(fit_kwargs)
+    ld = fit_kwargs.pop("ld", "f32")
+    ld_cache = fit_kwargs.pop("ld_cache", None)
+    ld_tile = fit_kwargs.pop("ld_tile", None)
+    from mixmogam._ld8 import LD_KINDS
+    if ld not in LD_KINDS:
+        raise ValueError(f"stage1_kwargs['ld'] must be one of {list(LD_KINDS)}, got {ld!r}")
+    fast_opt = dict(_FAST_DEFAULTS)
+    if method == "ldpred3-fast":
+        for key_ in _FAST_KEYS:
+            if key_ in fit_kwargs:
+                fast_opt[key_] = fit_kwargs.pop(key_)
+        if fit_kwargs:
+            raise ValueError(f"stage1 'ldpred3-fast' got unknown keywords {sorted(fit_kwargs)}")
     if h2 <= 0:  # no polygenic variance: no scores, as in the elastic-net path
         held_mask = _held_mask(lg.n, held)
         ys = np.asarray(ys, dtype=np.float64).ravel()
@@ -304,7 +387,10 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
             out["prediction"] = np.zeros((lg.n, G))
         return out
     ldpred3 = _import_ldpred3()
+    info = {"ld": ld, "method": method}
+    t0 = time.perf_counter()
     marg = fold_marginals(lg, ys, folds, held)
+    info["marginals_s"] = time.perf_counter() - t0
     order = np.argsort(lg.groups, kind="stable")
     # Column indices of MarginalFits: k fold training complements, the
     # hold-out complement, then the matching validation sets.
@@ -312,8 +398,10 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     train_cols = list(range(k + 1))
     val_cols = list(range(k + 1, n_sets))
     scale = marg.scale[order]
-    blocks = ld_blocks(lg, order, marg.scale, block_size)
+    blocks = _stage1_blocks(lg, order, marg.scale, method, block_size, ld, ld_cache, ld_tile,
+                            fast_opt, ldpred3, info)
 
+    c0, t0 = time.process_time(), time.perf_counter()
     effects = np.zeros((lg.m, len(train_cols)))
     for j, c in enumerate(train_cols):
         beta_std, _ = ldpred3.standardize_betas(
@@ -324,23 +412,29 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                 marg.beta[:, val_cols[j]], marg.se[:, val_cols[j]],
                 float(marg.n_eff[val_cols[j]]))
             kwargs["validation_beta"] = val_std[order]
+        if method == "ldpred3-fast":
+            kwargs = {**fast_opt, "seed": int(fast_opt["seed"]) + j}
         e = _fit_effects(ldpred3, blocks, beta_std[order], float(marg.n_eff[c]),
-                         "inf" if method == "ldpred3-inf" else "lassosum2",
-                         h2, kwargs)
+                         {"ldpred3-inf": "inf", "ldpred3-lassosum2": "lassosum2",
+                          "ldpred3-fast": "fast"}[method], h2, kwargs)
         with np.errstate(divide="ignore", invalid="ignore"):
             e = np.where(scale > 0, e / np.where(scale > 0, scale, 1.0), 0.0)
         effects[order, j] = e  # back to variant index order
+    info.update(solve_s=time.perf_counter() - t0, solve_cpu_s=time.process_time() - c0,
+                n_fits=len(train_cols))
 
     # Held-out candidate score: the fit excluding the hold-out, genome-wide.
     from mixmogam.twostep import _out_of_fold_loco  # late: the patchable seam
+    t0 = time.perf_counter()
     held_mask = _held_mask(lg.n, held)
     fitted = lg.project(_fitted_unprojected(lg, effects[:, k]))
     mse = np.array([float(np.mean((ys[held_mask] - fitted[held_mask]) ** 2))])
 
     prediction = _out_of_fold_loco(lg, effects[:, :k], folds)
+    info["predict_s"] = time.perf_counter() - t0
     out = {"mse": mse, "best": 0, "cv_converged": True,
            "loco_iterations": 0, "loco_converged": True,
-           "cv_grid": [method], "cv_best": method}
+           "cv_grid": [method], "cv_best": method, "stage1_info": info}
     out.update(residualize_score(lg, ys, prediction))
     if keep_prediction:
         out["prediction"] = prediction
