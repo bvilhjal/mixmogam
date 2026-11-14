@@ -1,5 +1,6 @@
 """Thin CLI tests: outputs byte-identical to the same call through the API."""
 
+import contextlib
 import os
 import subprocess
 import sys
@@ -22,6 +23,28 @@ REPO = Path(__file__).resolve().parents[1]
 ENV = {**os.environ, "PYTHONPATH": str(REPO),
        "OPENBLAS_NUM_THREADS": "1", "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1",
        "VECLIB_MAXIMUM_THREADS": "1", "NUMBA_NUM_THREADS": "1"}
+
+
+@contextlib.contextmanager
+def _one_blas_thread():
+    """Run the in-process side with the subprocess's BLAS thread count.
+
+    The subprocess pins BLAS/OpenMP to one thread through ``ENV``. Threaded
+    OpenBLAS level-2 and LAPACK paths split their reductions by thread
+    count, so an unpinned in-process run can differ from it in the last
+    bits. Pinning both sides keeps the comparison bitwise. threadpoolctl
+    (the ``fast`` extra) limits the loaded pools; without it the
+    environment must already pin BLAS to one thread, else the subprocess
+    comparison is skipped (the in-process CLI-vs-API check still runs).
+    """
+    try:
+        from threadpoolctl import threadpool_limits
+    except ImportError:
+        pinned = all(os.environ.get(k) == "1" for k in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS"))
+        yield pinned
+        return
+    with threadpool_limits(limits=1):
+        yield True
 
 
 def _write(path, text):
@@ -77,9 +100,13 @@ def test_gwas_cli_equals_api_bitwise(dataset, tmp_path):
     out = tmp_path / "cli.csv"
     base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
             "--covar", str(dataset["tmp"] / "cov.txt")]
-    assert main([*base, "--out", str(out)]) == 0
-    api = _api(dataset, tmp_path / "api.csv")
+    with _one_blas_thread() as pinned:
+        assert main([*base, "--out", str(out)]) == 0
+        api = _api(dataset, tmp_path / "api.csv")
     assert out.read_bytes() == api.read_bytes()
+    if not pinned:
+        pytest.skip("BLAS threads not pinned in-process (no threadpoolctl): "
+                    "the subprocess runs with one thread")
     sub = tmp_path / "sub.csv"
     ran = subprocess.run([sys.executable, "-m", "mixmogam", *base, "--out", str(sub)],
                          env=ENV, capture_output=True, text=True)
@@ -104,12 +131,16 @@ def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
             "--pheno-name", "case", "--trait", "binary", "--pcs", "3",
             "--covar", str(dataset["tmp"] / "cov.txt"),
             "--weights", str(dataset["tmp"] / "weights.txt")]
-    assert main([*base, "--out", str(out)]) == 0
-    api = _api(dataset, tmp_path / "api.csv", method="hratt", trait="binary",
-               weights=True, pcs=3, name="case", pheno="pheno2")
+    with _one_blas_thread() as pinned:
+        assert main([*base, "--out", str(out)]) == 0
+        api = _api(dataset, tmp_path / "api.csv", method="hratt", trait="binary",
+                   weights=True, pcs=3, name="case", pheno="pheno2")
     assert out.read_bytes() == api.read_bytes()
     header = out.read_text().splitlines()[0].split(",")
     assert "n" not in header and "n_eff" not in header
+    if not pinned:
+        pytest.skip("BLAS threads not pinned in-process (no threadpoolctl): "
+                    "the subprocess runs with one thread")
     sub = tmp_path / "sub.csv"
     ran = subprocess.run([sys.executable, "-m", "mixmogam", *base, "--out", str(sub)],
                          env=ENV, capture_output=True, text=True)
@@ -119,6 +150,7 @@ def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
 
 @pytest.mark.external
 def test_gwas_cli_stage1_flag_matches_the_api(dataset, tmp_path):
+    pytest.importorskip("ldpred3")
     # The CLI fixture is a 3-population panel; LDpred3 refuses strong
     # structure after the covariates unless ancestry PCs are included.
     out = tmp_path / "cli.csv"

@@ -197,6 +197,7 @@ LD_FAST = dict(alphas=(-0.25,), he_probes=16, heritability_method="he", random_s
 
 @pytest.mark.external
 def test_ldpred3_scores_are_cross_fitted_and_deterministic():
+    pytest.importorskip("ldpred3")
     rng = np.random.default_rng(9)
     gt, y, _ = _panel(8)
     st, ys = _setup_y(gt, y)
@@ -220,6 +221,7 @@ def test_ldpred3_scores_are_cross_fitted_and_deterministic():
 
 @pytest.mark.external
 def test_hratt_with_ldpred3_stage1_runs_deterministically():
+    pytest.importorskip("ldpred3")
     gt, y, u = _panel(10, n=600, m=600, h2=0.5)
     result = twostep.hratt(y, gt, stage1="ldpred3-inf", **LD_FAST)
     assert result.extra["stage1"] == "ldpred3-inf"
@@ -233,6 +235,7 @@ def test_hratt_with_ldpred3_stage1_runs_deterministically():
 
 @pytest.mark.external
 def test_stage1_auto_picks_the_lower_holdout_mse():
+    pytest.importorskip("ldpred3")
     gt, y, _ = _panel(11, n=400, m=400)
     result = twostep.hratt(y, gt, stage1="auto", **LD_FAST)
     sel = result.extra["stage1_selection"]
@@ -248,6 +251,7 @@ def test_stage1_auto_picks_the_lower_holdout_mse():
 
 @pytest.mark.external
 def test_interleaved_variants_give_the_same_fit():
+    pytest.importorskip("ldpred3")
     rng = np.random.default_rng(12)
     gt, y, _ = _panel(12)
     st, ys = _setup_y(gt, y)
@@ -269,6 +273,7 @@ def test_interleaved_variants_give_the_same_fit():
 @pytest.mark.external
 def test_ldpred3_lassosum2_stage1_runs_deterministically():
     """The lassosum2 branch of the stage-1 seam (review 2026-10-24, L1)."""
+    pytest.importorskip("ldpred3")
     gt, y, _ = _panel(21, n=600, m=600, h2=0.5)
     result = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **LD_FAST)
     assert result.extra["stage1"] == "ldpred3-lassosum2"
@@ -281,6 +286,7 @@ def test_ldpred3_lassosum2_stage1_runs_deterministically():
 
 @pytest.mark.external
 def test_ldpred3_lassosum2_takes_stage1_kwargs():
+    pytest.importorskip("ldpred3")
     gt, y, _ = _panel(22, n=400, m=400, h2=0.5)
     kwargs = dict(LD_FAST, stage1_kwargs={"block_size": 40})
     result = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **kwargs)

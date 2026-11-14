@@ -32,8 +32,15 @@ jobs:
       # CI does not run; the package and its tests do not import it
       - run: python -m pip install -e ".[${{ matrix.extras }}]" ${{ matrix.dependencies }}
       - run: ruff check .
-      - run: pytest -q -m "not slow and not integration and not external"
-      - run: pytest -q -m "(slow or integration) and not external"
+      # Each test step runs even if an earlier step failed (the job still
+      # fails), so a lint or fast-suite failure does not hide the slow and
+      # integration results.
+      - name: Fast tests
+        if: ${{ !cancelled() }}
+        run: pytest -q -m "not slow and not integration and not external"
+      - name: Slow and integration tests
+        if: ${{ !cancelled() }}
+        run: pytest -q -m "(slow or integration) and not external"
   external-gate:
     runs-on: ubuntu-latest
     outputs:
@@ -58,10 +65,29 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -e ".[test,fast]"
-      - run: python -m pip install "git+https://x-access-token:${LDPRED3_TOKEN}@github.com/bvilhjal/ldpred3@master"
+      # Pinned to the ldpred3 commit the integrate/stage1 reviews ran
+      # (2da4735c, 0.10.4, master on 2026-11-14). The tags (v0.4.x, v0.7.x)
+      # predate ldpred3-fast and FAST_EXPERIMENTAL_WARNING. Bump deliberately.
+      - run: python -m pip install "git+https://x-access-token:${LDPRED3_TOKEN}@github.com/bvilhjal/ldpred3@2da4735cbd28e91bdd0f154562444bb70f3fc818"
         env:
           LDPRED3_TOKEN: ${{ secrets.LDPRED3_READ_TOKEN || secrets.LDPRED3_FOR_BIPRED }}
-      - run: pytest -q -m external
+      - run: python -c "import ldpred3; print('ldpred3', ldpred3.__version__)"
+      - run: pytest -q -m external -rs --junitxml=external.xml
+      # The external tests skip when ldpred3 cannot be imported, so a broken
+      # install would otherwise pass with nothing run. Require the int8 file
+      # to have run (not skipped) at least one test.
+      - name: Require int8 external tests to have run
+        if: ${{ !cancelled() }}
+        run: |
+          python - <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          cases = ET.parse("external.xml").getroot().iter("testcase")
+          ran = [c for c in cases if "test_stage1_ldpred3_int8" in c.get("classname", "")
+                 and c.find("skipped") is None]
+          print(f"int8 external tests run: {len(ran)}")
+          sys.exit(0 if ran else 1)
+          EOF
   build:
     runs-on: ubuntu-latest
     steps:
