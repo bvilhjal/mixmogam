@@ -1,5 +1,6 @@
 """Prepared VB workspaces preserve the dense equations across repeated fits."""
 
+import sys
 from types import SimpleNamespace
 import weakref
 
@@ -212,14 +213,28 @@ def _fit(eng, Y, col_fold, col_group, prior_type=PRIOR_MIXTURE):
                    max_iter=200, tol=1e-12)
 
 
-def _assert_same_fit(actual, expected):
+def _assert_same_fit(actual, expected, ulp_tolerant=False):
     assert actual["converged"] is expected["converged"]
     assert actual["iterations"] == expected["iterations"]
     for key in ("beta", "resid", "prediction"):
-        np.testing.assert_array_equal(actual[key], expected[key])
+        if ulp_tolerant and sys.platform != "darwin":
+            # A few-ulp tolerance for comparisons whose two sides may take
+            # different BLAS routes for one column (GEMV in one, GEMM in the
+            # other); OpenBLAS rounds those apart by a few float64 ulps
+            # (max relative 1.5e-14 seen). Accelerate gives identical bits.
+            scale = float(np.max(np.abs(expected[key]), initial=0.0))
+            np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12,
+                                       atol=1e-12 * scale)
+        else:
+            np.testing.assert_array_equal(actual[key], expected[key])
     # The fused norm reduction may differ from einsum by a few float64 ulps;
     # this does not permit an absolute tolerance near a convergence boundary.
-    np.testing.assert_allclose(actual["rel_change"], expected["rel_change"], rtol=1e-14, atol=0)
+    # rel_change squares near-cancelled updates (~4e-14 here), so a few-ulp
+    # difference in the coefficients reaches ~3e-11 of it; the ulp-tolerant
+    # comparison allows 1e-9 relative, still far below anything that could
+    # move a convergence decision (tol 1e-12, iterations are checked above).
+    rtol = 1e-9 if ulp_tolerant and sys.platform != "darwin" else 1e-14
+    np.testing.assert_allclose(actual["rel_change"], expected["rel_change"], rtol=rtol, atol=0)
     if expected["mask"] is None:
         assert actual["mask"] is None
     else:
@@ -409,7 +424,9 @@ def test_interrupted_gram_rebuild_releases_old_cache_and_can_retry(workspace, mo
     monkeypatch.setattr(eng, "_gram", original_gram)
     retried = _fit(eng, one_Y, np.array([1]), group)
     expected = _fit(_DenseWorkspaceOracle(lg, folds=folds), one_Y, np.array([1]), group)
-    _assert_same_fit(retried, expected)
+    # One column: the oracle's allocating loop and the workspace path can take
+    # GEMV and GEMM routes respectively, so compare to a few ulps off macOS.
+    _assert_same_fit(retried, expected, ulp_tolerant=True)
 
 
 def test_workspace_projection_and_ridge_reference(workspace):

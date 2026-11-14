@@ -37,12 +37,25 @@ def _assert_same(got, want, single):
 
 def _assert_same_fit(actual, expected, single):
     assert actual.keys() == expected.keys()
-    if EXACT:
-        assert actual["iterations"] == expected["iterations"]
-        assert actual["converged"] is expected["converged"]
-    for key in ("beta", "resid", "prediction", "rel_change"):
+    assert actual["iterations"] == expected["iterations"]
+    assert actual["converged"] is expected["converged"]
+    for key in ("beta", "resid", "prediction"):
         if key in expected:
             _assert_same(actual[key], expected[key], single)
+    if "rel_change" in expected:
+        if EXACT:
+            np.testing.assert_array_equal(actual["rel_change"], expected["rel_change"])
+        else:
+            # rel_change is the last sweep's sum of squared residual updates
+            # over |y|^2. Near convergence those updates come from heavy
+            # cancellation in the float32 GEMM Z'd, and OpenBLAS's NN and TN
+            # SGEMM kernels round them apart by 1e-4 to 1e-3 relative (values
+            # ~1e-11), while beta, resid and prediction agree to float32
+            # rounding and the iteration counts match. As in
+            # test_vb_parallel.py, compare it loosely in float32 and tightly in
+            # float64, where the two layouts agree to ~4e-12.
+            np.testing.assert_allclose(actual["rel_change"], expected["rel_change"],
+                                       rtol=5e-2 if single else 1e-6, atol=0)
     if expected["mask"] is None:
         assert actual["mask"] is None
     else:

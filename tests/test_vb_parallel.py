@@ -464,10 +464,16 @@ def test_large_gemm_dispatch_preserves_fit_and_reuses_one_pool(phensim_problem, 
     # closer), so they may differ from each other by twice that; atol is set
     # to that budget rather than to a fraction of rtol. rel_change near
     # convergence is a ratio of rounding-scale changes in float32.
+    # In float64 the split backward product (one OpenBLAS call per sample
+    # range) can sum in a different order than the single call, a last-ulp
+    # difference that the VB iterations carry along. Near-zero coefficients
+    # then differ by ~5e-14 absolute, so atol scales with each field's
+    # magnitude (1e-12 x max) instead of a fixed absolute value.
     single = dtype == np.float32
     tolerance = 2e-6 if single else 5e-12
-    atol = 2e-7 if single else tolerance * 0.01
     for field in ("beta", "resid", "prediction"):
+        scale = float(np.max(np.abs(expected[field]), initial=0.0))
+        atol = 2e-7 if single else 1e-12 * scale
         np.testing.assert_allclose(actual[field], expected[field], rtol=tolerance, atol=atol)
     np.testing.assert_allclose(actual["rel_change"], expected["rel_change"],
                                rtol=5e-2 if single else 1e-3, atol=1e-14)
