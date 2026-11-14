@@ -126,28 +126,10 @@ dosages are not supported.
 **`None` (the default)** fits stage 1 on every variant, with results byte-identical to
 earlier versions.
 
-**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag.
-**Unarchived evidence:** the numbers in this paragraph and the next come from runs with no
-archived inputs, code version or outputs; treat them as indicative only.
-<!-- TODO(archive): rerun on the shipped code and archive under benchmarks/results/, or delete. -->
-In a
-pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet archived under
-`benchmarks/results/`), lambda_GC on null SNPs was:
-
-| Stage-1 SNPs | lambda_GC (± SE) |
-|---|---|
-| Every variant | 1.016 ± 0.004 |
-| 50% subset | 1.040 ± 0.005 |
-| 20% subset | 1.101 ± 0.008 |
-| 5% subset | 1.237 ± 0.010 |
-
-The LOCO scores removed less of the relatives' shared signal. A separate pre-merge
-coalescent simulation (n = 2,000, 3-5 replicates per cell, also unarchived) tested only the
-HapMap3 subset: it stayed calibrated in unrelated, unstratified samples. With population
-stratification it added 0.02-0.05 to the null mean chi-square when the structure test ran on
-the subset and flagged strong structure. HRATT now runs that test on every variant. Running
-it on every variant brought the excess to +0.008 ± 0.003 and +0.001 ± 0.004 with PCs, but in a
-patched copy of older code (12 runs per demography), not a rerun of the shipped code.
+**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag, so its LOCO
+scores can remove less of the signal that relatives share and of population stratification,
+and null statistics can inflate. No archived benchmark measures this cost yet. HRATT runs
+its structure test on every variant, not on the subset.
 
 If your sample contains relatives, you can pass them: `hratt(..., relatedness=...)` (CLI
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
@@ -288,6 +270,10 @@ provenance; they are not part of this documentation.)
   silence the warning.
 - `bolt` mixture p-values come with infinitesimal-model effects and standard
   errors (`extra["effect_method"] == "bolt-inf"`).
+- `bolt` uses the mixture when its cross-validated R² beats the infinitesimal model's by
+  more than 1% of that R² (`min_cv_gain`). BOLT-LMM v2.5 instead requires a 1% relative
+  reduction in prediction error on its first CV fold, so `bolt` switches to the mixture more
+  readily whenever the infinitesimal R² is below 0.5 (details in `docs/design.md`).
 - A genome-wide lambda near one can hide miscalibration within SNP groups.
   The benchmarks are simulations on one host plus one real panel; the
   corrected permutation scheme and real-cohort calibration still need larger

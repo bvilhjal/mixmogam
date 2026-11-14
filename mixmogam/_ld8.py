@@ -61,8 +61,10 @@ unarchived internal review simulation (n <= 2,000, m = 20,000, independent
 <= 0.002, and did not test reuse across ancestries at biobank n. That review's
 first guard (PCs in X, or the strong-structure gate, when a cached cover is
 reused for a subset) holds only through hratt's general refusal of LDpred3
-stage 1s under strong structure, which ``allow_strong_structure=True``
-overrides; there is no cache-specific check. Summary-statistic methods treat
+stage 1s under strong structure (structure-test excess > 0.1 with z > 3),
+which ``allow_strong_structure=True`` overrides; there is no cache-specific
+check, and a subset below that threshold reuses a cover with no PCs check
+and no warning. Summary-statistic methods treat
 LD/statistic mismatch as a failure mode (Prive et al. 2022,
 doi:10.1016/j.xhgg.2022.100136).
 Each reuse records the sample overlap (per-sample call fingerprints), an allele-frequency F_ST

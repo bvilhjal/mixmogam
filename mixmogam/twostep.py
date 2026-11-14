@@ -1139,8 +1139,8 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
 # TODO(SG): the docstring below calls alpha the "LDAK-Thin power" (the weights
 # are Speed et al. 2017's frequency weights without LD weights, not LDAK-Thin,
 # Speed et al. 2020) and calls ``loco_folds=1`` "LDAK-KVIK's design" (LDAK-KVIK
-# adds effect calibration models on top; in-sample HRATT is attenuated and
-# official LDAK-KVIK is not, benchmarks/results/20261005-hratt-weights-binary).
+# adds effect calibration models on top, so in-sample HRATT without them is not
+# LDAK-KVIK's design).
 def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
           alpha_method: str = "he", he_probes: int = 32,

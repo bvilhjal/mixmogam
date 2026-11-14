@@ -314,8 +314,9 @@ df/n of each sample's own phenotype into its score.
   variance shrinks with them.
 - For a rare binary outcome a case's working response is about 1/mu0, so the
   same absorption gives cases offsets of tens of logit units. At 1% prevalence
-  on a null trait, cases averaged +43 against -0.4 for controls, nearly
-  separating them.
+  2 of 30 null replicates stopped with a separation error, the per-group null
+  logistic fit with the in-sample offset diverging
+  (`benchmarks/results/20261005-hratt-weights-binary/`).
 - Heritability on the Pearson scale was overestimated there (REML median 0.10
   on null traits, up to 1.0).
 
@@ -331,9 +332,7 @@ The attenuation and its removal by cross-fitting are archived
 outcome, S3, where criterion F1 failed, and -5.5% at Fst 0.05 without PCs).
 The REML median of 0.10 (up to 1.0) is archived in
 `20261005-hratt-weights-binary` (`null_binary0.01_S0`, `hratt-bin.extra.h2`,
-28 replicates, in-sample scores). The case offsets (+43 against -0.4) are not
-archived; only `offset_sd` is kept. <!-- TODO(archive): rerun and archive the
-offset figures, or delete them. -->
+28 replicates, in-sample scores), as are the 2 separation failures.
 
 Dropping a group's share of a genome-wide fit costs five fits rather than five
 per group. Without structure it matched per-group refits (null lambda_GC
@@ -428,20 +427,19 @@ Plausibly new:
 - the structure-conditional switch between dropping a group's share of a
   genome-wide fit and refitting each group.
 
-Only the first has a committed ablation, and it shows cross-fitting is an
-alternative to LDAK-KVIK's effect calibration, not an improvement over it:
+Only the first has a committed ablation; it shows cross-fitting is an
+alternative to LDAK-KVIK's effect calibration:
 
 1. Done (`benchmarks/results/20261006-hratt-followups/`, replicated in
    `20261008-hratt-followups-builtin-pcs/`): against in-sample scores
    (`loco_folds=1`, which is HRATT without LDAK-KVIK's effect calibration,
    not LDAK-KVIK) on identical samples, cross-fitting removed the
-   attenuation of unweighted HRATT (in-sample -32% to -36%, cross-fitted
+   attenuation of unweighted HRATT (in-sample -28% to -36%, cross-fitted
    -2.0% to +0.9%; -31.8% and -0.6% on 8 October), left power unchanged
    (ratio 0.999-1.009; 1.003, MCSE 0.004 on 8 October) and cost 1.08-1.11
    times the time. Weighted HRATT stayed 5.4% low under selection on the
-   outcome. Official LDAK-KVIK's effects, like weighted least squares', were
-   already unbiased on the 5 October design (-4% to +0.3%,
-   `20261005-hratt-weights-binary`).
+   outcome. No improvement over LDAK-KVIK, which adds its own effect
+   calibration, is claimed or tested here.
 
 Ablations needed before any of the rest is claimed as an improvement (each
 with null-chromosome calibration, power at matched error rates, the

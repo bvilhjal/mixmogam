@@ -473,7 +473,12 @@ Equation~\eqref{eq:score} no longer supplies its null law, and the
 transfer is a heuristic. ``BOLT-style inf'' and ``BOLT-style mixture''
 (\code{bolt-inf} and \code{bolt}; labelled ``(mixmogam)'' in tables and
 figures) and HRATT below denote mixmogam methods inspired by BOLT-LMM and
-LDAK-KVIK, not the reference programs.
+LDAK-KVIK, not the reference programs. For example, BOLT-style mixture
+uses the mixture when its cross-validated $R^2$ exceeds the infinitesimal
+model's by more than 1\% of that $R^2$, whereas BOLT-LMM~v2.5 requires a
+1\% relative reduction in prediction error on its first fold; mixmogam
+therefore switches to the mixture more readily whenever the infinitesimal
+$R^2$ is below 0.5.
 
 \subsection{Environmental mean misspecification}
 \label{sec:environment}
@@ -821,8 +826,8 @@ $\tr S_g/n$ (the bias GRAMMAR-Gamma corrects; \citealp{svishcheva2012}).
 The residual variance shrinks with it, so p-values are unaffected. For a
 binary trait the working response of a case is about $1/\mu_0$, and the
 same absorption gives the cases offsets of tens of logit units at 1\%
-prevalence: on one null replicate cases averaged $+43$ against $-0.4$ for
-controls. Heritability on the Pearson scale was overestimated there
+prevalence, where 2 of 30 null replicates stopped with a separation error.
+Heritability on the Pearson scale was overestimated there
 (REML median 0.10 on null traits at 1\% prevalence, up to 1.0), which
 made it worse.
 
@@ -2436,21 +2441,19 @@ structure-conditional switch between dropping a group's share of a
 genome-wide fit and refitting the group.
 
 Only cross-fitting has a committed ablation
-(Section~\ref{sec:followup-results}). Against in-sample scores
-(\code{loco\_folds=1}, which is HRATT without LDAK-KVIK's effect
-calibration, not LDAK-KVIK) on identical samples, it removed the
-attenuation of unweighted HRATT's effects (in-sample $-32\%$ to $-36\%$,
-cross-fitted $-2.0\%$ to $+0.9\%$), left power unchanged (ratio
-0.999--1.009) and cost 1.08--1.11 times the time; weighted HRATT stayed
-$5.4\%$ low under selection on the outcome. Official LDAK-KVIK's effects
-were already unbiased on the earlier design ($-4\%$ to $+0.3\%$;
-Section~\ref{sec:weights-binary-results}). Cross-fitting is therefore an
-alternative to LDAK-KVIK's effect calibration, not an improvement shown over
-it, and none of the other items is shown here to improve power or
-calibration. The ablations still needed are below; items 2, 5, 6 and 8 have
-no committed results, and items 4 and 7 only partial ones (one replicate
-on two fixed panels for HE against REML; one sample of 1,500 for the
-spectral denominator):
+(Section~\ref{sec:followup-results}). Its comparator is in-sample scores
+on identical samples: that is HRATT without LDAK-KVIK's effect
+calibration, not LDAK-KVIK. Cross-fitting removed the attenuation of
+unweighted HRATT's effects (in-sample $-28\%$ to $-36\%$; cross-fitted
+$-2.0\%$ to $+0.9\%$). It left power unchanged (ratio 0.999 to 1.009)
+and cost 1.08 to 1.11 times the time. Weighted HRATT stayed $5.4\%$ low
+under selection on the outcome. Cross-fitting is therefore an alternative
+to LDAK-KVIK's effect calibration; no improvement over LDAK-KVIK, which
+adds its own effect calibration, is claimed or tested here. None of the
+other items is shown here to improve power or calibration. The ablations
+still needed are below. Items 2, 5, 6 and 8 have no committed results;
+items 4 and 7 have partial ones (one replicate on two fixed panels for HE
+against REML, and one sample of 1,500 for the spectral denominator):
 \begin{enumerate}
  \setcounter{enumi}{1}
  \item fixed offset (coefficient one) against the fitted slope, with and
