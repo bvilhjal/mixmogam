@@ -1288,7 +1288,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     (n - tr(Q' Phi Q)) for the covariates Q; weighted tests multiply their
     retrospective variance by kappa_g, binary tests that of w (y - mu_g),
     and the saddlepoint takes lambda_g = 1 / kappa_g as its per-group
-    variance ratio. lambda is then 1. ``relatedness`` takes (i, j, r = 2
+    variance ratio. lambda is then 1. Without ``relatedness``, close
+    relatives are left to the structure lambda; with sampling weights that
+    path is unpredictable (null lambda 0.70-1.92 in simulated families), so
+    weighted analyses of related samples need ``relatedness``.
+    :func:`~mixmogam.association.gwas_by_group` applies ``relatedness``
+    inside each group only (pairs that cross the split are dropped); do not
+    split relatives across groups. ``relatedness`` takes (i, j, r = 2
     phi) arrays or a :class:`mixmogam._relatedness.Relatedness` (e.g. a
     pedigree's, :func:`~mixmogam._relatedness.pedigree_relatedness`: no
     genotype pass; preferred), a KING / PLINK 2 ``.kin0`` path or a GCTA
@@ -1444,6 +1450,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     score, and it is anti-conservative for low-frequency variants (design
     notes).
 
+    A two-valued ``y`` with ``trait="quantitative"`` (the default) is
+    fitted as a Gaussian linear-probability model and warns; use
+    ``trait="binary"`` for case-control data.
     ``trait="binary"`` (outcomes 0/1) fits step 1 as weighted linear
     regression of the working response (y - mu0) / (mu0 (1 - mu0)), with
     working weights mu0 (1 - mu0) of the covariate-only null logistic fit
@@ -1468,6 +1477,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     """
     if trait not in ("quantitative", "binary"):
         raise ValueError("trait must be 'quantitative' or 'binary'")
+    if trait == "quantitative":
+        yv = np.asarray(y, dtype=np.float64).ravel()
+        if np.unique(yv[np.isfinite(yv)]).size == 2:
+            warnings.warn("y takes two values but trait='quantitative': it is fitted as a "
+                          "Gaussian trait (a linear probability model); for case-control "
+                          "data use trait='binary'", UserWarning, stacklevel=2)
     if heritability_method not in ("auto", "he", "reml"):
         raise ValueError("heritability_method must be 'auto', 'he' or 'reml'")
     weighted = sample_weights is not None
