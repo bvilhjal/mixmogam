@@ -111,18 +111,23 @@ python report/make_report_manifest.py
 ```
 
 Figures and tables must stay beside the LaTeX source. The figure script reads
-the archived CSVs and renders only mixmogam's methods; each `make_*`
-script writes a `*_manifest.json` with its input and output hashes. The
-earlier association results used mixmogam `2.0.0.dev2` at `db232216`, with
-phensim extensions frozen per archive. Large-n BED inputs stay local and out
-of Git, with hashes and generating references and seeds kept.
+the archived CSVs and renders only mixmogam's methods; each `make_*` script
+writes a `*_manifest.json` with its input and output hashes. The earlier
+association results used mixmogam `2.0.0.dev2` at `db232216`, with phensim
+extensions frozen per archive. Large-n BED inputs stay local and out of Git,
+with hashes and generating references and seeds kept.
 `make_phensim_figures.py` verifies reused archive files before rendering; its
 HAPNEST step needs those omitted BED inputs, so a public checkout can render
 its phensim figures but cannot finish that step without the local archives.
 The HAPNEST table in this revision was rendered from the archived
-`replicates.csv` files with the reruns' recorded hash checks. The primary
-matched case was regenerated independently and all mixmogam methods' p-values
-agreed exactly.
+`replicates.csv` files with the reruns' recorded hash checks. After the
+BOLT-style relabel only the generator hash in `hapnest_manifest.json` was
+updated: the HAPNEST association runs were not rerun, the rerun verification
+of the two archives (`20261006-hapnest-kvik-dev6-n10000` and `-n50000`) is
+carried over from the earlier manifest, and the relabel did not change
+`hapnest_association.tex` or `hapnest_simulator.tex`. The primary matched case
+was regenerated independently and all mixmogam methods' p-values agreed
+exactly.
 
 `report_manifest.json` hashes the delivered PDF, its current inputs and the
 evidence manifest (pages are counted with `pdfinfo`). It does not update

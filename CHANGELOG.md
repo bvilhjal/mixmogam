@@ -63,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   CITATION.cff title, package docstring), and the development status is 4 - Beta.
   `gwas(method="bolt")` without a mixture now notes "BOLT-style inf (mixmogam)
   statistics" in `extra["note"]`.
+- README: the stratified HapMap3-subset excess is attributed to the earlier
+  subset structure test (HRATT now runs it on every variant), and the subset
+  section points to `relatedness=` (kappa_g) for family inflation.
+  `report/README.md` notes that the HAPNEST runs were not rerun after the
+  relabel (only the generator hash in `hapnest_manifest.json` changed).
 
 ## [2.0.2.dev1] - 2026-11-03
 

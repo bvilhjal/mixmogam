@@ -117,9 +117,18 @@ pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet arch
 
 The LOCO scores removed less of the relatives' shared signal. A separate pre-merge
 coalescent simulation (n = 2,000, 3-5 replicates per cell, also unarchived) tested only the
-HapMap3 subset: it stayed calibrated in unrelated, unstratified samples, and with population
-stratification it added 0.02-0.05 to the null mean chi-square, because the structure test run
-on the subset flagged strong structure.
+HapMap3 subset: it stayed calibrated in unrelated, unstratified samples. With population
+stratification it added 0.02-0.05 to the null mean chi-square when the structure test ran on
+the subset and flagged strong structure; HRATT now runs that test on every variant, which in
+the same simulation brought the excess to +0.008 ± 0.003 and +0.001 ± 0.004 with PCs.
+
+For the family inflation, pass the relatives: `hratt(..., relatedness=...)` (CLI
+`--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
+GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). The default
+`relatedness_correction="kappa"` then divides each statistic by its expected null inflation
+kappa_g (times a covariate factor) instead of applying a global lambda. It does not correct
+population structure, so keep ancestry PCs. Details and options are in the `hratt`
+docstring (`help(mixmogam.twostep.hratt)`).
 
 **Warnings.** HRATT therefore warns, and records the details in
 `result.extra["model_snps"]["warnings"]`, when:
