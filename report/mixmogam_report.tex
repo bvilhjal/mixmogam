@@ -298,8 +298,9 @@ phenotype mean.
 
 Variance estimation can dominate a streaming fit even after individual
 matrix products are efficient. HRATT already computes randomized
-Haseman--Elston (HE) quantities to choose the frequency-weight exponent
-$a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}.
+Haseman--Elston (HE) quantities \citep{haseman1972,wu2018} to choose the frequency-weight exponent
+$a$, with $w_j=\{f_j(1-f_j)\}^{1+a}$ in Equation~\eqref{eq:grm}
+(the LDAK-Thin weights of \citealp{speed2012,speed2017}, without LD thinning).
 The optional \code{heritability\_method="he"} reuses these products to
 estimate the genetic and residual covariance coefficients. The default,
 \code{heritability\_method="auto"}, keeps REML without sampling weights and
@@ -320,7 +321,7 @@ $\y_s\y_s^\top$ gives the two moment equations
  \qquad t_1=\tr K,\quad t_2=\tr K^2.
  \label{eq:he-moments}
 \end{equation}
-Independent Rademacher probes $r_b$ estimate $t_2$ by
+Independent Rademacher probes $r_b$ \citep{hutchinson1990} estimate $t_2$ by
 $B^{-1}\sum_{b=1}^B\|Kr_b\|^2$, with $B=32$ by default. The diagonal
 and products already computed for exponent selection supply the remaining
 terms. All exponents use the same probes. Exponent selection retains the
@@ -455,7 +456,7 @@ Using a full-genome basis to approximate a different LOCO covariance
 requires its own error assessment.
 
 The production implementation computes group-specific bases with
-randomized subspace iteration and currently tries widths
+randomized subspace iteration \citep{halko2011} and currently tries widths
 64, 128, 256, and 512. It stops when the coefficient of variation of
 calibration ratios is at most 3\%, subject to the available dimension.
 Because the calibration markers also set the scale, this stopping
@@ -510,7 +511,7 @@ calls, the right-hand sides and working blocks; the calls alone take one
 byte, or a quarter byte, per genotype.
 
 Conjugate gradients supplies covariance solves, and stochastic Lanczos
-quadrature estimates likelihood terms for large samples. Both introduce
+quadrature \citep{ubaru2017} estimates likelihood terms for large samples. Both introduce
 numerical approximations beyond the statistical model. Association
 solves now reject nonconvergence. Variational fits expose incomplete
 convergence, and fit caches respect their options and model ownership.
@@ -2387,6 +2388,67 @@ it answers a different question from a separately generated exposure.
 Future studies should include both and state the causal and statistical
 role of each.
 
+\subsection{What is new in HRATT, and what has precedent}
+\label{sec:novelty}
+
+HRATT is assembled mostly from published parts, and its name should not be
+read as a claim of a new method family. Its two-step design is LDAK-KVIK's
+\citep{hof2025}. So are the 512-marker inter-chromosome structure test, the
+power grid $a\in\{-1,-0.75,-0.5,-0.25,0\}$ chosen by randomized HE, the
+ten-point elastic-net grid with a 90/10 hold-out, the calibration factor
+(one without strong structure, otherwise mean-matched to
+GRAMMAR-Gamma-calibrated ridge statistics) and weighted linear regression
+for binary step~1 (all checked against the LDAK-KVIK technical
+documentation, not the paper's Methods). The frequency weights are the
+LDAK-Thin model \citep{speed2012,speed2017}, without LD thinning. HE
+regression \citep{haseman1972}, randomized trace probes
+\citep{hutchinson1990} and their combination \citep{wu2018} predate it.
+Out-of-fold whole-genome predictions are REGENIE's level-0 design
+\citep{mbatchou2021}; cross-validated in-cohort predictors for
+mixed-model association are the subject of \citet{mefford2020}. Adjusting
+association tests for a polygenic score as a covariate, which fits its
+coefficient, was studied by \citet{campos2023}. The per-group relatedness factor is the retrospective
+variance of MASTOR \citep{jakobsdottir2013}, also used by BOLT-LMM
+\citep{loh2015}, reduced to one factor per group. Its optional variance
+component imitates fastGWA's sparse-relatedness model \citep{jiang2019},
+and pairs come from KING \citep{manichaikul2010} or a GCTA sparse GRM
+\citep{yang2011}. The \code{ldpred3-*} stage-1 options rest on LDpred2
+and lassosum2 \citep{prive2020,prive2022hgg}. The spectral denominator is a
+heuristic variant of exact eigen-based statistics
+\citep{kang2008,lippert2011,svishcheva2012}. Elsewhere in the package,
+stepwise selection uses EBIC \citep{chen2008}, the polygenic GxE option
+follows \citet{sul2016}, and BOLT-style calibration markers are screened with
+the GRAMMAR statistic \citep{amin2007} as in \citet{loh2015}.
+
+Plausibly new, and so far untested by ablation, are: cross-fitting the
+LDAK-KVIK elastic-net predictor (LDAK-KVIK fits its final and LOCO
+predictors on all samples); a per-group least-squares slope clipped to
+$[0,1]$; one-pass HE selection of $a$ with probes shared across exponents;
+the MASTOR factor reduced to one value per LOCO group; and a
+structure-conditional switch between dropping a group's share of a
+genome-wide fit and refitting the group. None of these is shown here to
+improve power or calibration over the published designs. The ablations
+needed are:
+\begin{enumerate}
+ \item in-sample (LDAK-KVIK-like, \code{loco\_folds=1}) against cross-fitted
+ scores, at matched hyperparameters;
+ \item fixed offset (coefficient one) against the fitted slope, with and
+ without clipping to $[0,1]$;
+ \item drop-share against per-group refit, on a grid of structure strengths
+ around the switch threshold, with and without principal components;
+ \item single-component HE against REML and against partitioned randomized
+ HE for $a$ and $h^2$;
+ \item LDAK-Thin weights against unweighted ($a=-1$) and fixed-$a$ kinships;
+ \item the per-group MASTOR factor against a global factor and against the
+ \code{"vc"} variance component, with close relatives present;
+ \item the spectral denominator against the constant and exact
+ denominators;
+ \item elastic-net against \code{ldpred3-inf} and \code{ldpred3-lassosum2}
+ stage~1 at matched marker sets.
+\end{enumerate}
+Each should report null-chromosome calibration, power at matched error
+rates and effect-size slope, with replicate seeds.
+
 \subsection{Limitations and intended use}
 
 mixmogam is best used as a transparent research implementation and a
@@ -2769,6 +2831,12 @@ Abney M (2015). Permutation testing in the presence of polygenic
 variation. \emph{Genet Epidemiol} 39(4):249--258.
 \href{https://doi.org/10.1002/gepi.21893}{doi:10.1002/gepi.21893}
 
+\bibitem[Amin et~al.(2007)]{amin2007}
+Amin N, van Duijn CM, Aulchenko YS (2007). A genomic background based
+method for association analysis in related individuals. \emph{PLoS One}
+2(12):e1274.
+\href{https://doi.org/10.1371/journal.pone.0001274}{doi:10.1371/journal.pone.0001274}
+
 \bibitem[Atwell et~al.(2010)]{atwell2010}
 Atwell S, Huang YS, Vilhj\'almsson BJ, et~al. (2010). Genome-wide
 association study of 107 phenotypes in \emph{Arabidopsis thaliana} inbred
@@ -2811,11 +2879,33 @@ regression distinguishes confounding from polygenicity in genome-wide
 association studies. \emph{Nat Genet} 47(3):291--295.
 \href{https://doi.org/10.1038/ng.3211}{doi:10.1038/ng.3211}
 
+\bibitem[Campos et~al.(2023)]{campos2023}
+Campos AI, Namba S, Lin SC, et~al. (2023). Boosting the power of
+genome-wide association studies within and across ancestries by using
+polygenic scores. \emph{Nat Genet} 55(10):1769--1776.
+\href{https://doi.org/10.1038/s41588-023-01500-0}{doi:10.1038/s41588-023-01500-0}
+
+\bibitem[Chen and Chen(2008)]{chen2008}
+Chen J, Chen Z (2008). Extended Bayesian information criteria for model
+selection with large model spaces. \emph{Biometrika} 95(3):759--771.
+\href{https://doi.org/10.1093/biomet/asn034}{doi:10.1093/biomet/asn034}
+
 \bibitem[Dey et~al.(2017)]{dey2017}
 Dey R, Schmidt EM, Abecasis GR, Lee S (2017). A fast and accurate
 algorithm to test for binary phenotypes and its application to PheWAS.
 \emph{Am J Hum Genet} 101(1):37--49.
 \href{https://doi.org/10.1016/j.ajhg.2017.05.014}{doi:10.1016/j.ajhg.2017.05.014}
+
+\bibitem[Halko et~al.(2011)]{halko2011}
+Halko N, Martinsson PG, Tropp JA (2011). Finding structure with
+randomness: probabilistic algorithms for constructing approximate matrix
+decompositions. \emph{SIAM Rev} 53(2):217--288.
+\href{https://doi.org/10.1137/090771806}{doi:10.1137/090771806}
+
+\bibitem[Haseman and Elston(1972)]{haseman1972}
+Haseman JK, Elston RC (1972). The investigation of linkage between a
+quantitative trait and a marker locus. \emph{Behav Genet} 2(1):3--19.
+\href{https://doi.org/10.1007/BF01066731}{doi:10.1007/BF01066731}
 
 \bibitem[Hof and Speed(2025)]{hof2025}
 Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model
@@ -2828,6 +2918,24 @@ Horton MW, Hancock AM, Huang YS, et~al. (2012). Genome-wide patterns of
 genetic variation in worldwide \emph{Arabidopsis thaliana} accessions
 from the RegMap panel. \emph{Nat Genet} 44(2):212--216.
 \href{https://doi.org/10.1038/ng.1042}{doi:10.1038/ng.1042}
+
+\bibitem[Hutchinson(1990)]{hutchinson1990}
+Hutchinson MF (1990). A stochastic estimator of the trace of the
+influence matrix for Laplacian smoothing splines. \emph{Commun Stat
+Simul Comput} 19(2):433--450.
+\href{https://doi.org/10.1080/03610919008812866}{doi:10.1080/03610919008812866}
+
+\bibitem[Jakobsdottir and McPeek(2013)]{jakobsdottir2013}
+Jakobsdottir J, McPeek MS (2013). MASTOR: mixed-model association
+mapping of quantitative traits in samples with related individuals.
+\emph{Am J Hum Genet} 92(5):652--666.
+\href{https://doi.org/10.1016/j.ajhg.2013.03.014}{doi:10.1016/j.ajhg.2013.03.014}
+
+\bibitem[Jiang et~al.(2019)]{jiang2019}
+Jiang L, Zheng Z, Qi T, et~al. (2019). A resource-efficient tool for
+mixed model association analysis of large-scale data. \emph{Nat Genet}
+51(12):1749--1755.
+\href{https://doi.org/10.1038/s41588-019-0530-8}{doi:10.1038/s41588-019-0530-8}
 
 \bibitem[Kang et~al.(2008)]{kang2008}
 Kang HM, Zaitlen NA, Wade CM, et~al. (2008). Efficient control of
@@ -2877,11 +2985,23 @@ universal analysis framework for large-scale genetic association studies in
 admixed populations. \emph{Genome Biol} 26(1):356.
 \href{https://doi.org/10.1186/s13059-025-03827-9}{doi:10.1186/s13059-025-03827-9}
 
+\bibitem[Manichaikul et~al.(2010)]{manichaikul2010}
+Manichaikul A, Mychaleckyj JC, Rich SS, et~al. (2010). Robust
+relationship inference in genome-wide association studies.
+\emph{Bioinformatics} 26(22):2867--2873.
+\href{https://doi.org/10.1093/bioinformatics/btq559}{doi:10.1093/bioinformatics/btq559}
+
 \bibitem[Mbatchou et~al.(2021)]{mbatchou2021}
 Mbatchou J, Barnard L, Backman J, et~al. (2021). Computationally
 efficient whole-genome regression for quantitative and binary traits.
 \emph{Nat Genet} 53(7):1097--1103.
 \href{https://doi.org/10.1038/s41588-021-00870-7}{doi:10.1038/s41588-021-00870-7}
+
+\bibitem[Mefford et~al.(2020)]{mefford2020}
+Mefford J, Park D, Zheng Z, et~al. (2020). Efficient estimation and
+applications of cross-validated genetic predictions to polygenic risk
+scores and linear mixed models. \emph{J Comput Biol} 27(4):599--612.
+\href{https://doi.org/10.1089/cmb.2019.0325}{doi:10.1089/cmb.2019.0325}
 
 \bibitem[Price et~al.(2006)]{price2006}
 Price AL, Patterson NJ, Plenge RM, et~al. (2006). Principal components
@@ -2895,10 +3015,21 @@ population stratification in genome-wide association studies.
 \emph{Nat Rev Genet} 11(7):459--463.
 \href{https://doi.org/10.1038/nrg2813}{doi:10.1038/nrg2813}
 
+\bibitem[Priv\'e et~al.(2020)]{prive2020}
+Priv\'e F, Arbel J, Vilhj\'almsson BJ (2020). LDpred2: better, faster,
+stronger. \emph{Bioinformatics} 36(22--23):5424--5431.
+\href{https://doi.org/10.1093/bioinformatics/btaa1029}{doi:10.1093/bioinformatics/btaa1029}
+
 \bibitem[Priv\'e(2022)]{prive2022}
 Priv\'e F (2022). Optimal linkage disequilibrium splitting.
 \emph{Bioinformatics} 38(1):255--256.
 \href{https://doi.org/10.1093/bioinformatics/btab519}{doi:10.1093/bioinformatics/btab519}
+
+\bibitem[Priv\'e et~al.(2022)]{prive2022hgg}
+Priv\'e F, Arbel J, Aschard H, Vilhj\'almsson BJ (2022). Identifying and
+correcting for misspecifications in GWAS summary statistics and polygenic
+scores. \emph{HGG Adv} 3(4):100136.
+\href{https://doi.org/10.1016/j.xhgg.2022.100136}{doi:10.1016/j.xhgg.2022.100136}
 
 \bibitem[Schoeler et~al.(2023)]{schoeler2023}
 Schoeler T, Speed D, Porcu E, Pirastu N, Pingault J-B, Kutalik Z (2023).
@@ -2912,6 +3043,23 @@ multi-locus mixed-model approach for genome-wide association studies in
 structured populations. \emph{Nat Genet} 44(7):825--830.
 \href{https://doi.org/10.1038/ng.2314}{doi:10.1038/ng.2314}
 
+\bibitem[Speed et~al.(2012)]{speed2012}
+Speed D, Hemani G, Johnson MR, Balding DJ (2012). Improved heritability
+estimation from genome-wide SNPs. \emph{Am J Hum Genet} 91(6):1011--1021.
+\href{https://doi.org/10.1016/j.ajhg.2012.10.010}{doi:10.1016/j.ajhg.2012.10.010}
+
+\bibitem[Speed et~al.(2017)]{speed2017}
+Speed D, Cai N, UCLEB Consortium, Johnson MR, Nejentsev S, Balding DJ
+(2017). Reevaluation of SNP heritability in complex human traits.
+\emph{Nat Genet} 49(7):986--992.
+\href{https://doi.org/10.1038/ng.3865}{doi:10.1038/ng.3865}
+
+\bibitem[Sul et~al.(2016)]{sul2016}
+Sul JH, Bilow M, Yang W-Y, et~al. (2016). Accounting for population
+structure in gene-by-environment interactions in genome-wide association
+studies using mixed models. \emph{PLoS Genet} 12(3):e1005849.
+\href{https://doi.org/10.1371/journal.pgen.1005849}{doi:10.1371/journal.pgen.1005849}
+
 \bibitem[Sul et~al.(2018)]{sul2018}
 Sul JH, Martin LS, Eskin E (2018). Population structure in genetic
 studies: confounding factors and mixed models. \emph{PLoS Genet}
@@ -2923,6 +3071,12 @@ Svishcheva GR, Axenovich TI, Belonogova NM, van Duijn CM, Aulchenko YS
 (2012). Rapid variance components-based method for whole-genome association
 analysis. \emph{Nat Genet} 44(10):1166--1170.
 \href{https://doi.org/10.1038/ng.2410}{doi:10.1038/ng.2410}
+
+\bibitem[Ubaru et~al.(2017)]{ubaru2017}
+Ubaru S, Chen J, Saad Y (2017). Fast estimation of $\mathrm{tr}(f(A))$ via
+stochastic Lanczos quadrature. \emph{SIAM J Matrix Anal Appl}
+38(4):1075--1099.
+\href{https://doi.org/10.1137/16M1104974}{doi:10.1137/16M1104974}
 
 \bibitem[Vilhj\'almsson and Nordborg(2013)]{vilhjalmsson2013}
 Vilhj\'almsson BJ, Nordborg M (2013). The nature of confounding in
@@ -2941,11 +3095,21 @@ generation and evaluation of synthetic datasets for genotypes and
 phenotypes. \emph{Bioinformatics} 39(9):btad535.
 \href{https://doi.org/10.1093/bioinformatics/btad535}{doi:10.1093/bioinformatics/btad535}
 
+\bibitem[Wu and Sankararaman(2018)]{wu2018}
+Wu Y, Sankararaman S (2018). A scalable estimator of SNP heritability
+for biobank-scale data. \emph{Bioinformatics} 34(13):i187--i194.
+\href{https://doi.org/10.1093/bioinformatics/bty253}{doi:10.1093/bioinformatics/bty253}
+
 \bibitem[Yang et~al.(2010)]{yang2010}
 Yang J, Benyamin B, McEvoy BP, et~al. (2010). Common SNPs explain a
 large proportion of the heritability for human height. \emph{Nat Genet}
 42(7):565--569.
 \href{https://doi.org/10.1038/ng.608}{doi:10.1038/ng.608}
+
+\bibitem[Yang et~al.(2011)]{yang2011}
+Yang J, Lee SH, Goddard ME, Visscher PM (2011). GCTA: a tool for
+genome-wide complex trait analysis. \emph{Am J Hum Genet} 88(1):76--82.
+\href{https://doi.org/10.1016/j.ajhg.2010.11.011}{doi:10.1016/j.ajhg.2010.11.011}
 
 \bibitem[Yang et~al.(2014)]{yang2014}
 Yang J, Zaitlen NA, Goddard ME, Visscher PM, Price AL (2014). Advantages
