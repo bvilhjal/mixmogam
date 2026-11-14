@@ -34,8 +34,8 @@ and large-panel options below can wait until you need them.
 
 HRATT (Heritability-weighted Residual Association Two-step Test) follows the
 two-step design of LDAK-KVIK (Hof & Speed 2025, *Nat Genet*) but is not
-LDAK-KVIK. Step 1 fits an elastic-net LOCO predictor under LDAK's heritability
-model; step 2 runs retrospective score tests with a structure-dependent
+LDAK-KVIK. Step 1 fits an elastic-net LOCO predictor under the LDAK-Thin heritability
+model (Speed et al. 2012, 2017); step 2 runs retrospective score tests with a structure-dependent
 calibration. The LOCO scores are cross-fitted as in REGENIE, so each fold's
 predictor is trained on the other samples, while variance components and
 model selection still use the whole trait.
@@ -126,8 +126,11 @@ dosages are not supported.
 **`None` (the default)** fits stage 1 on every variant, with results byte-identical to
 earlier versions.
 
-<!-- katla: overselling note, defer to NR M1/M2 label -->
-**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag. In a
+**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag.
+**Unarchived evidence:** the numbers in this paragraph and the next come from runs with no
+archived inputs, code version or outputs; treat them as indicative only.
+<!-- TODO(archive): rerun on the shipped code and archive under benchmarks/results/, or delete. -->
+In a
 pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet archived under
 `benchmarks/results/`), lambda_GC on null SNPs was:
 
@@ -301,7 +304,9 @@ methods you use. Each paper's PMID and lookup URL is in
 | the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.0.2.dev1 |
 | `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
 | `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
-| `method="hratt"`: its two-step design and LDAK heritability model | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |
+| `method="hratt"`: its two-step design | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |
+| HRATT's LDAK-Thin frequency weights w_j = [f_j(1 − f_j)]^(1+alpha) (without LD thinning) | Speed D et al. (2012). Improved heritability estimation from genome-wide SNPs. *Am J Hum Genet* **91**(6). [doi:10.1016/j.ajhg.2012.10.010](https://doi.org/10.1016/j.ajhg.2012.10.010); Speed D et al. (2017). Reevaluation of SNP heritability in complex human traits. *Nat Genet* **49**(7). [doi:10.1038/ng.3865](https://doi.org/10.1038/ng.3865) |
+| HRATT's randomized HE (alpha selection, `heritability_method="he"`) | Haseman JK, Elston RC (1972). *Behav Genet* **2**(1). [doi:10.1007/BF01066731](https://doi.org/10.1007/BF01066731); Wu Y, Sankararaman S (2018). A scalable estimator of SNP heritability for biobank-scale data. *Bioinformatics* **34**(13). [doi:10.1093/bioinformatics/bty253](https://doi.org/10.1093/bioinformatics/bty253); Hutchinson MF (1990). *Commun Stat Simul Comput* **19**(2). [doi:10.1080/03610919008812866](https://doi.org/10.1080/03610919008812866) |
 | HRATT's cross-fitted LOCO scores | Mbatchou J et al. (2021). Computationally efficient whole-genome regression for quantitative and binary traits. *Nat Genet* **53**(7). [doi:10.1038/s41588-021-00870-7](https://doi.org/10.1038/s41588-021-00870-7) |
 | `trait="binary"` saddlepoint tails | Zhou W et al. (2018). *Nat Genet* **50**(9). [doi:10.1038/s41588-018-0184-y](https://doi.org/10.1038/s41588-018-0184-y); Dey R et al. (2017). *Am J Hum Genet* **101**(1). [doi:10.1016/j.ajhg.2017.05.014](https://doi.org/10.1016/j.ajhg.2017.05.014); Bi W et al. (2020). *Am J Hum Genet* **107**(2). [doi:10.1016/j.ajhg.2020.06.003](https://doi.org/10.1016/j.ajhg.2020.06.003); Ma Y et al. (2025). SPAmix. *Genome Biol* **26**(1). [doi:10.1186/s13059-025-03827-9](https://doi.org/10.1186/s13059-025-03827-9) |
 | `sample_weights=` (participation or inverse-probability weights) | Schoeler T et al. (2023). Participation bias in the UK Biobank distorts genetic associations and downstream analyses. *Nat Hum Behav* **7**(7). [doi:10.1038/s41562-023-01579-9](https://doi.org/10.1038/s41562-023-01579-9) |
@@ -312,6 +317,12 @@ methods you use. Each paper's PMID and lookup URL is in
 | lambda_GC, confounding and mixed-model pitfalls | Yang J et al. (2014). Advantages and pitfalls in the application of mixed-model association methods. *Nat Genet* **46**(2). [doi:10.1038/ng.2876](https://doi.org/10.1038/ng.2876); Sul JH et al. (2018). Population structure in genetic studies: confounding factors and mixed models. *PLoS Genet* **14**(12). [doi:10.1371/journal.pgen.1007309](https://doi.org/10.1371/journal.pgen.1007309) |
 | the bundled *A. thaliana* panel in [`at_data/`](https://github.com/bvilhjal/mixmogam/blob/master/at_data/README.md) | Atwell S et al. (2010). Genome-wide association study of 107 phenotypes in *Arabidopsis thaliana* inbred lines. *Nature* **465**(7298). [doi:10.1038/nature08800](https://doi.org/10.1038/nature08800); Horton MW et al. (2012). *Nat Genet* **44**(2). [doi:10.1038/ng.1042](https://doi.org/10.1038/ng.1042); Baxter I et al. (2008). *PLoS Genet* **4**(2). [doi:10.1371/journal.pgen.1000004](https://doi.org/10.1371/journal.pgen.1000004) |
 | the simulated benchmark panels | Wharrie S et al. (2023). HAPNEST. *Bioinformatics* **39**(9). [doi:10.1093/bioinformatics/btad535](https://doi.org/10.1093/bioinformatics/btad535); Baumdicker F et al. (2022). msprime 1.0. *Genetics* **220**(3). [doi:10.1093/genetics/iyab229](https://doi.org/10.1093/genetics/iyab229); Kelleher J et al. (2016). *PLoS Comput Biol* **12**(5). [doi:10.1371/journal.pcbi.1004842](https://doi.org/10.1371/journal.pcbi.1004842) |
+| `relatedness=` (KING pairs, `"kappa"` and `"vc"` corrections, GCTA sparse GRM input) | Manichaikul A et al. (2010). Robust relationship inference in genome-wide association studies. *Bioinformatics* **26**(22). [doi:10.1093/bioinformatics/btq559](https://doi.org/10.1093/bioinformatics/btq559); Jakobsdottir J, McPeek MS (2013). MASTOR. *Am J Hum Genet* **92**(5). [doi:10.1016/j.ajhg.2013.03.014](https://doi.org/10.1016/j.ajhg.2013.03.014); Jiang L et al. (2019). fastGWA. *Nat Genet* **51**(12). [doi:10.1038/s41588-019-0530-8](https://doi.org/10.1038/s41588-019-0530-8); Yang J et al. (2011). GCTA. *Am J Hum Genet* **88**(1). [doi:10.1016/j.ajhg.2010.11.011](https://doi.org/10.1016/j.ajhg.2010.11.011) |
+| `stage1="ldpred3-inf"`, `"ldpred3-lassosum2"` | Privé F et al. (2020). LDpred2: better, faster, stronger. *Bioinformatics* **36**(22-23). [doi:10.1093/bioinformatics/btaa1029](https://doi.org/10.1093/bioinformatics/btaa1029); Privé F et al. (2022). Identifying and correcting for misspecifications in GWAS summary statistics and polygenic scores. *HGG Adv* **3**(4). [doi:10.1016/j.xhgg.2022.100136](https://doi.org/10.1016/j.xhgg.2022.100136) |
+| the BOLT-style calibration-marker screen (GRAMMAR chi2 < 5) | Amin N et al. (2007). A genomic background based method for association analysis in related individuals. *PLoS One* **2**(12). [doi:10.1371/journal.pone.0001274](https://doi.org/10.1371/journal.pone.0001274) |
+| stochastic Lanczos REML and randomized subspace iteration | Ubaru S, Chen J, Saad Y (2017). *SIAM J Matrix Anal Appl* **38**(4). [doi:10.1137/16M1104974](https://doi.org/10.1137/16M1104974); Halko N, Martinsson PG, Tropp JA (2011). *SIAM Rev* **53**(2). [doi:10.1137/090771806](https://doi.org/10.1137/090771806) |
+| stepwise model selection by the `"ebic"` criterion | Chen J, Chen Z (2008). Extended Bayesian information criteria for model selection with large model spaces. *Biometrika* **95**(3). [doi:10.1093/biomet/asn034](https://doi.org/10.1093/biomet/asn034) |
+| `polygenic_gxe=True` | Sul JH et al. (2016). Accounting for population structure in gene-by-environment interactions in genome-wide association studies using mixed models. *PLoS Genet* **12**(3). [doi:10.1371/journal.pgen.1005849](https://doi.org/10.1371/journal.pgen.1005849) |
 
 Citing a paper does not transfer its validation to this implementation.
 
