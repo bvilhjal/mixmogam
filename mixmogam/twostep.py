@@ -21,8 +21,8 @@ and in the calibration:
 - HRATT, the Heritability-weighted Residual Association Two-step Test:
   this package's method inspired by LDAK-KVIK (Hof & Speed 2025, Nat
   Genet) and following its design: w = y minus an elastic-net
-  LOCO polygenic score under the LDAK-Thin heritability model (Speed et al.
-  2012, 2017), cross-fitted
+  LOCO polygenic score with frequency weights [f(1 - f)]^(1 + alpha)
+  (Speed et al. 2017; no LD weights, as in LDAK-KVIK), cross-fitted
   as in REGENIE with each fold's predictor trained on the other folds;
   lambda = 1 unless a test of inter-chromosome correlation finds strong
   structure, in which case lambda is matched to the GRAMMAR-Gamma-calibrated
@@ -443,7 +443,7 @@ def _calibration_draw(st: _Setup, n_cal: int, rng) -> np.ndarray:
     """Calibration candidates, drawn before the LOCO residuals exist.
 
     BOLT-LMM-inf (Loh et al. 2015) calibrates on random SNPs whose GRAMMAR
-    (Amin et al. 2007) chi2, a function of
+    (Aulchenko et al. 2007) chi2, a function of
     the residuals, is below 5. Polymorphic SNPs drawn in random order and
     filtered afterwards (rejection sampling: the same distribution) let the
     candidates' prospective solves share the residuals' CG passes. About a
@@ -820,8 +820,12 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     s2 = vg / M (total prior variance fixed by the REML fit); (f2, p) is
     chosen by ``n_folds``-fold cross-validated prediction over ``grid``. The
     mixture is used only when its CV prediction R^2 beats the
-    infinitesimal model's by the relative margin ``min_cv_gain`` (BOLT's
-    exact threshold is not given in the paper; this is mixmogam's choice).
+    infinitesimal model's by the relative margin ``min_cv_gain``. This is
+    mixmogam's rule, not BOLT-LMM's: BOLT-LMM v2.5 requires a 1% relative
+    reduction in prediction MSE on the first CV fold (``predBoostMin``,
+    src/BoltMain.cpp:555, src/BoltParEstCV.cpp:234), i.e.
+    Delta R^2 >= 0.01 (1 - R^2_inf), which is stricter than
+    Delta R^2 > 0.01 R^2_inf whenever R^2_inf < 0.5.
     LOCO residuals come from the same variational iteration, and the
     statistic is calibrated by matching LD Score regression intercepts to
     BOLT-LMM-inf. Effects and standard errors come from that infinitesimal
@@ -1040,11 +1044,12 @@ def _he_products(lg: LocoGenotypes, P32: np.ndarray, Wt: np.ndarray):
 
 def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=False,
               design_weights=None) -> dict:
-    """Pick the LDAK-Thin power by randomized Haseman-Elston regression.
+    """Pick the frequency-weight power alpha by randomized Haseman-Elston regression.
 
-    HE regression: Haseman & Elston (1972); randomized trace probes:
-    Hutchinson (1990); randomized HE: Wu & Sankararaman (2018); LDAK-Thin
-    weights: Speed et al. (2012, 2017).
+    HE regression: Haseman & Elston (1972); Rademacher trace probes:
+    Hutchinson (1990); randomized HE: Wu & Sankararaman (2018), one pass
+    for several components: Pazokitoroudi et al. (2020); frequency weights
+    without LD weights: Speed et al. (2017).
 
     For each alpha, K_alpha = Z' W_alpha Z / sum(W_alpha) with
     W_alpha = [f (1 - f)]^(1 + alpha). HE regresses the off-diagonal
@@ -1131,6 +1136,11 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
     return result
 
 
+# TODO(SG): the docstring below calls alpha the "LDAK-Thin power" (the weights
+# are Speed et al. 2017's frequency weights without LD weights, not LDAK-Thin,
+# Speed et al. 2020) and calls ``loco_folds=1`` "LDAK-KVIK's design" (LDAK-KVIK
+# adds effect calibration models on top; in-sample HRATT is attenuated and
+# official LDAK-KVIK is not, benchmarks/results/20261005-hratt-weights-binary).
 def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
           alpha_method: str = "he", he_probes: int = 32,
@@ -2311,7 +2321,7 @@ def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float,
 def _hratt_variance(st: _Setup, struct: dict, alphas, alpha_method: str, heritability_method: str,
                     he_probes: int, rng, random_state, design_weights=None,
                     slq_tol: float = 1e-6) -> dict:
-    """(1b) The LDAK-Thin power alpha and the variance components at it.
+    """(1b) The frequency-weight power alpha and the variance components at it.
 
     Returns the chosen ``alpha``, its variant weights ``w``, ``h2``, the
     spectral ``basis`` shared with the ridge solves under strong structure

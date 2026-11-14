@@ -4,7 +4,8 @@ For an orthogonal residual projector S of rank d and K = S K S, fit
 E[yy'] = vg K + ve S by Frobenius least squares. The two normal equations
 use tr(K²), tr(K), y'Ky, and y'y; no individual covariance is materialized.
 These are Haseman-Elston moments (Haseman & Elston 1972) with tr(K²) from
-random probes (Hutchinson 1990), as in randomized HE (Wu & Sankararaman 2018).
+random probes (Hutchinson 1990), the estimator of randomized HE (Wu &
+Sankararaman 2018, who draw Gaussian probes; HRATT draws Rademacher ones).
 """
 
 from __future__ import annotations
