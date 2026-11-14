@@ -195,13 +195,12 @@ repetitions gave:
 | Method | Median wall time | Median peak RSS |
 |---|---:|---:|
 | HRATT-HE | 25.84 s | 2.49 GiB |
-| official LDAK-KVIK | 37.59 s | 1.26 GiB |
 | BOLT-LMM-inf | 101.77 s | 3.60 GiB |
 
 Each method reproduced its own p-values exactly across repetitions. In the
-20,000-variant sample-size ladder HRATT-HE was the fastest method from 10,000
+20,000-variant sample-size ladder HRATT-HE was the fastest method from 5,000
 through 100,000 samples; at 2,500 samples the default `exact` path took
-9.45 s against 1.91-3.19 s for LDAK-KVIK and HRATT. The
+9.45 s against 2.60-3.19 s for BOLT-LMM-inf and HRATT. The
 [evidence bundle](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261029-report-evidence/README.md) has
 the ladder, a longer-range-LD panel, 400,000- and 800,000-variant fits and the
 measurement details.
@@ -215,10 +214,9 @@ measurement details.
 - Neither LOCO nor a kinship removes an environment that tracks ancestry;
   that needs covariates spanning the ancestry structure (K - 1 principal
   components for K populations). In a four-population panel, three PCs made
-  every method converge and agree with official LDAK-KVIK (lambda_GC
-  1.06-1.10 on null variants). With none, or two, the BOLT mixture and both
-  HRATT paths did not converge and LDAK-KVIK's statistics inflated (lambda_GC
-  4.4 and 2.4), while `exact` and BOLT-LMM-inf stayed near calibration
+  every method converge and agree (lambda_GC 1.06-1.10 on null variants).
+  With none, or two, the BOLT mixture and both HRATT paths did not converge,
+  while `exact` and BOLT-LMM-inf stayed near calibration
   ([archive](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
   Check `extra["cv_converged"]` and `extra["loco_converged"]`.
 - Only HRATT models binary outcomes and weights. A 0/1 phenotype passed

@@ -39,6 +39,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group are dropped there, `method="auto"` is resolved once for both
   groups, and HRATT `sample_weights` are split with the samples.
 
+### Removed
+
+- Comparisons with LDAK-KVIK and LDAK from the README, the docs, the benchmark
+  guides and the research report, including its abstract, tables and figures.
+  The report's phensim, 20,000-marker, sample-ladder and case-control displays
+  keep only mixmogam's methods. `report/make_ldak_kvik_figures.py` is now
+  `report/make_phensim_figures.py` and writes nothing into the archives.
+  Attribution of HRATT's design to LDAK-KVIK (Hof & Speed 2025) stays. Benchmark
+  drivers, protocols and archived results are unchanged; external-program runs in
+  them are kept for provenance only.
+
 ## [2.0.2.dev1] - 2026-11-03
 
 ### Fixed

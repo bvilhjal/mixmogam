@@ -54,7 +54,7 @@ Use enough components to span the ancestry structure, K - 1 for K discrete
 populations. In a simulated panel of four populations with
 population-specific environments, two components left 58% of the environment
 in the trait and three left 0.3%. With three, every method converged and
-agreed with official LDAK-KVIK. With two, the BOLT-LMM mixture, HRATT-HE and
+they agreed. With two, the BOLT-LMM mixture, HRATT-HE and
 HRATT-REML hit their iteration caps and returned the statistics of failed
 fits, while the exact path and BOLT-LMM-inf converged
 ([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).

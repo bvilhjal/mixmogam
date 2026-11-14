@@ -301,7 +301,7 @@ fixed offsets (coefficient one). A group's score is dropped when it
 anti-predicts (non-positive coefficient), lies in the covariates' span, or its
 fixed-offset fit also diverges.
 
-An in-sample fit (`loco_folds=1`, LDAK-KVIK's design) puts a fraction near
+An in-sample fit (`loco_folds=1`) puts a fraction near
 df/n of each sample's own phenotype into its score.
 - It absorbs that fraction of every association. Effects were a third too
   small in simulations; p-values were unaffected because the residual
@@ -317,11 +317,6 @@ Each fold's predictor excludes that fold's outcomes, but variance components
 and prior selection still use the whole trait, so the procedure as a whole is
 not independent of the held-out outcomes. In the pilots, cross-fitting reduced
 effect attenuation and extreme null offsets.
-
-LDAK-KVIK instead calibrates effects by the slope of effects without the score
-on effects against the residual. Under structure that reference is
-confounded (at Fst 0.05 the slope was 1.24 for MAF 1-5% and 1.37 above, and
-QTL effects came out 15% large), and it cannot repair binary offsets.
 
 Dropping a group's share of a genome-wide fit costs five fits rather than five
 per group. Without structure it matched per-group refits (null lambda_GC
@@ -545,7 +540,7 @@ Null lambda_GC by structure-loading quintile (the share of z_j in the top-10
 kinship eigenvectors), six replicates, from the earlier implementation
 (archive `20261003T081812Z-structure-calibration`):
 
-| data | exact LOCO | `bolt-inf` | + spectral | KVIK-style (now `hratt`) | + spectral |
+| data | exact LOCO | `bolt-inf` | + spectral | `hratt` (earlier version) | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |

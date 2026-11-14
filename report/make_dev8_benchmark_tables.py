@@ -1,5 +1,9 @@
 #!/usr/bin/env python
-"""Make benchmark table rows from the archived measurements, without refitting."""
+"""Make benchmark table rows from the archived measurements, without refitting.
+
+Only mixmogam's methods are tabulated; the archive also holds external-program
+rows, which are skipped.
+"""
 import csv
 import hashlib
 import json
@@ -10,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 RUN = ROOT / "benchmarks/results/20261029-report-evidence"
 OUT = ROOT / "report"
 SIZES = (1000, 2500, 5000, 10000, 20000, 50000, 100000)
-METHODS = ("ldak-kvik", "hratt-he", "hratt-reml", "bolt-inf", "exact")
+METHODS = ("hratt-he", "hratt-reml", "bolt-inf", "exact")
 
 
 def read_csv(path):

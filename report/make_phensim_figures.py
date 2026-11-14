@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-"""Render the phensim/reference comparison, without rerunning scans.
+"""Render the matched phensim and HAPNEST-model evidence for mixmogam's methods.
 
-The archives are reruns with 2.0.0.dev6, whose HRATT cross-fits its LOCO
-scores: mixmogam methods ran again on the original inputs, and the official
-LDAK-KVIK outputs were reused unchanged. Every reused file is checked against
-the hash recorded at rerun time. Archives before the method's rename store
-HRATT as "kvik"; ``read_rows`` maps that key, or drops it where a rerun added
-"hratt".
+Never reruns a scan. The archives are reruns with 2.0.0.dev6, whose HRATT
+cross-fits its LOCO scores: mixmogam methods ran again on the original inputs.
+Every reused file is checked against the hash recorded at rerun time.
+Archives before the method's rename store HRATT as "kvik"; ``read_rows`` maps
+that key, or drops it where a rerun added "hratt". The archives also hold
+outputs of an external program; only mixmogam's methods are rendered, and
+nothing is written back into an archive.
 """
 import csv
 import hashlib
@@ -17,15 +18,14 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy import stats
 
 ROOT = Path(__file__).resolve().parents[1]
 RUN = ROOT / "benchmarks/results/20261006-phensim-kvik-dev6"
 HAPNEST = "benchmarks/results/20261006-hapnest-kvik-dev6-n{n}"
 OUT = ROOT / "report"
-METHODS = ["exact", "bolt-inf", "hratt", "ldak-kvik"]
-NAMES = ["Exact LOCO", "mixmogam BOLT-inf", "mixmogam HRATT", "LDAK-KVIK"]
-COLORS = ["#0072B2", "#009E73", "#CC79A7", "#D55E00"]
+METHODS = ["exact", "bolt-inf", "hratt"]
+NAMES = ["Exact LOCO", "BOLT-inf", "HRATT"]
+COLORS = ["#0072B2", "#009E73", "#CC79A7"]
 CELLS = ["unstructured", "structured", "confounded", "confounded-pc"]
 LABELS = ["Unstructured", "Structured", "Structured +\nenvironment", "Same trait\n+ 2 PCs"]
 
@@ -50,23 +50,32 @@ def read_rows(path):
     return rows
 
 
+def archive_path(path):
+    """An archive path relative to the repository, wherever it was recorded."""
+    parts = Path(path).parts
+    if "benchmarks" in parts:
+        return str(Path(*parts[parts.index("benchmarks"):]))
+    return str(path)
+
+
 def verify_rerun(run):
-    """Reused inputs and official outputs still match their rerun-time hashes."""
+    """Reused inputs still match their rerun-time hashes."""
     record = json.loads((run / "rerun.json").read_text())
     changed = [p for p, digest in record["reused_sha256"].items() if sha256(run / p) != digest]
     if changed:
         raise ValueError(f"{run.name}: reused files changed: {changed[:3]}")
     return {"archive": str(run.relative_to(ROOT)),
-            "rerun_from": str(Path(record["rerun_from"]).relative_to(ROOT)),
+            "rerun_from": archive_path(record["rerun_from"]),
             "rerun_methods": record["rerun_methods"], "reused_files_verified": len(record["reused_sha256"])}
 
 
 def main():
     rerun = verify_rerun(RUN)
     rows = [r for r in read_rows(RUN / "aggregate.csv") if r["stratum"] == "all"]
-    index = {(r["cell"], r["trait"], float(r["rho"]), r["method"]): r for r in rows}
-    if len(index) != 64 or any(int(r["n_replicates"]) != 6 for r in rows):
-        raise ValueError("the planned 64 cells with six replicates each are required")
+    index = {(r["cell"], r["trait"], float(r["rho"]), r["method"]): r for r in rows
+             if r["method"] in METHODS}
+    if len(index) != 48 or any(int(r["n_replicates"]) != 6 for r in rows):
+        raise ValueError("the planned 48 mixmogam cells with six replicates each are required")
     if json.loads((RUN / "completion.json").read_text())["failed_method_runs"]:
         raise ValueError("failed runs must be discussed before making complete-case figures")
     plt.rcParams.update({"font.size": 10, "axes.spines.top": False,
@@ -84,7 +93,7 @@ def main():
                 values = np.array([float(r[metric]) for r in rs])*100
                 errors = np.array([float(r[metric+"_mcse"]) for r in rs])*100
                 row_maximum[row_num] = max(row_maximum[row_num], np.max(values+errors))
-                ax.errorbar(np.arange(4)+(k-1.5)*.12, values, yerr=errors,
+                ax.errorbar(np.arange(4)+(k-1)*.14, values, yerr=errors,
                             fmt="o", ms=4.5, capsize=2.5, color=color, label=name)
             if row_num < 2:
                 ax.axhline(1, ls="--", color=".4", lw=.9)
@@ -97,12 +106,12 @@ def main():
     for row_num in range(3):
         axes[row_num, 0].set_ylim(0, row_maximum[row_num]*1.12)
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="upper center", ncol=4, frameon=False,
+    fig.legend(handles, labels, loc="upper center", ncol=3, frameon=False,
                bbox_to_anchor=(.5, 1.015))
     fig.tight_layout(rect=(0, 0, 1, .97), h_pad=2.0)
-    figure = OUT / "figures/kvik_phensim.pdf"
+    figure = OUT / "figures/phensim.pdf"
     fig.savefig(figure, bbox_inches="tight", metadata={"CreationDate": None})
-    fig.savefig(OUT / "figures/kvik_phensim.png", dpi=170, bbox_inches="tight")
+    fig.savefig(OUT / "figures/phensim.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
     lines = []
     for cell, label in zip(CELLS, LABELS):
@@ -116,7 +125,7 @@ def main():
                          + pm(null, "rejection_0.01") + " & " + pm(mixed, "rejection_0.01")
                          + " & " + pm(mixed, "power_bonferroni") + r" \\")
         lines.append(r"\addlinespace")
-    table = OUT / "tables/kvik_phensim.tex"
+    table = OUT / "tables/phensim.tex"
     table.write_text("\n".join(lines)+"\n")
     # Pool method resource descriptions across the same 96 case/replicate inputs.
     raw = [r for r in read_rows(RUN / "replicates.csv") if r["stratum"] == "all"]
@@ -128,40 +137,14 @@ def main():
         resource.append(f"{name} & {len(rs)} & {np.median(elapsed):.2f} & "
                         f"{elapsed.min():.2f}--{elapsed.max():.2f} & "
                         f"{np.median(rss):.1f} & {rss.max():.1f}"+r" \\")
-    resources = OUT / "tables/kvik_resources.tex"
+    resources = OUT / "tables/phensim_resources.tex"
     resources.write_text("\n".join(resource)+"\n")
-    # Within-panel differences preserve pairing; marker counts are not the
-    # replication unit. This file supports cautious comparative statements.
-    paired = []
-    raw_index = {(r["cell"], r["trait"], float(r["rho"]), r["rep"], r["method"]): r for r in raw}
-    for cell in CELLS:
-        for trait in ["null", "mixed"]:
-            for rho in [0, .8]:
-                for method in METHODS[:-1]:
-                    for metric in ["rejection_0.01", "power_bonferroni", "wall_seconds"]:
-                        if trait == "null" and metric == "power_bonferroni":
-                            continue
-                        values = [float(raw_index[cell, trait, rho, str(rep), method][metric])
-                                  - float(raw_index[cell, trait, rho, str(rep), "ldak-kvik"][metric])
-                                  for rep in range(1, 7)]
-                        mean = float(np.mean(values))
-                        se = float(np.std(values, ddof=1)/np.sqrt(6))
-                        width = stats.t.ppf(.975, 5)*se
-                        paired.append(dict(cell=cell, trait=trait, rho=rho, method=method,
-                                           reference="ldak-kvik", metric=metric, n=6,
-                                           mean_difference=mean, mcse=se,
-                                           ci95_low=mean-width, ci95_high=mean+width))
-    paired_file = RUN / "paired_differences.csv"
-    with open(paired_file, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=list(paired[0]))
-        writer.writeheader()
-        writer.writerows(paired)
     paths = [RUN/"aggregate.csv", RUN/"replicates.csv", RUN/"environment.json",
-             RUN/"plan.md", Path(__file__), figure, table, resources, paired_file]
+             RUN/"plan.md", Path(__file__), figure, table, resources]
     manifest = {"archive": str(RUN.relative_to(ROOT)), "rerun": rerun,
                 "error_bars": "one Monte Carlo standard error across six independent panels",
                 "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}}
-    (OUT / "kvik_figure_manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
+    (OUT / "phensim_figure_manifest.json").write_text(json.dumps(manifest, indent=2)+"\n")
 
 
 def scaling():
@@ -216,19 +199,19 @@ def scaling():
     axes[0, 0].set_ylabel("End-to-end wall time (seconds)")
     axes[1, 0].set_ylabel("Peak resident memory (MiB)")
     handles, labels = axes[0, 0].get_legend_handles_labels()
-    fig.legend(handles, labels, ncol=4, loc="upper center", frameon=False,
+    fig.legend(handles, labels, ncol=3, loc="upper center", frameon=False,
                bbox_to_anchor=(.5, 1.025))
     fig.tight_layout(rect=(0, 0, 1, .97))
-    fig.savefig(OUT/"figures/kvik_scaling.pdf", bbox_inches="tight", metadata={"CreationDate": None})
-    fig.savefig(OUT/"figures/kvik_scaling.png", dpi=170, bbox_inches="tight")
+    fig.savefig(OUT/"figures/phensim_scaling.pdf", bbox_inches="tight", metadata={"CreationDate": None})
+    fig.savefig(OUT/"figures/phensim_scaling.png", dpi=170, bbox_inches="tight")
     plt.close(fig)
-    (OUT/"tables/kvik_scaling.tex").write_text("\n".join(table)+"\n")
-    with open(RUN/"scaling_summary.csv", "w", newline="") as fh:
+    (OUT/"tables/phensim_scaling.tex").write_text("\n".join(table)+"\n")
+    with open(OUT/"phensim_scaling_summary.csv", "w", newline="") as fh:
         writer = csv.DictWriter(fh, fieldnames=list(records[0]))
         writer.writeheader(); writer.writerows(records)
-    paths = [a/"replicates.csv" for a in archives]+[OUT/"figures/kvik_scaling.pdf",
-             OUT/"tables/kvik_scaling.tex", RUN/"scaling_summary.csv", Path(__file__)]
-    (OUT/"kvik_scaling_manifest.json").write_text(json.dumps({
+    paths = [a/"replicates.csv" for a in archives]+[OUT/"figures/phensim_scaling.pdf",
+             OUT/"tables/phensim_scaling.tex", OUT/"phensim_scaling_summary.csv", Path(__file__)]
+    (OUT/"phensim_scaling_manifest.json").write_text(json.dumps({
         "intervals": "observed minimum to maximum across replicates", "reruns": reruns,
         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
     }, indent=2)+"\n")
@@ -258,14 +241,14 @@ def hapnest():
             raise ValueError("report failed large-sample methods explicitly")
         rows = [r for r in read_rows(run/"replicates.csv") if r["stratum"] == "all"]
         for cell, label in [("unstructured", "Unstructured"), ("confounded-pc", "Structure + PCs")]:
-            for method, name in [("hratt", "mixmogam"), ("ldak-kvik", "LDAK")]:
+            for method in ["hratt"]:
                 r, = [r for r in rows if r["cell"] == cell and r["method"] == method]
-                lines.append(f"{n:,} & {label} & {name} & {float(r['wall_seconds']):.2f} & "
+                lines.append(f"{n:,} & {label} & {float(r['wall_seconds']):.2f} & "
                     f"{float(r['peak_rss_bytes'])/2**20:.0f} & {float(r['lambda_gc']):.3f} & "
                     f"{100*float(r['rejection_0.01']):.2f}"+r" \\")
         paths += [run/"replicates.csv",run/"environment.json",run/"plan.md"]
-    (OUT/"tables/hapnest_kvik.tex").write_text("\n".join(lines)+"\n")
-    paths += [OUT/"tables/hapnest_kvik.tex",OUT/"tables/hapnest_simulator.tex",Path(__file__)]
+    (OUT/"tables/hapnest_association.tex").write_text("\n".join(lines)+"\n")
+    paths += [OUT/"tables/hapnest_association.tex",OUT/"tables/hapnest_simulator.tex",Path(__file__)]
     (OUT/"hapnest_manifest.json").write_text(json.dumps({
         "simulator_replicates": 3, "association_replicates": 1, "reruns": reruns,
         "sha256": {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}

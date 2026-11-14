@@ -3,9 +3,8 @@
 
 mixmogam's cross-fitted fits come from the 7 October rerun with threaded fold
 products (the current code); its in-sample (``loco_folds=1``) and storage fits
-are 2.0.0.dev6 reruns, whose code paths that change left alone. Official
-LDAK-KVIK fits are reused from the 2.0.0.dev3 experiment. All inputs must be
-byte-identical.
+are 2.0.0.dev6 reruns, whose code paths that change left alone. Only mixmogam
+fits are tabulated.
 The primary and storage (int8 against two-bit calls) experiments have
 separate timing baselines. Read their
 individual measurements, check the complete design, and retain that separation
@@ -21,10 +20,9 @@ from statistics import median
 ROOT = Path(__file__).resolve().parents[1]
 RUN = ROOT / "benchmarks/results/20261006-kvik-20k-dev6"
 GEMM = ROOT / "benchmarks/results/20261007-kvik-20k-crossfit-gemm"
-REFERENCE = ROOT / "benchmarks/results/20261003-kvik-20k"
 OUT = ROOT / "report"
 LABELS = {1: "Unstructured", 2: "Structure, environment, two PCs"}
-NAMES = {"mixmogam-he": "mixmogam HE", "insample": "mixmogam HE, in-sample", "ldak-kvik": "LDAK-KVIK"}
+NAMES = {"mixmogam-he": "HRATT-HE", "insample": "HRATT-HE, in-sample"}
 
 
 def read_csv(path):
@@ -42,17 +40,9 @@ def spread(rows, key, scale=1, digits=2):
             f"[{min(values):.{digits}f}, {max(values):.{digits}f}]")
 
 
-def input_hashes(manifest):
-    return [{path: entry["sha256"] for path, entry in case["files"].items()}
-            for case in manifest["inputs"]]
-
-
 def main():
     inputs = [GEMM / "thread-scaling/measurements.csv", GEMM / "thread-scaling/status.json",
               GEMM / "thread-scaling/manifest.json", GEMM / "thread-scaling/comparisons.json",
-              REFERENCE / "thread-scaling/measurements.csv",
-              REFERENCE / "thread-scaling/verification.json",
-              REFERENCE / "thread-scaling/manifest.json",
               RUN / "storage/measurements.csv", RUN / "storage/status.json",
               RUN / "storage/comparisons.json",
               RUN / "thread-scaling-insample/measurements.csv",
@@ -60,33 +50,26 @@ def main():
     local = read_csv(inputs[0])
     status = json.loads(inputs[1].read_text())
     manifest = json.loads(inputs[2].read_text())
-    official = [r for r in read_csv(inputs[4]) if r["method"] == "ldak-kvik"]
-    audit = json.loads(inputs[5].read_text())
-    reference_manifest = json.loads(inputs[6].read_text())
-    storage_runs = read_csv(inputs[7])
-    storage_status = json.loads(inputs[8].read_text())
-    storage_pairs = json.loads(inputs[9].read_text())
-    insample = [dict(r, method="insample") for r in read_csv(inputs[10])]
-    insample_status = json.loads(inputs[11].read_text())
+    storage_runs = read_csv(inputs[4])
+    storage_status = json.loads(inputs[5].read_text())
+    storage_pairs = json.loads(inputs[6].read_text())
+    insample = [dict(r, method="insample") for r in read_csv(inputs[7])]
+    insample_status = json.loads(inputs[8].read_text())
     if not status["complete"] or status["failed_method_runs"] or manifest["methods"] != ["mixmogam-he"]:
         raise ValueError("the cross-fitted rerun is incomplete or not mixmogam-only")
-    if not audit["archive_integrity_verified"] or audit["errors"]:
-        raise ValueError("the reused official archive integrity is not verified")
-    if input_hashes(manifest) != input_hashes(reference_manifest):
-        raise ValueError("official fits can be reused only on byte-identical inputs")
     if not storage_status["complete"] or len(storage_pairs) != 6:
         raise ValueError("the storage experiment is incomplete")
     if not insample_status["complete"] or insample_status["failed_method_runs"] or len(insample) != 12:
         raise ValueError("the in-sample control is incomplete")
     storage_exact = all(item["arrays"][key].get("exact", False)
                         for item in storage_pairs for key in item["arrays"])
-    primary = local + official
+    primary = local
     expected = {(c, t, m, r) for c in LABELS for t in (1, 4)
-                for m in ("mixmogam-he", "ldak-kvik") for r in (1, 2, 3)}
+                for m in ("mixmogam-he",) for r in (1, 2, 3)}
     observed = [(int(r["case_index"]), int(r["threads"]), r["method"],
                  int(r["rep"])) for r in primary]
-    if len(observed) != 24 or set(observed) != expected:
-        raise ValueError("primary design must contain exactly 24 distinct fits")
+    if len(observed) != 12 or set(observed) != expected:
+        raise ValueError("the cross-fitted design must contain exactly 12 distinct fits")
     expected_storage = {(c, s, r) for c in LABELS for s in ("baseline", "optimized")
                         for r in (1, 2, 3)}
     observed_storage = [(int(r["case_index"]), r["source"], int(r["rep"])) for r in storage_runs]
@@ -131,26 +114,23 @@ def main():
         storage.append(r"\addlinespace")
 
     outputs = []
-    for name, lines in [("kvik_20k_resources.tex", resources),
-                        ("kvik_20k_science.tex", science), ("kvik_20k_storage.tex", storage)]:
+    for name, lines in [("20k_resources.tex", resources),
+                        ("20k_science.tex", science), ("20k_storage.tex", storage)]:
         path = OUT / "tables" / name
         path.write_text("% Generated by report/make_efficiency_tables.py: mixmogam cross-fitted fits from\n"
-                        "% 20261007-kvik-20k-crossfit-gemm, in-sample and storage fits from 20261006-kvik-20k-dev6,\n"
-                        "% official LDAK-KVIK fits reused from 20261003-kvik-20k.\n"
+                        "% 20261007-kvik-20k-crossfit-gemm, in-sample and storage fits from 20261006-kvik-20k-dev6.\n"
                         + "\n".join(lines) + "\n")
         outputs.append(path)
     record = {"purpose": "Render measured evidence only; no simulation or fitting",
               "timed_versions": {"mixmogam-he": "cross-fitted: revision after 2.0.0.dev6 with threaded fold products (20261007-kvik-20k-crossfit-gemm, 7 October)",
                                  "insample": "2.0.0.dev6 (20261006-kvik-20k-dev6, 6 October)",
-                                 "storage": "2.0.0.dev6 (20261006-kvik-20k-dev6, 6 October)",
-                                 "ldak-kvik": "official binary, timed in 20261003-kvik-20k on the same inputs"},
+                                 "storage": "2.0.0.dev6 (20261006-kvik-20k-dev6, 6 October)"},
               "generator_sha256": sha256(Path(__file__)),
               "inputs": {str(p.relative_to(ROOT)): sha256(p) for p in inputs},
               "outputs": {str(p.relative_to(ROOT)): sha256(p) for p in outputs},
               "primary_fits": len(primary), "local_fits_rerun": len(local),
-              "official_fits_reused": len(official), "storage_fits": len(storage_runs),
+              "storage_fits": len(storage_runs),
               "insample_fits": len(insample),
-              "input_hashes_identical": True,
               "thread_comparisons": status["within_method_comparisons"],
               "thread_comparisons_outside_tolerance": status["comparisons_outside_tolerance"],
               "exact_storage_invariance_passed": storage_exact}
