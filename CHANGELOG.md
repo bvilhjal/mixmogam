@@ -19,8 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   warning recommending a pedigree or external pairs fires once the cutoff
   exceeds 0.0625 (3rd-degree relatives and first cousins no longer count);
   the refit is not disabled. The older 1% sample rule, applied at the 4-SD
-  floor, fired on an unrelated n=20,000 panel (SG p20k §4: 244 pairs, 1.33%
-  of samples, floor 0.042). A handful of true close pairs below 1% of
+  floor, fired on an unrelated n=20,000 panel (244 pairs, 1.33%
+  of samples, floor 0.042; simulation estimate from internal review runs, not archived in this repo). A handful of true close pairs below 1% of
   samples still does not fire: the in-model leak there was estimated at
   <= ~0.0014 and the refit costs 1.3-3.8x the stage-1 CPU (review
   simulations at n = 2,000, not archived). Pedigree and pair-file sources

@@ -128,7 +128,11 @@ patched copy of older code (12 runs per demography), not a rerun of the shipped 
 
 For the family inflation, pass the relatives: `hratt(..., relatedness=...)` (CLI
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
-GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). The default
+GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` can miss 2nd-degree
+relatives: with 80/20 two-population structure and no PCs it recovered only 6-17 of 20 such
+pairs, and under strong LD (m_eff around 800) they could not be reliably separated from noise
+(internal review simulations, not archived in this repo); there, pass a pedigree or pairs
+instead. The default
 `relatedness_correction="auto"` then means `"kappa"`: each statistic is divided by its
 expected null inflation kappa_g (times a covariate factor) instead of applying a global
 lambda. Without `relatedness=`, `"auto"` means `"lambda"`: a single structure lambda when the

@@ -635,8 +635,9 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
     estimated as negligible there (≤ ~0.0014 at 1% related, ≤ 0.006 at
     10%; 1.3-3.8× stage-1 cost of a refit) from review simulations
     (n = 2,000; not archived), so the cost is not worth it. n² growth of 4-SD-floor noise pairs is what this
-    cutoff stops from tripping the 1% rule (SG p20k §4: 244 pairs, 1.33%
-    of samples, on an unrelated n=20,000 panel).
+    cutoff stops from tripping the 1% rule (244 pairs, 1.33% of samples, on
+    an unrelated n=20,000 panel; simulation estimate from internal review
+    runs, not archived in this repo).
     """
     from scipy.stats import norm
 
@@ -964,9 +965,10 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
 
 def _kinship_overlap(gt, options: dict, model_idx) -> dict:
     """P4: external kinship estimated on the stage-1 model SNPs under-corrects
-    (KING on model SNPs left the null mean chi-square at up to 1.09 in the
-    SG's grid: the fit anti-correlates the residuals of pairs that look
-    related on its own SNPs). With ``options["kinship_variants"]`` (the
+    (KING on model SNPs left the null mean chi-square at up to 1.09 in
+    internal review simulations, not archived in this repo: the fit
+    anti-correlates the residuals of pairs that look related on its own
+    SNPs). With ``options["kinship_variants"]`` (the
     variants the pairs were estimated on: indices, a mask, IDs, or a path
     to a file of IDs, e.g. PLINK ``.prune.in``) the overlap with the model
     SNPs is recorded and a warning issued above ``kinship_max_model_overlap``

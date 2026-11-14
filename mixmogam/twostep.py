@@ -611,8 +611,9 @@ def _carrier_family_columns(st: _Setup, p, rel, threshold, p_max, fam_max, maf_m
     a hit's whole carrier graph would be costly) and
     ``few_carrier_families`` (<= ``fam_max``). Saddlepoint tails assume
     independent carriers; carriers clustered in 1-3 families read
-    1.2-2.3x nominal at 1e-3 under kappa_g in the SG's rare binary nulls,
-    in every MAC bin (specA-benchmark-sg.md §9c)."""
+    1.2-2.3x nominal at 1e-3 under kappa_g in simulated rare binary nulls,
+    in every MAC bin (simulation estimate from internal review runs, not
+    archived in this repo)."""
     from mixmogam._relatedness import carrier_families
 
     p = np.asarray(p, dtype=np.float64)
@@ -1316,7 +1317,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     keep the LOCO rule (scores for chromosome c never contain them when
     they lie on c).
 
-    ``relatedness`` (Spec A of the SG's relatedness specs) corrects for
+    ``relatedness`` (the kappa_g correction, Spec A) corrects for
     close relatives exactly instead of through lambda. For a null variant
     in LOCO group g the statistic's expectation given the residual a_g is
     kappa_g = a_g' Phi a_g / a_g'a_g (Phi = I + 2 x kinship off the
@@ -1372,9 +1373,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     estimated here) at least ``relatedness_options["loco_refit_min_related"]``
     (1%) of the samples must be in a pair above a noise-aware cutoff, not
     merely above the 4-SD floor that also fills Phi. The 4-SD floor still
-    admits a number of noise pairs that grows with n² (SG p20k §4: 244
-    pairs, 1.33% of samples, on an unrelated n=20,000 panel with floor
-    0.042, which tripped the older 1% rule). The trigger therefore counts
+    admits a number of noise pairs that grows with n² (244 pairs, 1.33% of
+    samples, on an unrelated n=20,000 panel with floor 0.042, which tripped
+    the older 1% rule; simulation estimate from internal review runs, not
+    archived in this repo). The trigger therefore counts
     only pre-floor KING pairs with
     phi > max(``relatedness_threshold``, location + z σ_eff),
     with σ_eff = σ̂ times the empirical-to-Gaussian upper-quantile ratio
@@ -1399,15 +1401,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     the folds split families, so a genome-wide fit's chromosome-g model SNPs
     absorb family-shared noise of the test samples' relatives and dropping
     their share leaves it in the residual (null model SNPs read a mean
-    chi-square of 1.06-1.19 with household c2 = 0.2 in the SG's simulations,
-    rising with n; refitted 0.99-1.04). ``relatedness_options={"loco_refit":
+    chi-square of 1.06-1.19 with household c2 = 0.2, rising with n;
+    refitted 0.99-1.04; simulation estimate from internal review runs, not
+    archived in this repo). ``relatedness_options={"loco_refit":
     False}`` disables this safety rule for research comparisons only (in-model
     nulls can be inflated; not recommended),
     ``True`` forces it. ``"crossfit_folds": "family"`` (opt-in; default
     ``"random"``) instead keeps each family (connected pairs with phi >
     ``relatedness_threshold``) in one fold, which removes the same leak
     without the refit's 1.3-3.8x stage-1 CPU (same review-simulation
-    estimate, n = 2,000, not archived): calibrated in the SG's grid
+    estimate, n = 2,000, not archived): calibrated in the review grid
     (unlinked 0.999, in-model 1.008), but the families' shared signal stays
     in the residual, so QTL chi-square is 0.66-0.92x the refit's in
     family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
@@ -1455,7 +1458,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     of the score, not its shape. When a variant's carriers cluster in a few
     families the score is heavier-tailed than the saddlepoint's (or the
     normal's) independent-carrier tail: binary nulls read 1.2-2.3x nominal
-    at 1e-3 (up to ~3.5x at 1e-4) in every MAC bin in the SG's simulations,
+    at 1e-3 (up to ~3.5x at 1e-4) in every MAC bin in internal review
+    simulations (not archived in this repo),
     worst with carriers in 1-3 families; a MAC floor does not fix it. Each
     variant with p < ``relatedness_options["carrier_families_p"]`` (1e-4)
     and MAF < ``"carrier_families_max_maf"`` (0.05) gets
@@ -1614,7 +1618,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             # marginals' noise covariance to be the LD the fit uses. Under
             # sampling weights the weighted slopes' noise covariance is the
             # w^2-weighted LD over Kish's n, the signal's the w-weighted LD:
-            # a per-fold Kish n fixes the scale only (stage1-int8-ldpred-cw.md).
+            # a per-fold Kish n fixes the scale only (internal review, not archived).
             raise ValueError(f"stage1 {stage1!r} needs unweighted samples: under sample_weights "
                              "the weighted marginal regressions do not follow LDpred3's "
                              "beta_hat ~ N(R beta, R / N) model; use stage1='enet'")
@@ -1769,7 +1773,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                               "Include ancestry principal components among the covariates",
                               RuntimeWarning, stacklevel=2)
     # The LOCO refit (k x groups fits, each without its group's variants).
-    # Strong structure needs it; so do relatives (SG specA-benchmark §2b):
+    # Strong structure needs it; so do relatives (internal review simulations):
     # cross-fit folds split families, so fold f's genome-wide fit lets
     # group g's model SNPs absorb family-shared noise of the test samples'
     # relatives, and dropping g's share afterwards leaves it in the residual
@@ -1788,7 +1792,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # need >= loco_refit_min_related (1%) of samples in a close pair.
         # For KING-auto, "close" is the n-aware trigger cutoff (median +
         # z σ̂, E[null pairs] ≈ 1), not the 4-SD floor: that floor already
-        # lets hundreds of noise pairs through at n = 20,000 (SG p20k §4).
+        # lets hundreds of noise pairs through at n = 20,000 (internal review simulation).
         # Below 1% related the leak is estimated as <= ~0.0014 even
         # scaled linearly from 100% (review simulations, n = 2,000,
         # not archived), so the refit's 1.3-3.8x stage-1 CPU buys nothing.
@@ -1895,7 +1899,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # ridge m / (N h2): nearly inert at N/m <~ 0.15, inflated above it
         # in simulations (CW panels N/m ~ 0.6: null lambda_GC 1.46-1.60,
         # type-I 4.8-6.3x at 1e-3; 1.4-2.9 with kappa_g only; SG
-        # reproduction, sg.md 11); biobank HM3 runs sit near N/m ~ 0.36.
+        # reproduction; internal review runs, not archived); biobank HM3 runs sit near N/m ~ 0.36.
         # lassosum2: 1.3-1.5 (2-12 with kappa_g only); fast's auto Gibbs
         # fit shrinks less than inf.
         err = (f"stage1 {stage1!r}: the structure test finds strong population structure "
@@ -1918,7 +1922,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           and not (weighted or trait == "binary")):
         # The refitted elastic net plus the lambda calibration is the best
         # stage 1 without PCs, but not exact: null lambda_GC 1.01-1.13 in the
-        # CW / SG structure panels (sg.md 11). With kappa_g (no lambda) the
+        # internal review structure panels (not archived). With kappa_g (no lambda) the
         # warning above covers it; weighted / binary traits warn above too.
         warnings.warn("strong population structure remains after the covariates: the elastic-net "
                       "stage 1 with the lambda calibration is the most robust choice without PCs, "

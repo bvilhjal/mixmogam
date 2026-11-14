@@ -181,8 +181,8 @@ structure lambda when the structure test is strong, otherwise none).
 This is the supported path for related samples, and it is required when
 `sample_weights` are also used. Without `relatedness=`, weighted tests in
 simulated families ranged from conservative to badly inflated (lambda
-0.70-1.92 in a 3-seed simulation, not archived under
-`benchmarks/results/`; stage1-int8-ldpred-epi.md). Unweighted tests
+0.70-1.92 in a 3-seed simulation from internal review runs, not archived
+in this repo). Unweighted tests
 without it leave close relatives to the structure lambda, which is only
 a partial correction.
 
@@ -191,15 +191,35 @@ Limits:
 - `"auto"` (KING-robust) only runs for n <= `relatedness_options["king_max_n"]`
   (50,000). Biobank-scale analyses must supply a pedigree or a precomputed
   pair file.
-- Phi keeps only pairs above `relatedness_threshold` (default 0.025; `"auto"`
-  may raise this to the KING noise location plus 4 times its SD). The SD is
-  1.4826 x the MAD of up to 1e6 random pairs (every pair when n(n-1)/2 <=
-  1e6). On a two-population panel that MAD is inflated by the gap between
-  within- and between-population pairs, so when its upper tail is lighter
-  than Gaussian (ratio below 0.8) the upper half of the pairs sets the
-  location and SD instead. Under two-population structure the floor
-  therefore no longer drops 2nd-degree pairs. More distant relatedness is
-  left to the structure test, so include ancestry PCs among the covariates.
+- Phi keeps only pairs above `relatedness_threshold` (default 0.025). With
+  `"auto"` the floor is max(threshold, max(0, location) + 4 SD) of the KING
+  noise, from up to 1e6 random pairs (every pair when n(n-1)/2 <= 1e6). By
+  default the location is their median and the SD is 1.4826 x their MAD; a
+  negative location (a between-population median) does not lower the floor.
+  On a two-population panel that MAD is inflated by the gap between within-
+  and between-population pairs, so the upper half of the pairs (phi at or
+  above the median) sets the location and SD instead when two checks pass:
+  the MAD's upper tail is lighter than Gaussian (ratio below 0.8), and the
+  upper half is separated from the median ((upper median - median) /
+  upper-half SD above 1.35, or above 1.27 when the upper-half SD times
+  the square root of the number of KING variants is at least 0.765). The
+  separation check keeps a 90/10 split or a single population from
+  underestimating the SD. With the switch, two-population structure no
+  longer drops 2nd-degree pairs; without it, the floor is also never below
+  the location-free bound max(threshold, 4 x 1.4826 x MAD) that `master`
+  uses. With three or more
+  populations or weak structure the switch often stays off, the SD can stay
+  inflated (up to about 2.3x the within-population SD), the trigger cutoff
+  may cap at 0.0884 and 3rd-degree relatives may not count; supply a
+  pedigree or a pair file (for example KING run within ancestry groups).
+  More distant relatedness is left to the structure test, so include
+  ancestry PCs among the covariates.
+- `"auto"` can miss 2nd-degree relatives. With an 80/20 two-population
+  split and no PCs, it recovered only 6-17 of 20 2nd-degree pairs, and
+  under strong LD (m_eff around 800) 2nd-degree pairs could not be reliably
+  separated from KING noise (simulation estimates from internal review
+  runs, not archived in this repo). In those settings supply a pedigree or
+  a pair file through `relatedness=` instead of `"auto"`.
 - kappa_g replaces the structure lambda. With strong structure and no PCs,
   that can leave structured variants inflated; pass PCs, or set
   `relatedness_options["structure_without_pcs"] = "error"` to refuse the run.
@@ -231,8 +251,7 @@ Useful `relatedness_options` (defaults in
   3rd-degree relatives and first cousins no longer count, and a warning
   recommends a pedigree or external pairs (the refit is not disabled). The 4-SD floor that fills Phi still admits a number of noise
   pairs that grows with n², which at n = 20,000 can exceed 1% of samples
-  (estimate from stage1-int8-ldpred-p20k-sg.md §4, not archived under
-  `benchmarks/results/`); the trigger does not count those. A handful of
+  (simulation estimate from internal review runs, not archived in this repo); the trigger does not count those. A handful of
   true close pairs below 1% of samples does not fire: the leak there was
   estimated at <= ~0.0014, and the refit costs 1.3-3.8x the stage-1 CPU
   (both from review simulations at n = 2,000, not archived under
@@ -240,8 +259,7 @@ Useful `relatedness_options` (defaults in
   file triggers the refit from a single pair above the threshold.
 - `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
   the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x the
-  refit's in simulations at n = 2,000, not archived under
-  `benchmarks/results/`; specA-benchmark-sg.md §9b).
+  refit's at n = 2,000; simulation estimate from internal review runs, not archived in this repo).
 - `unrelated_min_phi` / `unrelated_min_n`: the structure test uses a maximal
   set with no pair closer than 3rd degree (phi 0.0442), and falls back to every
   sample if that set is under 100.
@@ -258,8 +276,7 @@ With related samples, binary tests of variants with MAF below about 5% can be
 anti-conservative even after the kappa_g correction: in simulated families,
 null rare variants read 1.2-2.3x the nominal rate at p = 1e-3 (up to about
 3.5x at 1e-4), worst when the carriers sit in one to three families, at
-every minor-allele count (estimate from simulations, not archived under
-`benchmarks/results/`; specA-benchmark-sg.md §9c). The saddlepoint assumes
+every minor-allele count (simulation estimate from internal review runs, not archived in this repo). The saddlepoint assumes
 independent carriers; a minimum allele count does not fix it. Variants with p <
 `relatedness_options["carrier_families_p"]` (1e-4) and MAF < 5% get a
 `carrier_families` column (distinct families among the minor-allele carriers,

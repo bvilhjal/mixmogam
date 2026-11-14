@@ -55,8 +55,8 @@ The cache (:class:`LDCache`) keeps built covers keyed by the variants (the
 model-SNP set: positions, IDs, alleles, LOCO groups), variant order, block
 size, representation and the format / ldpred3 / quantizer versions -- not by
 samples or covariates, so a cohort cover is reused for trait subsets and
-other covariates (statistically safe: SG review Q3). Each reuse records the
-sample overlap (per-sample call fingerprints), an allele-frequency F_ST
+other covariates (statistically safe per an internal review, not archived).
+Each reuse records the sample overlap (per-sample call fingerprints), an allele-frequency F_ST
 proxy against the build cohort and whether the reuse is exact (same samples
 and covariates), and warns below 50 % overlap or above F_ST 0.01.
 ``ld_split="train"`` covers stay exact (their key includes the sample
