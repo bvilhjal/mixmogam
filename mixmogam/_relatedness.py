@@ -30,6 +30,8 @@ over random calibration variants (GRAMMAR-Gamma style; Svishcheva et al.
 from __future__ import annotations
 
 
+import math
+
 import numpy as np
 from scipy import linalg, sparse
 from scipy.sparse.csgraph import connected_components
@@ -338,14 +340,36 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     between-population pair means) and can push a 4-SD floor above
     2nd-degree phi. When the empirical-to-Gaussian upper-quantile ratio
     computed against the MAD is below 0.8 — a lighter-than-Gaussian
-    upper tail, the signature of that mixture, not of LD — the scale
-    and location switch to the MAD of the upper half of the subsample
-    (pairs at or above the overall median). That half is approximately
-    the within-population component, and related pairs are a tiny
-    fraction of it, so the scale does not drift with a few percent of
-    relatives. An upper-tail spacing estimator is not used, because
-    relatives live in that tail. The Phi floor is max(threshold,
-    location + noise_sd_multiple x SD). Pairs above ``threshold`` are
+    upper tail, the signature of that mixture, not of LD — *and* the
+    upper-half location is far enough from the overall median
+    (``(upper_median - median) / upper_MAD`` > ``_KING_STRUCTURE_SEP``,
+    1.35), or when that ratio is still above ``_KING_STRUCTURE_SEP_LO``
+    (1.27) and the upper-half scale is not an underestimate
+    (``σ̂ √n_variants`` ≥ ``_KING_STRUCTURE_SCALE_MIN``, 0.765), the
+    scale and location switch to the MAD of the upper half of the
+    subsample (pairs at or above the overall median). The looser sep
+    path is what keeps 2nd-degree pairs on smaller two-pop Fst 0.05
+    panels, where sep can fall in (1.27, 1.35] while the 4·MAD floor
+    would sit near 0.15. That half is then approximately the
+    within-population component, and related pairs are a tiny fraction
+    of it, so the scale does not drift with a few percent of relatives.
+    The sep guard rejects a nearly-unimodal upper half (a 90/10 split,
+    or a single Gaussian), where the upper-half MAD underestimates σ. An upper-tail spacing estimator is
+    not used, because relatives live in that tail. With K ≥ 3
+    populations or weak / unbalanced structure the switch often stays
+    off and σ̂ stays inflated (up to ~2.3× within-population); the
+    trigger cutoff may then cap at 0.0884 and 3rd-degree relatives may
+    not count. Supply PC-based clusters, a pedigree or external pairs
+    in that case. The Phi floor and the trigger cutoff both use
+    location max(0, loc): a between-population median is negative and
+    must not pull either one down. When the switch does not fire, the
+    floor is also at least master's bound max(threshold,
+    noise_sd_multiple x MAD) (cdd6530a), so the robust scale may only
+    raise that bound. The sep-guarded switch may lower σ̂, with loc
+    still ≥ 0, which is what keeps 2nd-degree pairs under two-pop
+    Fst 0.05. The Phi floor is therefore max(threshold, max(0, loc) +
+    noise_sd_multiple x SD) and, without the switch, master's 4·MAD
+    bound. Pairs above ``threshold`` are
     also returned unfiltered (``i_prefloor``, ``j_prefloor``,
     ``r_prefloor``) so the LOCO-refit trigger can count them even if
     the floor would drop them. ``noise_tail_ratio`` is then recomputed
@@ -425,10 +449,21 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         r = r + s
         up = c > r
         I.append(r[up]); J.append(c[up]); V.append(phi[r[up] - s, c[up]])
-    loc, sd, sd_mad, med, tail_ratio, from_structure, tail_mad = _king_noise_scale(phi_r)
-    # Floor is an absolute phi cut: location + k·σ (location ≈ 0 on an
-    # unstructured null; under structure it is the within-population centre).
-    thr = float(max(threshold, loc + noise_sd_multiple * sd))
+    loc, sd, sd_mad, med, tail_ratio, from_structure, tail_mad = _king_noise_scale(
+        phi_r, n_variants=int(idx.size))
+    # Floor is an absolute phi cut. A between-population median is
+    # negative (K ≥ 4, Fst 0.05: loc ≈ −0.05) and must not pull the
+    # floor down to the requested threshold (that flooded Phi with
+    # thousands of false pairs). Anchor at max(0, loc). When the
+    # structure switch does not fire, also never go below master's
+    # 4·MAD bound (cdd6530a: max(threshold, k * MAD around the
+    # median)); the robust scale may only raise that bound. The
+    # sep-guarded switch may lower σ̂ (two-pop Fst 0.05), with loc
+    # still ≥ 0, so 2nd-degree pairs stay in Phi.
+    loc_floor = max(0.0, loc)
+    thr = float(max(threshold, loc_floor + noise_sd_multiple * sd))
+    if not from_structure:
+        thr = float(max(thr, noise_sd_multiple * sd_mad))
     I, J, V = np.concatenate(I), np.concatenate(J), np.concatenate(V)
     ok = V > thr
     I_f, J_f, V_f = I[ok], J[ok], V[ok]
@@ -449,9 +484,27 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
 # Measured: ≈ 0.55-0.73 on two-pop Fst 0.05 panels, ≈ 0.9-1.0 on
 # unstructured, admixed, isolate, nuclear and sib panels.
 _KING_STRUCTURE_TAIL = 0.8
+# (upper_median - overall_median) / upper_MAD. A Gaussian is ~1.14; a
+# 90/10 split at Fst 0.05 is ~1.20-1.22; a well-separated 50/50 or
+# 70/30 mix is ≥ 1.38. Dense-grid (n=2000, m=8000, 0% related): bad
+# switches (upper-half σ̂/σ_w < 0.8) had sep ≤ 1.320, good switches
+# (0.8-1.2) had sep ≥ 1.378.
+_KING_STRUCTURE_SEP = 1.35
+# Secondary switch when sep is in (SEP_LO, SEP]. At m ≈ 2000 a two-pop
+# Fst 0.05 50/50 has sep ≈ 1.29-1.43, overlapping the large-m 80/20
+# band, so T=1.35 alone rejects and the 4·MAD floor (~0.16) drops
+# 2nd-degree pairs. Accept those only when the upper-half scale is
+# not an underestimate: sd · √n_variants ≥ SCALE_MIN. On the same
+# grid plus n=400/800 panels, good 50/50 switches had sd·√m ≥ 0.80
+# and 90/10 (bad) had sep ≤ 1.223; 80/20 had sd·√m ≤ 0.728.
+# Midpoints: SEP_LO = 1.27, SCALE_MIN = 0.765. The 90/10 sep is
+# scale-free, so LD cannot open that path; 80/20 with very strong
+# LD is a residual risk (the product uses n_variants, not m_eff).
+_KING_STRUCTURE_SEP_LO = 1.27
+_KING_STRUCTURE_SCALE_MIN = 0.765
 
 
-def _king_noise_scale(phi_r):
+def _king_noise_scale(phi_r, n_variants=None):
     """Location and scale of KING-auto pair-subsample noise.
 
     Default: location = median, scale = 1.4826·MAD. If the
@@ -460,10 +513,26 @@ def _king_noise_scale(phi_r):
     two-component ancestry mixture whose MAD is inflated by the
     between-population gap. In that case the location and scale are
     the median and 1.4826·MAD of the *upper half* (phi >= overall
-    median), which is approximately the within-population component.
+    median), which is approximately the within-population component
+    *if* that upper half is a full component: the switch is accepted
+    when ``(upper_median - median) / upper_MAD`` >
+    ``_KING_STRUCTURE_SEP`` (1.35), or when that ratio is still above
+    ``_KING_STRUCTURE_SEP_LO`` (1.27) and ``σ̂ √n_variants`` ≥
+    ``_KING_STRUCTURE_SCALE_MIN`` (0.765). On a unimodal or
+    nearly-unimodal density (including a 90/10 split) the ratio is
+    ~1.14-1.22 and the upper-half MAD underestimates σ (~0.6×); on a
+    well-separated 50/50 or 70/30 mixture it is ≥ 1.38. The looser
+    path covers smaller two-pop Fst 0.05 panels where sep falls in
+    (1.27, 1.35] but the upper-half scale still matches within-pop σ.
     Related pairs sit in the far upper tail of that half and are a
     tiny fraction of all pairs, so they do not move the MAD. An
     upper-quantile spacing estimator is not used.
+
+    With K ≥ 3 equal populations or weak structure the tail ratio vs
+    MAD is typically > 0.8, so the switch stays off and σ̂ stays
+    inflated (up to ~2.3× within-population). The trigger cutoff may
+    then cap at 0.0884 and 3rd-degree relatives may not count; supply
+    PC-based clusters, a pedigree or external pairs.
 
     Returns ``(location, scale, mad_scale, overall_median, tail_ratio,
     from_structure, tail_ratio_mad)``. ``tail_ratio`` is recomputed at
@@ -485,7 +554,14 @@ def _king_noise_scale(phi_r):
         upper = x[x >= med]
         loc = float(np.median(upper))
         sd = float(1.4826 * np.median(np.abs(upper - loc))) if upper.size else sd_mad
-        if sd <= 0.0:
+        sep = (loc - med) / sd if sd > 0.0 else 0.0
+        scale_ok = (
+            n_variants is not None and n_variants > 0
+            and sd * math.sqrt(n_variants) >= _KING_STRUCTURE_SCALE_MIN
+        )
+        if sd <= 0.0 or not (
+                sep > _KING_STRUCTURE_SEP
+                or (sep > _KING_STRUCTURE_SEP_LO and scale_ok)):
             loc, sd, from_structure = med, sd_mad, False
     else:
         loc, sd = med, sd_mad
@@ -533,8 +609,9 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
     for kappa_g are a separate, floor-filtered set. For the trigger only,
     a pair counts as related if
     ``phi > max(relatedness_threshold, location + z σ_eff)``, with
-    location the noise-scale centre (``noise_location``, falling back to
-    ``noise_median``), σ_eff = σ̂ · max(1, tail_ratio) (the
+    location max(0, noise-scale centre) (``noise_location``, falling back
+    to ``noise_median``): a negative location must not pull the cutoff
+    down. σ_eff = σ̂ · max(1, tail_ratio) (the
     empirical-to-Gaussian upper-quantile ratio, so heavier-than-Gaussian
     tails raise the cutoff) and z the standard-normal upper quantile at
     which the expected number of null pairs among N = n(n-1)/2 *all*
@@ -573,6 +650,7 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
     loc = float(med if noise_location is None else noise_location)
     if not np.isfinite(loc):
         loc = med
+    loc = max(0.0, loc)
     tail_ratio = float(noise_tail_ratio) if np.isfinite(noise_tail_ratio) else 1.0
     sd_eff = sd * max(1.0, tail_ratio)
     cap = float(KING_SECOND_DEGREE)

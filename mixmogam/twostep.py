@@ -1345,12 +1345,22 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     dropped and counted; files keep phi > ``relatedness_threshold``), or
     ``"auto"``: KING-robust on at most 50,000 common (MAF >= 0.05) variants
     that are not model SNPs (model SNPs bias kappa_g down through the fit),
-    for n <= 50,000 only, keeping phi > max(``relatedness_threshold``,
-    location + 4 x the KING noise SD). The SD is 1.4826·MAD of a seeded
-    pair subsample, or the MAD of the upper half when that MAD's
-    upper-tail ratio is below 0.8 (a two-population ancestry mixture),
-    so the floor is not raised above 2nd-degree phi by between-population
-    pair means.
+    for n <= 50,000 only, keeping phi above the noise floor (the max of
+    ``relatedness_threshold``, max(0, location) + 4 x the KING noise SD,
+    and, unless a sep-guarded upper-half switch lowers σ̂, master's
+    4·MAD bound). The
+    SD is 1.4826·MAD of a seeded pair subsample, or the MAD of the
+    upper half when that MAD's upper-tail ratio is below 0.8 *and*
+    (upper_median - median) / upper_MAD > 1.35 (a well-separated
+    two-population mixture, not a 90/10 split), or when that ratio
+    is still above 1.27 and σ̂ √n_variants ≥ 0.765 (smaller two-pop
+    Fst 0.05 panels, where sep alone can sit in (1.27, 1.35]). A
+    negative location
+    does not pull the floor or the trigger cutoff down. With K ≥ 3
+    populations or weak structure, σ̂ may stay inflated (up to ~2.3×
+    within-population), the trigger cutoff may cap at 0.0884, and
+    3rd-degree relatives may not count; supply PC-based clusters, a
+    pedigree or external pairs.
     The structure test is repeated on
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in

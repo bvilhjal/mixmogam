@@ -920,6 +920,14 @@ def test_king_auto_structure_keeps_second_degree_in_phi_and_fires():
     king_sum = sum(king_phi[p] for p in recovered)
     assert 0.70 * ped_sum <= king_sum <= 1.30 * ped_sum, (
         f"KING phi sum {king_sum:.3f} vs pedigree {ped_sum:.3f}")
+    n_false = len(king_phi) - len(recovered)
+    false_sum = sum(ph for pair, ph in king_phi.items() if pair not in true_set)
+    # n=2000, 2-pop Fst 0.05: a handful of 4-SD noise pairs is expected;
+    # thousands would be the K>=4 / 90/10 flood.
+    assert n_false <= 80, (
+        f"{n_false} false Phi pairs; floor={info['king']['threshold']:.4f}")
+    assert false_sum <= 0.30 * ped_sum, (
+        f"false phi-sum {false_sum:.3f} vs pedigree {ped_sum:.3f}")
 
 
 def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
@@ -1055,3 +1063,225 @@ def test_king_refit_trigger_respects_user_threshold_at_or_above_cap():
     assert trig["cutoff"] == pytest.approx(0.10)
     assert trig["n_pairs"] == 20
 
+
+def _bn_counts_panel(n, m, fst, k_pops, props, n_pairs, seed):
+    """Balding-Nichols K-population panel, optional planted half-sibs
+    (cycled across pops). ``props`` is a tuple of ancestry fractions,
+    or None for equal sizes."""
+    from mixmogam import Genotypes
+
+    rng = np.random.default_rng(seed)
+    if props is None:
+        sizes = [n // k_pops] * k_pops
+        sizes[-1] += n - sum(sizes)
+    else:
+        sizes = [int(round(p * n)) for p in props]
+        sizes[-1] = n - sum(sizes[:-1])
+    p0 = rng.uniform(0.1, 0.9, m)
+    a = p0 * (1 - fst) / fst
+    b = (1 - p0) * (1 - fst) / fst
+    P = np.clip(np.stack([rng.beta(a, b) for _ in range(k_pops)]), 0.02, 0.98)
+
+    def hap(f):
+        return (rng.random((2, m)) < f).astype(np.int8)
+
+    mei = lambda H: np.where(rng.integers(0, 2, m) == 0, H[0], H[1])
+    rows, true_i, true_j, used = [], [], [], [0] * k_pops
+    for t_ix in range(n_pairs):
+        p_u = t_ix % k_pops
+        f = P[p_u]
+        parent = hap(f)
+        a_ = mei(parent) + mei(hap(f))
+        b_ = mei(parent) + mei(hap(f))
+        rows += [a_, b_]
+        true_i.append(2 * t_ix)
+        true_j.append(2 * t_ix + 1)
+        used[p_u] += 2
+    leftover = []
+    for p_u, sz in enumerate(sizes):
+        leftover += [p_u] * max(0, sz - used[p_u])
+    n_rest = n - 2 * n_pairs
+    if len(leftover) < n_rest:
+        leftover += [k_pops - 1] * (n_rest - len(leftover))
+    leftover = leftover[:n_rest]
+    rng.shuffle(leftover)
+    for p_u in leftover:
+        rows.append(hap(P[p_u]).sum(0))
+    G = np.vstack(rows).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2, 3, 4], (m + 3) // 4)[:m],
+                   position=np.arange(m) * 10_000 + 1)
+    return gt, np.array(true_i, dtype=int), np.array(true_j, dtype=int)
+
+
+def _phi_false_and_true(rel, true_i, true_j):
+    u = rel.upper.tocoo()
+    true = {frozenset((int(a), int(b))) for a, b in zip(true_i, true_j)}
+    king = {frozenset((int(a), int(b))): float(ph)
+            for a, b, ph in zip(u.row, u.col, u.data / 2.0)}
+    rec = true & set(king)
+    n_false = len(king) - len(rec)
+    false_sum = sum(ph for pair, ph in king.items() if pair not in true)
+    rec_sum = sum(king[p] for p in rec)
+    ped = 0.125 * len(true) if true else 0.0
+    return dict(n_phi=len(king), n_true=len(true), n_rec=len(rec),
+                n_false=n_false, rec_sum=rec_sum, false_sum=false_sum,
+                ped=ped, total_sum=rec_sum + false_sum)
+
+
+def test_king_auto_k4_null_false_pairs_match_master_floor():
+    """S1: K=4, Fst 0.05, n=3000, no relatives. A negative overall
+    median must not collapse the floor to 0.025. False Phi pairs stay
+    within a few of master's 4-MAD floor on the same panel (typically
+    zero)."""
+    n, m, seed = 3000, 8000, 1
+    gt, i_t, j_t = _bn_counts_panel(n, m, fst=0.05, k_pops=4, props=None,
+                                    n_pairs=0, seed=seed)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=seed)
+    king = info["king"]
+    stats = _phi_false_and_true(rel, i_t, j_t)
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert not king.get("noise_scale_from_structure")
+    assert king["threshold"] >= master_floor - 1e-12
+    assert king["threshold"] > 0.05, king["threshold"]
+    assert stats["n_false"] <= n_master + 5, (
+        f"false={stats['n_false']} master_floor_pairs={n_master} "
+        f"floor={king['threshold']:.4f} master={master_floor:.4f} "
+        f"loc={king['noise_location']:.4f}")
+    assert not trig["evidence"], trig["reason"]
+
+
+def test_king_auto_9010_null_does_not_underestimate_or_fire():
+    """S2: a null Fst 0.05 90/10 panel must not switch to an
+    underestimated upper-half sigma, must not fire, and must not flood
+    Phi. Seeds 7/8/9 include the seed that flipped under the unguarded
+    0.8 rule (seed 8)."""
+    n, m = 2000, 8000
+    for seed in (7, 8, 9):
+        gt, i_t, j_t = _bn_counts_panel(n, m, fst=0.05, k_pops=2,
+                                        props=(0.90, 0.10), n_pairs=0,
+                                        seed=seed)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            trig, rel, info = _live_trigger(gt, seed=seed)
+        king = info["king"]
+        stats = _phi_false_and_true(rel, i_t, j_t)
+        assert not king.get("noise_scale_from_structure"), (
+            f"seed {seed} switched; sd={king['noise_sd']:.4f} "
+            f"MAD={king['noise_sd_mad']:.4f} loc={king['noise_location']:.4f}")
+        assert king["noise_sd"] == pytest.approx(king["noise_sd_mad"], rel=1e-12)
+        assert king["threshold"] >= 4.0 * king["noise_sd_mad"] - 1e-12
+        assert stats["n_false"] <= 5, (
+            f"seed {seed}: {stats['n_false']} false Phi pairs, "
+            f"floor={king['threshold']:.4f}")
+        assert not trig["evidence"], f"seed {seed} fired: {trig['reason']}"
+
+
+def test_king_auto_unrelated_null_n3000_few_false_pairs():
+    """A negative loc must not pull the floor down on an unstructured
+    null. n=3000 should have about as many false Phi pairs as master's
+    4-MAD floor (0-1, not dozens)."""
+    from mixmogam import Genotypes
+
+    n, m, seed = 3000, 8000, 1
+    rng = np.random.default_rng(seed)
+    f = rng.uniform(0.05, 0.5, m)
+    G = rng.binomial(2, f, size=(n, m)).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2, 3, 4], (m + 3) // 4)[:m],
+                   position=np.arange(m) * 10_000 + 1)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=seed)
+    king = info["king"]
+    stats = _phi_false_and_true(rel, [], [])
+    master_floor = 4.0 * float(king["noise_sd_mad"])
+    pre = info.get("king_prefloor") or {}
+    if pre.get("r") is not None and np.size(pre["r"]):
+        n_master = int(np.sum(np.asarray(pre["r"], dtype=np.float64) / 2.0 > master_floor))
+    else:
+        n_master = 0
+    assert king["threshold"] >= master_floor - 1e-12
+    assert not king.get("noise_scale_from_structure")
+    assert stats["n_false"] <= n_master + 5, (
+        f"{stats['n_false']} false Phi pairs (master_floor_pairs={n_master}); "
+        f"floor={king['threshold']:.4f} loc={king['noise_location']:.4f} "
+        f"master={master_floor:.4f}")
+    assert not trig["evidence"], trig["reason"]
+
+
+def test_king_refit_trigger_uses_prefloor_when_floor_exceeds_cutoff():
+    """The Phi floor can sit above the n-aware trigger cutoff (a large
+    king_noise_sd_multiple), so planted half-sibs drop out of Phi. The
+    trigger must still see them through the pre-floor pair list, as
+    twostep does on the real path."""
+    from mixmogam import Genotypes
+    from mixmogam._relatedness import RELATEDNESS_OPTIONS, resolve_relatedness
+
+    n, m, n_pairs, seed = 600, 2000, 8, 21
+    rng = np.random.default_rng(seed)
+    f = rng.uniform(0.05, 0.5, m)
+
+    def hap():
+        return (rng.random((2, m)) < f).astype(np.int8)
+
+    mei = lambda H: np.where(rng.integers(0, 2, m) == 0, H[0], H[1])
+    rows, true_i, true_j = [], [], []
+    for t_ix in range(n_pairs):
+        parent = hap()
+        a_ = mei(parent) + mei(hap())
+        b_ = mei(parent) + mei(hap())
+        rows += [a_, b_]
+        true_i.append(2 * t_ix)
+        true_j.append(2 * t_ix + 1)
+    for _ in range(n - 2 * n_pairs):
+        rows.append(hap().sum(0))
+    G = np.vstack(rows).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2], m // 2),
+                   position=np.arange(m) * 10_000 + 1)
+    opts = {**RELATEDNESS_OPTIONS, "king_noise_sd_multiple": 16.0}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        rel, info = resolve_relatedness(
+            "auto", gt, mean=np.asarray(gt.G, dtype=np.float64).mean(0),
+            model_idx=None, threshold=0.025, options=opts,
+            rng=np.random.default_rng(seed))
+        king = info["king"]
+        pre = info.get("king_prefloor") or {}
+        trig = king_refit_trigger(
+            n, pre["i"], pre["j"], np.asarray(pre["r"], dtype=np.float64) / 2.0,
+            noise_sd=king["noise_sd"], noise_median=king["noise_median"],
+            noise_location=king.get("noise_location"),
+            noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
+            n_variants=king.get("n_variants"),
+            relatedness_threshold=0.025)
+    assert king["threshold"] > trig["cutoff"], (
+        f"floor {king['threshold']:.4f} should exceed cutoff {trig['cutoff']:.4f} "
+        f"at k=16, sigma={king['noise_sd']:.4f}")
+    assert king["threshold"] > 0.125
+    assert rel.upper.nnz == 0 or all(
+        (np.asarray(rel.upper.tocoo().data) / 2.0) > king["threshold"] - 1e-15)
+    # Phi dropped the planted pairs; pre-floor + trigger must still see them
+    u = rel.upper.tocoo()
+    in_phi = {frozenset((int(a), int(b))) for a, b in zip(u.row, u.col)}
+    true = {frozenset((int(a), int(b))) for a, b in zip(true_i, true_j)}
+    assert len(true & in_phi) == 0
+    assert trig["evidence"], trig["reason"]
+    assert trig["n_pairs"] >= n_pairs
+    # Post-floor pairs would miss them:
+    trig_post = king_refit_trigger(
+        n, u.row, u.col, u.data / 2.0 if u.row.size else np.zeros(0),
+        noise_sd=king["noise_sd"], noise_median=king["noise_median"],
+        noise_location=king.get("noise_location"),
+        noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
+        n_variants=king.get("n_variants"),
+        relatedness_threshold=0.025)
+    assert not trig_post["evidence"]

@@ -514,10 +514,14 @@ def test_weights_gate_and_auto_fallback():
 
 
 def test_binary_values_as_quantitative_warn_with_ldpred3():
+    """Count the 0/1 warning on the ldpred3 path: a duplicate must fail."""
     G, gt, y = _family_free_panel()
     yb = (y > np.median(y)).astype(float)
-    with pytest.warns(UserWarning, match="two values"):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always", UserWarning)
         twostep.hratt(yb, gt, None, loco_folds=2, random_state=1, stage1="ldpred3-inf")
+    n_two = sum("two values" in str(w.message) for w in rec)
+    assert n_two == 1, n_two
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
         twostep.hratt(y, gt, None, loco_folds=2, random_state=1, stage1="ldpred3-inf")
@@ -608,6 +612,38 @@ def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
     k, cx = r.extra["relatedness"]["kappa"], r.extra["relatedness"]["c_X"]
     np.testing.assert_allclose(r.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
                                rtol=1e-10)
+
+
+def test_auto_picking_inf_reports_actual_loco_refit_not_the_decision():
+    """When stage1='auto' picks the ldpred3-inf candidate, relatives
+    would have triggered a refit for enet, but inf is block-exact and
+    is fit with refit=False. extra['loco_refit'] must record what
+    actually ran (False), not the pre-selection decision."""
+    from tests._families import family_panel
+
+    G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
+    orig = twostep._hratt_fit_scores
+
+    def high_mse(*a, **k):
+        out = orig(*a, **k)
+        mse = np.asarray(out["mse"], dtype=np.float64)
+        out["mse"] = mse + 1e6
+        return out
+
+    twostep._hratt_fit_scores = high_mse
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            r = twostep.hratt(y, gt, None, loco_folds=2, random_state=1,
+                              stage1="auto", relatedness=pairs,
+                              model_snps_h2_check=False,
+                              stage1_kwargs={"block_size": 200})
+    finally:
+        twostep._hratt_fit_scores = orig
+    assert r.extra["stage1_selection"]["chosen"] == "ldpred3-inf"
+    assert r.extra.get("relatedness", {}).get("relatives_evidence") is True
+    assert r.extra["loco_refit"] is False
+    assert r.extra["stage1"] == "ldpred3-inf"
 
 
 def test_ldpred3_lassosum2_refit_with_relatives():

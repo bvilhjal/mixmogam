@@ -37,6 +37,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   30,000 to 1e6 also shifts the floor slightly on unstructured panels.
   `extra["relatedness"]["refit_trigger"]` records σ̂, the tail ratio, the
   cutoff, the observed and expected null counts, and the reason.
+- KING-auto's Phi floor and refit-trigger cutoff are anchored at
+  max(0, location) and, when the structure switch does not fire, never
+  go below master's 4·MAD bound, so a between-population median cannot
+  collapse the floor and flood Phi with false pairs (K ≥ 4). The
+  upper-half MAD switch also requires (upper_median - median) /
+  upper_MAD > 1.35, so a 90/10 split no longer underestimates σ̂;
+  when that ratio is still above 1.27 and σ̂ √n_variants ≥ 0.765
+  the switch is still accepted, which keeps 2nd-degree pairs on
+  smaller two-pop Fst 0.05 panels. With
+  K ≥ 3 populations or weak structure, σ̂ may stay inflated (up to
+  ~2.3× within-population), the trigger cutoff may cap at 0.0884, and
+  3rd-degree relatives may not count; supply PC-based clusters, a
+  pedigree or external pairs.
 - `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
   Spec A relatedness (kappa_g) follow-ups, and the LDpred3 / int8 stage-1
   seam. A supplied pedigree or pair file is assumed complete: relatives
