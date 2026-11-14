@@ -2,9 +2,10 @@
 
 One simulated structured population, analysed from start to finish. Every
 number and figure below comes from
-[`tutorial/tutorial.py`](tutorial/tutorial.py). On a laptop each mixture or
-elastic-net fit takes about 20 s, and the script rewrites the three figures in
-`docs/tutorial/`:
+[`tutorial/tutorial.py`](tutorial/tutorial.py), which rewrites the three figures
+in `docs/tutorial/`. The times are from one run on an unrecorded laptop and
+depend strongly on the machine; expect the mixture and elastic-net fits to take
+several times longer on some hosts:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python docs/tutorial/tutorial.py
@@ -101,9 +102,9 @@ for method in ["exact", "bolt-inf", "bolt", "hratt"]:
 
 - `exact` is the reference at this size, and `method="auto"` picks it up to
   5,000 samples (`bolt-inf` above). The other engines avoid the O(n³)
-  factorizations, which pays at larger n. In this single run at n = 1,500,
-  `bolt-inf` took 1.0 s against 2.3 s for `exact`, while `bolt` and `hratt`
-  took about 20 s.
+  factorizations, which pays at larger n. In the single timed run at
+  n = 1,500, `bolt-inf` took 1.0 s against 2.3 s for `exact`, while `bolt` and
+  `hratt` took about 20 s.
 - `bolt` and `hratt` give larger −log10 p at the strongest QTL than `exact`
   (57-61 against 43). Read nothing into that here: neither fit converged (next
   point), and their retrospective score tests are a different statistic from

@@ -3,7 +3,8 @@
 mixmogam fits linear mixed models for genome-wide association studies (GWAS) in
 Python. By default each variant is tested against a polygenic background fitted
 without its own chromosome (leave-one-chromosome-out, LOCO). Every method handles
-quantitative traits; HRATT also handles case-control outcomes and sampling weights.
+quantitative traits; HRATT also handles case-control outcomes and sampling weights
+(both experimental).
 
 The core needs only NumPy and SciPy. For the two-step methods, install the `fast`
 extra (Numba): without it they fall back to much slower Python code and warn. In
@@ -62,11 +63,12 @@ passed two of its seven pre-registered criteria. The
 re-scored the same panels, traits and samples (regenerated from the first run's seeds; the
 genotype hashes match), plus new Fst 0.05 and principal-component cells, with the revised
 2.0.0.dev6 code, and passed five of its own seven pre-registered criteria.
-With cross-fitted scores, quantitative effects were within 2% of the population
-slopes when there was no selection on the outcome (in-sample scores were 28-36% low).
-Weighted effects missed twice: 5.4% low under selection on the outcome (Monte Carlo
-SE 2.1%; weighted least squares was 4.0% low on the same samples), and 5.5% low at
-F_ST 0.05 without principal components. Binary one-step effects were within 3%, with
+With cross-fitted scores, unweighted quantitative effects were within 2% of the
+population slopes when there was no selection on the outcome (in-sample scores were
+28-36% low). Weighted effects were 5.4% low under selection on the outcome (Monte Carlo
+SE 2.1%; weighted least squares was 4.0% low on the same samples), the criterion's one
+failed cell, and 5.5% low at F_ST 0.05 without principal components (Monte Carlo SE
+2.6%, within-population slopes; not a prespecified cell). Binary one-step effects were within 3%, with
 Monte Carlo SEs of 4-9%. Weighted fits took 1.55 times as long as HRATT-HE, against
 a target of 1.3.
 
@@ -84,7 +86,7 @@ gwas(y, gt, X, method="hratt", model_snps="hm3",
 ```
 
 ```
-mixmogam gwas --geno imputed_hardcalls --pheno y.txt --out r.csv --model-snps hm3 [--hm3-build GRCh38]
+mixmogam gwas --geno imputed_hardcalls --pheno y.txt --pcs 10 --out r.csv --model-snps hm3 [--hm3-build GRCh38]
 mixmogam hm3 match --geno imputed_hardcalls             # the match report only
 mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenance
 ```
@@ -92,7 +94,7 @@ mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenanc
 Imputed data must be hard-called first (for example BGEN with `--hard-call-threshold`);
 dosages are not supported.
 
-**Human data: `"hm3"` (recommended).**
+**Human data: `"hm3"` (recommended; see "What a subset costs" below).**
 - By default it uses the 1,444,196 HapMap3+ variants of ldpred3's UK Biobank European LD
   reference (Privé's `map_hm3_plus.rds`, figshare
   [10.6084/m9.figshare.21305061](https://doi.org/10.6084/m9.figshare.21305061), CC BY 4.0).
@@ -146,8 +148,8 @@ patched copy of older code (12 runs per demography), not a rerun of the shipped 
 
 If your sample contains relatives, you can pass them: `hratt(..., relatedness=...)` (CLI
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
-GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` is reliable
-without population structure. Under structure the 4-SD MAD floor can sit
+GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` is meant for
+samples without population structure; no archived benchmark tests it yet. Under structure the 4-SD MAD floor can sit
 above 0.125 and drop 2nd-degree relatives from Phi (the LOCO refit may
 still fire on pre-floor pairs). In that case supply a pedigree or pairs
 (e.g. KING run within ancestry groups) instead of `"auto"`.
@@ -234,7 +236,8 @@ threads, two-bit storage and memory budgets for large HRATT fits, and
 On one simulated 100,000 x 20,000 founder-block panel, three balanced-order repetitions of
 HRATT-HE and BOLT-style inf gave the times below (2.0.0.dev8, one requested thread, Apple
 M2 Pro; the Accelerate thread pool itself could not be observed). They have not been rerun
-since 2.0.2.dev1 changed fixed-seed stochastic REML fits, so read them as indicative for
+since 2.0.2.dev1 changed REML/SLQ fitting and the mixture and elastic-net posterior
+means (see the changelog), so read them as indicative for
 the current version:
 
 | Method | Median wall time | Median peak RSS |

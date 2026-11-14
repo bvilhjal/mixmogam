@@ -23,8 +23,9 @@ calibration fits and four Atwell HRATT scans had non-converged stages. The
 [evidence bundle](../benchmarks/results/20261029-report-evidence/README.md)
 holds the selected raw measurements, per-fit convergence diagnostics and
 source and input identities. The 2.0.0 and 2.0.1 releases did not change the
-estimators measured there; 2.0.2.dev1 changed the REML covariate basis and
-fixed-seed stochastic REML fits (see the changelog), and these measurements
+estimators measured there; 2.0.2.dev1 changed REML/SLQ fitting (the REML
+covariate basis and fixed-seed stochastic traces) and the mixture and
+elastic-net posterior means (see the changelog), and these measurements
 have not been rerun since.
 
 Each result keeps the package version it ran with. The earlier phensim,

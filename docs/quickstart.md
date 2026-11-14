@@ -93,9 +93,9 @@ from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
 result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
-result = gwas(y, gt, method="bolt-inf")      # BOLT-style inf: no kinship matrix formed
-result = gwas(y, gt, method="bolt")          # BOLT-style mixture (two-Gaussian prior)
-result = gwas(y, gt, method="hratt")         # HRATT: elastic-net two-step test
+result = gwas(y, gt, X=X, method="bolt-inf")  # BOLT-style inf: no kinship matrix formed
+result = gwas(y, gt, X=X, method="bolt")      # BOLT-style mixture (two-Gaussian prior)
+result = gwas(y, gt, X=X, method="hratt")     # HRATT: elastic-net two-step test
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
@@ -361,8 +361,9 @@ depend on the cache, only the first-call compile time does.
 During parallel sweeps the workers spin between launches instead of sleeping
 at once (as OpenMP does on Apple silicon). This shortens launch latency at the cost of
 1.5-2x the process CPU time during parallel fits
-([speed review](../benchmarks/results/20261026-hratt-speed-review/README.md)); one
-thread is unaffected. Set `KMP_BLOCKTIME` or `OMP_WAIT_POLICY` to keep the runtime's
+([speed review](../benchmarks/results/20261026-hratt-speed-review/README.md)); gains
+appear only with several threads and can reverse on a loaded host, and one thread is
+unaffected. Set `KMP_BLOCKTIME` or `OMP_WAIT_POLICY` to keep the runtime's
 own policy.
 
 No float copy of the genotypes is kept; every pass decodes them. For large
@@ -375,9 +376,9 @@ not fully out of core.
 
 int8 arrays decode fastest variant-major, each variant's calls contiguous, as
 the readers return them and as `Genotypes(G.T)` gives for a C-ordered
-(variants, samples) array: about 0.16 ns per call on one M2 Pro thread since the
-October efficiency work (CHANGELOG), against 1 ns for a C-ordered (samples, variants)
-array, which needs a transpose. Analysis
+(variants, samples) array: about 0.16 ns per call on one M2 Pro thread, against 1 ns
+for a C-ordered (samples, variants) array, which needs a transpose (unarchived
+measurements; CHANGELOG 2.0.0.dev7). Analysis
 entry points call `variant_major()` and make one int8 copy rather than
 transposing on every pass; the caller's array is not modified.
 `np.asfortranarray(G)` (or `packed=True`) avoids the copy, and selecting or

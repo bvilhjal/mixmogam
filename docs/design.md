@@ -21,11 +21,13 @@ linear model on the same machinery.
 `gwas(y, gt, method=...)` tests every SNP against a polygenic model built
 without its own chromosome. With the tested SNP inside the kinship, the
 polygenic term absorbs part of its effect (proximal contamination). In
-historical simulations from 3 October (three seeds per scenario, before later
-fixes), the exact non-LOCO scan was deflated (lambda_GC 0.91 at n = 4,000 and
-0.85 at n = 10,000), and in scenario S3 (n = 4,000, 30 large QTLs) LOCO raised
-locus-level power from 0.33 to 0.51
-([archive](../benchmarks/results/20261003T120104Z-sim-study/NOTES.md)). More than 25 chromosomes
+historical simulations from 3 October (before later fixes), the exact non-LOCO
+scan was deflated: lambda_GC 0.91 at n = 4,000 (three seeds;
+[archive](../benchmarks/results/20261003T120104Z-sim-study/NOTES.md)) and 0.85
+at n = 10,000 (one run;
+[archive](../benchmarks/results/20261003T001500Z-sim-study-large/NOTES.md),
+erratum). In scenario S3 (n = 4,000, 30 QTLs) LOCO raised locus-level power
+from 0.33 to 0.51. More than 25 chromosomes
 are merged into 25 contiguous groups of balanced size.
 
 | method | residual tested against | calibration |
@@ -440,11 +442,13 @@ rounding is most sensitive, use the four-point probability calculation. A
 pooled distribution with a corrected variance still gave inflated tails when
 ancestry predicted both weights and allele frequency.
 
-Two departures from common practice follow from pilots. The Huber-White
-sandwich sum a^2 Z^2 of weighted GWAS replaces each genotype's variance by its
-own square; under selection on the outcome it rejected 12 times too often at
-1e-3 for MAF 1-5% (26 times at 1e-4 over all MAF), because a few samples carry
-the score ([archive](../benchmarks/results/20261005-hratt-weights-binary/README.md)).
+Two departures from common practice follow from pilots
+(`benchmarks/hratt_weights_binary_plan.md`). The Huber-White sandwich sum
+a^2 Z^2 of weighted GWAS replaces each genotype's variance by its own square;
+under selection on the outcome a few samples carry the score. In the pilot it
+was inflated 17-fold at 1e-3 for MAF 1-5%; in the prespecified validation's S3
+cell it rejected 12 times too often at 1e-3 for MAF 1-5% (26 times at 1e-4 over
+all MAF; [archive](../benchmarks/results/20261005-hratt-weights-binary/README.md)).
 The model-based logistic
 variance sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample
 LOCO offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets

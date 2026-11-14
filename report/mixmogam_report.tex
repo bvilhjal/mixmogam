@@ -61,9 +61,12 @@ genetic null at 1\% and HRATT 0.64\%; two genotype PCs brought these to
 0.94\% and 0.92\%. We extended HRATT to case-control outcomes and
 sampling weights. In prespecified simulations the weighted test stayed
 calibrated under selection on the outcome, where the sandwich variance
-rejected up to 26 times too often at $10^{-4}$; cross-fitted LOCO scores
-brought quantitative effect bias within 2\% without selection on the outcome,
-against 28--36\% attenuation with in-sample scores; and covariate-specific genotype
+rejected 12 times too often at $10^{-3}$ for minor allele frequency 1--5\%
+and 26 times at $10^{-4}$ over all frequencies; cross-fitted LOCO scores
+brought unweighted quantitative effect bias within 2\% without selection on
+the outcome (weighted: within 1\% at $F_{ST}=0$, 5.5\% low at $F_{ST}=0.05$
+without principal components), against 28--36\% attenuation with in-sample
+scores; and covariate-specific genotype
 distributions with principal components removed inflation from
 ancestry-dependent weights. Two criteria failed: weighted effects under selection on the
 outcome were 5.4\% low (Monte Carlo standard error 2.1\%), and weighted fits
@@ -773,14 +776,18 @@ are reported rather than rejected. The spectral denominator is unavailable
 with weights or binary traits, and the other association methods reject
 these options. Unit sampling weights still select HE and these tests.
 
-Two common alternatives failed in pilots and are not used. The
+Two common alternatives failed in pilots
+(\code{benchmarks/}\allowbreak\code{hratt\_weights\_binary\_plan.md}) and are
+not used. The
 Huber--White sandwich $\sum_i a_{gi}^2x_{ij}^2$, with $x_{ij}$ the
 weighted covariate-adjusted genotype, replaces each genotype's variance by
 its own square. Under selection on the outcome a few samples carry each
-score: its test rejected 12 times too often at $\alpha=10^{-3}$ for minor
-allele frequency 1--5\% (Table~\ref{tab:weights-quantitative}, S3), where
-Equation~\eqref{eq:retro-variance} with the saddlepoint gave 0.90 times the
-nominal rate. The model-based logistic variance
+score. In the pilot its test was inflated 17-fold at $\alpha=10^{-3}$ for
+minor allele frequency 1--5\%, where Equation~\eqref{eq:retro-variance} with
+the saddlepoint gave 0.75-fold. In the prespecified validation
+(Table~\ref{tab:weights-quantitative}, S3) the sandwich rejected 12 times too
+often at the same level and frequencies, against 0.90 times the nominal rate
+for Equation~\eqref{eq:retro-variance}. The model-based logistic variance
 $\sum_i\mu_i(1-\mu_i)\tilde g_{ij}^2$ of logistic score tests with
 saddlepoint tails \citep{dey2017,zhou2018,hof2025} trusts fitted
 probabilities that an in-sample LOCO offset overfits when cases are few:
@@ -2078,6 +2085,9 @@ Cross-fitting removed the attenuation (Table~\ref{tab:followup-effects}):
   low under selection on the outcome, as the design expects.
  \item At $F_{ST}=0.05$ without principal components they were 2.0\% below the
   within-population slopes.
+ \item Weighted HRATT at $F_{ST}=0.05$ without principal components was 5.5\%
+  below the within-population slopes (Monte Carlo SE 2.6; not a prespecified
+  cell), and 1.0\% low with them.
  \item In-sample scores gave $-28$ to $-36$\%.
  \item Under selection on the outcome (S3), weighted HRATT was 5.4\% low
   (Monte Carlo SE 2.1), failing that criterion. Weighted least squares was
@@ -2323,7 +2333,8 @@ non-converged stage; A2 does not exclude such fits. The 17 October run's
 in-tree driver did not record these fields, but its exploratory follow-up
 (\code{exploratory/}\allowbreak\code{hratt\_convergence.csv}) found both
 stages unconverged in five of the eight scans
-(Section~\ref{sec:atwell-results}), so convergence did not get worse.
+(Section~\ref{sec:atwell-results}): four of eight now, against five of eight
+then, on the same phenotypes with different code.
 
 \FloatBarrier
 
@@ -2435,7 +2446,7 @@ The priorities are ordered by dependence: reliable input identity and
 reproducible reference comparisons come before claims about a new
 method's power or speed.
 
-\subsection{Priority 1: build a matched-input reference benchmark}
+\subsection{Priority 1: broaden the matched-input benchmark to established programs}
 
 \textbf{Hypothesis.} With input handling and nuisance definitions matched,
 mixmogam's implementations reproduce an independent Gaussian reference,
@@ -2543,9 +2554,10 @@ speed gained by reusing matrix products.
 balanced order, CPU time and complete-fit boundaries. Vary
 sample size and marker density separately and report peak memory per
 genotype for int8 and two-bit calls, with setup, variance fitting,
-prediction and testing timed apart. The target is clear: REML and BOLT-style
-mixture fits still take 1.14 to 1.23 times as long as with dev5's cache
-(Table~\ref{tab:streaming-paired}). Before accepting a looser
+prediction and testing timed apart. The target is clear: in the d51b4c3
+comparison (Table~\ref{tab:streaming-paired}), BOLT-style inf, BOLT-style
+mixture and HRATT-REML fits took 1.14 to 1.23 times as long as with dev5's
+cache. Before accepting a looser
 numerical tolerance, test high LD, small residual variance and phenotypes
 near decision thresholds. HRATT's case-control and weighted tests need
 external validation at prevalence below 1\%, with related samples, real
@@ -2559,8 +2571,9 @@ The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. Earlier report sections describe
 package version 2.0.0.dev6 and the unreleased changes after it; the new
 benchmark section identifies 2.0.0.dev8 and its commit. Version 2.0.2.dev1
-(3 November) later changed the REML covariate basis and fixed-seed stochastic
-REML fits; none of the results here has been rerun with it. The known-covariance experiment uses baseline commit
+(3 November) later changed REML/SLQ fitting (the REML covariate basis and
+fixed-seed stochastic traces) and the mixture and elastic-net posterior
+means; none of the results here has been rerun with it. The known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/}\allowbreak\code{denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-}\allowbreak\code{manuscript-}\allowbreak\code{geometry} beneath
