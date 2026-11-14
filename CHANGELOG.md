@@ -48,8 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `report/make_phensim_figures.py` and writes nothing into the archives.
   Attribution of HRATT's design to LDAK-KVIK (Hof & Speed 2025) stays. Benchmark
   drivers, protocols and archived results are unchanged; external-program runs in
-  them are kept for provenance only. The committed `report/mixmogam_report.pdf`
-  is still the 2.0.0 build and keeps the old comparisons until it is rebuilt.
+  them are kept for provenance only.
 
 ### Changed
 
@@ -68,6 +67,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   section points to `relatedness=` (kappa_g) for family inflation.
   `report/README.md` notes that the HAPNEST runs were not rerun after the
   relabel (only the generator hash in `hapnest_manifest.json` changed).
+- `report/mixmogam_report.pdf` was rebuilt with Tectonic from the current LaTeX
+  source (47 pages, was 51), so it no longer carries the external-program
+  comparisons or the old labels; the stale-PDF notes in `report/README.md` and
+  `report_manifest.json` were removed.
 
 ## [2.0.2.dev1] - 2026-11-03
 

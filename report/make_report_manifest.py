@@ -47,9 +47,8 @@ def main():
         "benchmark_commit": "d550c41212fb4eca72858893d7ef7c6b89d4398a",
         "revision_state": ("Documentation and report sources only: external-program comparisons "
                            "removed, mixmogam's BOLT-style methods labelled as such and comparative "
-                           "claims audited; no estimator changed. The committed PDF predates this "
-                           "revision (the 2.0.0 release build) and is stale until rebuilt; the pdf "
-                           "hash identifies that older build."),
+                           "claims audited; no estimator changed. The committed PDF was rebuilt "
+                           "with Tectonic from this revision's LaTeX source and displays."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

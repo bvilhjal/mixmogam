@@ -1,8 +1,6 @@
 # Research report
 
-The [manuscript PDF](mixmogam_report.pdf) (**stale**: the committed PDF is the
-2.0.0 build, which predates the removal of the external-program comparisons and
-the claims audit; it will be rebuilt from the LaTeX source) sets out the statistical argument
+The [manuscript PDF](mixmogam_report.pdf) sets out the statistical argument
 behind mixmogam, the evidence for it and six research priorities; the
 [LaTeX source](mixmogam_report.tex) is the editable manuscript. The
 [design notes](../docs/design.md) describe the methods and the
