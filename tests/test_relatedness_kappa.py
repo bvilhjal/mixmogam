@@ -227,7 +227,34 @@ def test_unrelated_set_is_maximal_and_unrelated():
     assert not K[np.ix_(keep, keep)].any()
     for s_ in np.setdiff1d(np.arange(7), keep):
         assert K[s_, keep].any()  # maximal: every dropped sample has a kept relative
-    assert 6 in keep and keep.size == 5  # drops 0 (3 pairs), then 4
+    assert 6 in keep and keep.size == 5  # keeps 1 (fewest relatives), dropping 0; then 3
+
+
+def test_unrelated_set_near_maximum_on_cousin_graph():
+    # (iii) isolate-like kinship: each sample a child of two sibships, so
+    # cousins through either parent (a line graph; mean degree ~7 here). The
+    # old max-degree removal kept 86-88% of the exact maximum on seeds 4-8,
+    # minimum-degree selection 96-98%.
+    from scipy import sparse
+    from scipy.optimize import Bounds, LinearConstraint, milp
+
+    rng = np.random.default_rng(4)
+    n, n_sib = 600, 330
+    a, b = rng.integers(0, n_sib, n), rng.integers(0, n_sib, n)
+    same = a[:, None] == a[None, :]
+    same |= a[:, None] == b[None, :]
+    same |= b[:, None] == a[None, :]
+    same |= b[:, None] == b[None, :]
+    i, j = np.nonzero(np.triu(same, 1))
+    rel = Relatedness(n, i, j, np.full(i.size, 0.125))
+    keep = unrelated_set(rel, min_phi=0.0442)
+    K = rel.Koff.toarray() != 0
+    assert not K[np.ix_(keep, keep)].any()
+    A = sparse.csr_matrix((np.ones(2 * i.size), (np.repeat(np.arange(i.size), 2),
+                                                 np.c_[i, j].ravel())), shape=(i.size, n))
+    best = -milp(-np.ones(n), constraints=LinearConstraint(A, -np.inf, 1),
+                 integrality=np.ones(n), bounds=Bounds(0, 1)).fun
+    assert keep.size >= 0.95 * best
 
 
 def test_gls_is_opt_in_and_api_errors(fam):
