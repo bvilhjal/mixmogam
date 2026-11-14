@@ -280,3 +280,172 @@ def test_fast_blocks_stay_group_pure(trait_panel):
     for (F, idx) in fast:
         assert np.unique(lg.groups[order[idx]]).size == 1
         assert F.m == idx.size
+
+
+# --------------------------------------------------------------------------- Phase 2
+def _train_corr(lg, idx, rows):
+    Z = lg.rows(idx)[:, rows]
+    Z = Z - Z.mean(axis=1, keepdims=True)
+    d = np.einsum("ij,ij->i", Z, Z)
+    return (Z @ Z.T) / np.sqrt(np.outer(d, d))
+
+
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("q", [0, 4])
+def test_split_train_ld_matches_explicit_rows(ldp, packed, q):
+    """ld_split='train': each training set's cover is the centred correlation
+    of the projected rows restricted to that set, from one pass, for the
+    float path and the hard-call algebra (Q_P'Q_P, u = Q_P'z terms)."""
+    G, gt = ldp
+    n = G.shape[0]
+    X = None if q == 0 else np.random.default_rng(2).normal(size=(n, q))
+    lg = _lg(G, gt.chromosome, X, packed)
+    rng = np.random.default_rng(5)
+    folds = rng.integers(0, 3, n)
+    held = rng.random(n) < 0.2
+    labels, n_parts, excluded = _ld8.split_parts(n, folds, held)
+    order = np.arange(lg.m)
+    sets = [folds != f for f in range(3)] + [~held]
+    for kind in ("f32", "f32-hardcall"):
+        covers = _ld8.build_split_blocks(lg, order, 300, kind, labels, n_parts, excluded, tile=97)
+        assert len(covers) == 4
+        for cover, rows in zip(covers, sets):
+            for R, idx in cover[:3]:
+                ref = _train_corr(lg, order[idx], rows)
+                np.fill_diagonal(ref, 1.0)
+                assert np.max(np.abs(R - ref)) < 3e-6, kind
+    d8 = _ld8.build_split_blocks(lg, order, 300, "d8-hardcall", labels, n_parts, excluded)
+    f32 = _ld8.build_split_blocks(lg, order, 300, "f32-hardcall", labels, n_parts, excluded)
+    for (Rd, _), (Rf, _) in zip(d8[1], f32[1]):
+        assert Rd.dtype == np.int8 and np.max(np.abs(Rd / 127.0 - Rf)) <= 0.5 / 127 + 1e-6
+
+
+def test_split_train_stage1_cache_and_numerics():
+    G, gt, y = _family_free_panel()
+    caches = _ld8.LDCache()
+    base = twostep.hratt(y, gt, None, loco_folds=2, stage1="ldpred3-inf", random_state=1,
+                        stage1_kwargs={"ld": "d8-hardcall"})
+    r1 = twostep.hratt(y, gt, None, loco_folds=2, stage1="ldpred3-inf", random_state=1,
+                      stage1_kwargs={"ld": "d8-hardcall", "ld_split": "train", "ld_cache": caches})
+    info = r1.extra["stage1_info"]
+    assert info["ld_split"] == "train" and info["ld_cache"] == "miss"
+    # k = 2 folds + hold-out complement: three covers.
+    assert info["ld_bytes"] == 3 * base.extra["stage1_info"]["ld_bytes"]
+    r2 = twostep.hratt(y + 0.0, gt, None, loco_folds=2, stage1="ldpred3-inf", random_state=1,
+                      stage1_kwargs={"ld": "d8-hardcall", "ld_split": "train", "ld_cache": caches})
+    assert r2.extra["stage1_info"]["ld_cache"] == "hit"
+    assert np.allclose(r1.f_stat, r2.f_stat, equal_nan=True)
+    # A different fold split must not hit the cache.
+    r3 = twostep.hratt(y, gt, None, loco_folds=2, stage1="ldpred3-inf", random_state=2,
+                      stage1_kwargs={"ld": "d8-hardcall", "ld_split": "train", "ld_cache": caches})
+    assert r3.extra["stage1_info"]["ld_cache"] == "miss"
+    assert _corr(_chi2(r1), _chi2(base)) > 0.999
+
+
+def _family_free_panel(n=900, m=1200, seed=3):
+    G, gt = ld_panel(n, m, seed=seed)
+    rng = np.random.default_rng(seed)
+    beta = np.zeros(m)
+    c = rng.choice(m, 40, replace=False)
+    beta[c] = rng.normal(size=40)
+    g = (G - G.mean(0)) @ beta
+    y = g / g.std() * np.sqrt(0.5) + rng.normal(size=n) * np.sqrt(0.5)
+    return G, gt, y
+
+
+def test_spectrum_guard_and_ridge(ldp):
+    G, gt = ldp
+    # A rank-deficient block: more variants than samples makes R singular,
+    # so the D8 rounding pushes lambda_min below zero.
+    lg = _lg(G[:150], gt.chromosome)
+    idx = np.arange(0, 400)
+    D8, R = _ld8.hardcall_block(lg, idx, return_float=True)
+    lam_exact = _ld8.block_lambda_min(R)
+    lam8 = _ld8.block_lambda_min(D8)
+    assert lam_exact > -1e-8 and lam8 < -1e-3
+    # Lanczos above the dense threshold agrees with LAPACK.
+    assert abs(_ld8.block_lambda_min(D8, dense_max=10) - lam8) < 1e-3
+    R2, c, after = _ld8.ridge_block_d8(D8, lam8, margin=1e-3)
+    assert R2.dtype == np.int8 and np.all(np.diag(R2) == 127) and after >= 0 and c > 0
+    s_seq, s_min = stage1._lassosum2_s_floor((0.2, 0.5, 0.9), -0.4)
+    assert abs(s_min - 0.401 / 1.401) < 1e-12 and min(s_seq) == s_min
+    assert stage1._lassosum2_s_floor((0.2, 0.5), 0.0) == ((0.2, 0.5), 0.0)
+
+
+@pytest.mark.parametrize("mode", ["check", "floor", "ridge"])
+def test_psd_modes_run_in_stage1(mode):
+    G, gt, y = _family_free_panel()
+    for meth in ("ldpred3-inf", "ldpred3-lassosum2"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            r = twostep.hratt(y, gt, None, loco_folds=2, stage1=meth, random_state=1,
+                             stage1_kwargs={"ld": "d8-proj", "ld_psd": mode})
+        info = r.extra["stage1_info"]
+        assert info["ld_psd"] == mode and info["ld_spectrum"][0]["n_blocks"] >= 1
+        if mode == "floor" and meth == "ldpred3-lassosum2":
+            assert "s_floor" in info
+    with pytest.raises(ValueError, match="ld_psd"):
+        twostep.hratt(y, gt, None, loco_folds=2, stage1="ldpred3-inf",
+                     stage1_kwargs={"ld": "d8-proj", "ld_psd": "bogus"})
+
+
+def _two_pop(n=800, m=1200, fst=0.1, seed=0):
+    rng = np.random.default_rng(seed)
+    p = rng.uniform(0.1, 0.5, m)
+    a, b = p * (1 - fst) / fst, (1 - p) * (1 - fst) / fst
+    f = np.clip(np.stack([rng.beta(a, b), rng.beta(a, b)]), 0.02, 0.98)
+    pop = rng.random(n) < 0.5
+    fi = f[pop.astype(int)]
+    G = ((rng.random((n, m)) < fi).astype(np.int8) + (rng.random((n, m)) < fi)).astype(np.int8)
+    gt = Genotypes(G, chromosome=np.repeat([1, 2, 3], m // 3), position=np.tile(np.arange(m // 3), 3))
+    c = rng.choice(m, 30, replace=False)
+    g = (G[:, c] - G[:, c].mean(0)) @ rng.normal(size=30)
+    y = g / g.std() * 0.6 + rng.normal(size=n) * 0.8 + 0.8 * pop
+    return gt, y, pop
+
+
+def test_strong_structure_gate_and_auto_fallback():
+    """Strong structure after the covariates: explicit LDpred3 stage 1
+    refuses (block-diagonal LD cannot absorb ancestry), auto keeps the
+    refitted elastic net; ancestry covariates lift the gate; the override
+    runs with a warning."""
+    gt, y, pop = _two_pop()
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(ValueError, match="strong population structure"):
+            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf")
+        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="auto")
+    sel = r.extra["stage1_selection"]
+    assert sel["chosen"] == "enet" and sel["reason"].startswith("strong structure")
+    assert r.extra["loco_refit"]
+    with pytest.warns(RuntimeWarning, match="allow_strong_structure"):
+        twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
+                      stage1_kwargs={"allow_strong_structure": True})
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = twostep.hratt(y, gt, pop[:, None].astype(float), loco_folds=2, random_state=0,
+                          stage1="ldpred3-inf")
+    assert not r.extra["structure"]["strong"] and r.extra["stage1"] == "ldpred3-inf"
+
+
+def test_weights_gate_and_auto_fallback():
+    G, gt, y = _family_free_panel()
+    w = np.random.default_rng(0).uniform(0.5, 2.0, y.size)
+    with pytest.raises(ValueError, match="unweighted samples"):
+        twostep.hratt(y, gt, None, loco_folds=2, stage1="ldpred3-inf", sample_weights=w)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=1, stage1="auto",
+                          sample_weights=w)
+    assert r.extra["stage1_selection"]["chosen"] == "enet"
+    assert r.extra["stage1_selection"]["reason"].startswith("sample_weights")
+
+
+def test_binary_values_as_quantitative_warn_with_ldpred3():
+    G, gt, y = _family_free_panel()
+    yb = (y > np.median(y)).astype(float)
+    with pytest.warns(UserWarning, match="two values"):
+        twostep.hratt(yb, gt, None, loco_folds=2, random_state=1, stage1="ldpred3-inf")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", UserWarning)
+        twostep.hratt(y, gt, None, loco_folds=2, random_state=1, stage1="ldpred3-inf")

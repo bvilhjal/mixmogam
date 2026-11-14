@@ -71,7 +71,8 @@ from typing import Optional
 import numpy as np
 
 __all__ = ["LD_KINDS", "LDCache", "build_blocks", "hardcall_block", "quantize_d8",
-           "ld_cache_key", "cover_nbytes"]
+           "ld_cache_key", "cover_nbytes", "split_parts", "build_split_blocks",
+           "block_lambda_min", "cover_spectrum", "ridge_block_d8"]
 
 LD_KINDS = ("f32", "d8-proj", "d8-hardcall", "f32-hardcall")
 _Q8 = 127.0
@@ -342,3 +343,207 @@ def resolve_cache(spec) -> Optional[LDCache]:
     if isinstance(spec, (str, os.PathLike)):
         return LDCache(os.fspath(spec))
     raise ValueError("ld_cache must be None, an LDCache or a directory path")
+
+
+# --------------------------------------------------------------------------- per-fold LD
+def split_parts(n: int, folds: np.ndarray, held_mask: np.ndarray):
+    """Partition of the samples into ``2 k`` parts (fold f, in/out of the
+    hold-out) and, per training set of the LDpred3 stage 1 (the k fold
+    complements, then the hold-out complement), the parts it *excludes*.
+    Every sample is in exactly one part, so the part Grams sum to the
+    whole-cohort Gram and the k + 1 training Grams cost one pass and one
+    GEMM over the n samples."""
+    folds = np.asarray(folds, dtype=np.int64)
+    k = int(folds.max()) + 1
+    labels = folds * 2 + np.asarray(held_mask, dtype=np.int64)
+    excluded = [[2 * f, 2 * f + 1] for f in range(k)] + [[2 * f + 1 for f in range(k)]]
+    return labels, 2 * k, excluded
+
+
+def split_cache_extra(labels: np.ndarray) -> str:
+    """Cache-key component of a sample partition."""
+    return hashlib.sha256(np.ascontiguousarray(labels, dtype=np.int64).tobytes()).hexdigest()[:16]
+
+
+def _corr_from_sums(S2: np.ndarray, s1: np.ndarray, nT: float) -> np.ndarray:
+    """Centred correlation of a set's rows from its Gram and sums (float64);
+    rows without variance get zeros and a unit diagonal."""
+    C = S2 - np.outer(s1, s1) / nT
+    C = (C + C.T) / 2.0
+    d = np.diag(C).copy()
+    good = d > 1e-10 * nT
+    dinv = np.where(good, 1.0 / np.sqrt(np.where(good, d, 1.0)), 0.0)
+    R = C * np.outer(dinv, dinv)
+    R[~good, :] = 0.0
+    R[:, ~good] = 0.0
+    np.clip(R, -1.0, 1.0, out=R)
+    np.fill_diagonal(R, 1.0)
+    return R
+
+
+def _split_sums_rows(lg, idx, labels, n_parts):
+    """Per-part Gram and sums of the projected standardized rows (the
+    baseline's float path)."""
+    Z = lg.rows(idx)
+    out = []
+    for p in range(n_parts):
+        cols = labels == p
+        Zp = Z[:, cols]
+        out.append((Zp @ Zp.T, Zp.sum(axis=1), float(cols.sum())))
+    return out
+
+
+def _split_sums_hardcall(lg, idx, labels, n_parts, tile):
+    """Per-part Gram and sums of the projected standardized rows from hard
+    calls. Per part p (rows P): the call products XX, XO, OO, the covariate
+    products A = X Q_P, B = O Q_P (k x q), the call sums and called counts;
+    then, with z = (x - mu o) / sigma and c_i = Q'z_i (the prepared
+    projection over all rows), Z = z - Q c and
+
+        sum_P Z_i Z_j = z_i'z_j|P - c_i'u_j - u_i'c_j + c_i'(Q_P'Q_P)c_j,
+        u_i = Q_P'z_i = (A_i - mu_i B_i) / sigma_i,
+        sum_P Z_i   = (sx_i - mu_i so_i) / sigma_i - c_i'(Q_P'1).
+
+    Over all rows (Q_P = Q, orthonormal) this is the single-set algebra of
+    :func:`hardcall_block`."""
+    from mixmogam._standardize import decode_table
+
+    idx = np.asarray(idx, dtype=np.int64)
+    k, n = idx.size, lg.n
+    Q = np.asarray(lg.Q, dtype=np.float64)
+    q = Q.shape[1]
+    T = _sample_tile(k, n, tile)
+    lut = np.ascontiguousarray(np.broadcast_to(_LUT_CALL, (k, 4)), dtype=np.float32)
+    acc = [dict(XX=np.zeros((k, k)), XO=np.zeros((k, k)), OO=np.zeros((k, k)),
+                A=np.zeros((k, q)), B=np.zeros((k, q)), sx=np.zeros(k), so=np.zeros(k))
+           for _ in range(n_parts)]
+    buf = np.empty((k, T), dtype=np.float32)
+    G = lg.gt.G
+    for s0 in range(0, n, T):
+        s1 = min(n, s0 + T)
+        Xt = buf[:, : s1 - s0]
+        decode_table(G, idx, lut, Xt, lg.n_threads, compiled=lg._compiled, start=s0)
+        COUNTER["cells"] += Xt.size
+        lab = labels[s0:s1]
+        for p in range(n_parts):
+            cols = np.flatnonzero(lab == p)
+            if not cols.size:
+                continue
+            X = Xt[:, cols]
+            O = (X >= 0).astype(np.float32)
+            np.maximum(X, 0.0, out=X)
+            Qp = Q[s0 + cols]
+            a = acc[p]
+            a["XX"] += X @ X.T
+            a["XO"] += X @ O.T
+            a["OO"] += O @ O.T
+            a["A"] += X.astype(np.float64) @ Qp
+            a["B"] += O.astype(np.float64) @ Qp
+            a["sx"] += X.sum(axis=1, dtype=np.float64)
+            a["so"] += O.sum(axis=1, dtype=np.float64)
+    mu = lg.mean[idx]
+    sd = lg.sd[idx]
+    inv = np.where(sd > 0, 1.0 / np.where(sd > 0, sd, 1.0), 0.0)
+    C = np.asarray(lg._projection[idx], dtype=np.float64)
+    out = []
+    for p in range(n_parts):
+        a = acc[p]
+        rows = labels == p
+        Qp = Q[rows]
+        S = a["XX"] - mu[None, :] * a["XO"] - (mu[None, :] * a["XO"]).T + np.outer(mu, mu) * a["OO"]
+        zz = S * np.outer(inv, inv)
+        U = (a["A"] - mu[:, None] * a["B"]) * inv[:, None]
+        G2 = zz - C @ U.T - U @ C.T + C @ (Qp.T @ Qp) @ C.T
+        s = (a["sx"] - mu * a["so"]) * inv - C @ Qp.sum(axis=0)
+        out.append((G2, s, float(rows.sum())))
+    return out
+
+
+def build_split_blocks(lg, order: np.ndarray, block_size: int, kind: str, labels: np.ndarray,
+                       n_parts: int, excluded, tile: Optional[int] = None) -> list:
+    """Per-training-set covers (``ld_split="train"``): one cover per entry of
+    ``excluded``, each block the centred correlation of the projected rows
+    of that training set only (R_train = R_all - R_excluded on the Gram
+    scale, renormalised). One genotype pass; part Grams are summed, not
+    recomputed. Returns a list of covers sharing one layout."""
+    if kind not in LD_KINDS:
+        raise ValueError(f"ld must be one of {list(LD_KINDS)}, got {kind!r}")
+    order = np.asarray(order, dtype=np.int64)
+    labels = np.asarray(labels, dtype=np.int64)
+    hard = kind in ("d8-hardcall", "f32-hardcall")
+    if hard and lg.row_scale is not None:
+        raise ValueError("the hard-call LD build needs an unweighted model (no row_scale)")
+    quant = kind in ("d8-proj", "d8-hardcall")
+    covers = [[] for _ in excluded]
+    for a, b in _cover_layout(lg, order, block_size):
+        idx = order[a:b]
+        parts = (_split_sums_hardcall(lg, idx, labels, n_parts, tile) if hard
+                 else _split_sums_rows(lg, idx, labels, n_parts))
+        S_all = sum(p[0] for p in parts)
+        s_all = sum(p[1] for p in parts)
+        n_all = sum(p[2] for p in parts)
+        for j, ex in enumerate(excluded):
+            S2 = S_all - sum(parts[p][0] for p in ex)
+            s1 = s_all - sum(parts[p][1] for p in ex)
+            nT = n_all - sum(parts[p][2] for p in ex)
+            R = _corr_from_sums(S2, s1, nT)
+            covers[j].append((quantize_d8(R) if quant else R.astype(np.float32),
+                              np.arange(a, b)))
+    return covers
+
+
+# --------------------------------------------------------------------------- spectrum
+def _dense_float(R) -> np.ndarray:
+    R = np.asarray(R)
+    if R.dtype == np.int8:
+        return R.astype(np.float64) / _Q8
+    return R.astype(np.float64)
+
+
+def block_lambda_min(R, dense_max: int = 2000) -> float:
+    """Smallest eigenvalue of one dense LD block (D8 dequantised by 1/127):
+    LAPACK's selected-eigenvalue driver up to ``dense_max`` variants, a
+    Lanczos (ARPACK, smallest algebraic) estimate above."""
+    from scipy import linalg
+
+    A = _dense_float(R)
+    k = A.shape[0]
+    if k == 0:
+        return 1.0
+    if k <= dense_max:
+        return float(linalg.eigh(A, eigvals_only=True, subset_by_index=[0, 0],
+                                 check_finite=False)[0])
+    from scipy.sparse.linalg import eigsh
+
+    return float(eigsh(A, k=1, which="SA", tol=1e-4, return_eigenvectors=False)[0])
+
+
+def cover_spectrum(blocks) -> dict:
+    """lambda_min per dense block of a cover, with summary statistics."""
+    lam = np.array([block_lambda_min(R) for R, _ in blocks if isinstance(R, np.ndarray)])
+    if not lam.size:
+        return {"lambda_min": lam}
+    return {"lambda_min": lam, "min": float(lam.min()), "median": float(np.median(lam)),
+            "n_blocks": int(lam.size), "n_negative": int(np.sum(lam < 0)),
+            "n_below_minus_0_05": int(np.sum(lam < -0.05)),
+            "n_below_minus_0_25": int(np.sum(lam < -0.25))}
+
+
+def ridge_block_d8(R: np.ndarray, lam_min: float, margin: float = 0.0, max_doublings: int = 8):
+    """Floor a D8 block's spectrum at ``margin``: requantise
+    (R + c I) / (1 + c) (unit diagonal, D8 code) with c = margin - lam_min,
+    doubling c until the requantised block's lambda_min >= 0 (requantising
+    re-rounds the off-diagonals). Returns ``(block, c, lambda_min_after)``;
+    float blocks are floored exactly, without requantising."""
+    if lam_min >= margin:
+        return R, 0.0, lam_min
+    A = _dense_float(R)
+    c = float(margin - lam_min)
+    for _ in range(max_doublings):
+        F = (A + c * np.eye(A.shape[0])) / (1.0 + c)
+        out = quantize_d8(F) if np.asarray(R).dtype == np.int8 else F.astype(np.float32)
+        after = block_lambda_min(out)
+        if after >= 0.0:
+            return out, c, after
+        c *= 2.0
+    return out, c, after

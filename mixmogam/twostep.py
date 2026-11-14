@@ -1168,8 +1168,21 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     :class:`mixmogam._ld8.LDCache` or a directory) to reuse a built cover
     across traits of one panel, covariates and model-SNP subset;
     ``extra["stage1_info"]`` records the LD build or cache hit and the fit
-    times. ``model_snps`` and ``relatedness`` combine with every LDpred3
-    option. Variance components and prior selection still
+    times. ``stage1_kwargs["ld_split"] = "train"`` builds one cover per
+    cross-fit training set (the LD of exactly the rows whose marginals the
+    fit reads; same pass, k + 1 times the storage), and
+    ``stage1_kwargs["ld_psd"]`` (``"check"``, the D8 default: per-block
+    lambda_min recorded, a warning when lassosum2's smallest s cannot keep
+    (1 - s) R + s I PSD; ``"floor"``: raise lassosum2's smallest s, or ridge
+    the blocks of the other fits; ``"ridge"``; ``"off"``) guards the int8
+    spectrum. ``model_snps`` and ``relatedness`` combine with every LDpred3
+    option. Gates: an explicit LDpred3 stage 1 refuses ``sample_weights``
+    (weighted marginals do not follow LDpred3's beta_hat ~ N(R beta, R/N))
+    and strong structure after the covariates (block-diagonal LD cannot
+    absorb ancestry; add ancestry PCs to ``X``, or pass
+    ``stage1_kwargs["allow_strong_structure"]=True``); ``"auto"`` keeps the
+    elastic net in both cases. A two-valued ``y`` with an LDpred3 stage 1
+    warns (use ``trait="binary"``). Variance components and prior selection still
     use the whole trait, and the genome-wide h2 the infinitesimal fit shares
     over its blocks leaks the tested chromosome second-order (documented in
     :mod:`mixmogam.stage1`).
@@ -1415,6 +1428,22 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                              "working model keeps the elastic-net stage 1")
         if loco_folds < 2:
             raise ValueError(f"stage1 {stage1!r} needs cross-fitted scores: loco_folds >= 2")
+        if weighted and stage1 != "auto":
+            # LDpred3's working model beta_hat ~ N(R beta, R / N) needs the
+            # marginals' noise covariance to be the LD the fit uses. Under
+            # sampling weights the weighted slopes' noise covariance is the
+            # w^2-weighted LD over Kish's n, the signal's the w-weighted LD:
+            # a per-fold Kish n fixes the scale only (stage1-int8-ldpred-cw.md).
+            raise ValueError(f"stage1 {stage1!r} needs unweighted samples: under sample_weights "
+                             "the weighted marginal regressions do not follow LDpred3's "
+                             "beta_hat ~ N(R beta, R / N) model; use stage1='enet'")
+        if trait == "quantitative":
+            yv = np.asarray(y, dtype=np.float64).ravel()
+            if np.unique(yv[np.isfinite(yv)]).size == 2:
+                warnings.warn(f"y takes two values: stage1 {stage1!r} fits it as a Gaussian "
+                              "trait (a linear probability model); for case-control data use "
+                              "trait='binary', which keeps the elastic-net stage 1 and the "
+                              "logistic step 2", UserWarning, stacklevel=2)
     n_threads = _validate_n_threads(n_threads)
     if loco_folds > gt.n_samples:
         raise ValueError("loco_folds exceeds the number of samples")
@@ -1535,7 +1564,38 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     folds = None
     if loco_folds > 1:
         folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
-    if stage1 == "auto" and h2 > 0:
+    stage1_kwargs = dict(stage1_kwargs or {})
+    allow_strong = bool(stage1_kwargs.pop("allow_strong_structure", False))
+    ldp_strong = stage1 not in ("enet", "auto") and struct["strong"] and h2 > 0
+    if ldp_strong and not allow_strong:
+        # LDpred3's block-diagonal LD has no cross-chromosome terms, so it
+        # fits ancestry once per block; the LOCO subtraction then leaves the
+        # tested group's share of ancestry in its residual, and no scalar
+        # lambda removes a confounder that only ancestry-informative SNPs
+        # carry (null lambda_GC 1.6-1.8 after lambda without PCs, against
+        # 1.0-1.2 for the refitted elastic net; stage1-int8-ldpred-cw.md).
+        raise ValueError(f"stage1 {stage1!r}: the structure test finds strong population "
+                         "structure after the covariates; LDpred3's block-diagonal LD cannot "
+                         "absorb ancestry the way the refitted elastic net does. Add ancestry "
+                         "principal components to X, or use stage1='enet' or 'auto' "
+                         "(stage1_kwargs allow_strong_structure=True overrides)")
+    if ldp_strong:
+        warnings.warn(f"stage1 {stage1!r} under strong population structure "
+                      "(allow_strong_structure=True): check null-SNP calibration",
+                      RuntimeWarning, stacklevel=2)
+    if stage1 == "auto" and h2 > 0 and (weighted or struct["strong"]):
+        # The LDpred3 candidate needs unweighted samples and no strong
+        # structure after the covariates (see the gates above).
+        scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
+                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
+        scores["stage1_selection"] = {"heldout_mse_enet": float(np.min(scores["mse"])),
+                                      "heldout_mse_ldpred3": float("nan"), "chosen": "enet",
+                                      "reason": ("sample_weights" if weighted else
+                                                 "strong structure")
+                                      + ": LDpred3 candidate skipped"}
+        scores["stage1_name"] = "enet"
+    elif stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=struct["strong"],
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)

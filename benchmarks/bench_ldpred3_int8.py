@@ -19,7 +19,19 @@ Methods (``--methods``, comma separated)
     ldpred3-d8-hardcall-rankq    (b) D8 from hard calls, rank-q covariates
     ldpred3-fast                 (c) LDpred3-auto on FastLD (int8 sub-blocks
                                  + int8 Nystrom landmarks), from (b) blocks
-``--models inf,lassosum2`` picks the LDpred3 model for the first three.
+``--models inf,lassosum2`` picks the LDpred3 model for the first three
+(``ldpred3-fast`` is always LDpred3-auto). ``--ld-split all|train`` and
+``--ld-psd off|check|floor|ridge`` pass to ``stage1_kwargs`` (Phase 2) and
+tag the run; ``--variants`` adds extra (method:model:split:psd) runs.
+
+Phase 2 additions: a Numba/BLAS warm-up fit on a tiny panel before the
+timed traits (``--no-warmup`` to skip); ``gen --null-chrom`` appends
+unlinked chromosomes without causal variants, and ``lambda_null`` is
+lambda_GC over them; KING cells are counted separately (``king``);
+``spectrum`` measures ||D8 - R||_2 and lambda_min per block.
+
+spectrum   lambda_min(R), lambda_min(D8), ||D8 - R||_2 (exact, float64) per
+           block of a panel's projected hard-call LD, at several sample sizes.
 
 Example (smoke)
     source /workspace/repos/mixmogam-ldpred3/.venv/bin/activate
@@ -58,7 +70,8 @@ def gen(a):
     from mixmogam._packed import PackedCalls
 
     rng = np.random.default_rng(a.seed)
-    n, m, C = a.n, a.m, a.n_chrom
+    n, m = a.n, a.m
+    C = a.n_chrom + a.null_chrom  # the last null_chrom carry no causal variants
     n_kid_target = int(round(a.fam_frac * n))
     n_fam = n_kid_target // a.kids
     n_kids = n_fam * a.kids
@@ -102,7 +115,8 @@ def gen(a):
             else:
                 pos[j] = base[t] + 1  # one base off an HM3 site: not a match
     # genotypes, variant by variant
-    caus = np.sort(rng.choice(m, a.n_causal, replace=False))
+    n_causal_pool = int(np.sum(chrom <= a.n_chrom))
+    caus = np.sort(rng.choice(n_causal_pool, a.n_causal, replace=False))
     betas = rng.standard_normal((a.n_traits, caus.size))
     g = np.zeros((a.n_traits, n))
     Hf = np.zeros((2, n_found), dtype=bool)
@@ -125,8 +139,10 @@ def gen(a):
     zc = G[:, caus].astype(float)
     zc = (zc - zc.mean(0)) / np.where(zc.std(0) > 0, zc.std(0), 1)
     g = betas @ zc.T
-    if a.miss > 0:
-        G[rng.random(G.shape, dtype=np.float32) < a.miss] = -1
+    if a.miss > 0:  # column chunks: no n x m float array
+        for s0 in range(0, m, 2048):
+            sub = G[:, s0:s0 + 2048]
+            sub[rng.random(sub.shape, dtype=np.float32) < a.miss] = -1
     ys = {}
     h2s = np.linspace(a.h2_min, a.h2_max, a.n_traits)
     for t in range(a.n_traits):
@@ -156,7 +172,8 @@ def gen(a):
             fh.write(f"f{i}\ti{i}\t0\t0\t0\t-9\n")
     np.savez(a.prefix + ".npz", X=X, pop=pop_all, causal=caus, h2=h2s,
              pairs_i=np.array(I), pairs_j=np.array(J), pairs_r=np.full(len(I), 0.5),
-             hm3_idx=np.array(hm3_rows, dtype=np.int64), **ys)
+             hm3_idx=np.array(hm3_rows, dtype=np.int64),
+             null_idx=np.flatnonzero(chrom > a.n_chrom), **ys)
     print(json.dumps({"n": n, "m": m, "n_families": n_fam, "n_kids": n_kids,
                       "hm3_variants": len(hm3_rows), "pairs": len(I)}))
 
@@ -204,16 +221,56 @@ def _instrument(gt):
                 stack.pop()
         setattr(mod, name, w)
 
+    ok = REL.king_pairs
+
+    def king(gt_, variants, *x, **k):
+        block = k.get("block", 2048)
+        cells[("king", "panel")] += -(-gt_.n_samples // block) * gt_.n_samples * len(variants)
+        return ok(gt_, variants, *x, **k)
+    REL.king_pairs = king
     for mod, name, label in [
             (twostep, "_setup", "setup"), (twostep, "_model_snp_setup", "subset_select"),
             (twostep, "structure_test", "structure"), (twostep, "_hratt_variance", "variance_components"),
             (twostep, "_model_snp_warnings", "h2check"), (REL, "resolve_relatedness", "relatedness"),
             (twostep, "_hratt_fit_scores", "stage1_enet"), (stage1, "fold_marginals", "stage1_marginals"),
-            (_ld8, "build_blocks", "stage1_ld_build"), (stage1, "_fitted_unprojected", "stage1_predict"),
+            (_ld8, "build_blocks", "stage1_ld_build"),
+            (_ld8, "build_split_blocks", "stage1_ld_build"), (stage1, "_fitted_unprojected", "stage1_predict"),
             (twostep, "_out_of_fold_loco", "stage1_predict"), (stage1, "residualize_score", "stage1_predict"),
             (twostep, "_retro_stats", "stage2"), (twostep, "_hratt_lambda", "lambda")]:
         wrap(mod, name, label)
     return cells, _ld8
+
+
+def _tag(method, model, split="all", psd="default"):
+    t = f"{method}-{model}"
+    if split != "all":
+        t += f"-split{split}"
+    if psd != "default":
+        t += f"-psd{psd}"
+    return t
+
+
+def _warmup(stage1, kw, a):
+    """One untimed fit on a tiny in-memory panel: Numba JIT and BLAS start-up
+    are paid here, not by trait 1."""
+    from mixmogam import twostep
+    from mixmogam.genotypes import Genotypes
+
+    rng = np.random.default_rng(0)
+    G = (rng.random((400, 1200)) < 0.3).astype(np.int8) + (rng.random((400, 1200)) < 0.3)
+    gt = Genotypes(G.astype(np.int8), chromosome=np.repeat([1, 2, 3], 400),
+                   position=np.tile(np.arange(400), 3))
+    y = rng.standard_normal(400)
+    kw = dict(kw)
+    if "block_size" in kw:
+        kw["block_size"] = min(kw["block_size"], 200)
+    if "fast_block_size" in kw:
+        kw.update(fast_block_size=400, width=200, burn_in=20, num_iter=10)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        twostep.hratt(y, gt, rng.standard_normal((400, 2)), stage1=stage1,
+                      stage1_kwargs=kw or None, loco_folds=a.loco_folds, random_state=0,
+                      relatedness="auto" if a.relatedness == "auto" else None)
 
 
 def run(a):
@@ -231,7 +288,10 @@ def run(a):
     kw = {}
     if method != "enet":
         stage1 = "ldpred3-fast" if method == "ldpred3-fast" else f"ldpred3-{a.model}"
-        kw = {"ld": LD_OF[method], "block_size": a.block_size, "ld_tile": a.ld_tile}
+        kw = {"ld": LD_OF[method], "block_size": a.block_size, "ld_tile": a.ld_tile,
+              "ld_split": a.ld_split}
+        if a.ld_psd != "default":
+            kw["ld_psd"] = a.ld_psd
         if method == "ldpred3-fast":
             kw.update(fast_block_size=a.fast_block_size, width=a.fast_width,
                       landmarks=a.fast_landmarks, burn_in=a.fast_burn_in,
@@ -252,6 +312,9 @@ def run(a):
     elif a.relatedness == "pedigree":
         relatedness = (d["pairs_i"], d["pairs_j"], d["pairs_r"])
     causal = d["causal"]
+    null_idx = d["null_idx"] if "null_idx" in d.files else np.zeros(0, dtype=np.int64)
+    if a.warmup:
+        _warmup(stage1, {k_: v for k_, v in kw.items() if k_ != "ld_cache"}, a)
     traits = []
     chi2_out = {}
     for t in range(a.n_traits):
@@ -280,6 +343,10 @@ def run(a):
                   for (ph, so), v in sorted(cells.items())}
         rec = {"trait": t, "wall_s": wall, "cpu_s": cpu,
                "lambda_gc": float(np.median(chi2[ok]) / 0.454936423119572),
+               "lambda_null": (float(np.nanmedian(chi2[null_idx]) / 0.454936423119572)
+                               if null_idx.size else None),
+               "mean_chi2_null": float(np.nanmean(chi2[null_idx])) if null_idx.size else None,
+               "king_passes": cells.get(("king", "panel"), 0) / float(n * m),
                "mean_chi2": float(np.mean(chi2[ok])),
                "causal_mean_chi2": float(np.nanmean(chi2[causal])),
                "h2": float(r.extra["h2"]), "cv_mse": float(np.min(r.extra["cv_mse"])),
@@ -303,11 +370,12 @@ def run(a):
     if method != "enet" and a.cache == "disk":
         disk = kw["ld_cache"].disk_bytes()
     out = {"method": method, "model": a.model if method in LDP_METHODS else
-           ("auto" if method == "ldpred3-fast" else "vb"),
+           ("auto" if method == "ldpred3-fast" else "vb"), "ld_split": a.ld_split,
+           "ld_psd": a.ld_psd,
            "n": n, "m": m, "threads": a.threads, "traits": traits,
            "peak_rss_mb": resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024.0,
            "ld_cache_disk_bytes": disk}
-    tag = f"{method}-{out['model']}"
+    tag = _tag(method, out["model"], a.ld_split, a.ld_psd)
     np.savez(os.path.join(a.workdir, f"chi2-{tag}.npz"), **chi2_out)
     with open(os.path.join(a.workdir, f"run-{tag}.json"), "w") as fh:
         json.dump(out, fh, indent=1, default=float)
@@ -335,23 +403,35 @@ def summarize(workdir, n_traits):
         t0 = r["traits"][0]
         rest = r["traits"][1:]
         s0 = t0["stage1_info"]
+        spec = s0.get("ld_spectrum") or []
         row = {"tag": tag, "k": t0["model_snps"], "k_source": t0.get("model_snps_source"),
                "passes_by_phase_t1": t0.get("passes_by_phase"),
                "passes_by_phase_t2": rest[0].get("passes_by_phase") if rest else None,
                "peak_rss_mb": r["peak_rss_mb"], "disk_mb": r["ld_cache_disk_bytes"] / 2**20,
                "wall_t1": t0["wall_s"], "cpu_t1": t0["cpu_s"],
                "wall_next": float(np.mean([x["wall_s"] for x in rest])) if rest else None,
+               "cpu_next": float(np.mean([x["cpu_s"] for x in rest])) if rest else None,
                "ld_build_s": s0.get("ld_build_s"), "ld_build_cpu_s": s0.get("ld_build_cpu_s"),
-               "solve_s": s0.get("solve_s"), "ld_mb": (s0.get("ld_bytes") or 0) / 2**20,
+               "solve_s": s0.get("solve_s"), "solve_cpu_s": s0.get("solve_cpu_s"),
+               "marginals_s": s0.get("marginals_s"), "predict_s": s0.get("predict_s"),
+               "ld_mb": (s0.get("ld_bytes") or 0) / 2**20,
                "ld_cache_next": [x["stage1_info"].get("ld_cache") for x in rest],
                "panel_passes_t1": t0["panel_passes"], "subset_passes_t1": t0["subset_passes"],
+               "king_passes_t1": t0.get("king_passes"),
                "subset_passes_next": (float(np.mean([x["subset_passes"] for x in rest]))
                                       if rest and rest[0]["subset_passes"] is not None else None),
                "ld_passes_t1": t0["ld_passes_subset_equiv"],
                "lambda_gc": [x["lambda_gc"] for x in r["traits"]],
+               "lambda_null": [x.get("lambda_null") for x in r["traits"]],
                "causal_mean_chi2": [x["causal_mean_chi2"] for x in r["traits"]],
                "cv_mse": [x["cv_mse"] for x in r["traits"]],
-               "h2": [x["h2"] for x in r["traits"]]}
+               "h2": [x["h2"] for x in r["traits"]],
+               "lam_min": min((e["min"] for e in spec), default=None),
+               "lam_min_median": (float(np.median([e["median"] for e in spec])) if spec else None),
+               "n_neg_blocks": sum(e.get("n_negative", 0) for e in spec) if spec else None,
+               "ridge_blocks": sum(e.get("ridge_blocks", 0) for e in spec) if spec else None,
+               "ridge_max": max((e.get("ridge_max", 0.0) for e in spec), default=None),
+               "s_floor": s0.get("s_floor"), "spectrum_s": sum(e.get("spectrum_s", 0) for e in spec)}
         model = r["model"]
         ref = f"ldpred3-f32-{model}" if model in ("inf", "lassosum2") else "ldpred3-f32-inf"
         for name, other in (("vs_f32", ref), ("vs_enet", "enet-vb")):
@@ -371,23 +451,70 @@ def _fmt(x, nd=3):
     return str(x)
 
 
+def _mean(v):
+    v = [x for x in (v or []) if x is not None]
+    return float(np.mean(v)) if v else None
+
+
 def markdown(rows):
-    head = ("| method | model SNPs | peak RSS MB | LD MB | cache disk MB | LD build s (CPU) | solve s | "
-            "trait-1 wall s | next-trait wall s | panel passes | subset passes t1/next | "
-            "λGC per trait | causal χ² | hold-out MSE | corr χ² vs f32 | max Δχ² vs f32 | corr χ² vs enet |")
+    head = ("| run | peak RSS MB | LD MB | disk MB | LD build s (CPU) | marg s | solve s (CPU) | predict s | "
+            "trait-1 wall/CPU s | next-trait wall/CPU s | passes panel/subset/KING t1 | subset next | "
+            "λGC null (mean) | causal χ² (mean) | h² (mean) | MSE (mean) | λmin min/med (neg blocks) | "
+            "corr χ² vs f32 (min) | max Δχ² vs f32 | corr χ² vs enet (min) |")
     out = [head, "|" + "---|" * (head.count("|") - 1)]
     for r in rows:
         vf = r.get("vs_f32") or []
         ve = r.get("vs_enet") or []
         out.append("| " + " | ".join([
-            r["tag"], f"{r['k']} ({r['k_source']})", _fmt(r["peak_rss_mb"], 4), _fmt(r["ld_mb"]), _fmt(r["disk_mb"]),
-            f"{_fmt(r['ld_build_s'])} ({_fmt(r['ld_build_cpu_s'])})", _fmt(r["solve_s"]),
-            _fmt(r["wall_t1"]), _fmt(r["wall_next"]), _fmt(r["panel_passes_t1"]),
-            f"{_fmt(r['subset_passes_t1'])}/{_fmt(r['subset_passes_next'])}",
-            _fmt(r["lambda_gc"], 4), _fmt(r["causal_mean_chi2"]), _fmt(r["cv_mse"], 4),
-            _fmt([x["corr_chi2"] for x in vf], 5), _fmt([x["max_abs_dchi2"] for x in vf]),
-            _fmt([x["corr_chi2"] for x in ve], 4)]) + " |")
+            r["tag"], _fmt(r["peak_rss_mb"], 4), _fmt(r["ld_mb"]), _fmt(r["disk_mb"]),
+            f"{_fmt(r['ld_build_s'])} ({_fmt(r['ld_build_cpu_s'])})", _fmt(r["marginals_s"]),
+            f"{_fmt(r['solve_s'])} ({_fmt(r['solve_cpu_s'])})", _fmt(r["predict_s"]),
+            f"{_fmt(r['wall_t1'])}/{_fmt(r['cpu_t1'])}", f"{_fmt(r['wall_next'])}/{_fmt(r['cpu_next'])}",
+            f"{_fmt(r['panel_passes_t1'])}/{_fmt(r['subset_passes_t1'])}/{_fmt(r['king_passes_t1'])}",
+            _fmt(r["subset_passes_next"]),
+            _fmt(_mean(r["lambda_null"]), 4), _fmt(_mean(r["causal_mean_chi2"])),
+            _fmt(_mean(r["h2"])), _fmt(_mean(r["cv_mse"]), 4),
+            f"{_fmt(r['lam_min'])}/{_fmt(r['lam_min_median'])} ({_fmt(r['n_neg_blocks'])})",
+            _fmt(min((x["corr_chi2"] for x in vf), default=None), 6),
+            _fmt(max((x["max_abs_dchi2"] for x in vf), default=None)),
+            _fmt(min((x["corr_chi2"] for x in ve), default=None), 4)]) + " |")
     return "\n".join(out)
+
+
+def spectrum(a):
+    """||D8 - R||_2, lambda_min(R) and lambda_min(D8) of the projected
+    hard-call LD blocks of the model-SNP (HM3) subset, at several sample
+    sizes (the first n rows), against the Wigner estimate 2 sigma sqrt(k),
+    sigma = 1 / (127 sqrt(12))."""
+    from mixmogam import _ld8, twostep
+    from mixmogam.genotypes import Genotypes
+    from mixmogam.io.plink import read_plink
+
+    gt = read_plink(a.prefix, mmap=True)
+    d = np.load(a.prefix + ".npz")
+    hm = d["hm3_idx"]
+    chrom = np.asarray(gt.chromosome)
+    sel = hm[chrom[hm] == chrom[hm][0]][: a.block_size * a.n_blocks]
+    out = []
+    for n_sub in [int(x) for x in a.sizes.split(",")]:
+        G = np.asarray(gt.G[:n_sub][:, sel]).astype(np.int8)
+        g2 = Genotypes(np.ascontiguousarray(G), chromosome=np.ones(sel.size, dtype=np.int64),
+                       position=np.arange(sel.size))
+        lg = twostep._setup(d["y0"][:n_sub], g2, d["X"][:n_sub], 25, 4096).lg
+        for b in range(0, sel.size, a.block_size):
+            idx = np.arange(b, min(sel.size, b + a.block_size))
+            D8, R = _ld8.hardcall_block(lg, idx, return_float=True)
+            E = D8.astype(np.float64) / 127.0 - R
+            ev = np.linalg.eigvalsh(E)
+            rec = {"n": n_sub, "block": b // a.block_size, "k": int(idx.size),
+                   "lam_min_R": _ld8.block_lambda_min(R), "lam_min_D8": _ld8.block_lambda_min(D8),
+                   "norm2_D8_minus_R": float(np.max(np.abs(ev))),
+                   "wigner_2sigma_sqrtk": 2.0 / (127 * np.sqrt(12)) * np.sqrt(idx.size),
+                   "max_abs_entry": float(np.max(np.abs(E)))}
+            out.append(rec)
+            print(json.dumps(rec), flush=True)
+    with open(a.out, "w") as fh:
+        json.dump(out, fh, indent=1)
 
 
 def run_all(a):
@@ -398,7 +525,8 @@ def run_all(a):
         subprocess.run([sys.executable, __file__, "gen", "--prefix", prefix, "--n", str(a.n),
                         "--m", str(a.m), "--n-chrom", str(a.n_chrom), "--n-traits", str(a.n_traits),
                         "--fam-frac", str(a.fam_frac), "--seed", str(a.seed),
-                        "--hm3-frac", str(a.hm3_frac), "--n-causal", str(a.n_causal)], check=True)
+                        "--hm3-frac", str(a.hm3_frac), "--n-causal", str(a.n_causal),
+                        "--null-chrom", str(a.null_chrom)], check=True)
         print(f"# generated {prefix} in {time.perf_counter() - t0:.1f}s", flush=True)
     work = os.path.join(a.out, "work")
     os.makedirs(work, exist_ok=True)
@@ -408,7 +536,14 @@ def run_all(a):
             jobs += [(meth, mod) for mod in a.models.split(",")]
         else:
             jobs.append((meth, "inf"))
-    for meth, mod in jobs:
+    jobs = [(m_, d_, a.ld_split, a.ld_psd) for m_, d_ in jobs]
+    for v in filter(None, a.variants.split(",")):
+        m_, d_, sp_, ps_ = v.split(":")
+        jobs.append((m_, d_, sp_, ps_))
+    for meth, mod, split, psd in jobs:
+        if os.path.exists(os.path.join(work, f"run-{_tag(meth, 'auto' if meth == 'ldpred3-fast' else ('vb' if meth == 'enet' else mod), split, psd)}.json")):
+            print(f"# skip {meth} {mod} {split} {psd} (done)", flush=True)
+            continue
         cmd = [sys.executable, __file__, "run", "--prefix", prefix, "--workdir", work,
                "--method", meth, "--model", mod, "--n-traits", str(a.n_traits),
                "--model-snps", a.model_snps, "--relatedness", a.relatedness,
@@ -416,7 +551,9 @@ def run_all(a):
                "--threads", str(a.threads), "--cache", a.cache, "--seed", str(a.seed),
                "--fast-block-size", str(a.fast_block_size), "--fast-width", str(a.fast_width),
                "--fast-landmarks", str(a.fast_landmarks), "--fast-burn-in", str(a.fast_burn_in),
-               "--fast-num-iter", str(a.fast_num_iter)]
+               "--fast-num-iter", str(a.fast_num_iter), "--ld-split", split, "--ld-psd", psd]
+        if not a.warmup:
+            cmd.append("--no-warmup")
         if a.ld_tile:
             cmd += ["--ld-tile", str(a.ld_tile)]
         if not a.covariates:
@@ -424,7 +561,7 @@ def run_all(a):
         env = dict(os.environ, OPENBLAS_NUM_THREADS=str(a.threads), OMP_NUM_THREADS=str(a.threads),
                    MKL_NUM_THREADS=str(a.threads))
         t0 = time.perf_counter()
-        print(f"# run {meth} {mod}", flush=True)
+        print(f"# run {meth} {mod} {split} {psd}", flush=True)
         subprocess.run(cmd, check=True, env=env)
         print(f"#   {time.perf_counter() - t0:.1f}s", flush=True)
     rows = summarize(work, a.n_traits)
@@ -460,6 +597,8 @@ def main():
     g.add_argument("--h2-min", type=float, default=0.2)
     g.add_argument("--h2-max", type=float, default=0.5)
     g.add_argument("--hm3-frac", type=float, default=0.5)
+    g.add_argument("--null-chrom", type=int, default=1,
+                   help="extra unlinked chromosomes without causal variants")
     _common(g)
     for name in ("run", "all"):
         p = sub.add_parser(name)
@@ -477,6 +616,9 @@ def main():
         p.add_argument("--fast-landmarks", type=int, default=64)
         p.add_argument("--fast-burn-in", type=int, default=300)
         p.add_argument("--fast-num-iter", type=int, default=100)
+        p.add_argument("--ld-split", default="all", choices=("all", "train"))
+        p.add_argument("--ld-psd", default="default", choices=("default", "off", "check", "floor", "ridge"))
+        p.add_argument("--no-warmup", dest="warmup", action="store_false")
         _common(p)
         if name == "run":
             p.add_argument("--workdir", required=True)
@@ -492,8 +634,19 @@ def main():
             p.add_argument("--hm3-frac", type=float, default=0.5)
             p.add_argument("--methods", default=",".join(ALL_METHODS))
             p.add_argument("--models", default="inf,lassosum2")
+            p.add_argument("--null-chrom", type=int, default=1)
+            p.add_argument("--variants", default="",
+                           help="extra runs method:model:split:psd, comma separated")
+    sp = sub.add_parser("spectrum")
+    sp.add_argument("--prefix", required=True)
+    sp.add_argument("--out", required=True)
+    sp.add_argument("--block-size", type=int, default=500)
+    sp.add_argument("--n-blocks", type=int, default=6)
+    sp.add_argument("--sizes", default="300,500,1000,5000,20000")
     a = ap.parse_args()
-    if a.cmd == "gen":
+    if a.cmd == "spectrum":
+        spectrum(a)
+    elif a.cmd == "gen":
         gen(a)
     elif a.cmd == "run":
         run(a)
