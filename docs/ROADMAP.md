@@ -26,6 +26,43 @@ Decoding (`decode_table`, 3.8-6.7 s of the profiles, called from the rows
 above) is near its floor, 0.16 ns per call from variant-major int8 and 0.2 ns
 from two-bit calls.
 
+## Biobank scale (14 November review)
+
+A scalability review found the kernels flat in n but the layer around them
+limited to one trait, one fileset and one process. Done on the same day: HRATT runs as step 1 plus
+a streamed step 2 (`mixmogam.steps`, CLI `step2`) over files per chromosome,
+hard calls or BGEN dosages, several traits per read; a mapped panel stays
+mapped when samples are filtered; step-2 scores come from a fused kernel
+(0.45 to 0.09 ns per call at eight threads on 200,000 x 2,560); the joint
+Gram preparation runs on up to four threads (2.1x at four on the M2 Pro,
+where concurrent float64 GEMMs saturate at about 2.2x). A streamed step 2
+costs 0.63 ns per call at eight threads, against 1.35 before.
+
+Open, by expected gain:
+
+- **The moments pass** is now most of step 2 (0.9 ns per call at eight
+  threads, 3x over one thread). A BLAS projection of decoded tiles would be
+  several times faster but gives up per-variant bit-identity across blocks,
+  storage and thread counts, which the step-2 equivalence relies on.
+- **Stage 1 per trait.** Each trait still prepares the model panel's moments
+  and builds its Grams. Traits with the same samples, covariates and folds
+  could share both, but the folds and hold-out are drawn after trait-dependent
+  random draws; they would need their own seed stream first.
+- **Sweeps tiled over samples** (the multi-core item below) matter more at
+  n = 500,000, where one decoded 128-variant sub-block is 256 MB.
+- **Dosages for binary and weighted traits** need a dosage form of the
+  genotype saddlepoint and of the ancestry ratio.
+- **The genotype saddlepoint** costs O(n) per variant above |z| = 2 (about
+  5% of variants). Restricting the cumulant sum to carriers, as SAIGE does,
+  does not carry over: here the genotypes are the random part. Not measured
+  at biobank n.
+- **Defaults (decision).** `method="auto"` chooses `bolt-inf` above 5,000
+  samples (76 s against 17 s for HRATT-HE at 50,000 x 20,000) and
+  `heritability_method="auto"` is REML at every n. Changing either changes
+  results.
+- BIM parsing and the CSV writer are per-row Python: minutes at tens of
+  millions of variants in one file; per-chromosome files keep them small.
+
 ## Open
 
 - **REML with more samples than variants.** The guarded Lanczos stop saves
@@ -38,8 +75,9 @@ from two-bit calls.
   regions, two per 128-variant sub-block, each 100-200 us of work; spinning
   workers hide the launch latency but not the count. Fewer, larger regions
   (fusing decoding with the sweep, or parallelizing across sub-blocks) is the
-  real fix; prefetching the next sub-block on a helper thread and a parallel
-  Gram build were proposed and not verified. Letting Accelerate thread the
+  real fix; prefetching the next sub-block on a helper thread was proposed and
+  not verified. The joint Gram build is parallel since 14 November; Grams
+  rebuilt during sweeps (a partial cache) are still serial. Letting Accelerate thread the
   REML Lanczos GEMMs (not setting `VECLIB_MAXIMUM_THREADS=1`) is a
   configuration change worth about 3-4 s on a multi-core REML fit, measured
   only across processes.

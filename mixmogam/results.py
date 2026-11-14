@@ -124,6 +124,50 @@ class GwasResult:
         idx = np.argsort(self.p)[:k]
         return self.take(idx)
 
+    @classmethod
+    def concat(cls, parts) -> "GwasResult":
+        """One result from results for consecutive variant blocks (e.g. the
+        blocks or files of :func:`mixmogam.steps.hratt_step2`), in order.
+
+        Variant columns and per-variant extras are concatenated; a
+        per-variant extra missing from some parts is NaN there (False for a
+        flag). Counts over variants (``n_spa``, ``n_few_carrier_families``)
+        are summed; other extras come from the first part. The parts must
+        share n, n_eff and genome_build."""
+        parts = list(parts)
+        if not parts:
+            raise ValueError("concat needs at least one result")
+        first = parts[0]
+        for other in parts[1:]:
+            if (other.n, other.n_eff, other.genome_build) != (first.n, first.n_eff,
+                                                              first.genome_build):
+                raise ValueError("results to concatenate must share n, n_eff and genome_build")
+
+        def cat(name):
+            values = [getattr(part, name) for part in parts]
+            if all(v is None for v in values):
+                return None
+            if any(v is None for v in values):
+                raise ValueError(f"{name} is present in some results only")
+            return np.concatenate([np.asarray(v) for v in values])
+
+        extra = dict(first.extra)
+        for key in ("ppa", "log_bf", "priors", "prior_variance") + _EXTRA_COLUMNS:
+            if any(key in part.extra for part in parts):
+                fill = False if key == "few_carrier_families" else np.nan
+                extra[key] = np.concatenate([
+                    np.asarray(part.extra[key]) if key in part.extra
+                    else np.full(len(part), fill) for part in parts])
+        for key in _COUNT_EXTRAS:
+            if key in extra:
+                extra[key] = int(sum(int(part.extra.get(key, 0)) for part in parts))
+        return cls(chromosome=cat("chromosome"), position=cat("position"), p=cat("p"),
+                   variant_ids=cat("variant_ids"), f_stat=cat("f_stat"), beta=cat("beta"),
+                   se=cat("se"), rss=cat("rss"), af=cat("af"), var_perc=cat("var_perc"),
+                   extra=extra, effect_allele=cat("effect_allele"),
+                   other_allele=cat("other_allele"), n=first.n, n_eff=first.n_eff,
+                   genome_build=first.genome_build)
+
     def take(self, idx) -> "GwasResult":
         """Results for the variants at ``idx`` (indices or a boolean mask);
         per-variant posterior extras are subset too, other extras copied."""
@@ -346,11 +390,15 @@ class GwasResult:
         return (self.extra.get("effect_method") != "one-step-logistic"
                 and self.extra.get("trait") != "binary" and "kish_n" not in self.extra)
 
-    def write_csv(self, path: str, delimiter: Optional[str] = None) -> None:
+    def write_csv(self, path: str, delimiter: Optional[str] = None, *, append: bool = False) -> None:
         """Write variant columns with round-trip precision as CSV or TSV.
 
         The delimiter defaults to tab for ``.tsv``/``.txt`` and comma
         otherwise, ignoring a final ``.gz`` (which enables gzip compression).
+        ``append=True`` adds the rows to an existing file without a header
+        (a ``.gz`` file gains a gzip member, which gzip readers join), so
+        results can be written block by block; the blocks must have the
+        same columns.
 
         ``af`` is the frequency of ``effect_allele``. The headcount ``n``
         is omitted for binary and weighted scores because downstream readers
@@ -378,9 +426,10 @@ class GwasResult:
             if key in self.extra:
                 columns[key] = np.asarray(self.extra[key])
         opener = gzip.open if str(path).lower().endswith(".gz") else open
-        with opener(path, "wt", newline="") as fh:
+        with opener(path, "at" if append else "wt", newline="") as fh:
             writer = csv.writer(fh, delimiter=_delimiter(path, delimiter))
-            writer.writerow(columns)
+            if not append:
+                writer.writerow(columns)
             writer.writerows(zip(*columns.values()))
 
     @classmethod
@@ -467,6 +516,8 @@ _SCORE_COLUMNS = {"beta": "beta_one_step", "se": "se_null_score"}
 # Per-variant extras exported as columns when present: HRATT with
 # relatedness= (carrier families of variants with p < carrier_families_p).
 _EXTRA_COLUMNS = ("carrier_families", "few_carrier_families")
+# Counts over variants, summed when block results are concatenated.
+_COUNT_EXTRAS = ("n_spa", "n_few_carrier_families")
 
 
 def _delimiter(path, delimiter):

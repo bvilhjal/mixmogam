@@ -544,6 +544,101 @@ def _gather_packed(data, idx, lut, rows, scale, out):
             out[r, h] = value * scale[h] if scaled else value
 
 
+# Variants per parallel task of the score kernels.
+_SCORE_ROWS = 16
+
+
+def _score_packed_rows(data, idx, lut, w, scale, out, r0, r1):
+    """out[r] = sum_i v_ri w_i for rows r0:r1 from two-bit codes, v_ri the
+    value :func:`_decode_packed_rows` gives (times ``scale`` in the table's
+    precision when ``scale`` is non-empty), summed in float64 by four
+    accumulators, one per sample position within a byte. No row is
+    written: a decode and a dot in one read of the codes."""
+    n = w.size
+    full = n // 4
+    scaled = scale.size > 0
+    v = np.empty(4, dtype=lut.dtype)
+    for r in range(r0, r1):
+        v[0], v[1], v[2], v[3] = lut[r, 2], lut[r, 3], lut[r, 1], lut[r, 0]
+        row = data[idx[r]]
+        a0 = 0.0
+        a1 = 0.0
+        a2 = 0.0
+        a3 = 0.0
+        if scaled:
+            for b in range(full):
+                byte = row[b]
+                i = 4 * b
+                a0 += (v[byte & 3] * scale[i]) * w[i]
+                a1 += (v[(byte >> 2) & 3] * scale[i + 1]) * w[i + 1]
+                a2 += (v[(byte >> 4) & 3] * scale[i + 2]) * w[i + 2]
+                a3 += (v[byte >> 6] * scale[i + 3]) * w[i + 3]
+            for i in range(4 * full, n):
+                a0 += (v[(row[i >> 2] >> (2 * (i & 3))) & 3] * scale[i]) * w[i]
+        else:
+            for b in range(full):
+                byte = row[b]
+                i = 4 * b
+                a0 += v[byte & 3] * w[i]
+                a1 += v[(byte >> 2) & 3] * w[i + 1]
+                a2 += v[(byte >> 4) & 3] * w[i + 2]
+                a3 += v[byte >> 6] * w[i + 3]
+            for i in range(4 * full, n):
+                a0 += v[(row[i >> 2] >> (2 * (i & 3))) & 3] * w[i]
+        out[r] = (a0 + a1) + (a2 + a3)
+
+
+def _score_variants_rows(G, idx, lut, w, scale, out, r0, r1):
+    """:func:`_score_packed_rows` for variant-major int8 calls."""
+    n = w.size
+    scaled = scale.size > 0
+    for r in range(r0, r1):
+        col = G[:, idx[r]]
+        l0, l1, l2, missing = lut[r, 0], lut[r, 1], lut[r, 2], lut[r, 3]
+        a0 = 0.0
+        a1 = 0.0
+        a2 = 0.0
+        a3 = 0.0
+        last = n - n % 4
+        if scaled:
+            for i in range(0, last, 4):
+                a0 += (_select_call(col[i], l0, l1, l2, missing) * scale[i]) * w[i]
+                a1 += (_select_call(col[i + 1], l0, l1, l2, missing) * scale[i + 1]) * w[i + 1]
+                a2 += (_select_call(col[i + 2], l0, l1, l2, missing) * scale[i + 2]) * w[i + 2]
+                a3 += (_select_call(col[i + 3], l0, l1, l2, missing) * scale[i + 3]) * w[i + 3]
+            for i in range(last, n):
+                a0 += (_select_call(col[i], l0, l1, l2, missing) * scale[i]) * w[i]
+        else:
+            for i in range(0, last, 4):
+                a0 += _select_call(col[i], l0, l1, l2, missing) * w[i]
+                a1 += _select_call(col[i + 1], l0, l1, l2, missing) * w[i + 1]
+                a2 += _select_call(col[i + 2], l0, l1, l2, missing) * w[i + 2]
+                a3 += _select_call(col[i + 3], l0, l1, l2, missing) * w[i + 3]
+            for i in range(last, n):
+                a0 += _select_call(col[i], l0, l1, l2, missing) * w[i]
+        out[r] = (a0 + a1) + (a2 + a3)
+
+
+def _score_packed(data, idx, lut, w, scale, out):
+    _score_packed_rows(data, idx, lut, w, scale, out, 0, idx.size)
+
+
+def _score_packed_parallel(data, idx, lut, w, scale, out):
+    for t in prange((idx.size + _SCORE_ROWS - 1) // _SCORE_ROWS):
+        _score_packed_rows(data, idx, lut, w, scale, out, t * _SCORE_ROWS,
+                           min(t * _SCORE_ROWS + _SCORE_ROWS, idx.size))
+
+
+def _score_variants(G, idx, lut, w, scale, out):
+    _score_variants_rows(G, idx, lut, w, scale, out, 0, idx.size)
+
+
+def _score_variants_parallel(G, idx, lut, w, scale, out):
+    for t in prange((idx.size + _SCORE_ROWS - 1) // _SCORE_ROWS):
+        _score_variants_rows(G, idx, lut, w, scale, out, t * _SCORE_ROWS,
+                             min(t * _SCORE_ROWS + _SCORE_ROWS, idx.size))
+
+
 def _project_rows(z, coefficients, Qt, out):
     """out = z - c Q' row by row, the q-term correction summed in a fixed
     order (c_0 Q_0, then + c_k Q_k) along the samples, so a row's values do
@@ -579,23 +674,29 @@ if HAS_NUMBA:
     _moments_packed_parallel = njit(parallel=True, cache=True)(_moments_packed_parallel)
     _decode_packed_rows = njit(cache=True)(_decode_packed_rows)
     _decode_packed_span = njit(cache=True)(_decode_packed_span)
-    _decode_packed = njit(cache=True)(_decode_packed)
+    _decode_packed = njit(cache=True, nogil=True)(_decode_packed)
     _decode_packed_parallel = njit(parallel=True, cache=True)(_decode_packed_parallel)
-    _decode_packed_span_all = njit(cache=True)(_decode_packed_span_all)
+    _decode_packed_span_all = njit(cache=True, nogil=True)(_decode_packed_span_all)
     _decode_packed_span_parallel = njit(parallel=True, cache=True)(_decode_packed_span_parallel)
     _project_rows = njit(cache=True)(_project_rows)
     _moments_columns_serial = njit(cache=True)(_moments_columns_serial)
     _moments_columns_parallel = njit(parallel=True, cache=True)(_moments_columns_parallel)
     _select_call = njit(inline="always", cache=True)(_select_call)
     _decode_column = njit(cache=True)(_decode_column)
-    _decode_variants = njit(cache=True)(_decode_variants)
+    _decode_variants = njit(cache=True, nogil=True)(_decode_variants)
     _decode_variants_parallel = njit(parallel=True, cache=True)(_decode_variants_parallel)
     _decode_tile = njit(cache=True)(_decode_tile)
-    _decode_samples = njit(cache=True)(_decode_samples)
+    _decode_samples = njit(cache=True, nogil=True)(_decode_samples)
     _decode_samples_parallel = njit(parallel=True, cache=True)(_decode_samples_parallel)
     _gather_variants = njit(cache=True)(_gather_variants)
     _gather_samples = njit(cache=True)(_gather_samples)
     _gather_packed = njit(cache=True)(_gather_packed)
+    _score_packed_rows = njit(cache=True, nogil=True)(_score_packed_rows)
+    _score_variants_rows = njit(cache=True, nogil=True)(_score_variants_rows)
+    _score_packed = njit(cache=True, nogil=True)(_score_packed)
+    _score_packed_parallel = njit(parallel=True, cache=True)(_score_packed_parallel)
+    _score_variants = njit(cache=True, nogil=True)(_score_variants)
+    _score_variants_parallel = njit(parallel=True, cache=True)(_score_variants_parallel)
 
 
 def prepare_moments(G, idx, Q, n_threads=1, sq_weights=None):
@@ -718,3 +819,30 @@ def gather_table(G, idx, lut, rows, out, scale=None, compiled=True):
     else:
         _gather_variants(G, idx, lut, rows, factors, out)
     return out
+
+
+def score_table(G, idx, lut, w, out, scale=None, n_threads=1) -> bool:
+    """out[r] = sum_i z_ri w_i for variants ``idx``, z_r their rows as
+    :func:`decode_table` gives them (times ``scale``, one value per sample,
+    in the table's precision, as LocoGenotypes scales decoded rows), summed
+    in float64 without writing the rows. Each variant is summed by one
+    thread in a fixed order, so every thread count gives the same values.
+    Returns False, leaving ``out`` alone, for storage without a kernel
+    (sample-major int8, other array-likes, or no Numba)."""
+    if not HAS_NUMBA:
+        return False
+    if isinstance(G, PackedCalls):
+        serial, parallel, source = _score_packed, _score_packed_parallel, G.data
+    elif isinstance(G, np.ndarray) and G.ndim == 2 and G.strides[0] <= G.strides[1]:
+        serial, parallel, source = _score_variants, _score_variants_parallel, G
+    else:
+        return False
+    factors = np.empty(0, dtype=lut.dtype) if scale is None else np.ascontiguousarray(scale, dtype=lut.dtype)
+    w = np.ascontiguousarray(w, dtype=np.float64)
+    tasks = (idx.size + _SCORE_ROWS - 1) // _SCORE_ROWS
+    if n_threads > 1 and tasks > 1:
+        with _numba_thread_limit(min(_validate_n_threads(n_threads), tasks)):
+            parallel(source, idx, lut, w, factors, out)
+    else:
+        serial(source, idx, lut, w, factors, out)
+    return True

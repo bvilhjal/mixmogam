@@ -299,7 +299,18 @@ def _ancestry_ratio(cu: np.ndarray, zz: np.ndarray, Q: np.ndarray, mean: np.ndar
     return (p @ a2) / (float(np.sum(a2)) * np.mean(p, axis=1))
 
 
-def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict:
+def _projected_residuals(st: _Setup, W: np.ndarray, cache: Optional[dict] = None) -> np.ndarray:
+    """(I - QQ') W, kept in ``cache`` (if given) for later calls."""
+    if cache is not None and "Wp" in cache:
+        return cache["Wp"]
+    Wp = st.lg.project(W)
+    if cache is not None:
+        cache["Wp"] = Wp
+    return Wp
+
+
+def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False,
+                 cache: Optional[dict] = None) -> dict:
     """Uncalibrated retrospective chi2 of every variant against its group's
     column of W: n_eff (z'w)^2 / (z'z |w|^2).
 
@@ -311,22 +322,33 @@ def _retro_stats(st: _Setup, W: np.ndarray, retrospective: bool = False) -> dict
     variance after covariates. When allele frequencies vary with the
     covariates the variance is zvar_j |a_g|^2 rho_j instead
     (:func:`_ancestry_ratio`). ``chi2_retro`` = (z_j'a_g)^2 / ``V`` with
-    ``V`` = zvar_j |a_g|^2 rho_j, and ``A`` holds the a_g.
+    ``V`` = zvar_j |a_g|^2 rho_j, and ``A`` holds the a_g. ``cache`` keeps
+    the per-sample quantities (they depend on W alone) across calls on
+    further variants of the same samples.
     """
     m = st.lg.m
     num = np.zeros(m)
     zz = np.array(st.lg.zz)
-    wn = np.einsum("ij,ij->j", W, W)
-    Wp = st.lg.project(W)  # Z_j w = z_j (I - QQ') w
+    if cache is not None and "wn" in cache:
+        wn = cache["wn"]
+    else:
+        wn = np.einsum("ij,ij->j", W, W)
+        if cache is not None:
+            cache["wn"] = wn
+    Wp = _projected_residuals(st, W, cache)  # Z_j w = z_j (I - QQ') w
     if retrospective:
         A = Wp if st.s is None else Wp * st.s[:, None]
         A2 = A * A
         inv_s = None if st.s is None else 1.0 / st.s
         zvar, rho = np.zeros(m), np.zeros(m)
-    # Widen at most 16 MiB of variant rows, retaining each full sample
+    scorer = None if retrospective else getattr(st.lg, "score_numerators", None)
+    fused = None if scorer is None else scorer(Wp)
+    if fused is not None:
+        num = fused  # one parallel read of the calls, no decoded rows
+    # Otherwise widen at most 16 MiB of variant rows, retaining each full sample
     # reduction. The minimum one-row tile and native BLAS scratch are separate.
     tile = max(1, (16 * 1024**2) // max(8 * st.lg.n, 1))
-    for idx, g, Z64 in st.lg.wide_slices(tile):
+    for idx, g, Z64 in (() if fused is not None else st.lg.wide_slices(tile)):
         num[idx] = Z64 @ Wp[:, g]
         if retrospective:
             z = Z64 if inv_s is None else Z64 * inv_s
@@ -1577,7 +1599,39 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``beta_one_step`` and ``se_null_score``; posterior probabilities are
     unavailable for these approximations.
     ``denominator="spectral"`` is unavailable with weights or binary traits.
+
+    Step 1 and step 2 can also run apart (:func:`mixmogam.steps.hratt_step1`,
+    :func:`mixmogam.steps.hratt_step2`): the step-1 fit is saved once and
+    step 2 streams any number of genotype files (per chromosome, sample
+    order free, also imputed dosages) in bounded blocks, with the same
+    statistics as this function.
     """
+    state, cache = _hratt_stage1(**locals())
+    return _hratt_test(state, cache["st_test"], gt, n_threads, rsU=cache["rsU"], U=cache["U"])
+
+
+def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
+                  max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
+                  alpha_method: str = "he", he_probes: int = 32,
+                  heritability_method: str = "auto",
+                  grid=HRATT_GRID, cv_fraction: float = 0.1, loco_folds: int = 5,
+                  n_calibration: int = 30, denominator: str = "constant", n_spectral="auto",
+                  structure_snps: int = 512, vb_max_iter: int = 100, vb_tol: float = 1e-5,
+                  cv_tol: Optional[float] = None, cg_tol: float = 1e-6, slq_tol: float = 1e-6,
+                  spa_threshold: float = 2.0, spa_two_sided: str = "distance",
+                  random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
+                  block: int = 4096, n_threads: int = 1,
+                  gram_cache_bytes: float = 1e9, model_snps=None,
+                  model_snps_options: Optional[dict] = None, model_snps_include=None,
+                  model_snps_h2_check: bool = True, model_snps_stream=None,
+                  relatedness=None, relatedness_threshold: float = 0.025,
+                  relatedness_correction: str = "auto",
+                  relatedness_options: Optional[dict] = None) -> tuple:
+    """Step 1 of :func:`hratt` (same arguments): everything up to the LOCO
+    residuals and their calibration (lambda, kappa_g). Returns ``(state,
+    cache)``: the state :func:`_hratt_test` tests variants against, and the
+    step-1 panel's prepared genotypes ``st_test`` with any statistics already
+    computed on them."""
     if trait not in ("quantitative", "binary"):
         raise ValueError("trait must be 'quantitative' or 'binary'")
     if trait == "quantitative":
@@ -1998,11 +2052,6 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             scores["stage1_selection"]["heldout_mse_enet"] *= weight_scale
             scores["stage1_selection"]["heldout_mse_ldpred3"] *= weight_scale
     resid = scores.pop("resid")
-    if binary and not (struct["strong"] and h2 > 0):
-        rsU, U = None, None  # step 2 is logistic; no working-model statistic needed
-    else:
-        rsU = _retro_stats(st_test, resid, retrospective=weighted and not binary)
-        U = rsU["chi2"]
 
     extra = {"method": "hratt", "denominator": denominator, "alpha": vc["alpha"], "h2": h2,
              "alpha_method": alpha_method, "alpha_scores": vc["alpha_scores"],
@@ -2038,15 +2087,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         extra.update({"kish_n": kish, "design_effect": n / kish})
     if model_info is not None:
         extra["model_snps"] = model_info
-    kap_g, c_X, gls = None, 1.0, None
+    kap_g, c_X = None, 1.0
     if rel is not None:
-        from mixmogam._relatedness import covariate_factor, gls_stats
+        from mixmogam._relatedness import covariate_factor
 
         if relatedness_correction == "kappa" and not binary:
             # kappa_g = a_g' Phi a_g / a_g'a_g of the residual each score is
             # taken against: the projected LOCO residual, or the weighted
             # residual of the retrospective (weighted) test.
-            A_rel = rsU["A"] if weighted else st_test.lg.project(resid)
+            A_rel = st_test.lg.project(resid)
+            if weighted and st_test.s is not None:
+                A_rel *= st_test.s[:, None]
             kap_g = _kappa_guard(rel.kappa(A_rel), rel_opt["kappa_floor"])
             del A_rel
             # c_X: the genotype variance after covariates (z'Pz / n_eff, or
@@ -2056,29 +2107,28 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                                         st_test.n_eff)
             rel_info["trace_QPhiQ"] = trq
         elif relatedness_correction == "gls":
+            # The family variance components of each group's residual belong
+            # to step 1; step 2 takes the GLS scores (and gamma, if needed).
             Wp = st_test.lg.project(resid)
-            gls = gls_stats(st_test.lg, Wp, rel, denominator=rel_opt["denominator"],
-                            n_gamma=rel_opt["n_gamma"], max_cluster=rel_opt["max_cluster"],
-                            rng=np.random.default_rng([0 if random_state is None else random_state,
-                                                       0x7663]))
-            rel_info.update({"kappa": rel.kappa(Wp), "s_f": gls["s_f"], "s_e": gls["s_e"],
-                             "gamma": gls["gamma"]})
+            s_f, s_e = rel.family_vc(Wp)
+            rel_info.update({"kappa": rel.kappa(Wp), "s_f": s_f, "s_e": s_e})
             del Wp
         if kap_g is not None:
             rel_info.update({"kappa": kap_g, "c_X": c_X})
         extra["relatedness"] = rel_info
-        extra["_carrier_ctx"] = (rel, relatedness_threshold, rel_opt["carrier_families_p"],
-                                 rel_opt["carrier_families_max"],
-                                 rel_opt["carrier_families_max_maf"], binary)
-    lam = 1.0
+    lam, rsU, U = 1.0, None, None
     if struct["strong"] and h2 > 0 and relatedness_correction == "lambda":
         # At the HE residual-zero boundary, use the same declared noise
         # floor for ridge calibration as for VB. A zero ridge would leave
         # the projected LOCO operator singular in the covariate directions.
         residual_variance = s2e if heritability_method == "he" else 1.0 - h2
         if st is st_test:
-            lam, U, lam_extra = _hratt_lambda(st, ys, U, h2, residual_variance, w, vc["basis"],
-                                              n_calibration, denominator, n_spectral, cg_tol, rng)
+            # The stage-1 panel is the tested panel: its statistics calibrate
+            # lambda, and step 2 reuses them (spectral: multiplied by kappa_j).
+            rsU = _retro_stats(st_test, resid, retrospective=weighted and not binary)
+            lam, U, lam_extra = _hratt_lambda(st, ys, rsU["chi2"], h2, residual_variance, w,
+                                              vc["basis"], n_calibration, denominator,
+                                              n_spectral, cg_tol, rng)
         else:
             # lambda is a stage-1 quantity: calibrated on the model SNPs'
             # own statistics, then applied to every tested variant.
@@ -2087,15 +2137,67 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                                               vc["basis"], n_calibration, denominator,
                                               n_spectral, cg_tol, rng)
         extra.update(lam_extra)
-    del resid
     extra["lambda"] = lam
-    st = st_test
+    state = {"trait": trait, "binary": binary, "weighted": weighted, "denominator": denominator,
+             "correction": relatedness_correction, "lam": lam, "sy": sy,
+             "resid": None if binary else resid,
+             "prediction": scores.pop("prediction") if binary else None,
+             "crossfit": folds is not None, "kap_g": kap_g, "c_X": c_X,
+             "rel": rel, "rel_opt": rel_opt, "relatedness_threshold": relatedness_threshold,
+             "spa_threshold": spa_threshold, "spa_two_sided": spa_two_sided,
+             "random_state": random_state, "gls_gamma": None, "extra": extra}
+    del resid
+    return state, {"st_test": st_test, "rsU": rsU,
+                   "U": U if denominator == "spectral" and rsU is not None else None}
+
+
+def _hratt_test(state: dict, st: _Setup, gt, n_threads: int = 1, *, rsU=None, U=None,
+                cache: Optional[dict] = None) -> GwasResult:
+    """(2) HRATT's tests of the variants of ``st`` (genotypes ``gt``) against
+    a step-1 ``state`` (:func:`_hratt_stage1`).
+
+    Every statistic is per variant given the state, so any partition of the
+    variants gives the same values. ``rsU`` and ``U`` are the step-1 panel's
+    own statistics when they were computed for lambda (``U``: the spectral
+    denominator's). ``cache`` keeps what depends only on the samples (the
+    projected residuals, the binary null fits, the GLS covariance inverses)
+    across calls on further variants.
+    """
+    extra = dict(state["extra"])
+    rel, rel_opt = state["rel"], state["rel_opt"]
+    lam, sy = state["lam"], state["sy"]
+    weighted, binary = state["weighted"], state["binary"]
+    kap_g, c_X = state["kap_g"], state["c_X"]
+    if rel is not None:
+        extra["relatedness"] = dict(extra["relatedness"])
+        extra["_carrier_ctx"] = (rel, state["relatedness_threshold"], rel_opt["carrier_families_p"],
+                                 rel_opt["carrier_families_max"],
+                                 rel_opt["carrier_families_max_maf"], binary)
     if binary:
-        return _hratt_binary_step2(st, gt, scores.pop("prediction"), sy, lam, spa_threshold,
-                                   n_threads, extra, crossfit=folds is not None,
-                                   two_sided=spa_two_sided,
-                                   rel=rel if relatedness_correction == "kappa" else None,
-                                   kappa_floor=None if rel_opt is None else rel_opt["kappa_floor"])
+        return _hratt_binary_step2(st, gt, state["prediction"], sy, lam, state["spa_threshold"],
+                                   n_threads, extra, crossfit=state["crossfit"],
+                                   two_sided=state["spa_two_sided"],
+                                   rel=rel if state["correction"] == "kappa" else None,
+                                   kappa_floor=None if rel_opt is None else rel_opt["kappa_floor"],
+                                   cache=cache)
+    spa_threshold, spa_two_sided = state["spa_threshold"], state["spa_two_sided"]
+    gls = None
+    if state["correction"] == "gls":
+        from mixmogam._relatedness import gls_stats
+
+        Wp = _projected_residuals(st, state["resid"], cache)
+        gls = gls_stats(st.lg, Wp, rel, denominator=rel_opt["denominator"],
+                        n_gamma=rel_opt["n_gamma"], max_cluster=rel_opt["max_cluster"],
+                        rng=np.random.default_rng([0 if state["random_state"] is None
+                                                   else state["random_state"], 0x7663]),
+                        s_f=extra["relatedness"]["s_f"], s_e=extra["relatedness"]["s_e"],
+                        gamma=state["gls_gamma"], cache=cache)
+        extra["relatedness"]["gamma"] = gls["gamma"]
+    else:
+        if rsU is None:
+            rsU = _retro_stats(st, state["resid"], retrospective=weighted, cache=cache)
+        if U is None:
+            U = rsU["chi2"]
     p = None
     if weighted:
         # lambda, a structure correction of the model-based statistic,
@@ -2616,7 +2718,7 @@ def _hratt_lambda(st: _Setup, ys: np.ndarray, U: np.ndarray, h2: float, residual
 
 def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_threads,
                         extra, crossfit: bool = False, two_sided: str = "distance",
-                        rel=None, kappa_floor=None) -> GwasResult:
+                        rel=None, kappa_floor=None, cache: Optional[dict] = None) -> GwasResult:
     """Logistic score tests of a binary trait with the LOCO polygenic scores
     as offsets (step 2 of binary HRATT).
 
@@ -2637,17 +2739,24 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     """
     from mixmogam._binary import group_null_fits, loco_offsets, score_pass
 
-    offsets = loco_offsets(prediction, st.s, sy)
-    del prediction
     y = st.y_raw
-    try:
-        fits = group_null_fits(y, st.X_raw, offsets, weights=st.w, free_offset=crossfit)
-    except ValueError as exc:
-        if crossfit:
-            raise
-        raise ValueError(f"{exc}; with in-sample LOCO scores (loco_folds=1) the offset can nearly "
-                         "separate rare cases; use loco_folds >= 2") from None
-    sp = score_pass(st.lg, y, st.X_raw, fits, weights=st.w, s=st.s, Q=st.Q_raw)
+    if cache is not None and "binary_fits" in cache:
+        fits, off_sd = cache["binary_fits"], cache["offset_sd"]
+    else:
+        offsets = loco_offsets(prediction, st.s, sy)
+        try:
+            fits = group_null_fits(y, st.X_raw, offsets, weights=st.w, free_offset=crossfit)
+        except ValueError as exc:
+            if crossfit:
+                raise
+            raise ValueError(f"{exc}; with in-sample LOCO scores (loco_folds=1) the offset can nearly "
+                             "separate rare cases; use loco_folds >= 2") from None
+        off_sd = float((offsets - offsets.mean(axis=0)).std())
+        del offsets
+        if cache is not None:
+            cache["binary_fits"], cache["offset_sd"] = fits, off_sd
+    del prediction
+    sp = score_pass(st.lg, y, st.X_raw, fits, weights=st.w, s=st.s, Q=st.Q_raw, cache=cache)
     U, J, A = sp["U"], sp["J"], sp["A"]
     w = np.ones(y.size) if st.w is None else st.w
     V = sp["zvar"] * np.einsum("ij,ij->j", A, A)[st.lg.groups] * sp["rho"]
@@ -2660,8 +2769,13 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
         # lambda_g = 1 / (kappa_g c_X) as its per-group variance ratio.
         from mixmogam._relatedness import covariate_factor
 
-        kap = _kappa_guard(rel.kappa(A), kappa_floor)
-        c_X, trq = covariate_factor(rel, st.Q_raw, st.n_eff)
+        if cache is not None and "binary_kappa" in cache:
+            kap, c_X, trq = cache["binary_kappa"]
+        else:
+            kap = _kappa_guard(rel.kappa(A), kappa_floor)
+            c_X, trq = covariate_factor(rel, st.Q_raw, st.n_eff)
+            if cache is not None:
+                cache["binary_kappa"] = (kap, c_X, trq)
         extra["relatedness"].update({"kappa": kap, "c_X": c_X, "trace_QPhiQ": trq})
         lam_spa = 1.0 / (kap * c_X)
         lam_j = lam_spa[st.lg.groups]
@@ -2674,12 +2788,11 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
         # Uncertainty of the null-score linearization, independent of the
         # choice of tail approximation. This is not a fitted logistic MLE.
         se_z = np.where(valid, np.sqrt(V / lam_j) / J, np.nan)
-    off = offsets - offsets.mean(axis=0)
     extra.update({"n_cases": int(y.sum()),
                   "n_controls": int(y.size - y.sum()),
                   "prevalence": float(np.sum(w * y) / np.sum(w)),
                   "null_converged": bool(all(f["converged"] for f in fits)),
-                  "mu0_clipped": st.mu0_clipped, "offset_sd": float(off.std()),
+                  "mu0_clipped": st.mu0_clipped, "offset_sd": off_sd,
                   "spa_threshold": float(spa_threshold), "spa_two_sided": two_sided,
                   "n_spa": n_spa, "effect_method": "one-step-logistic"})
     if crossfit:

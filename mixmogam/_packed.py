@@ -17,7 +17,9 @@ import numpy as np
 from mixmogam._fast import HAS_NUMBA
 
 if HAS_NUMBA:
-    from numba import njit
+    from numba import njit, prange
+else:
+    prange = range
 
 __all__ = ["PackedCalls"]
 
@@ -39,6 +41,9 @@ for _valid in range(1, 5):
                 _BYTE_SUM[_valid, _byte] += _call
 # Decoded or packed calls per NumPy chunk.
 _CHUNK_CALLS = 1 << 24
+# Bytes of source rows per chunk when a mapped panel's samples are
+# repacked to a file.
+_SPILL_BYTES = 64 * 1024**2
 
 
 def _decode_columns_compiled(data, idx, n_samples, out):
@@ -94,6 +99,20 @@ def _take_samples_compiled(data, rows, out):
             out[j, b] = byte
 
 
+def _take_samples_parallel(data, rows, out):
+    """:func:`_take_samples_compiled` with Numba workers over variants."""
+    for j in prange(out.shape[0]):
+        for b in range(out.shape[1]):
+            byte = 0
+            for slot in range(4):
+                r = 4 * b + slot
+                if r < rows.size:
+                    old = rows[r]
+                    code = (data[j, old // 4] >> (2 * (old % 4))) & 3
+                    byte |= code << (2 * slot)
+            out[j, b] = byte
+
+
 def _qc_compiled(data, idx, n_samples, called, twice_ac):
     """Called count and summed dosage from one lookup per packed byte."""
     valid = (n_samples - 1) % 4 + 1
@@ -110,6 +129,7 @@ if HAS_NUMBA:
     _decode_columns_compiled = njit(cache=True)(_decode_columns_compiled)
     _pack_compiled = njit(cache=True)(_pack_compiled)
     _take_samples_compiled = njit(cache=True)(_take_samples_compiled)
+    _take_samples_parallel = njit(parallel=True, cache=True)(_take_samples_parallel)
     _qc_compiled = njit(cache=True)(_qc_compiled)
 
 
@@ -244,18 +264,74 @@ class PackedCalls:
         np.bitwise_and(self.data, keep, out=self.data)
         np.bitwise_or(self.data, add, out=self.data)
 
-    def take_samples(self, sample_indices) -> "PackedCalls":
-        """Packed calls of the selected samples, repacked in bounded chunks."""
+    def take_samples(self, sample_indices, *, n_threads: int = 1,
+                     directory=None, in_memory: bool = False) -> "PackedCalls":
+        """Packed calls of the selected samples, repacked in bounded chunks.
+
+        A memory-mapped source (``numpy.memmap``, e.g. a bed file loaded
+        with ``mmap=True``) gives a memory-mapped result: the repacked rows
+        are written in bounded chunks to a temporary file in ``directory``
+        (default: the system temp directory, ``TMPDIR``), which is mapped
+        read-only and unlinked, so resident memory stays about one chunk
+        whatever the panel size (disk use: the new panel, ceil(k / 4) bytes
+        per variant). Other sources are repacked in memory. ``n_threads``
+        Numba workers repack variants in parallel; values are the same.
+        ``in_memory=True`` repacks a mapped source in memory too (a block of
+        variants, say).
+        """
         idx = np.asarray(sample_indices)
         rows = np.arange(self.shape[0], dtype=np.int64)[idx]
         n_new = rows.size
         nb = (n_new + 3) // 4
+        if (HAS_NUMBA and rows.ndim == 1 and isinstance(self.data, np.memmap)
+                and not in_memory and self.shape[1] and nb):
+            return self._take_samples_to_file(np.ascontiguousarray(rows), n_threads, directory)
         data = np.empty((self.shape[1], nb), dtype=np.uint8)
         if HAS_NUMBA and rows.ndim == 1:
-            _take_samples_compiled(self.data, np.ascontiguousarray(rows), data)
+            self._repack(self.data, np.ascontiguousarray(rows), data, n_threads)
             return PackedCalls(data, n_new)
         step = max(1, _CHUNK_CALLS // max(4 * self.data.shape[1], 1))
         for start in range(0, self.shape[1], step):
             cols = np.arange(start, min(start + step, self.shape[1]))
             data[start : start + cols.size] = PackedCalls.pack(self._decode_columns(cols)[idx]).data
         return PackedCalls(data, n_new)
+
+
+    @staticmethod
+    def _repack(data, rows, out, n_threads: int) -> None:
+        if n_threads > 1 and out.shape[0] > 1:
+            from mixmogam._vb import _numba_thread_limit, _validate_n_threads
+
+            with _numba_thread_limit(min(_validate_n_threads(n_threads), out.shape[0])):
+                _take_samples_parallel(data, rows, out)
+        else:
+            _take_samples_compiled(data, rows, out)
+
+    def _take_samples_to_file(self, rows, n_threads: int, directory) -> "PackedCalls":
+        """:meth:`take_samples` of a mapped source through a temporary file."""
+        import os
+        import tempfile
+
+        from mixmogam._stream import Readahead
+
+        m, n_new = self.shape[1], rows.size
+        nb = (n_new + 3) // 4
+        step = max(1, _SPILL_BYTES // max(self.data.shape[1], nb, 1))
+        source = Readahead.for_array(self.data, _SPILL_BYTES)
+        fd, path = tempfile.mkstemp(prefix="mixmogam-samples-", suffix=".bed", dir=directory)
+        try:
+            buffer = np.empty((min(step, m), nb), dtype=np.uint8)
+            with os.fdopen(fd, "wb") as fh:
+                if source is not None:
+                    source.begin()
+                for start in range(0, m, step):
+                    stop = min(start + step, m)
+                    if source is not None:
+                        source.at(np.arange(start, stop))
+                    out = buffer[: stop - start]
+                    self._repack(self.data[start:stop], rows, out, n_threads)
+                    fh.write(out.data)
+            mm = np.memmap(path, dtype=np.uint8, mode="r", shape=(m, nb))
+        finally:
+            os.unlink(path)  # the mapping keeps the data until it goes
+        return PackedCalls(mm, n_new)

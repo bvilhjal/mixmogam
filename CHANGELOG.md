@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- HRATT in two steps (`mixmogam.steps`): `hratt_step1` fits step 1 with any
+  `hratt` options and returns a `HrattStep1`, saved and loaded as one `.npz`
+  (arrays and JSON, no pickles); `hratt_step2` tests genotype files against
+  it in blocks of bounded memory (`chunk_bytes`, default 256 MiB): any
+  number of files (per chromosome), step 1's samples selected by ID in any
+  order, several traits per read, results written as they are tested
+  (`out=`). Hard calls get `hratt`'s statistics: bitwise on 14 configurations
+  for the projection-only tests, within 3e-12 relative for weighted, binary
+  and GLS tests (BLAS products of other shapes). `denominator="spectral"`
+  stays in the one-call `hratt`.
+- Dosages in step 2: `Dosages` blocks and `mixmogam.io.bgen.iter_bgen_dosages`
+  (expected counts of the second allele, NaN when missing), for unweighted
+  quantitative traits with the lambda or kappa_g correction. Integer dosages
+  reproduce the hard-call statistics to about 1e-5.
+- CLI: `mixmogam gwas --save-step1 FILE` (with or without `--out`) and
+  `mixmogam step2 --step1 ... --geno ... --out ...` (`--dosage` for BGEN,
+  `--chunk-mb`, `--n-threads`).
+- `GwasResult.concat` and `write_csv(..., append=True)`.
+
+### Changed
+
+- `hratt` runs as step 1 then step 2 internally. The split alone changed no
+  value on 15 configurations (quantitative, HE with model SNPs, weighted,
+  binary, kappa_g, GLS, strong structure, spectral).
+- Step-2 score numerators come from one kernel over the stored calls
+  (lookup, row scale and float64 product per variant, parallel over
+  variants), not from decoded float64 rows: 0.45 to 0.09 ns per call at
+  eight threads on 200,000 x 2,560, 0.41 to 0.32 at one. Unweighted
+  quantitative results move by summation order only: log10 p by at most
+  7e-15 on those configurations (relative f_stat up to 3e-12, on
+  near-zero statistics); weighted, binary and GLS tests are unchanged.
+- With `n_threads > 1` HRATT's joint Gram preparation uses up to four
+  worker threads (2.1x at four on an M2 Pro; at most 2 GiB extra scratch);
+  the Grams are identical.
+- `Genotypes.filter_samples` keeps a memory-mapped panel mapped: the kept
+  samples are repacked into a temporary file (`TMPDIR`, or `directory=`) and
+  mapped, so the CLI's complete-case selection no longer copies the panel
+  into memory. `PackedCalls.take_samples` gains `n_threads`, `directory` and
+  `in_memory`.
+- `iter_bgen_dosages` and `read_bgen` share their input checks; the decode
+  and Gram packing kernels release the GIL.
+
 ## [2.0.2.dev2] - 2026-11-14
 
 ### Added

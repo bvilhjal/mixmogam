@@ -91,8 +91,8 @@ mixmogam hm3 match --geno imputed_hardcalls             # the match report only
 mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenance
 ```
 
-Imputed data must be hard-called first (for example BGEN with `--hard-call-threshold`);
-dosages are not supported.
+Stage 1 needs hard calls (for example BGEN with `--hard-call-threshold`). Step 2, run
+apart from it (next section), can also test imputed dosages.
 
 **Human data: `"hm3"` (recommended; see "What a subset costs" below).**
 - By default it uses the 1,444,196 HapMap3+ variants of ldpred3's UK Biobank European LD
@@ -159,6 +159,42 @@ calibrated in unrelated samples. HRATT warns, and records the details in
   points to `relatedness=` for relatives, as well as to PCs and a larger subset.
 - HapMap3 matching kept under half of the map's variants on a chromosome that has variants.
 - `"auto"` keeps more than 80% of the variants.
+
+### Biobank scale: step 1 once, step 2 per file
+
+`hratt` fits step 1 and tests the same panel in one call. For large cohorts, fit step 1 once
+(typically on the HapMap3 hard calls), save it, and stream step 2 over the other files, as
+REGENIE and LDAK-KVIK do:
+
+```
+mixmogam gwas --geno hm3 --mmap --pheno y.txt --pheno-name height --pcs 10 --save-step1 height.npz
+mixmogam gwas --geno hm3 --mmap --pheno y.txt --pheno-name bmi --pcs 10 --save-step1 bmi.npz
+mixmogam step2 --step1 height.npz bmi.npz --geno chr{1..22} --mmap --n-threads 8 \
+    --out height.tsv.gz bmi.tsv.gz
+mixmogam step2 --step1 height.npz --geno chr{1..22}.bgen --dosage --out height.tsv.gz
+```
+
+```python
+from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
+
+hratt_step1(y, hm3, X, n_threads=8).save("height.npz")  # takes any hratt option
+files = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
+hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.gz")
+```
+
+- Step 2 reads each file in blocks (`chunk_bytes`, default 256 MiB), selects step 1's samples
+  in every block (any order; other samples are ignored) and writes results as it goes, so
+  memory is one block plus the n x groups LOCO residuals.
+- Hard calls get the statistics `hratt` gives the same variants. Dosages
+  (`mixmogam.io.bgen.iter_bgen_dosages`, or `Dosages` blocks) are tested for unweighted
+  quantitative traits with the lambda or kappa_g correction; binary, weighted and GLS tests
+  need hard calls.
+- Several step 1s are tested in one read of the files. Traits fitted on the same samples and
+  covariates also share the standardization, the costly part of step 2.
+- Lambda (under strong structure) is calibrated in step 1 on its own panel.
+  `denominator="spectral"` is available only in the one-call `hratt`.
+- Samples without a phenotype no longer copy a memory-mapped panel into memory:
+  `filter_samples` repacks the kept samples into a temporary file (in `TMPDIR`) and maps it.
 
 ## Install
 

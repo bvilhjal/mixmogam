@@ -587,6 +587,39 @@ tails, rho_j and cross-fitting were designed to fix those; the prespecified
 of seven criteria, failing on weighted effects under selection on the outcome
 (5.4% low) and on weighted run time (1.55 times HRATT-HE against a 1.3 target).
 
+### Step 2 apart from step 1
+
+`hratt` is step 1 (`_hratt_stage1`: structure test, relatedness, variance
+components, prior choice, LOCO scores, lambda and kappa_g) followed by step 2
+(`_hratt_test`), which needs only the LOCO residuals or predictions (n x
+groups), lambda, kappa_g and c_X, the scale sy, the covariate basis and row
+scale, and the relatedness pairs. Every step-2 statistic is a function of one
+variant's calls and these, so any partition of the variants gives the same
+values: `mixmogam.steps` saves the state and streams genotype files through
+step 2 in blocks. Quantities that depend only on the samples (projected
+residuals, the binary null fits and their score-pass matrices, the GLS
+covariance inverses) are prepared once per run. On 14 configurations
+(quantitative, HE with a model-SNP subset, weighted, binary, kappa_g, GLS
+with both denominators, strong structure) the split gave `hratt`'s values
+bitwise on the same panel, and after saving, shuffling samples, adding
+samples and splitting the panel per chromosome into 37-variant blocks,
+bitwise for the projection-only tests and within 3e-12 relative where BLAS
+products of other shapes round apart (weighted, binary, GLS).
+
+Two quantities are defined over variants rather than per variant. Lambda
+under strong structure is calibrated on the step-1 panel's statistics, as
+with `model_snps`. The GLS `"gamma"` denominator averages over `n_gamma`
+random variants; `hratt_step1` draws them from its panel with `hratt`'s seed.
+The spectral denominator's factors exist only for step-1 variants, so it
+stays in the one-call function.
+
+Step 2's score numerators z_j'w_g come from one kernel that reads each
+variant's stored calls, applies the lookup table (and the float32 row
+scale) and accumulates the product in float64, parallel over variants, so
+no decoded rows are written and every thread count gives the same values.
+They differ from the decoded-row product only in summation order (~1e-16
+relative).
+
 ### Optional HRATT parallelism and memory budgets
 
 `n_threads=1` is the default. Above one, the `fast` extra parallelizes genotype
@@ -597,7 +630,10 @@ workers splits each residual update's matrix product over sample rows (above
 32 model columns a bounded workspace also serves the forward product). This
 needs `threadpoolctl`; without it those products stay serial. Smaller products
 use the ordinary path. Temporary Numba and detected BLAS limits are restored on
-exit. Under Numba's OpenMP layer the workers spin for 1 ms between a parallel
+exit. HRATT's joint Gram preparation hands sub-blocks to up to four worker
+threads, each with its own decode and gather scratch (about 20 bytes per
+sample and block variant), within 2 GiB of extra scratch; each sub-block's
+arithmetic is unchanged, so the Grams are identical at any worker count. Under Numba's OpenMP layer the workers spin for 1 ms between a parallel
 fit's launches instead of sleeping at once, unless `KMP_BLOCKTIME` or
 `OMP_WAIT_POLICY` is set. The [quickstart](quickstart.md#larger-hratt-fits)
 gives the measured gain and a complete configuration, including Apple

@@ -8,7 +8,7 @@ import numpy as np
 
 from mixmogam._packed import PackedCalls
 
-__all__ = ["Genotypes", "MISSING", "PackedCalls"]
+__all__ = ["Genotypes", "Dosages", "MISSING", "PackedCalls"]
 
 MISSING = -1  # internal missing genotype code
 
@@ -262,15 +262,23 @@ class Genotypes:
             keep[s] = ~bad
         return self.variant_mask(np.nonzero(keep)[0])
 
-    def filter_samples(self, sample_indices) -> "Genotypes":
+    def filter_samples(self, sample_indices, *, n_threads: int = 1,
+                       directory=None) -> "Genotypes":
         """New genotypes holding only the selected samples (indices or a
-        boolean mask), in that order; packed calls stay packed."""
+        boolean mask), in that order; packed calls stay packed.
+
+        Memory-mapped packed calls (``load_plink(..., mmap=True)``) stay
+        mapped: the selected samples are repacked to a temporary file in
+        ``directory`` (default ``TMPDIR``), unlinked once mapped, so a
+        complete-case subset of a large panel needs disk, not memory
+        (:meth:`~mixmogam._packed.PackedCalls.take_samples`). ``n_threads``
+        repacks in parallel."""
         idx = np.asarray(sample_indices)
         sample_ids = self.sample_ids[idx]
         if np.unique(sample_ids).size != sample_ids.size:
             raise ValueError("sample_ids must be unique; resolve duplicate IDs before alignment")
         if self.packed:
-            calls = self.G.take_samples(idx)
+            calls = self.G.take_samples(idx, n_threads=n_threads, directory=directory)
         else:
             # Keep variant-major calls variant-major: G[idx, :] would be
             # sample-major, which every later decoding pass reads slower.
@@ -392,3 +400,50 @@ class Genotypes:
         from mixmogam.io.eigenstrat import read_eigenstrat
 
         return read_eigenstrat(prefix)
+
+
+class Dosages:
+    """Expected allele counts (imputed dosages) of a block of variants.
+
+    ``values`` is an (n_samples, n_variants) float array of counted-allele
+    dosages in [0, 2], NaN for a missing value; the metadata are those of
+    :class:`Genotypes` (``allele1`` is the counted allele). The inference
+    engine fits on hard calls; dosages are for HRATT's step 2
+    (:func:`mixmogam.steps.hratt_step2`), which tests them directly, block by
+    block (:func:`mixmogam.io.bgen.iter_bgen_dosages` reads BGEN this way).
+    """
+
+    def __init__(self, values, sample_ids, chromosome, position=None, variant_ids=None,
+                 allele1=None, allele2=None):
+        values = np.asarray(values)
+        if values.ndim != 2 or values.dtype.kind != "f":
+            raise ValueError("dosages must be a two-dimensional float array (samples, variants)")
+        finite = values[np.isfinite(values)]
+        if np.isinf(values).any() or (finite.size and (finite.min() < -1e-6 or finite.max() > 2 + 1e-6)):
+            raise ValueError("dosages must lie in [0, 2], with NaN for a missing value")
+        self.values = values
+        n, m = values.shape
+        self.sample_ids = np.asarray(sample_ids)
+        if self.sample_ids.shape != (n,) or np.unique(self.sample_ids).size != n:
+            raise ValueError("dosages need one unique sample ID per row")
+        self.chromosome = np.asarray(chromosome)
+        self.position = np.arange(m, dtype=np.int64) if position is None else np.asarray(position)
+        self.variant_ids = (np.array([f"V{i}" for i in range(m)], dtype=object)
+                            if variant_ids is None else np.asarray(variant_ids))
+        self.allele1 = None if allele1 is None else np.asarray(allele1)
+        self.allele2 = None if allele2 is None else np.asarray(allele2)
+        for name in ("chromosome", "position", "variant_ids", "allele1", "allele2"):
+            arr = getattr(self, name)
+            if arr is not None and arr.shape != (m,):
+                raise ValueError(f"{name} must have one entry per variant")
+
+    @property
+    def n_samples(self) -> int:
+        return self.values.shape[0]
+
+    @property
+    def n_variants(self) -> int:
+        return self.values.shape[1]
+
+    def __repr__(self):
+        return f"Dosages(n_samples={self.n_samples}, n_variants={self.n_variants})"

@@ -139,7 +139,7 @@ def group_null_fits(y, X, offsets, weights=None, free_offset: bool = False) -> l
     return fits
 
 
-def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
+def score_pass(lg, y, X, fits, weights=None, s=None, Q=None, cache=None) -> dict:
     """Logistic score statistics of every variant against its LOCO group.
 
     With W = w mu (1 - mu) of the group's null fit, H_j = X' W z_j and
@@ -154,8 +154,13 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
     w (y - mu), one column per group. One pass over the genotype slices;
     rows are decoded
     row-scaled (z~ = s z), so sample-side vectors are divided by s and
-    squared-tile weights by s^2.
+    squared-tile weights by s^2. ``cache`` (a dict) keeps the per-group
+    sample-side matrices, which depend on the fits alone, for later calls on
+    further variants of the same samples.
     """
+    if cache is not None and "score_groups" in cache:
+        groups, A, A2, Q = cache["score_groups"]
+        return _score_scan(lg, groups, A, A2, Q, X.shape)
     n, q = X.shape
     w = np.ones(n) if weights is None else np.asarray(weights, dtype=np.float64)
     inv_s = np.ones(n) if s is None else 1.0 / np.asarray(s, dtype=np.float64)
@@ -173,10 +178,18 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None) -> dict:
         sq = np.column_stack([W, np.ones(n)]) * inv_v[:, None]
         groups.append({"side": side, "sq": sq, "M": linalg.inv((Xg * W[:, None]).T @ Xg),
                        "Xr": Xg.T @ resid, "q": Xg.shape[1]})
-    from mixmogam.twostep import _ancestry_ratio
-
     A = np.column_stack([w * (y - fit["mu"]) for fit in fits])
     A2 = A * A
+    if cache is not None:
+        cache["score_groups"] = (groups, A, A2, Q)
+    return _score_scan(lg, groups, A, A2, Q, X.shape)
+
+
+def _score_scan(lg, groups, A, A2, Q, shape) -> dict:
+    """The per-variant pass of :func:`score_pass`."""
+    from mixmogam.twostep import _ancestry_ratio
+
+    n, q = shape
     m = lg.m
     U, J, zvar, rho = np.zeros(m), np.zeros(m), np.zeros(m), np.zeros(m)
     tile = max(1, (16 * 1024**2) // max(8 * n, 1))

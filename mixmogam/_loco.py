@@ -288,12 +288,14 @@ class LocoGenotypes:
             self.zz[take] = np.einsum("ij,ij->i", Z, Z)
 
     def _decode(self, idx: np.ndarray, out: Optional[np.ndarray] = None,
-                scaled: bool = True, start: int = 0, stop: Optional[int] = None) -> np.ndarray:
+                scaled: bool = True, start: int = 0, stop: Optional[int] = None,
+                n_threads: Optional[int] = None) -> np.ndarray:
         """Unprojected standardized rows (k, stop - start) of ``idx`` for
         samples start:stop (default all), by table lookup (times the row
         scale, when there is one, unless ``scaled=False``). A float64 ``out``
         receives the storage-precision values widened, without a separate
-        storage-precision copy."""
+        storage-precision copy. ``n_threads`` (default the object's) decodes
+        in parallel; the values are the same."""
         from mixmogam._standardize import decode_table
 
         self._check_source()
@@ -305,7 +307,8 @@ class LocoGenotypes:
             # Scaled values are rounded in the storage precision first.
             target = (np.empty(out.shape, dtype=self.dtype)
                       if scale and out.dtype != self.dtype else out)
-            decode_table(self.gt.G, idx, self._lut[idx], target, self.n_threads,
+            decode_table(self.gt.G, idx, self._lut[idx], target,
+                         self.n_threads if n_threads is None else n_threads,
                          compiled=self._compiled, start=start)
             if scale:
                 target *= self._scale_store[start:stop]
@@ -396,6 +399,31 @@ class LocoGenotypes:
             scale = None if self.row_scale is None else self._scale_store[take]
             yield start, stop, gather_table(self.gt.G, idx, lut, take, z, scale,
                                             compiled=self._compiled)
+
+    def score_numerators(self, W: np.ndarray) -> Optional[np.ndarray]:
+        """z_j' W[:, g_j] for every variant j (``W``: one column per LOCO
+        group), with z_j the unprojected row :meth:`raw_slices` gives (row
+        scale included), computed from the stored calls without decoding
+        rows: one parallel read of the calls (``n_threads``). Equal to the
+        product of the widened rows up to summation order. None when the
+        storage has no compiled kernel (sample-major int8, other storage,
+        no Numba); callers then decode."""
+        from mixmogam._standardize import score_table
+
+        self._check_source()
+        G = self.gt.G
+        if not (self._compiled and (isinstance(G, PackedCalls)
+                                    or (G.ndim == 2 and G.strides[0] <= G.strides[1]))):
+            return None
+        Wt = np.ascontiguousarray(np.asarray(W, dtype=np.float64).T)
+        scale = None if self.row_scale is None else self._scale_store
+        out = np.empty(self.m)
+        for idx, g in self.slices(self.block):
+            part = np.empty(idx.size)
+            if not score_table(G, idx, self._lut[idx], Wt[g], part, scale, self.n_threads):
+                return None
+            out[idx] = part
+        return out
 
     def _project_into(self, idx: np.ndarray, z: np.ndarray, out: np.ndarray) -> np.ndarray:
         """out = z - c Q' for the rows of ``idx``: float64 arithmetic, one

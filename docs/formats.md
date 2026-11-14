@@ -3,8 +3,10 @@
 For repeated hard-call analyses use PLINK BED with memory mapping
 (`Genotypes.load_plink(prefix, mmap=True)`, CLI `--mmap`). The file already
 stores four calls per byte in variant order, the layout the engine consumes;
-mapping defers reads until access but still scans the calls. HDF5 is kept for
-compatibility. The [25 October review](review-2026-10-25.md) compares them.
+mapping defers reads until access but still scans the calls. Selecting
+samples from a mapped panel (`filter_samples`, as the CLI does for complete
+cases) repacks them into a temporary file in `TMPDIR` and maps that, so it
+needs disk rather than memory. HDF5 is kept for compatibility. The [25 October review](review-2026-10-25.md) compares them.
 
 `Genotypes.load(path, format="auto", packed=False)` and both CLI commands
 dispatch the inputs below. Auto-detection uses a filename suffix or
@@ -33,8 +35,11 @@ The inference engine accepts integral 0/1/2 calls and -1 for missing. VCF
 and PGEN use stored GT/hard calls, never DS values. BGEN conversion is
 deliberate: `Genotypes.load_bgen(path, hard_call_threshold=0.9, packed=True)`
 calls the most probable genotype only when its probability reaches 0.9 and
-sets the rest missing. This discards probability information; it is not
-dosage association testing. BGEN's allele order does not establish
+sets the rest missing. This discards probability information. HRATT's step 2
+can test expected dosages instead: `mixmogam.io.bgen.iter_bgen_dosages(path)`
+yields `Dosages` blocks of p(AB) + 2 p(BB) for the second listed allele (NaN
+when the record marks a call missing), and `mixmogam step2 --dosage` reads
+BGEN that way (unweighted quantitative traits). BGEN's allele order does not establish
 reference/alternate status, and its variant identifier is kept rather than
 replaced by the rsID field.
 

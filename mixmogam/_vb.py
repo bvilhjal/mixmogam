@@ -27,6 +27,7 @@ from contextlib import contextmanager, ExitStack
 from itertools import islice
 import math
 import os
+import threading
 from typing import Optional
 import warnings
 
@@ -335,8 +336,8 @@ if HAS_NUMBA:
     _sweep_block = njit(cache=True)(_sweep_block)
     _sweep_block_parallel = njit(parallel=True, cache=True)(_sweep_block_parallel)
     _gather = njit(cache=True, nogil=True)(_gather)
-    _pack_upper = njit(cache=True)(_pack_upper)
-    _pack_difference = njit(cache=True)(_pack_difference)
+    _pack_upper = njit(cache=True, nogil=True)(_pack_upper)
+    _pack_difference = njit(cache=True, nogil=True)(_pack_difference)
 else:
     prange = range
     _unsigned = int
@@ -743,10 +744,12 @@ class VBEngine:
 
     def _buffer(self, name, rows, cols, order):
         """A (rows, cols) float64 view of a reused scratch array, kept until
-        the preparation or fit that uses it returns."""
-        flat = self._scratch.get(name)
+        the preparation or fit that uses it returns (one per thread, for
+        :func:`_prepare_crossfit_grams`' workers)."""
+        key = (name, threading.get_ident())
+        flat = self._scratch.get(key)
         if flat is None or flat.size < rows * cols:
-            flat = self._scratch[name] = np.empty(max(rows, self.sub_block) * cols)
+            flat = self._scratch[key] = np.empty(max(rows, self.sub_block) * cols)
         return flat[:rows * cols].reshape((rows, cols), order=order)
 
     def _held_out(self, Zs, c, f, coef):
@@ -1157,6 +1160,23 @@ class VBEngine:
         return out
 
 
+# Scratch beyond the serial preparation's that Gram workers may hold, in
+# total (each holds a decoded and a widened sub-block, about 12 bytes per
+# genotype of a 128-variant sub-block, and a fold's gather).
+_GRAM_WORKER_BYTES = 2 * 1024**3
+_GRAM_MAX_WORKERS = 4
+
+
+def _gram_workers(n_threads: int, rows: int, lg, n_blocks: int) -> int:
+    """Threads that prepare Gram sub-blocks: up to ``n_threads`` (and
+    four), within :data:`_GRAM_WORKER_BYTES` of extra scratch."""
+    if n_threads <= 1 or n_blocks <= 1:
+        return 1
+    per_worker = rows * lg.n * (lg.dtype.itemsize + 2 * 8)
+    extra = 1 + int(_GRAM_WORKER_BYTES // max(per_worker, 1))
+    return max(1, min(n_threads, _GRAM_MAX_WORKERS, n_blocks, extra))
+
+
 def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     """Prepare HRATT's hold-out and cross-fitted Gram caches in one pass.
 
@@ -1182,6 +1202,9 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     lg, rows = crossfit.lg, crossfit.sub_block
     if cv.lg is not lg or cv.sub_block != rows:
         raise ValueError("joint Gram preparation needs engines on the same genotypes and sub-blocks")
+    # With n_threads > 1, sub-blocks are prepared by worker threads, each
+    # with its own decode and gather scratch; every sub-block's arithmetic
+    # is unchanged, so the Grams are the same at any worker count.
     q, item = lg.Q.shape[1], lg.dtype.itemsize
     every = np.arange(crossfit.n_folds)
     for eng, folds in ((cv, np.zeros(1, dtype=np.int64)), (crossfit, every)):
@@ -1198,23 +1221,48 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     if n_cv == sizes.size and sizes.size:
         n_fit = int(np.searchsorted(fit_bytes, budget - cv_bytes[-1], side="right"))
     grams_cv, coefs_cv, grams_fit, coefs_fit = [], [], [], []
+
+    def build(b, idx, Zs):
+        k = idx.size
+        full, held, coefs = crossfit._products(Zs, idx, every, None if b < n_fit else ())
+        fit = None
+        if b < n_fit:
+            G = np.empty((every.size, k * (k + 1) // 2), dtype=lg.dtype)
+            for f, H in enumerate(held):
+                _pack_difference(full, H, G[f])
+            fit = (G, coefs)
+        C = np.empty((2, k, q))
+        C[0] = coefs[0]
+        H = cv._held_out(Zs, lg._projection[idx], 0, C[1])
+        G = np.empty((1, k * (k + 1) // 2), dtype=lg.dtype)
+        _pack_difference(full, H, G[0])
+        return fit, (G, C)
+
+    workers = _gram_workers(crossfit.n_threads, rows, lg, n_cv)
     try:
-        for b, (idx, _, Zs) in enumerate(islice(crossfit._subblocks(), n_cv)):
-            k = idx.size
-            full, held, coefs = crossfit._products(Zs, idx, every, None if b < n_fit else ())
-            if b < n_fit:
-                G = np.empty((every.size, k * (k + 1) // 2), dtype=lg.dtype)
-                for f, H in enumerate(held):
-                    _pack_difference(full, H, G[f])
-                grams_fit.append(G)
-                coefs_fit.append(coefs)
-            C = np.empty((2, k, q))
-            C[0] = coefs[0]
-            H = cv._held_out(Zs, lg._projection[idx], 0, C[1])
-            G = np.empty((1, k * (k + 1) // 2), dtype=lg.dtype)
-            _pack_difference(full, H, G[0])
-            grams_cv.append(G)
-            coefs_cv.append(C)
+        if workers > 1:
+            crossfit._fold_layout()  # made once, before the workers read them
+            cv._fold_columns(0)
+            local = threading.local()
+            subs = [idx for idx, _ in islice(lg.slices(rows), n_cv)]
+
+            def work(b):
+                if getattr(local, "decoded", None) is None:
+                    local.decoded = np.empty((rows, lg.n), dtype=lg.dtype)
+                idx = subs[b]
+                return build(b, idx, lg._decode(idx, out=local.decoded[: idx.size], n_threads=1))
+
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mixmogam-gram") as pool:
+                built = list(pool.map(work, range(n_cv)))
+        else:
+            built = (build(b, idx, Zs)
+                     for b, (idx, _, Zs) in enumerate(islice(crossfit._subblocks(), n_cv)))
+        for fit, held_out in built:
+            if fit is not None:
+                grams_fit.append(fit[0])
+                coefs_fit.append(fit[1])
+            grams_cv.append(held_out[0])
+            coefs_cv.append(held_out[1])
     finally:
         cv._scratch.clear()
         crossfit._scratch.clear()

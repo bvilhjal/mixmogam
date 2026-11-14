@@ -322,3 +322,32 @@ def test_full_data_fit_after_joint_preparation_stores_the_full_slot():
     actual = crossfit.fit(*args, max_iter=60, tol=1e-9)
     assert crossfit._full_slot and crossfit._grams[0].shape[0] == 2
     _assert_same(actual, expected)
+
+
+@pytest.mark.parametrize("q, weighted, packed", [(2, False, True), (3, True, False)])
+@pytest.mark.parametrize("budget", [1e9, 6e4])
+def test_parallel_joint_preparation_builds_the_same_grams(q, weighted, packed, budget):
+    from .conftest import require_numba_threads
+
+    require_numba_threads(4)
+    lg = _problem(np.float32, q, weighted, packed, n=137, m=611)
+    serial = _pair(lg, budget)
+    lg4 = LocoGenotypes(lg.gt, lg.groups, lg.Q, block=97, row_scale=lg.row_scale, n_threads=4)
+    assert _vb._gram_workers(4, 128, lg4, 5) == 4
+    parallel = _pair(lg4, budget, n_threads=4)
+    for one, four in zip(serial, parallel):
+        assert (one._grams is None) == (four._grams is None)
+        assert not four._scratch
+        if one._grams is None:
+            continue
+        assert len(one._grams) == len(four._grams)
+        for a, b in zip(one._grams + one._coefs, four._grams + four._coefs):
+            np.testing.assert_array_equal(a, b)
+
+
+def test_gram_workers_respect_the_scratch_budget(monkeypatch):
+    lg = _problem(n=1000)
+    monkeypatch.setattr(_vb, "_GRAM_WORKER_BYTES", 2 * 128 * 1000 * (4 + 16))
+    assert _vb._gram_workers(8, 128, lg, 50) == 3
+    assert _vb._gram_workers(1, 128, lg, 50) == 1
+    assert _vb._gram_workers(8, 128, lg, 1) == 1

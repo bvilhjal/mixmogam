@@ -344,7 +344,10 @@ grid fit alone; `cv_tol=1e-4` halves that fit's sweeps but can change the
 selected prior and hence the results (see the
 [design notes](design.md#order-of-steps-prior-selection-and-convergence)).
 
-`n_threads=4` parallelizes preparation and independent model updates while
+`n_threads=4` parallelizes preparation, the Gram matrices of the
+cross-fitted fits (up to four worker threads, each with about 20 bytes of
+scratch per sample and block variant: 0.5 GB at 200,000 samples, at most
+2 GiB in all), the step-2 scores and independent model updates while
 keeping the SNP order within each model. Preparation gives the same values at
 every thread count; parallel residual products may change rounding. Detected
 BLAS pools are limited internally, but Apple Accelerate needs the
@@ -383,6 +386,44 @@ entry points call `variant_major()` and make one int8 copy rather than
 transposing on every pass; the caller's array is not modified.
 `np.asfortranarray(G)` (or `packed=True`) avoids the copy, and selecting or
 aligning samples keeps the given order.
+
+## Biobank scale: HRATT in two steps
+
+Fit step 1 once and test any number of genotype files against it, block by
+block (`mixmogam.steps`):
+
+```python
+from mixmogam.genotypes import Genotypes
+from mixmogam.io.bgen import iter_bgen_dosages
+from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
+
+hm3 = Genotypes.load_plink("hm3", mmap=True).filter_samples(keep)  # stays mapped
+step1 = hratt_step1(y, hm3, X, heritability_method="he", n_threads=8)
+step1.save("height.npz")  # arrays and JSON, no pickles
+
+step1 = HrattStep1.load("height.npz")
+calls = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
+hratt_step2(step1, calls, n_threads=8, out="height.tsv.gz")
+dosages = (block for c in range(1, 23) for block in iter_bgen_dosages(f"chr{c}.bgen"))
+hratt_step2(step1, dosages, n_threads=8, out="height_imputed.tsv.gz")
+```
+
+`hratt_step1` takes the arguments of `hratt` and fits what `hratt` fits.
+`hratt_step2` selects step 1's samples from each file (by ID, any order),
+maps each chromosome to step 1's LOCO group (variants on other chromosomes
+are an error) and tests every variant: hard calls give `hratt`'s statistics
+for the same variants, and in the fitting process `hratt_step2(step1, hm3)`
+is `hratt` itself. With `out=` the results are written as each block is
+tested (one path per step 1); without it they are returned. A list of step
+1s is tested in one read of the files, sharing the standardized blocks of
+traits fitted on the same samples and covariates.
+
+Dosages are standardized like calls (mean and population SD over the observed
+values, missing values at the mean) and tested in float64; integer dosages
+reproduce the hard-call statistics to about 1e-5. They are tested for
+unweighted quantitative traits with the lambda or kappa_g correction only.
+Under strong structure lambda is calibrated in step 1, on its own variants.
+`denominator="spectral"` needs the one-call `hratt`.
 
 ## The mixed model by hand
 

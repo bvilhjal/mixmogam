@@ -2,7 +2,10 @@
 
 ``mixmogam gwas`` reads standard genotype files plus a phenotype file (and
 optional covariate, weight and PC columns) and writes a summary-statistic
-CSV/TSV (optionally gzip-compressed); ``mixmogam pca``
+CSV/TSV (optionally gzip-compressed), and for HRATT can save its step 1
+(``--save-step1``); ``mixmogam step2`` tests further genotype files (per
+chromosome, hard calls or BGEN dosages, several traits at once) against
+saved step 1s, block by block; ``mixmogam pca``
 writes built-in ancestry components (:mod:`mixmogam.pca`) as a covariate
 file; ``mixmogam plot`` turns a result CSV into Manhattan and QQ PNGs
 (needs the ``plot`` extra); ``mixmogam hm3`` shows, matches or rebuilds the
@@ -150,12 +153,47 @@ def _parser() -> argparse.ArgumentParser:
                       help="parallel genotype preparation and sweeps for the exact and hratt methods "
                            "(values are identical at every count, up to rounding in parallel products)")
     gwas.add_argument("--max-loco-groups", type=int, default=25)
-    gwas.add_argument("--out", "-o", required=True, help="summary-statistic .csv or .tsv (optional .gz)")
+    gwas.add_argument("--out", "-o", help="summary-statistic .csv or .tsv (optional .gz); "
+                                           "required unless --save-step1 is given")
+    gwas.add_argument("--save-step1", metavar="FILE",
+                      help="hratt (implies --method hratt): save step 1 (LOCO residuals and "
+                           "calibration) to FILE (.npz) for 'mixmogam step2'; with --out the "
+                           "panel's variants are tested as well")
     gwas.add_argument("--genome-build", help="declared coordinate assembly (e.g. GRCh38 or TAIR10); no liftover")
     gwas.add_argument("--pca-max-memory-gib", type=float, default=4.0,
                       help="working-memory budget for --pcs (default 4 GiB)")
     gwas.add_argument("--pca-solver", choices=("exact", "randomized"), default="exact",
                       help="PCA eigensolver for --pcs (default exact SVD)")
+
+    step2 = sub.add_parser("step2", help="test genotype files against saved HRATT step 1s",
+                           description="HRATT step 2 (mixmogam.steps.hratt_step2): test every "
+                                       "variant of the genotype files against each saved step 1, "
+                                       "reading the files in blocks of bounded memory.")
+    step2.add_argument("--step1", nargs="+", required=True, metavar="FILE",
+                       help="step-1 files from 'mixmogam gwas --save-step1' (several traits: "
+                            "the genotype blocks are read once)")
+    step2.add_argument("--geno", nargs="+", required=True, metavar="PATH",
+                       help="genotype files or PLINK prefixes, e.g. one per chromosome; each must "
+                            "hold every step-1 sample (any order) and only chromosomes step 1 "
+                            "was fitted on")
+    step2.add_argument("--geno-format", default="auto",
+                       choices=("auto", "plink", "pgen", "vcf", "bgen", "eigenstrat", "tped", "hdf5"))
+    step2.add_argument("--packed", action="store_true", help="keep calls in two-bit storage")
+    step2.add_argument("--mmap", action="store_true",
+                       help="map PLINK BED calls read-only (recommended for large files)")
+    step2.add_argument("--sample", help="BGEN sample file when sample IDs are not embedded")
+    step2.add_argument("--hard-call-threshold", type=float,
+                       help="BGEN: posterior threshold for hard calls (or use --dosage)")
+    step2.add_argument("--dosage", action="store_true",
+                       help="BGEN: test expected dosages, read in blocks (unweighted quantitative "
+                            "traits; lambda or kappa_g correction)")
+    step2.add_argument("--out", "-o", nargs="+", required=True, metavar="FILE",
+                       help="one result .csv/.tsv (optional .gz) per --step1, written block by block")
+    step2.add_argument("--n-threads", type=int, default=1,
+                       help="parallel preparation and scoring (values identical at every count)")
+    step2.add_argument("--chunk-mb", type=float, default=256.0,
+                       help="genotype storage per block in MiB (default 256)")
+    step2.add_argument("--genome-build", help="declared coordinate assembly; no liftover")
 
     pca = sub.add_parser("pca", help="ancestry PCs of the genotypes, as a covariate file",
                          description="Run mixmogam.pca.principal_components and write a covariate file.")
@@ -245,6 +283,10 @@ def _cmd_gwas(args) -> int:
 
     if args.binary_coding == "1/2" and args.trait != "binary":
         raise ValueError("--binary-coding 1/2 requires --trait binary")
+    if args.out is None and args.save_step1 is None:
+        raise ValueError("give --out, --save-step1 or both")
+    if args.save_step1 is not None and args.method not in ("auto", "hratt"):
+        raise ValueError("--save-step1 saves HRATT's step 1; it needs --method hratt (or auto)")
     gt = _read_genotypes(args)
     ph = read_phenotypes(args.pheno, format=args.pheno_format, id_columns=args.pheno_id_columns)
     names = ph.pids()
@@ -286,7 +328,8 @@ def _cmd_gwas(args) -> int:
     if np.count_nonzero(complete) == gt.n_samples:
         subset = gt
     else:
-        subset = gt.filter_samples(np.flatnonzero(complete))
+        # A memory-mapped panel stays mapped (repacked through a temporary file).
+        subset = gt.filter_samples(np.flatnonzero(complete), n_threads=args.n_threads)
     y = y[complete]
     columns = [values[complete] for values in columns]
     if w is not None:
@@ -307,7 +350,8 @@ def _cmd_gwas(args) -> int:
         # source, so alone they do not switch.
         from mixmogam.association import EXACT_N_AUTO
         if (args.trait is not None or w is not None or args.stage1 != "enet"
-                or args.model_snps is not None or args.relatedness is not None):
+                or args.model_snps is not None or args.relatedness is not None
+                or args.save_step1 is not None):
             method = "hratt"
         else:
             method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
@@ -406,8 +450,26 @@ def _cmd_gwas(args) -> int:
         if args.relatedness is None:
             raise ValueError("--kinship-variants needs --relatedness")
         kwargs["relatedness_options"] = {"kinship_variants": args.kinship_variants}
-    result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
-                  genome_build=args.genome_build, **kwargs)
+    if args.save_step1 is not None:
+        from mixmogam.steps import hratt_step1, hratt_step2
+
+        import inspect
+
+        panel = subset.variant_major()
+        # gwas()'s own block size, so that both routes give the same values
+        block = inspect.signature(gwas).parameters["block"].default
+        step1 = hratt_step1(y, panel, X, max_loco_groups=args.max_loco_groups, block=block,
+                            **kwargs)
+        step1.save(args.save_step1)
+        print(f"saved step 1 ({step1.n} samples, {len(step1.loco_groups)} LOCO groups) "
+              f"to {args.save_step1}")
+        if args.out is None:
+            return 0
+        result = hratt_step2(step1, panel, n_threads=args.n_threads,
+                             genome_build=args.genome_build)
+    else:
+        result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
+                      genome_build=args.genome_build, **kwargs)
     info = result.extra.get("model_snps")
     if info is not None:
         opts = info.get("options") or {}
@@ -422,6 +484,38 @@ def _cmd_gwas(args) -> int:
                   f"{c['h2_he_full']:.3f} on every variant (ratio {c['ratio']:.2f})")
     result.write_csv(args.out)
     print(f"wrote {len(result)} variants for {result.n} samples to {args.out}")
+    return 0
+
+
+def _cmd_step2(args) -> int:
+    from mixmogam.steps import HrattStep1, hratt_step2
+
+    if len(args.out) != len(args.step1):
+        raise ValueError("give one --out per --step1")
+    if args.dosage and args.geno_format not in ("auto", "bgen"):
+        raise ValueError("--dosage reads BGEN files")
+    if args.dosage and args.hard_call_threshold is not None:
+        raise ValueError("--dosage tests dosages; drop --hard-call-threshold")
+    fits = [HrattStep1.load(path) for path in args.step1]
+
+    def sources():
+        for path in args.geno:
+            if args.dosage:
+                from mixmogam.io.bgen import iter_bgen_dosages
+
+                yield from iter_bgen_dosages(path, sample_path=args.sample)
+            else:
+                from mixmogam.io import read_genotypes
+
+                yield read_genotypes(path, format=args.geno_format, packed=args.packed,
+                                     mmap=args.mmap, hard_call_threshold=args.hard_call_threshold,
+                                     sample_path=args.sample)
+
+    summary = hratt_step2(fits, sources(), n_threads=args.n_threads,
+                          chunk_bytes=args.chunk_mb * 1024**2, out=args.out,
+                          genome_build=args.genome_build)
+    print(f"wrote {summary['variants']:,} variants for {len(fits)} trait(s) to "
+          f"{', '.join(map(str, args.out))}")
     return 0
 
 
@@ -483,6 +577,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _cmd_plot(args)
         if args.command == "hm3":
             return _cmd_hm3(args)
+        if args.command == "step2":
+            return _cmd_step2(args)
         return _cmd_gwas(args)
     except (ValueError, KeyError, OSError, TypeError, ImportError) as exc:
         print(f"mixmogam: error: {exc}", file=sys.stderr)

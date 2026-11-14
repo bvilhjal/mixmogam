@@ -760,6 +760,35 @@ def unrelated_set(rel: Relatedness, min_phi: float = 0.0) -> np.ndarray:
     return np.flatnonzero(state == 1)
 
 
+def gls_prepare(Q, Wp, rel: Relatedness, sf, se, max_cluster: int = 5000) -> tuple:
+    """Per-group (V^-1, V^-1 Q, (Q'V^-1 Q)^-1) and P w of :func:`gls_stats`."""
+    vinv, b = [], np.empty_like(Wp)
+    for g in range(Wp.shape[1]):
+        Vi = rel.vinv(float(sf[g]), float(se[g]), max_cluster=max_cluster)
+        ViQ = Vi @ Q
+        M = linalg.inv(Q.T @ ViQ)
+        Viw = Vi @ Wp[:, g]
+        b[:, g] = Viw - ViQ @ (M @ (Q.T @ Viw))   # P w
+        vinv.append((Vi, ViQ, M))
+    return vinv, b
+
+
+def gls_gamma(lg, vinv, n_gamma: int = 1000, rng=None) -> np.ndarray:
+    """The ``"gamma"`` denominator of :func:`gls_stats`: per group, the mean
+    of z'Pz / z'z over ``n_gamma`` random variants of ``lg``."""
+    rng = rng or np.random.default_rng(0)
+    m = lg.m
+    cal = np.sort(rng.choice(m, min(int(n_gamma), m), replace=False))
+    Zc = lg.rows(cal)                          # projected rows
+    gamma = np.empty(len(vinv))
+    for g, (Vi, ViQ, M) in enumerate(vinv):
+        VZ = Vi @ Zc.T
+        c = ViQ.T @ Zc.T
+        zpz = np.einsum("ij,ji->i", Zc, VZ) - np.einsum("ik,ij,jk->k", c, M, c)
+        gamma[g] = float(np.mean(zpz / lg.zz[cal]))
+    return gamma
+
+
 def carrier_families(lg, rel: Relatedness, idx, threshold: float) -> np.ndarray:
     """(iv) Distinct families among the minor-allele carriers of variants
     ``idx`` (``lg``: their LocoGenotypes): connected components of the
@@ -988,24 +1017,29 @@ def _kinship_overlap(gt, options: dict, model_idx) -> dict:
 
 
 def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact",
-              n_gamma: int = 1000, max_cluster: int = 5000, rng=None) -> dict:
+              n_gamma: int = 1000, max_cluster: int = 5000, rng=None, s_f=None, s_e=None,
+              gamma=None, cache=None) -> dict:
     """Fix (b): GLS score tests of every variant of ``lg`` against its group's
     column of the projected LOCO residuals ``Wp`` under Cov(w_g) = s_e I + s_f R
     (see the module docstring). Returns chi2, num (z'P w), den (z'P z) and the
-    per-group fits."""
+    per-group fits.
+
+    ``s_f``/``s_e``: the fitted variance components, if already computed
+    (:meth:`Relatedness.family_vc` of ``Wp``). ``gamma``: the ``"gamma"``
+    denominator's per-group factors, if fixed elsewhere (HRATT's step 1);
+    otherwise they are estimated on ``n_gamma`` variants of ``lg``. ``cache``
+    keeps the covariance inverses for later calls on further variants."""
     Q = lg.Q if lg.Q.shape[1] else np.ones((lg.n, 1)) / np.sqrt(lg.n)
-    G = Wp.shape[1]
-    sf, se = rel.family_vc(Wp)
-    vinv, b, QVQi = [], np.empty_like(Wp), []
-    for g in range(G):
-        Vi = rel.vinv(float(sf[g]), float(se[g]), max_cluster=max_cluster)
-        ViQ = Vi @ Q
-        M = linalg.inv(Q.T @ ViQ)
-        w = Wp[:, g]
-        Viw = Vi @ w
-        b[:, g] = Viw - ViQ @ (M @ (Q.T @ Viw))   # P w
-        vinv.append((Vi, ViQ, M))
-        QVQi.append(M)
+    if s_f is None or s_e is None:
+        sf, se = rel.family_vc(Wp)
+    else:
+        sf, se = np.asarray(s_f, dtype=np.float64), np.asarray(s_e, dtype=np.float64)
+    if cache is not None and "gls" in cache:
+        vinv, b = cache["gls"]
+    else:
+        vinv, b = gls_prepare(Q, Wp, rel, sf, se, max_cluster)
+        if cache is not None:
+            cache["gls"] = (vinv, b)
     m = lg.m
     num = np.zeros(m)
     den = np.full(m, np.nan)
@@ -1018,19 +1052,12 @@ def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact
             VZ = (Vi @ Z64.T)                      # (n, k)
             c = ViQ.T @ Z64.T                      # (q, k) = Q'V^-1 z
             den[idx] = np.einsum("ij,ji->i", Z64, VZ) - np.einsum("ik,ij,jk->k", c, M, c)
-    gamma = None
-    if not exact:
-        rng = rng or np.random.default_rng(0)
-        cal = np.sort(rng.choice(m, min(int(n_gamma), m), replace=False))
-        Zc = lg.rows(cal)                          # projected rows
-        gamma = np.empty(G)
-        for g in range(G):
-            Vi, ViQ, M = vinv[g]
-            VZ = Vi @ Zc.T
-            c = ViQ.T @ Zc.T
-            zpz = np.einsum("ij,ji->i", Zc, VZ) - np.einsum("ik,ij,jk->k", c, M, c)
-            gamma[g] = float(np.mean(zpz / lg.zz[cal]))
-        den = gamma[lg.groups] * lg.zz
+    if exact:
+        gamma = None
+    else:
+        if gamma is None:
+            gamma = gls_gamma(lg, vinv, n_gamma, rng)
+        den = np.asarray(gamma)[lg.groups] * lg.zz
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2 = num * num / den
     chi2[~(den > 0)] = np.nan
