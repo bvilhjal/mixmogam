@@ -498,7 +498,9 @@ def spectrum(a):
     out = []
     for n_sub in [int(x) for x in a.sizes.split(",")]:
         G = np.asarray(gt.G[:n_sub][:, sel]).astype(np.int8)
-        g2 = Genotypes(np.ascontiguousarray(G), chromosome=np.ones(sel.size, dtype=np.int64),
+        # two LOCO groups (the setup needs >= 2); blocks stay within one
+        g2 = Genotypes(np.ascontiguousarray(G),
+                       chromosome=1 + (np.arange(sel.size) >= (sel.size // a.block_size // 2) * a.block_size),
                        position=np.arange(sel.size))
         lg = twostep._setup(d["y0"][:n_sub], g2, d["X"][:n_sub], 25, 4096).lg
         for b in range(0, sel.size, a.block_size):
