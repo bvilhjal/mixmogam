@@ -438,12 +438,15 @@ def test_family_folds_opt_in_calibrated_without_refit():
 
 def test_family_folds_fall_back_when_a_family_is_too_large():
     G, gt, y, pairs, causal = family_panel(seed=6, n_fam=60, kids=2, m=3000, n_causal=100)
-    n = gt.n_samples
-    chain = (np.arange(n - 1), np.arange(1, n), np.full(n - 1, 0.25))  # one component
+    i, j, r = pairs
+    k = np.arange(59)  # cousins linking family k's first kid to family k+1's: one component
+    linked = (np.r_[i, 4 * k + 2], np.r_[j, 4 * (k + 1) + 2], np.r_[r, np.full(59, 0.125)])
     with pytest.warns(RuntimeWarning, match="cannot balance"):
-        r = hratt(y, gt, relatedness=chain, random_state=1, model_snps_h2_check=False,
-                  relatedness_options={"crossfit_folds": "family"})
-    assert r.extra["crossfit_folds"] == "random" and r.extra["loco_refit"]
+        res = hratt(y, gt, relatedness=linked, random_state=1, model_snps_h2_check=False,
+                    relatedness_options={"crossfit_folds": "family"})
+    assert res.extra["relatedness"]["family_folds"]["largest_family"] == gt.n_samples
+    assert res.extra["crossfit_folds"] == "random"
+    assert res.extra["loco_refit"] and res.extra["loco_refit_reason"] == "relatives"
 
 
 # (iv) carrier families: distinct families among minor-allele carriers for
