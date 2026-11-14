@@ -158,6 +158,18 @@ is given). Method-specific keywords raise the same way: `n_threads` belongs to
 `hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
 `cv_fraction` to `hratt` alone.
 
+With related samples (`relatedness=` a pedigree, KING pairs or `"auto"`),
+binary tests of variants with MAF below about 5% can be anti-conservative even
+after the kappa_g correction: in simulated families, null rare variants read
+1.2-2.3x the nominal rate at p = 1e-3 (up to about 3.5x at 1e-4), worst when
+the carriers sit in one to three families, at every minor-allele count. The
+saddlepoint assumes independent carriers; a minimum allele count does not fix
+it. Variants with p < `relatedness_options["carrier_families_p"]` (1e-4) and
+MAF < 5% get a `carrier_families` column (distinct families among the
+minor-allele carriers, from the close-pair graph) and `few_carrier_families`
+(three or fewer); binary scans warn when any is flagged. Confirm such hits in an
+unrelated subset, or by gene-dropping through the pedigree.
+
 HRATT's LOCO predictors are trained on the other folds (`loco_folds=5`), while
 variance components and model selection use the whole trait. In the tested
 scenarios this reduced effect attenuation and case-control separation.

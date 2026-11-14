@@ -288,7 +288,9 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
                        "king_max_abs_f": 0.5, "kinship_variants": None,
                        "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn",
-                       "loco_refit_min_related": 0.01, "crossfit_folds": "random"}
+                       "loco_refit_min_related": 0.01, "crossfit_folds": "random",
+                       "carrier_families_p": 1e-4, "carrier_families_max": 3,
+                       "carrier_families_max_maf": 0.05}
 
 # KING-robust from a sample block against all samples, keeping pairs above a
 # threshold: O(block x n) memory, never the n x n matrix.
@@ -491,6 +493,37 @@ def unrelated_set(rel: Relatedness, min_phi: float = 0.0) -> np.ndarray:
                         deg[k] -= 1
                         heapq.heappush(heap, (int(deg[k]), int(k)))
     return np.flatnonzero(state == 1)
+
+
+def carrier_families(lg, rel: Relatedness, idx, threshold: float) -> np.ndarray:
+    """(iv) Distinct families among the minor-allele carriers of variants
+    ``idx`` (``lg``: their LocoGenotypes): connected components of the
+    carriers' own pairs with phi > ``threshold``. Unrelated carriers count
+    one each; carriers linked only through non-carriers count apart (in a
+    cousin-rich isolate the full pair graph is one giant component, which
+    would call every variant one family). One decode of ``idx``."""
+    from scipy.sparse.csgraph import connected_components
+
+    from mixmogam._standardize import decode_table
+
+    idx = np.asarray(idx, dtype=np.int64)
+    out = np.zeros(idx.size, dtype=np.int64)
+    if not idx.size:
+        return out
+    K = rel.threshold_phi(threshold).Koff.tocsr()
+    minor_is_counted = lg.mean[idx] / 2.0 <= 0.5
+    lut = np.where(minor_is_counted[:, None], np.array([0.0, 1.0, 1.0, 0.0]),
+                   np.array([1.0, 1.0, 0.0, 0.0])).astype(np.float32)
+    step = 256  # decode in row tiles: memory O(256 n)
+    for a in range(0, idx.size, step):
+        b = min(idx.size, a + step)
+        C = np.empty((b - a, lg.n), dtype=np.float32)
+        decode_table(lg.gt.G, idx[a:b], lut[a:b], C, 1, compiled=lg._compiled)
+        for r in range(b - a):
+            car = np.flatnonzero(C[r] > 0)
+            out[a + r] = (car.size if car.size <= 1 else
+                          connected_components(K[car][:, car], directed=False)[0])
+    return out
 
 
 def covariate_factor(rel: Relatedness, Q: np.ndarray, n_eff: float) -> tuple:

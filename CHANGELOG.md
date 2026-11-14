@@ -39,6 +39,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     with a warning, below 100 samples. KING `"auto"` refuses haploid or inbred calls.
   - Warnings for external kinship estimated on model SNPs (`kinship_variants`)
     and for strong structure without covariates under kappa.
+  - With `"auto"` the refit needs at least 1% of samples in a close pair
+    (`loco_refit_min_related`), so KING noise pairs alone do not trigger it. Any
+    supplied pair still triggers it.
+  - `crossfit_folds="family"` (opt-in) keeps each family in one fold instead of
+    refitting. It is calibrated but loses QTL power (0.66-0.92x the refit's).
+  - The unrelated set uses minimum-degree selection, which keeps more samples in
+    cousin-rich cohorts (812-814 vs 775 of 2,000 on a simulated isolate).
+  - The KING-auto noise-floor and no-PC warnings say when the floor drops
+    2nd-degree (> 0.0884) or 1st-degree relatives.
+  - Rare variants with relatives: `carrier_families` / `few_carrier_families`
+    result columns for p < 1e-4 and MAF < 5%, and a documented caveat for
+    binary tests (1.2-2.3x nominal at 1e-3 with clustered carriers).
 - `mixmogam hm3 info|match|build`: show, match or rebuild a HapMap3 map. `--map` takes a
   bundled name or a file.
 - `gwas_by_group(y, gt, groups, X)` runs `gwas` separately in two

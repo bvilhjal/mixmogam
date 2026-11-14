@@ -604,6 +604,37 @@ def _spectral_calibration_quadform(st: _Setup, bases: list, delta: float, snps: 
     return out
 
 
+def _carrier_family_columns(st: _Setup, p, rel, threshold, p_max, fam_max, maf_max,
+                            binary) -> dict:
+    """(iv) Per-variant ``carrier_families`` (NaN unless p < ``p_max`` and
+    MAF < ``maf_max``: common variants have carriers in many families, and
+    a hit's whole carrier graph would be costly) and
+    ``few_carrier_families`` (<= ``fam_max``). Saddlepoint tails assume
+    independent carriers; carriers clustered in 1-3 families read
+    1.2-2.3x nominal at 1e-3 under kappa_g in the SG's rare binary nulls,
+    in every MAC bin (specA-benchmark-sg.md §9c)."""
+    from mixmogam._relatedness import carrier_families
+
+    p = np.asarray(p, dtype=np.float64)
+    fam = np.full(p.size, np.nan)
+    half = st.lg.mean / 2.0
+    maf = np.minimum(half, 1.0 - half)
+    idx = np.flatnonzero(np.isfinite(p) & (p < p_max) & (maf < maf_max))
+    fam[idx] = carrier_families(st.lg, rel, idx, threshold)
+    few = np.zeros(p.size, dtype=bool)
+    few[idx] = fam[idx] <= fam_max
+    n_few = int(few.sum())
+    if binary and n_few:
+        warnings.warn(
+            f"relatedness: {n_few} variant(s) with p < {p_max:g} have their minor-allele "
+            f"carriers in <= {fam_max} families (few_carrier_families); the saddlepoint "
+            "assumes independent carriers and such tests read 1.2-2.3x nominal at 1e-3 in "
+            "simulated families. Confirm them in an unrelated subset", RuntimeWarning,
+            stacklevel=4)
+    return {"carrier_families": fam, "few_carrier_families": few,
+            "carrier_families_p": float(p_max), "n_few_carrier_families": n_few}
+
+
 def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResult:
     if any(extra.get(key) is False for key in ("cv_converged", "loco_converged")):
         warnings.warn("variational fit did not converge; inspect cv_converged/loco_converged before using results",
@@ -614,6 +645,9 @@ def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResu
         se = np.where(sd > 0, se_z / sd, np.nan)
     if p is None:
         p = stats.chi2.sf(chi2, 1)
+    ctx = extra.pop("_carrier_ctx", None)
+    if ctx is not None:
+        extra.update(_carrier_family_columns(st, p, *ctx))
     res = GwasResult(
         chromosome=np.asarray(gt.chromosome),
         position=np.asarray(gt.position),
@@ -1320,6 +1354,21 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``extra["relatedness"]`` records the pairs, kappa_g, c_X, the checks
     and the KING settings.
 
+    Rare variants with relatives (MAF < ~5%): kappa_g corrects the variance
+    of the score, not its shape. When a variant's carriers cluster in a few
+    families the score is heavier-tailed than the saddlepoint's (or the
+    normal's) independent-carrier tail: binary nulls read 1.2-2.3x nominal
+    at 1e-3 (up to ~3.5x at 1e-4) in every MAC bin in the SG's simulations,
+    worst with carriers in 1-3 families; a MAC floor does not fix it. Each
+    variant with p < ``relatedness_options["carrier_families_p"]`` (1e-4)
+    and MAF < ``"carrier_families_max_maf"`` (0.05) gets
+    ``extra["carrier_families"]`` (distinct families among its
+    minor-allele carriers; NaN otherwise) and ``extra
+    ["few_carrier_families"]`` (<= ``"carrier_families_max"``, 3), also
+    exported as result columns; binary traits warn when any is flagged.
+    Confirm such hits in an unrelated subset (or by gene-dropping); a
+    family-aware saddlepoint is not implemented.
+
     A subset's stage 1 sees only the polygenic signal its SNPs tag. In
     simulated nuclear families (n = 2,000) the median null chi-square
     (lambda_GC) rose from 1.016 with every variant to 1.040, 1.101 and
@@ -1766,6 +1815,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if kap_g is not None:
             rel_info.update({"kappa": kap_g, "c_X": c_X})
         extra["relatedness"] = rel_info
+        extra["_carrier_ctx"] = (rel, relatedness_threshold, rel_opt["carrier_families_p"],
+                                 rel_opt["carrier_families_max"],
+                                 rel_opt["carrier_families_max_maf"], binary)
     lam = 1.0
     if struct["strong"] and h2 > 0 and relatedness_correction == "lambda":
         # At the HE residual-zero boundary, use the same declared noise

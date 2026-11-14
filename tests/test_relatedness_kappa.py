@@ -445,3 +445,44 @@ def test_family_folds_fall_back_when_a_family_is_too_large():
                   relatedness_options={"crossfit_folds": "family"})
     assert r.extra["crossfit_folds"] == "random" and r.extra["loco_refit"]
 
+
+# (iv) carrier families: distinct families among minor-allele carriers for
+# variants below carrier_families_p, flagged at <= 3
+def test_carrier_families_column_and_flag(tmp_path):
+    G, gt, y, pairs, causal = family_panel(seed=2, n_fam=100, kids=3, m=3000, n_causal=100,
+                                           prevalence=0.2)
+    rng = np.random.default_rng(1)
+    n = G.shape[0]  # families of 5: rows 5f, 5f+1 parents, 5f+2.. kids
+    rare = np.zeros((n, 4), np.int8)
+    rare[[0, 2, 3], 0] = 1          # father + 2 kids of family 0: 1 family
+    rare[[0, 2, 5, 10], 1] = 1      # families 0, 1, 2: 3 families
+    rare[rng.choice(n, 40, replace=False), 2] = 1  # spread
+    rare[:, 3] = 2
+    rare[[0, 1], 3] = 1             # minor allele = the other one; carriers 0, 1 (spouses)
+    from mixmogam import Genotypes
+    m = G.shape[1]
+    g2 = Genotypes(np.c_[G, rare], chromosome=np.r_[gt.chromosome, [1, 2, 3, 4]],
+                   position=np.r_[gt.position, m * 1_000_000 + np.arange(1, 5)])
+    with pytest.warns(RuntimeWarning, match="few_carrier_families"):
+        r = hratt(y, g2, trait="binary", relatedness=pairs, random_state=1,
+                  model_snps_h2_check=False, relatedness_options={"carrier_families_p": 1.01})
+    fam = r.extra["carrier_families"]
+    np.testing.assert_array_equal(fam[m:m + 4][[0, 1, 3]], [1, 3, 2])  # spouses: unrelated
+    assert fam[m + 2] > 30
+    few = r.extra["few_carrier_families"]
+    assert few[m] and few[m + 1] and not few[m + 2] and few[m + 3]
+    r.write_csv(tmp_path / "r.csv")
+    from mixmogam.results import GwasResult
+    back = GwasResult.read_csv(str(tmp_path / "r.csv"))
+    np.testing.assert_array_equal(back.extra["carrier_families"], fam)
+    np.testing.assert_array_equal(back.extra["few_carrier_families"], few)
+    assert r.take(np.arange(m, m + 4)).extra["carrier_families"].size == 4
+    # default: only p < 1e-4 and MAF < 5% are computed (NaN elsewhere)
+    q = _run(y, g2, relatedness=pairs)
+    cf = q.extra["carrier_families"]
+    maf = np.minimum(q.af, 1 - q.af)
+    on = (q.p < 1e-4) & (maf < 0.05)
+    assert np.all(np.isnan(cf[~on])) and np.all(np.isfinite(cf[on]))
+    c = _run(y, g2, relatedness=pairs, relatedness_options={"carrier_families_p": 1.01,
+                                                            "carrier_families_max_maf": 0.51})
+    assert np.all(np.isfinite(c.extra["carrier_families"][np.isfinite(c.p)]))  # all computed
