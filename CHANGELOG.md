@@ -182,6 +182,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   statement covers the RegMap traits and PC runs, and its date is
   14 November 2026. The report PDF and `report/report_manifest.json` were
   regenerated.
+- Tests: the VB column-layout, parallel and workspace comparisons allow BLAS
+  rounding off macOS but not result changes. Iteration counts and
+  convergence are always compared exactly; `rel_change` uses a relative
+  tolerance (5e-2 for float32, 1e-6 for float64) and the float64 parallel
+  fields an absolute tolerance of 1e-12 times each field's maximum. Among the
+  workspace tests, only the interrupted Gram-rebuild test compares fits at
+  1e-12 instead of bitwise. The VB code is unchanged.
+- CI and tests:
+  - The two bitwise CLI-vs-API tests pin the in-process side to one BLAS
+    thread (threadpoolctl), matching the subprocess, so they stay bitwise on
+    multi-core machines. Without threadpoolctl and with BLAS unpinned, only
+    the subprocess comparison is skipped.
+  - The external `test_stage1` and `test_cli` tests skip when ldpred3 cannot
+    be imported.
+  - The external job pins ldpred3 to commit 2da4735c (0.10.4, the version
+    the integrate reviews ran; no tag has ldpred3-fast) and fails unless at
+    least one int8 test ran without skipping.
+  - The fast and slow/integration pytest steps run (`!cancelled()`) even
+    after an earlier step fails.
 
 ### Fixed
 
