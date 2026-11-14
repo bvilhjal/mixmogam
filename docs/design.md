@@ -447,8 +447,8 @@ Two departures from common practice follow from pilots
 a^2 Z^2 of weighted GWAS replaces each genotype's variance by its own square;
 under selection on the outcome a few samples carry the score. In the pilot it
 was inflated 17-fold at 1e-3 for MAF 1-5%; in the prespecified validation's S3
-cell it rejected 12 times too often at 1e-3 for MAF 1-5% (26 times at 1e-4 over
-all MAF; [archive](../benchmarks/results/20261005-hratt-weights-binary/README.md)).
+cell it rejected 12 times too often at 1e-3 for MAF 1-5% (26 times at 1e-4 for
+MAF >= 1%; [archive](../benchmarks/results/20261005-hratt-weights-binary/README.md)).
 The model-based logistic
 variance sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample
 LOCO offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets

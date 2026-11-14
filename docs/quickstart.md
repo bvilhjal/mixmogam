@@ -92,11 +92,11 @@ the algorithm (CLI: `pca --max-memory-gib`, `gwas --pca-max-memory-gib`).
 from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
-result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
+result = gwas(y, gt, X=X, method="exact", n_threads=4)  # parallel standardization (fast extra)
 result = gwas(y, gt, X=X, method="bolt-inf")  # BOLT-style inf: no kinship matrix formed
 result = gwas(y, gt, X=X, method="bolt")      # BOLT-style mixture (two-Gaussian prior)
 result = gwas(y, gt, X=X, method="hratt")     # HRATT: elastic-net two-step test
-result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
+result = gwas(y, gt, X=X, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
 result.extra.get("calibration_cv")            # available when calibration is performed
