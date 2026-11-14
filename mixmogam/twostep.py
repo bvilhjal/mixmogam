@@ -1667,6 +1667,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             raise ValueError(f"relatedness_correction={relatedness_correction!r} needs relatedness=")
         if relatedness_options is not None:
             raise ValueError("relatedness_options needs relatedness=")
+        if relatedness_correction == "none":
+            warnings.warn(
+                "relatedness_correction='none' without relatedness= is ignored; "
+                "without a relatedness source the correction is 'lambda', not 'none'",
+                RuntimeWarning,
+                stacklevel=2,
+            )
         relatedness_correction = "lambda"
     kappa_on = relatedness is not None and relatedness_correction in ("kappa", "gls")
     rng = np.random.default_rng(random_state)

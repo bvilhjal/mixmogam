@@ -72,8 +72,8 @@ def _parser() -> argparse.ArgumentParser:
                            "2000 markers, seed 0; use the pca command for other settings)")
     gwas.add_argument("--method", default="auto", choices=_METHODS,
                       help="auto: exact up to 5000 samples, bolt-inf above (hratt when "
-                           "--trait, --weights, --stage1, --model-snps, --relatedness or "
-                           "--relatedness-correction is given); default auto")
+                           "--trait, --weights, --stage1, --model-snps or "
+                           "--relatedness is given); default auto")
     gwas.add_argument("--trait", choices=("quantitative", "binary"),
                       help="binary needs --method hratt and 0/1 outcomes")
     gwas.add_argument("--binary-coding", choices=("0/1", "1/2"), default="0/1",
@@ -299,16 +299,15 @@ def _cmd_gwas(args) -> int:
 
     method = args.method
     if method == "auto":
-        # --trait, --weights, --stage1, --model-snps, --relatedness and
-        # --relatedness-correction are HRATT-only options, so they move
-        # auto to hratt (the Python API raises TypeError for them with
-        # method="auto" instead). --relatedness-threshold is used only
-        # with a relatedness source, so alone it does not switch.
+        # --trait, --weights, --stage1, --model-snps and --relatedness
+        # are HRATT-only options, so they move auto to hratt (the
+        # Python API raises TypeError for them with method="auto"
+        # instead). --relatedness-threshold, --relatedness-correction
+        # and --kinship-variants are used only with a relatedness
+        # source, so alone they do not switch.
         from mixmogam.association import EXACT_N_AUTO
         if (args.trait is not None or w is not None or args.stage1 != "enet"
-                or args.model_snps is not None or args.relatedness is not None
-                or args.relatedness_correction is not None
-                or args.kinship_variants is not None):
+                or args.model_snps is not None or args.relatedness is not None):
             method = "hratt"
         else:
             method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
@@ -389,7 +388,20 @@ def _cmd_gwas(args) -> int:
         else:
             kwargs["relatedness_threshold"] = args.relatedness_threshold
     if args.relatedness_correction is not None:
-        kwargs["relatedness_correction"] = args.relatedness_correction
+        if args.relatedness is None:
+            if method == "hratt":
+                # Pass through so hratt can error on kappa/gls or warn
+                # that "none" is overwritten to "lambda".
+                kwargs["relatedness_correction"] = args.relatedness_correction
+            else:
+                warnings.warn(
+                    "--relatedness-correction has no effect without --relatedness; "
+                    "the correction is applied only with a relatedness source",
+                    RuntimeWarning,
+                    stacklevel=2,
+                )
+        else:
+            kwargs["relatedness_correction"] = args.relatedness_correction
     if args.kinship_variants is not None:
         if args.relatedness is None:
             raise ValueError("--kinship-variants needs --relatedness")

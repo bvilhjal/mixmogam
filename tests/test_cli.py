@@ -268,10 +268,8 @@ def test_plink_binary_coding_is_explicit(dataset, tmp_path, monkeypatch):
     assert main([*args, "--trait", "binary"]) == 0
 
 
-@pytest.mark.parametrize("flags", [["--relatedness", "auto"],
-                                   ["--relatedness-correction", "lambda"]])
-def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch, flags):
-    """Like --trait, --relatedness and --relatedness-correction resolve auto to hratt."""
+def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch):
+    """Like --trait, --relatedness resolves auto to hratt."""
     import mixmogam.association as association
     from mixmogam.results import GwasResult
 
@@ -285,10 +283,9 @@ def test_relatedness_flags_move_auto_to_hratt(dataset, tmp_path, monkeypatch, fl
     assert main(base) == 0
     assert seen["method"] == "exact"
     seen.clear()
-    assert main([*base, *flags]) == 0
+    assert main([*base, "--relatedness", "auto"]) == 0
     assert seen["method"] == "hratt"
-    key = flags[0].lstrip("-").replace("-", "_")
-    assert seen[key] == flags[1]
+    assert seen["relatedness"] == "auto"
 
 
 def test_relatedness_threshold_alone_does_not_switch_auto(dataset, tmp_path, monkeypatch):
@@ -313,6 +310,79 @@ def test_relatedness_threshold_alone_does_not_switch_auto(dataset, tmp_path, mon
     assert seen["method"] == "hratt"
     assert seen["relatedness"] == "auto"
     assert seen["relatedness_threshold"] == 0.05
+
+
+def test_relatedness_correction_alone_does_not_switch_auto(dataset, tmp_path, monkeypatch):
+    """The correction is used only with a relatedness source, so alone it
+    must not move auto to hratt and must warn that it has no effect."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+
+    seen = {}
+    def scan(y, subset, **kwargs):
+        seen.update(kwargs)
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--out", str(tmp_path / "out.csv")]
+    with pytest.warns(RuntimeWarning, match="relatedness-correction has no effect"):
+        assert main([*base, "--relatedness-correction", "lambda"]) == 0
+    assert seen["method"] == "exact"
+    assert "relatedness_correction" not in seen
+    seen.clear()
+    assert main([*base, "--relatedness", "auto", "--relatedness-correction", "lambda"]) == 0
+    assert seen["method"] == "hratt"
+    assert seen["relatedness"] == "auto"
+    assert seen["relatedness_correction"] == "lambda"
+
+
+def test_relatedness_correction_none_without_source_warns(dataset, tmp_path, monkeypatch):
+    """With --method hratt and no relatedness source, 'none' is passed
+    through and hratt warns that it is ignored in favour of 'lambda'."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+    from mixmogam.twostep import hratt
+    from mixmogam.io.plink import read_plink
+    from mixmogam.io.phenofile import read_phenotypes
+
+    seen = {}
+    def scan(y, subset, **kwargs):
+        seen.update(kwargs)
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--method", "hratt", "--out", str(tmp_path / "out.csv")]
+    assert main([*base, "--relatedness-correction", "none"]) == 0
+    assert seen["method"] == "hratt"
+    assert seen["relatedness_correction"] == "none"
+    assert "relatedness" not in seen
+
+    gt = read_plink(dataset["prefix"])
+    y = read_phenotypes(dataset["pheno1"]).align(gt.sample_ids, "y")
+    with pytest.warns(RuntimeWarning, match=r"relatedness_correction='none' without relatedness="):
+        none = hratt(y, gt, relatedness_correction="none", random_state=0)
+    lam = hratt(y, gt, relatedness_correction="lambda", random_state=0)
+    np.testing.assert_allclose(none.f_stat, lam.f_stat, rtol=1e-12, atol=0)
+    assert none.extra["lambda"] == lam.extra["lambda"]
+    assert "relatedness" not in none.extra
+
+
+def test_kinship_variants_alone_errors_and_does_not_call_gwas(dataset, tmp_path, monkeypatch):
+    """--kinship-variants needs --relatedness and must not promote auto."""
+    import mixmogam.association as association
+    from mixmogam.results import GwasResult
+
+    seen = {}
+    def scan(y, subset, **kwargs):
+        seen.update(kwargs)
+        return GwasResult(subset.chromosome, subset.position, np.ones(subset.n_variants), n=len(y))
+    monkeypatch.setattr(association, "gwas", scan)
+    snps = tmp_path / "kin.txt"
+    snps.write_text("rs1\n")
+    base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
+            "--out", str(tmp_path / "out.csv")]
+    assert main([*base, "--kinship-variants", str(snps)]) == 2
+    assert seen == {}
 
 
 def test_relatedness_auto_runs_without_method(dataset, tmp_path):

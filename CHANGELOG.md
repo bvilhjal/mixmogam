@@ -202,16 +202,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- CLI: `--relatedness`, `--relatedness-correction` and `--kinship-variants`
-  now move `--method auto` to HRATT, like `--trait`, `--weights`, `--stage1`
-  and `--model-snps`. `--relatedness-threshold` alone does not: the
-  threshold is applied only with a relatedness source, so without
-  `--relatedness` the CLI leaves auto as exact or bolt-inf and warns that
-  the flag has no effect. Before, `mixmogam gwas --relatedness auto` without
+- CLI: `--relatedness` now moves `--method auto` to HRATT, like `--trait`,
+  `--weights`, `--stage1` and `--model-snps`. `--relatedness-threshold` and
+  `--relatedness-correction` alone do not: they are applied only with a
+  relatedness source, so without `--relatedness` the CLI leaves auto as
+  exact or bolt-inf and warns that the flag has no effect.
+  `--kinship-variants` still requires `--relatedness` and does not switch
+  auto on its own. Before, `mixmogam gwas --relatedness auto` without
   `--method hratt` resolved to exact or bolt-inf and exited with
-  "relatedness: options of method='hratt' only". The API TypeError for
-  HRATT-only options with `method="auto"` now names stage-1 options and
-  relatedness as well as binary outcomes and sampling weights.
+  "relatedness: options of method='hratt' only". With `--method hratt`,
+  `relatedness_correction="none"` and no relatedness source, HRATT warns
+  that the request is ignored and the correction is `"lambda"`. The API
+  TypeError for HRATT-only options with `method="auto"` now names stage-1
+  options and relatedness as well as binary outcomes and sampling weights.
 
 ## [2.0.2.dev1] - 2026-11-03
 
