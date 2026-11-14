@@ -133,7 +133,8 @@ result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 ```
 
 Without `trait="binary"`, a 0/1 (or other two-valued) phenotype is fitted as a
-Gaussian trait, and HRATT warns; use `trait="binary"` for case-control data. Weights must be finite and positive (drop samples with zero weight) and
+Gaussian trait, and HRATT warns; use `trait="binary"` for case-control data, or
+filter `UserWarning` to silence the warning. Weights must be finite and positive (drop samples with zero weight) and
 are rescaled to mean one. With weights, `heritability_method="auto"` fits
 heritability by HE; REML is unavailable because the weights define no
 likelihood. Binary `beta` is a one-step log-odds approximation per counted
@@ -165,7 +166,12 @@ relatives through kappa_g instead of the structure lambda. Pass a pedigree
 (`mixmogam._relatedness.pedigree_relatedness`: no genotype pass; preferred), a
 KING / PLINK 2 `.kin0` path, a GCTA `.grm.sp` prefix, `(i, j, r)` arrays with
 `r = 2 phi`, or `"auto"` (KING-robust on common non-model SNPs). IDs in a file
-are aligned to `gt.sample_ids`. The default `relatedness_correction="kappa"`
+are aligned to `gt.sample_ids`. A supplied pedigree or pair file is assumed
+complete: every close relative of every sample is present. Relatives missing
+from it deflate kappa_g, so the elastic-net + kappa_g correction is
+over-conservative, and leftover residual sharing can trip the structure test
+and masquerade as strong structure (an explicit LDpred3 stage 1 then refuses
+the run). The default `relatedness_correction="kappa"`
 reports scores divided by kappa_g and the covariate factor c_X, and sets
 lambda to 1.
 
@@ -194,7 +200,9 @@ Useful `relatedness_options` (defaults in
 
 - `loco_refit`: `"auto"` (default) refits the per-chromosome stage 1 when there
   is evidence of relatives or strong structure; `True` forces it, `False` turns
-  it off (research comparisons only; in-model nulls can inflate).
+  it off (research comparisons only; in-model nulls can inflate). An explicit
+  LDpred3 stage 1 skips this refit (block-exact LOCO) and records
+  `loco_refit_reason` `"n/a (block-exact LOCO)"`.
 - `loco_refit_min_related`: 0.01. For `"auto"` KING pairs, the refit needs at
   least this fraction of samples in a close pair. A supplied pedigree or file
   triggers the refit from a single pair above the threshold.

@@ -1219,15 +1219,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``stage1_kwargs["allow_strong_structure"]=True``, which runs with a
     warning); ``"auto"`` keeps the elastic net in both cases, and the
     elastic net itself warns under strong structure (null lambda_GC
-    1.01-1.13 without PCs; with ``relatedness`` the lambda calibration is
-    replaced by kappa_g and the warning is stronger: up to ~1.2).
+    1.01-1.13 without PCs, in simulations; with ``relatedness`` the lambda
+    calibration is replaced by kappa_g and the warning is stronger: up to
+    ~1.2, and ~1.4-2.9 for LDpred3 stage 1s, also in simulations).
     (Behaviour change from 5fd7806f, where all ran silently; a3c523d6 had
     narrowed the refusal to lassosum2, which was reverted.) With ``model_snps`` the h2 shared by the
     LDpred3 fits (the inf ridge m / (N h2), fast's h2_init) is the model-SNP
     GRM's REML h2, not the full panel's (HM3 smoke: 0.44 vs 0.69), so
     LDpred3-inf shrinks more on a subset; this is consistent with the
-    subset model but not with a full-panel h2. A two-valued ``y`` with an LDpred3 stage 1
-    warns (use ``trait="binary"``). Variance components and prior selection still
+    subset model but not with a full-panel h2. A two-valued ``y`` with ``trait="quantitative"``
+    warns (pass ``trait="binary"`` for case-control data, or filter
+    ``UserWarning`` to silence it). Variance components and prior selection still
     use the whole trait, and the genome-wide h2 the infinitesimal fit shares
     over its blocks leaks the tested chromosome second-order (documented in
     :mod:`mixmogam.stage1`).
@@ -1329,7 +1331,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     weighted analyses of related samples need ``relatedness``.
     :func:`~mixmogam.association.gwas_by_group` applies ``relatedness``
     inside each group only (pairs that cross the split are dropped); do not
-    split relatives across groups. ``relatedness`` takes (i, j, r = 2
+    split relatives across groups. A supplied pedigree or pair list is
+    assumed complete: every close relative of every sample is present.
+    Relatives missing from it deflate kappa_g, so the elastic-net +
+    kappa_g correction is over-conservative, and leftover residual sharing
+    can trip the unrelated-set structure test and masquerade as strong
+    structure (an explicit LDpred3 stage 1 then refuses the run).
+    ``relatedness`` takes (i, j, r = 2
     phi) arrays or a :class:`mixmogam._relatedness.Relatedness` (e.g. a
     pedigree's, :func:`~mixmogam._relatedness.pedigree_relatedness`: no
     genotype pass; preferred), a KING / PLINK 2 ``.kin0`` path or a GCTA
@@ -1369,7 +1377,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
     CPU binds. When the largest family exceeds n / (2 k) samples the folds
     cannot balance and it falls back to random folds with the refit, with a
-    warning. ``"gls"`` (opt-in, unweighted quantitative)
+    warning. An explicit LDpred3 stage 1 has block-exact LOCO (no in-model
+    leak), so the relatives auto-refit and family folds are not applied;
+    ``extra["loco_refit_reason"]`` is then ``"n/a (block-exact LOCO)"``.
+    ``"gls"`` (opt-in, unweighted quantitative)
     whitens the residual with a sparse family covariance instead. It gains
     power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
     families with a 5% subset) but is prospective: under families ascertained
@@ -1487,7 +1498,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
 
     A two-valued ``y`` with ``trait="quantitative"`` (the default) is
     fitted as a Gaussian linear-probability model and warns; use
-    ``trait="binary"`` for case-control data.
+    ``trait="binary"`` for case-control data, or filter ``UserWarning``
+    to silence the warning.
     ``trait="binary"`` (outcomes 0/1) fits step 1 as weighted linear
     regression of the working response (y - mu0) / (mu0 (1 - mu0)), with
     working weights mu0 (1 - mu0) of the covariate-only null logistic fit

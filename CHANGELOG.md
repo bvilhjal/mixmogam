@@ -9,6 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
+  Spec A relatedness (kappa_g) follow-ups, and the LDpred3 / int8 stage-1
+  seam. A supplied pedigree or pair file is assumed complete: relatives
+  missing from it deflate kappa_g, which makes the elastic-net + kappa_g
+  correction over-conservative and can masquerade as strong structure. An
+  explicit LDpred3 stage 1 skips the relatives auto-refit and family folds
+  (`extra["loco_refit_reason"]` is `"n/a (block-exact LOCO)"`). Thresholds
+  and lambda_GC figures in the no-PC / strong-structure warnings are
+  simulation-derived. The two-valued-y warning (a 0/1 trait passed as
+  quantitative) is silenced by `trait="binary"` or by filtering
+  `UserWarning`. `tests/test_stage1_ldpred3_int8.py` is marked `external`
+  so the CI external job collects it.
+
 - HRATT `model_snps=` / `--model-snps` fits stage 1 on a subset of variants. Stage 2 still
   tests every variant against LOCO scores, and the LOCO groups are those of the full panel.
   - `"hm3"`: matched by rsID and/or GRCh37/GRCh38 position, with a match report.

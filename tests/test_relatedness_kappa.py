@@ -387,6 +387,7 @@ def test_structure_without_pcs_warns_or_errors():
     assert floor > 0.0884
     msg = [str(x.message) for x in w if "no covariates" in str(x.message)]
     assert len(msg) == 1 and "noise floor" in msg[0] and "degree relatives" in msg[0]
+    assert "kappa_g replaces" in msg[0] and "LDpred3" in msg[0] and "in simulations" in msg[0]
     assert any("2nd-degree bound" in str(x.message) for x in w)
     pcs = np.linalg.svd(G - G.mean(0), full_matrices=False)[0][:, :2]
     with warnings.catch_warnings(record=True) as w:
@@ -489,3 +490,25 @@ def test_carrier_families_column_and_flag(tmp_path):
     c = _run(y, g2, relatedness=pairs, relatedness_options={"carrier_families_p": 1.01,
                                                             "carrier_families_max_maf": 0.51})
     assert np.all(np.isfinite(c.extra["carrier_families"][np.isfinite(c.p)]))  # all computed
+
+
+def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
+    """auto + sample_weights + relatives falls back to enet, keeps the
+    relcal-decided LOCO refit, and applies λ_g = 1/(κ_g c_X) once."""
+    G, gt, y, pairs, causal = family_panel(n_fam=40, kids=2, m=1200, n_chrom=4,
+                                           n_causal=40, h2=0.5, seed=4)
+    w = np.random.default_rng(3).uniform(0.5, 2.0, y.size)
+    sub = np.sort(np.random.default_rng(5).choice(gt.n_variants, gt.n_variants // 4,
+                                                  replace=False))
+    kap = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
+               stage1="auto", loco_folds=2)
+    sel = kap.extra["stage1_selection"]
+    assert sel["chosen"] == "enet" and sel["reason"].startswith("sample_weights")
+    assert kap.extra.get("stage1", "enet") == "enet"
+    assert kap.extra["loco_refit"] and kap.extra["loco_refit_reason"] == "relatives"
+    base = _run(y, gt, model_snps=sub, relatedness=pairs, relatedness_correction="none",
+                sample_weights=w, stage1="auto", loco_folds=2)
+    k, cx = kap.extra["relatedness"]["kappa"], kap.extra["relatedness"]["c_X"]
+    np.testing.assert_allclose(kap.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
+                               rtol=1e-10)
+

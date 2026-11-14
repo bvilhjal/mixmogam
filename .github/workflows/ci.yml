@@ -43,8 +43,11 @@ jobs:
         env:
           LDPRED3_TOKEN: ${{ secrets.LDPRED3_READ_TOKEN || secrets.LDPRED3_FOR_BIPRED }}
         run: echo "has_token=${LDPRED3_TOKEN:+true}" >> "$GITHUB_OUTPUT"
-  # The LDpred3 stage-1 seam's tests are marked `external`: ldpred3 is private
-  # and outside mixmogam's install requirements, so they need a read token.
+  # Tests that need the private ldpred3 package are marked `external`
+  # (per-test on tests/test_stage1.py and tests/test_cli.py, and
+  # pytestmark on tests/test_stage1_ldpred3_int8.py). ldpred3 is outside
+  # mixmogam's install requirements, so this job installs it with a read
+  # token and runs `pytest -q -m external`.
   external:
     runs-on: ubuntu-latest
     needs: external-gate

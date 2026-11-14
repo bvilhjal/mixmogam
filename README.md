@@ -223,7 +223,8 @@ measurement details.
   Check `extra["cv_converged"]` and `extra["loco_converged"]`.
 - Only HRATT models binary outcomes and weights. A 0/1 phenotype passed
   without `trait="binary"` is fitted as Gaussian, and HRATT warns; use
-  `trait="binary"` for case-control data.
+  `trait="binary"` for case-control data, or filter `UserWarning` to
+  silence the warning.
 - `bolt` mixture p-values come with infinitesimal-model effects and standard
   errors (`extra["effect_method"] == "bolt-inf"`).
 - A genome-wide lambda near one can hide miscalibration within SNP groups.

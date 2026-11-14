@@ -13,6 +13,8 @@ import warnings
 import numpy as np
 import pytest
 
+pytestmark = pytest.mark.external
+
 from mixmogam import _ld8, stage1, twostep
 from mixmogam._packed import PackedCalls
 from mixmogam.genotypes import Genotypes
@@ -477,15 +479,25 @@ def test_strong_structure_warning_with_relatedness():
     """With relatedness kappa_g replaces lambda, so the structure warning
     says nothing removes the ancestry; LDpred3 still refuses."""
     gt, y, pop = _two_pop()
-    with pytest.warns(RuntimeWarning, match="kappa_g replaces the lambda calibration"):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always")
         r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="enet",
                           relatedness="auto")
+    msgs = [str(x.message) for x in rec if "kappa_g replaces the lambda calibration" in str(x.message)]
+    assert len(msgs) == 1
+    assert "LDpred3" in msgs[0] and "in simulations" in msgs[0]
     assert r.extra["structure"]["strong"]
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with pytest.raises(ValueError, match="principal components"):
             twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
                           relatedness="auto")
+        # A supplied pedigree / pair file (not KING-auto) also mentions
+        # missing or unmodelled relatives as a possible cause.
+        pairs = (np.array([0]), np.array([1]), np.array([0.5]))
+        with pytest.raises(ValueError, match="relatives missing from it"):
+            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
+                          relatedness=pairs)
 
 
 def test_weights_gate_and_auto_fallback():
@@ -573,3 +585,24 @@ def test_hardcall_needs_no_private_projection(ldp, monkeypatch):
     lg._projection = None  # the hard-call build must not read it
     _, R = _ld8.hardcall_block(lg, idx, return_float=True)
     assert np.max(np.abs(R - ref)) < 2e-6
+
+
+def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
+    """Explicit LDpred3 + relatives: no LOCO refit (block-exact LOCO), and
+    λ_g = 1/(κ_g c_X) is applied a single time. Family folds are skipped."""
+    G, gt, y, pairs, causal = family_panel(n_fam=40, kids=2, m=800, n_chrom=4,
+                                           n_causal=20, h2=0.4, seed=4)
+    kw = dict(stage1="ldpred3-inf", stage1_kwargs={"block_size": 200})
+    r = _hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "family"},
+               **kw)
+    assert r.extra["stage1"] == "ldpred3-inf"
+    assert r.extra["loco_refit"] is False
+    assert r.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"
+    assert r.extra["crossfit_folds"] == "random"
+    ff = r.extra["relatedness"].get("family_folds") or {}
+    assert ff.get("applied") is False and ff.get("reason") == "n/a (block-exact LOCO)"
+    base = _hratt(y, gt, relatedness=pairs, relatedness_correction="none", **kw)
+    k, cx = r.extra["relatedness"]["kappa"], r.extra["relatedness"]["c_X"]
+    np.testing.assert_allclose(r.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
+                               rtol=1e-10)
+
