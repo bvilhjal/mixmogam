@@ -30,7 +30,6 @@ over random calibration variants (GRAMMAR-Gamma style; Svishcheva et al.
 from __future__ import annotations
 
 
-import math
 
 import numpy as np
 from scipy import linalg, sparse
@@ -862,7 +861,6 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                           "coding and population structure, or pass a pedigree or external "
                           "pairs", RuntimeWarning,
                           stacklevel=3)
-        sd, mad = res["noise_sd"], res["noise_sd_mad"]
         if res["threshold"] > threshold:
             # Structure inflates 1.4826·MAD (a two-pop Fst 0.05 panel
             # without PCs: MAD SD ≈ 0.039, floor ≈ 0.16) and can drop

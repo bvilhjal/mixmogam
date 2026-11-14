@@ -920,7 +920,7 @@ def test_king_auto_structure_trigger_fires_even_if_phi_drops_second_degree():
     assert stats["n_false"] <= n_master + 5, (
         f"{stats['n_false']} false Phi pairs; master_floor_pairs={n_master} "
         f"floor={king['threshold']:.4f}")
-    recovered = true_set  # documented: recovery may be low
+    # documented: recovery may be low
     assert stats["n_rec"] <= len(true_set)
 
 
