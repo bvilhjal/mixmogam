@@ -378,6 +378,16 @@ def test_structure_without_pcs_warns_or_errors():
     with pytest.raises(ValueError, match="no covariates"):
         hratt(y, gt, relatedness=empty, random_state=1,
               relatedness_options={"structure_without_pcs": "error"})
+    # (ii) KING-auto under the same structure: its noise floor rises past the
+    # 2nd-degree bound, and the no-covariates warning says so
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        k = hratt(y, gt, relatedness="auto", random_state=1)
+    floor = k.extra["relatedness"]["king"]["threshold"]
+    assert floor > 0.0884
+    msg = [str(x.message) for x in w if "no covariates" in str(x.message)]
+    assert len(msg) == 1 and "noise floor" in msg[0] and "degree relatives" in msg[0]
+    assert any("2nd-degree bound" in str(x.message) for x in w)
     pcs = np.linalg.svd(G - G.mean(0), full_matrices=False)[0][:, :2]
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")

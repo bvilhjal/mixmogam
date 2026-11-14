@@ -1559,6 +1559,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                        "so structured variants can be inflated (null mean chi-square 1.05-1.08 "
                        "in simulation against <= 1.013 with lambda); include ancestry principal "
                        "components among the covariates")
+                king = rel_info.get("king") or {}
+                if king.get("threshold", 0.0) > king.get("threshold_requested", np.inf):
+                    from mixmogam._relatedness import dropped_degree
+
+                    # (ii) the same structure inflates KING-auto's noise floor
+                    # (SG: Fst 0.05, no PCs -> phi 0.158, 2nd degree lost)
+                    lost = dropped_degree(king["threshold"])
+                    msg += (f". The structure also raised the KING-auto noise floor to phi "
+                            f"{king['threshold']:.3f} (requested {king['threshold_requested']:g})"
+                            + (f", which can drop {lost} from kappa_g" if lost else "")
+                            + "; PCs do not lower it (KING runs on genotypes), so pass "
+                            "pedigree or external PC-aware kinship pairs")
                 if rel_opt["structure_without_pcs"] == "error":
                     raise ValueError(msg)
                 warnings.warn(msg, RuntimeWarning, stacklevel=2)

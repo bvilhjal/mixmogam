@@ -43,6 +43,18 @@ import warnings
 
 # KING kinship boundaries (Manichaikul et al. 2010): 3rd degree from 2^-4.5.
 KING_THIRD_DEGREE = 0.0442
+KING_SECOND_DEGREE = 0.0884  # KING's 2nd-degree lower bound (phi 1/8 nominal)
+KING_FIRST_DEGREE = 0.177  # KING's 1st-degree lower bound (phi 1/4 nominal)
+
+
+def dropped_degree(floor: float) -> str:
+    """Closest relatives a KING floor of ``floor`` can drop: '' when it is
+    below the 2nd-degree bound."""
+    if floor > KING_FIRST_DEGREE:
+        return "1st-degree relatives (phi 0.25: parents, offspring, full sibs)"
+    if floor > KING_SECOND_DEGREE:
+        return "2nd-degree relatives (phi 0.125)"
+    return ""
 
 
 class Relatedness:
@@ -534,11 +546,20 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                           "pairs", RuntimeWarning,
                           stacklevel=3)
         if res["threshold"] > threshold:
+            # Population structure inflates the random-pair spread (the SG's
+            # Fst 0.05 panel without PCs: SD 0.039, floor 0.158), and above
+            # 0.0884 the floor drops 2nd-degree relatives from kappa_g.
+            lost = dropped_degree(res["threshold"])
             warnings.warn(
                 f"relatedness='auto': the KING noise SD on {res['n_variants']:,} variants is "
                 f"{res['noise_sd']:.4f}, so pairs with phi <= {res['threshold']:.4f} "
                 f"({options['king_noise_sd_multiple']:g} SD) are dropped instead of <= "
-                f"{threshold:g}; pass pedigree or external KING pairs for distant relatives",
+                f"{threshold:g}"
+                + (f"; this floor is above KING's 2nd-degree bound (0.0884), so {lost} "
+                   "can be dropped too, usually because population structure inflates the "
+                   "random-pair spread. Pass pedigree or external (PC-aware) kinship pairs"
+                   if lost else
+                   "; pass pedigree or external KING pairs for distant relatives"),
                 RuntimeWarning, stacklevel=3)
         rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
         info.update({"source": "king-auto", "king": {k: res[k] for k in (
