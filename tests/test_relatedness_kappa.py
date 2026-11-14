@@ -4,7 +4,7 @@ import warnings
 import numpy as np
 import pytest
 
-from mixmogam._relatedness import (KING_SECOND_DEGREE, RELATEDNESS_OPTIONS, Relatedness,
+from mixmogam._relatedness import (KING_COUSIN_DEGREE, KING_SECOND_DEGREE, RELATEDNESS_OPTIONS, Relatedness,
                                    align_pairs, covariate_factor, king_pairs,
                                    king_refit_trigger, read_grm_sparse, read_kin0,
                                    resolve_relatedness, unrelated_set)
@@ -385,12 +385,18 @@ def test_structure_without_pcs_warns_or_errors():
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
         k = hratt(y, gt, relatedness="auto", random_state=1)
-    floor = k.extra["relatedness"]["king"]["threshold"]
-    assert floor > 0.0884
+    king = k.extra["relatedness"]["king"]
+    floor = king["threshold"]
+    # Mixture-robust scale: the 4-SD floor must stay below 2nd-degree,
+    # which is the bug this test used to encode (MAD floor ≈ 0.15).
+    assert king["threshold_requested"] < floor < 0.0884
+    assert king.get("noise_scale_from_structure") or king["noise_sd_mad"] > 1.5 * king["noise_sd"]
     msg = [str(x.message) for x in w if "no covariates" in str(x.message)]
-    assert len(msg) == 1 and "noise floor" in msg[0] and "degree relatives" in msg[0]
+    assert len(msg) == 1
     assert "kappa_g replaces" in msg[0] and "LDpred3" in msg[0] and "in simulations" in msg[0]
-    assert any("2nd-degree bound" in str(x.message) for x in w)
+    assert "2nd-degree bound" not in msg[0]
+    assert not any("2nd-degree bound" in str(x.message) and "noise floor" in str(x.message)
+                   for x in w)
     pcs = np.linalg.svd(G - G.mean(0), full_matrices=False)[0][:, :2]
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -521,6 +527,19 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
     k, cx = kap.extra["relatedness"]["kappa"], kap.extra["relatedness"]["c_X"]
     np.testing.assert_allclose(kap.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
                                rtol=1e-10)
+    # Catch a mutation back to refit=struct["strong"] on the auto+weights
+    # fallback: extra["loco_refit"] can still say True if it is built from
+    # the decision variable, but the statistics would match loco_refit=False.
+    forced = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
+                  stage1="auto", loco_folds=2, spa_threshold=1e6,
+                  relatedness_options={"loco_refit": True})
+    off = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
+               stage1="auto", loco_folds=2, spa_threshold=1e6,
+               relatedness_options={"loco_refit": False})
+    assert forced.extra["loco_refit"] is True
+    assert off.extra["loco_refit"] is False
+    np.testing.assert_allclose(kap.f_stat, forced.f_stat, rtol=1e-10)
+    assert not np.allclose(kap.f_stat, off.f_stat, rtol=1e-5, atol=1e-5)
 
 
 def test_king_refit_trigger_ignores_n2_noise_but_fires_on_true_relatives():
@@ -571,17 +590,8 @@ def test_king_auto_trigger_on_unrelated_and_related_panels():
     from mixmogam import Genotypes
 
     def _trigger(gt, seed=0):
-        rel, info = resolve_relatedness(
-            "auto", gt, mean=np.asarray(gt.G, dtype=np.float64).mean(0),
-            model_idx=None, threshold=0.025, options=RELATEDNESS_OPTIONS,
-            rng=np.random.default_rng(seed))
-        king = info["king"]
-        u = rel.upper.tocoo()
-        return king_refit_trigger(gt.n_samples, u.row, u.col, u.data / 2.0,
-                                  noise_sd=king["noise_sd"],
-                                  noise_median=king["noise_median"],
-                                  noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
-                                  n_variants=king.get("n_variants"))
+        trig, rel, info = _live_trigger(gt, seed)
+        return trig
 
     for seed in (1, 2, 3, 7):
         G, gt, y, pairs, causal = family_panel(seed=seed, kids=0, n_fam=400, m=3000,
@@ -686,17 +696,8 @@ def test_king_auto_second_degree_fraction_rule_not_a_handful():
                          position=np.arange(m) * 10_000 + 1)
 
     def _trig(gt, seed):
-        rel, info = resolve_relatedness(
-            "auto", gt, mean=np.asarray(gt.G, dtype=np.float64).mean(0),
-            model_idx=None, threshold=0.025, options=RELATEDNESS_OPTIONS,
-            rng=np.random.default_rng(seed))
-        king = info["king"]
-        u = rel.upper.tocoo()
-        return king_refit_trigger(gt.n_samples, u.row, u.col, u.data / 2.0,
-                                  noise_sd=king["noise_sd"],
-                                  noise_median=king["noise_median"],
-                                  noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
-                                  n_variants=king.get("n_variants"))
+        trig, rel, info = _live_trigger(gt, seed)
+        return trig
 
     # 5 half-sib pairs in 2,000 samples: 10/2000 = 0.5% < 1%, no fire
     gt_few = half_sib_panel(1990, 5, seed=21)
@@ -721,18 +722,8 @@ def test_king_auto_trigger_does_not_fire_on_structure_or_admixture():
         gt = Genotypes(np.ascontiguousarray(G),
                        chromosome=np.repeat([1, 2], m // 2),
                        position=np.arange(m) * 10_000 + 1)
-        rel, info = resolve_relatedness(
-            "auto", gt, mean=G.mean(0).astype(np.float64), model_idx=None,
-            threshold=0.025, options=RELATEDNESS_OPTIONS,
-            rng=np.random.default_rng(seed))
-        king = info["king"]
-        u = rel.upper.tocoo()
-        trig = king_refit_trigger(n, u.row, u.col, u.data / 2.0,
-                                  noise_sd=king["noise_sd"],
-                                  noise_median=king["noise_median"],
-                                  noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
-                                  n_variants=king.get("n_variants"))
-        return trig, int(u.row.size)
+        trig, rel, info = _live_trigger(gt, seed)
+        return trig, int(rel.upper.nnz)
 
     def balding_nichols(n, m, fst, seed, admixed=False):
         rng = np.random.default_rng(seed)
@@ -761,4 +752,307 @@ def test_king_auto_trigger_does_not_fire_on_structure_or_admixture():
               f"frac={trig['related_fraction']:.3%} tail={trig['noise_tail_ratio']:.2f} "
               f"cut={trig['cutoff']:.4f} σ={trig['noise_sd']:.4f} E0={trig['n_expected_null']:.2f}",
               flush=True)
+
+
+def _live_trigger(gt, seed=0, threshold=0.025):
+    """Same path as twostep: trigger sees pre-floor KING pairs."""
+    rel, info = resolve_relatedness(
+        "auto", gt, mean=np.asarray(gt.G, dtype=np.float64).mean(0),
+        model_idx=None, threshold=threshold, options=RELATEDNESS_OPTIONS,
+        rng=np.random.default_rng(seed))
+    king = info["king"]
+    pre = info.get("king_prefloor") or {}
+    if pre.get("i") is not None and np.size(pre["i"]):
+        i, j, phi = pre["i"], pre["j"], np.asarray(pre["r"], dtype=np.float64) / 2.0
+    else:
+        u = rel.upper.tocoo()
+        i, j, phi = u.row, u.col, u.data / 2.0
+    loc = king.get("noise_location", king.get("noise_median", 0.0))
+    trig = king_refit_trigger(
+        gt.n_samples, i, j, phi,
+        noise_sd=king["noise_sd"],
+        noise_median=king["noise_median"],
+        noise_location=None if loc is None else float(loc),
+        noise_tail_ratio=king.get("noise_tail_ratio", 1.0),
+        n_variants=king.get("n_variants"),
+        relatedness_threshold=threshold)
+    return trig, rel, info
+
+
+def test_king_refit_trigger_warns_when_cutoff_exceeds_cousin_degree():
+    """Once the effective cutoff exceeds 0.0625, 3rd-degree pairs no
+    longer count and a warning recommends a pedigree; the 0.0884 cap
+    is a separate, higher threshold."""
+    n, sd = 2000, 0.015  # z ≈ 4.89 -> cutoff ≈ 0.073, under the cap
+    i2, j2 = np.arange(20), 20 + np.arange(20)  # 2% of samples, 2nd-degree
+    phi2 = np.full(20, 0.125)
+    i3, j3 = 100 + np.arange(20), 120 + np.arange(20)
+    phi3 = np.full(20, KING_COUSIN_DEGREE)
+    with pytest.warns(RuntimeWarning, match="0.0625"):
+        trig = king_refit_trigger(n, np.r_[i2, i3], np.r_[j2, j3], np.r_[phi2, phi3],
+                                  noise_sd=sd, noise_median=0.0, n_variants=8000)
+    assert not trig["capped"]
+    assert KING_COUSIN_DEGREE < trig["cutoff"] < KING_SECOND_DEGREE
+    assert trig["n_pairs"] == 20  # only the 2nd-degree pairs
+    assert trig["evidence"] and trig["related_fraction"] >= 0.01
+
+
+def test_king_noise_scale_uses_upper_half_under_structure_not_relatives():
+    """1.4826·MAD is kept on a single Gaussian. On a two-population
+    mixture the MAD is inflated and the MAD-tail ratio falls below 0.8,
+    so the scale switches to the upper-half MAD and recovers the
+    within-component σ. Adding related-pair contamination (upper tail)
+    does not drift that σ."""
+    from mixmogam._relatedness import _king_noise_scale
+
+    rng = np.random.default_rng(0)
+    sig = 0.0155
+    gauss = rng.normal(0.0, sig, 200_000)
+    loc, sd, sd_mad, med, tail, struct, tail_mad = _king_noise_scale(gauss)
+    assert not struct
+    assert abs(loc) < 0.002
+    assert sd == pytest.approx(sig, rel=0.05)
+    assert tail == pytest.approx(1.0, abs=0.08)
+    assert tail_mad == pytest.approx(1.0, abs=0.08)
+
+    # 50/50 mixture, separation like Fst 0.05 (review: means ≈ 0 and -0.05)
+    mix = np.r_[rng.normal(-0.0057, sig, 100_000), rng.normal(-0.0561, sig, 100_000)]
+    loc_m, sd_m, mad_m, _, tail_m, struct_m, tail_mad_m = _king_noise_scale(mix)
+    assert struct_m
+    assert mad_m > 1.5 * sd_m
+    assert sd_m == pytest.approx(sig, rel=0.1)
+    assert tail_mad_m < 0.8
+    # 10% of *samples* in 2nd-degree pairs is a tiny fraction of all pairs
+    with_rel = np.r_[mix, np.full(2000, 0.125)]
+    loc_r, sd_r, mad_r, _, _, struct_r, _ = _king_noise_scale(with_rel)
+    assert struct_r
+    assert sd_r == pytest.approx(sd_m, rel=0.05)
+    assert mad_r == pytest.approx(mad_m, rel=0.05)
+
+
+def _structured_halfsib_panel(n, m, fst, n_pairs, seed, admixed=False):
+    """Balding-Nichols (or admixed) panel with n_pairs within-population
+    half-sib pairs (2nd-degree, phi 0.125) planted at the end."""
+    from mixmogam import Genotypes
+
+    rng = np.random.default_rng(seed)
+    n_unrel = n - 2 * n_pairs
+    p0 = rng.uniform(0.1, 0.9, m)
+    a = p0 * (1 - fst) / fst
+    b = (1 - p0) * (1 - fst) / fst
+    p = np.clip(np.stack([rng.beta(a, b), rng.beta(a, b)]), 0.02, 0.98)
+
+    def draw(freq, k):
+        return rng.binomial(2, np.broadcast_to(freq, (k, m))).astype(np.int8)
+
+    def hap(freq):
+        return (rng.random(m) < freq).astype(np.int8)
+
+    if admixed:
+        q = rng.uniform(0.1, 0.9, n_unrel)
+        freq = q[:, None] * p[0] + (1 - q)[:, None] * p[1]
+        Gun = draw(freq, n_unrel)
+    else:
+        pop = np.repeat([0, 1], (n_unrel + 1) // 2)[:n_unrel]
+        Gun = draw(p[pop], n_unrel)
+
+    rows = [Gun]
+    true_i, true_j = [], []
+    base = n_unrel
+    for u in range(n_pairs):
+        pop_u = u % 2
+        if admixed:
+            qu = rng.uniform(0.2, 0.8)
+            f = qu * p[0] + (1 - qu) * p[1]
+        else:
+            f = p[pop_u]
+        # shared parent + two married-ins from the same frequency
+        hp, hm1, hm2 = hap(f), hap(f), hap(f)
+        hp2, hm12, hm22 = hap(f), hap(f), hap(f)
+        # two meioses of the shared parent, independent mates
+        def mei(h0, h1):
+            pick = rng.integers(0, 2, m)
+            return np.where(pick == 0, h0, h1)
+        kid1 = (mei(hp, hp2) + mei(hm1, hm12)).astype(np.int8)
+        kid2 = (mei(hp, hp2) + mei(hm2, hm22)).astype(np.int8)
+        rows.append(kid1[None, :])
+        rows.append(kid2[None, :])
+        true_i.append(base + 2 * u)
+        true_j.append(base + 2 * u + 1)
+    G = np.vstack(rows)
+    assert G.shape[0] == n
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2], m // 2),
+                   position=np.arange(m) * 10_000 + 1)
+    return gt, np.array(true_i), np.array(true_j)
+
+
+def test_king_auto_structure_keeps_second_degree_in_phi_and_fires():
+    """Fst 0.05 plus ≈ 2% of samples in true 2nd-degree (half-sib) pairs
+    must fire through the real 4-SD floor path, and the Phi pair set /
+    phi sum must stay close to a pedigree Phi on the same pairs.
+
+    Tolerance: recover at least 70% of the true pairs in KING Phi, and
+    the KING phi sum over recovered true pairs is between 70% and 130%
+    of the pedigree sum (0.125 per pair). KING-robust phi on 8,000
+    unlinked SNPs is noisy and slightly downward-biased (review median
+    ≈ 0.11 vs 0.125), so a 30% band is the stated tolerance."""
+    from mixmogam import Genotypes  # noqa: F401
+
+    n, m, n_pairs = 2000, 8000, 20  # 40/2000 = 2% of samples
+    gt, i_true, j_true = _structured_halfsib_panel(n, m, fst=0.05, n_pairs=n_pairs, seed=51)
+    true_set = {frozenset((int(a), int(b))) for a, b in zip(i_true, j_true)}
+    ped_sum = 0.125 * len(true_set)
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=51)
+
+    assert trig["evidence"], trig["reason"]
+    assert trig["related_fraction"] >= 0.01
+    u = rel.upper.tocoo()
+    king_phi = {frozenset((int(a), int(b))): float(ph)
+                for a, b, ph in zip(u.row, u.col, u.data / 2.0)}
+    recovered = true_set & set(king_phi)
+    assert len(recovered) >= 0.70 * len(true_set), (
+        f"recovered {len(recovered)}/{len(true_set)} true 2nd-degree pairs; "
+        f"floor={info['king']['threshold']:.4f} σ={info['king']['noise_sd']:.4f} "
+        f"MAD={info['king']['noise_sd_mad']:.4f}")
+    king_sum = sum(king_phi[p] for p in recovered)
+    assert 0.70 * ped_sum <= king_sum <= 1.30 * ped_sum, (
+        f"KING phi sum {king_sum:.3f} vs pedigree {ped_sum:.3f}")
+
+
+def _ancestry_panel_with_pairs(n, m, fst, kind, frac, seed, admixed=False):
+    """Balding-Nichols (or admixed) panel with ``frac`` of samples in
+    planted half-sib (phi 1/8) or first-cousin (phi 1/16) pairs, matching
+    the Skeptic repro ``skeptic-repro/king/king_struct.py``.
+    """
+    from mixmogam import Genotypes
+
+    rng = np.random.default_rng(seed)
+    p0 = rng.uniform(0.1, 0.9, m)
+    a = p0 * (1 - fst) / fst
+    b = (1 - p0) * (1 - fst) / fst
+    P = np.clip(np.stack([rng.beta(a, b), rng.beta(a, b)]), 0.02, 0.98)
+    if admixed:
+        q = rng.uniform(0.1, 0.9, n)
+        F = q[:, None] * P[0] + (1 - q)[:, None] * P[1]
+    else:
+        pop = np.r_[np.zeros(n // 2, int), np.ones(n - n // 2, int)]
+        F = P[pop]
+
+    def hap(f):
+        return (rng.random((2, m)) < f).astype(np.int8)
+
+    mei = lambda H: np.where(rng.integers(0, 2, m) == 0, H[0], H[1])
+    npair = int(frac * n) // 2
+    rows, true_i, true_j = [], [], []
+    for k in range(npair):
+        f = F[2 * k]
+        if kind == "halfsib":
+            parent = hap(f)
+            a_ = mei(parent) + mei(hap(f))
+            b_ = mei(parent) + mei(hap(f))
+        else:
+            GP, GQ = hap(f), hap(f)
+            s1 = np.stack([mei(GP), mei(GQ)])
+            s2 = np.stack([mei(GP), mei(GQ)])
+            a_ = mei(s1) + mei(hap(f))
+            b_ = mei(s2) + mei(hap(f))
+        rows += [a_, b_]
+        true_i.append(2 * k)
+        true_j.append(2 * k + 1)
+    for i in range(2 * npair, n):
+        rows.append(hap(F[i]).sum(0))
+    G = np.vstack(rows).astype(np.int8)
+    gt = Genotypes(np.ascontiguousarray(G),
+                   chromosome=np.repeat([1, 2], m // 2),
+                   position=np.arange(m) * 10_000 + 1)
+    return gt, np.array(true_i), np.array(true_j)
+
+
+def test_king_auto_structured_phi_keeps_planted_halfsibs_and_cousins():
+    """Skeptic K1 / king_struct.py: on two populations, Phi used to be
+    empty because the 4-SD MAD floor sat above 0.125. After the
+    mixture-robust scale, planted half-sibs (and some first cousins)
+    must appear in Phi, and 2% half-sibs must fire the trigger."""
+    n, m, fst = 800, 4000, 0.05
+    gt, i_t, j_t = _ancestry_panel_with_pairs(n, m, fst, "halfsib", 0.02, seed=7)
+    true = {frozenset((int(a), int(b))) for a, b in zip(i_t, j_t)}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=7)
+    u = rel.upper.tocoo()
+    king_phi = {frozenset((int(a), int(b))): float(ph)
+                for a, b, ph in zip(u.row, u.col, u.data / 2.0)}
+    recovered = true & set(king_phi)
+    assert len(recovered) >= 0.70 * len(true), (
+        f"half-sibs in Phi {len(recovered)}/{len(true)}; "
+        f"floor={info['king']['threshold']:.4f} σ={info['king']['noise_sd']:.4f} "
+        f"MAD={info['king']['noise_sd_mad']:.4f}")
+    assert info["king"]["threshold"] < 0.0884
+    assert trig["evidence"], trig["reason"]
+
+    gt, i_t, j_t = _ancestry_panel_with_pairs(n, m, fst, "cousin", 0.03, seed=7)
+    true = {frozenset((int(a), int(b))) for a, b in zip(i_t, j_t)}
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", RuntimeWarning)
+        trig, rel, info = _live_trigger(gt, seed=7)
+    u = rel.upper.tocoo()
+    king_phi = {frozenset((int(a), int(b))) for a, b in zip(u.row, u.col)}
+    recovered = true & king_phi
+    assert len(recovered) >= 1, (
+        f"no planted cousins in Phi; floor={info['king']['threshold']:.4f} "
+        f"n_true={len(true)} phi_pairs={u.row.size}")
+    assert rel.upper.nnz > 0
+
+
+def test_king_auto_structure_hratt_refits_and_reports_actual_refit():
+    """End-to-end through hratt: structured panel + planted half-sibs
+    must keep those pairs in Phi, and extra['loco_refit'] must be the
+    flag returned by the scores fit that actually ran."""
+    n, m = 400, 2000
+    gt, i_t, j_t = _ancestry_panel_with_pairs(n, m, 0.05, "halfsib", 0.04, seed=11)
+    rng = np.random.default_rng(11)
+    y = rng.standard_normal(n)
+    for a, b in zip(i_t, j_t):
+        s = rng.normal() * 0.8
+        y[a] += s
+        y[b] += s
+    kw = dict(random_state=11, model_snps_h2_check=False, loco_folds=2,
+              grid=[(0.0, 1.0)], vb_max_iter=40, he_probes=8)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        r = hratt(y, gt, relatedness="auto", **kw)
+    king = r.extra["relatedness"]["king"]
+    assert king["threshold"] < 0.0884
+    assert r.extra["relatedness"]["n_pairs_above_threshold"] >= 1
+    assert r.extra["relatedness"]["relatives_evidence"]
+    assert r.extra["loco_refit"] is True
+    # Two-pop Fst 0.05 also trips the unrelated-set structure test, so
+    # the recorded reason may be "structure"; relatives evidence is required.
+    assert r.extra["loco_refit_reason"] in ("relatives", "structure")
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        off = hratt(y, gt, relatedness="auto",
+                    relatedness_options={"loco_refit": False}, **kw)
+    assert off.extra["loco_refit"] is False
+    # f_stat need not move on this small structured panel (structure
+    # already forces a refit decision; turning the option off is what
+    # extra['loco_refit'] must reflect). The mutation test above, on an
+    # unstructured family panel, checks that the fit itself changes.
+
+
+def test_king_refit_trigger_respects_user_threshold_at_or_above_cap():
+    """A user relatedness_threshold >= 0.0884 is respected: the cap
+    does not pull the cutoff back down."""
+    n, sd = 2000, 0.015
+    i, j = np.arange(20), 20 + np.arange(20)
+    phi = np.full(20, 0.20)
+    trig = king_refit_trigger(n, i, j, phi, noise_sd=sd, noise_median=0.0,
+                              relatedness_threshold=0.10, n_variants=8000)
+    assert not trig["capped"]
+    assert trig["cutoff"] == pytest.approx(0.10)
+    assert trig["n_pairs"] == 20
 

@@ -1345,8 +1345,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     dropped and counted; files keep phi > ``relatedness_threshold``), or
     ``"auto"``: KING-robust on at most 50,000 common (MAF >= 0.05) variants
     that are not model SNPs (model SNPs bias kappa_g down through the fit),
-    for n <= 50,000 only, keeping phi > max(``relatedness_threshold``, 4 x
-    the KING noise SD from random pairs). The structure test is repeated on
+    for n <= 50,000 only, keeping phi > max(``relatedness_threshold``,
+    location + 4 x the KING noise SD). The SD is 1.4826·MAD of a seeded
+    pair subsample, or the MAD of the upper half when that MAD's
+    upper-tail ratio is below 0.8 (a two-population ancestry mixture),
+    so the floor is not raised above 2nd-degree phi by between-population
+    pair means.
+    The structure test is repeated on
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in
     ``extra["structure"]``). The cross-fitted LOCO scores are refitted per
@@ -1360,19 +1365,24 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     admits a number of noise pairs that grows with n² (SG p20k §4: 244
     pairs, 1.33% of samples, on an unrelated n=20,000 panel with floor
     0.042, which tripped the older 1% rule). The trigger therefore counts
-    only pairs with phi > max(``relatedness_threshold``, median + z σ_eff),
+    only pre-floor KING pairs with
+    phi > max(``relatedness_threshold``, location + z σ_eff),
     with σ_eff = σ̂ times the empirical-to-Gaussian upper-quantile ratio
     when the tail is heavier than Gaussian, and z set so the expected
-    number of null pairs among n(n-1)/2 is about 1
+    number of null pairs among N = n(n-1)/2 (all sample pairs, not the
+    subsample) is about 1
     (``extra["relatedness"]["refit_trigger"]``). The cutoff is capped at
-    KING's 2nd/3rd-degree bound (0.0884); if the noise cutoff would
-    exceed the cap, a warning recommends a pedigree or external pairs
-    (the refit is not disabled). A handful of true close pairs below
+    KING's 2nd/3rd-degree bound (0.0884). A warning fires once the
+    effective cutoff exceeds 0.0625 (nominal 3rd-degree / first-cousin
+    phi): those relatives then no longer count toward the trigger, and
+    a pedigree or external pairs should be supplied. If the uncapped
+    cutoff also exceeds 0.0884, the same warning says the trigger is
+    capped (the refit is not disabled). A handful of true close pairs below
     ``loco_refit_min_related`` does not fire: the leak the refit removes
     grows with the related fraction (paired in-model null excess -0.007
-    to +0.001 at 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100% in
-    the CW's mixed nuclear-family panels), so below 1% the 1.3-3.8x
-    stage-1 cost is not worth it.
+    to +0.001 at 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100%;
+    estimates from review simulations, n = 2,000, not archived), so
+    below 1% the 1.3-3.8x stage-1 cost is not worth it.
     ``extra["relatedness"]["related_fraction"]`` is still the fraction in
     any floor-kept pair.
     Why the refit:
@@ -1386,15 +1396,25 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``True`` forces it. ``"crossfit_folds": "family"`` (opt-in; default
     ``"random"``) instead keeps each family (connected pairs with phi >
     ``relatedness_threshold``) in one fold, which removes the same leak
-    without the refit's 1.3-3.8x stage-1 CPU: calibrated in the SG's grid
+    without the refit's 1.3-3.8x stage-1 CPU (same review-simulation
+    estimate, n = 2,000, not archived): calibrated in the SG's grid
     (unlinked 0.999, in-model 1.008), but the families' shared signal stays
     in the residual, so QTL chi-square is 0.66-0.92x the refit's in
     family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
     CPU binds. When the largest family exceeds n / (2 k) samples the folds
     cannot balance and it falls back to random folds with the refit, with a
-    warning. An explicit LDpred3 stage 1 has block-exact LOCO (no in-model
-    leak), so the relatives auto-refit and family folds are not applied;
-    ``extra["loco_refit_reason"]`` is then ``"n/a (block-exact LOCO)"``.
+    warning. An explicit ``ldpred3-inf`` stage 1 keeps block-exact LOCO
+    given the shared genome-wide h2 (the chromosomal subtraction is the
+    leave-chromosome-out fit; in-model null mean chi-square was 1.048
+    without a second refit in the review simulations, next to 1.033 for
+    refitted enet), so the relatives auto-refit and family folds are not
+    applied and ``extra["loco_refit_reason"]`` is ``"n/a (block-exact
+    LOCO)"``. ``ldpred3-lassosum2`` and ``ldpred3-fast`` are not
+    block-exact once hyperparameters are chosen on all chromosomes
+    (lassosum2 in-model null mean chi-square 1.122 without refit in the
+    same simulations); with relatives they use the same auto-refit as
+    the elastic net. The "no in-model leak" wording does not apply to
+    them.
     ``"gls"`` (opt-in, unweighted quantitative)
     whitens the residual with a sparse family covariance instead. It gains
     power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
@@ -1719,14 +1739,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                 if king.get("threshold", 0.0) > king.get("threshold_requested", np.inf):
                     from mixmogam._relatedness import dropped_degree
 
-                    # (ii) the same structure inflates KING-auto's noise floor
-                    # (SG: Fst 0.05, no PCs -> phi 0.158, 2nd degree lost)
                     lost = dropped_degree(king["threshold"])
-                    msg += (f". The structure also raised the KING-auto noise floor to phi "
-                            f"{king['threshold']:.3f} (requested {king['threshold_requested']:g})"
-                            + (f", which can drop {lost} from kappa_g" if lost else "")
-                            + "; PCs do not lower it (KING runs on genotypes), so pass "
-                            "pedigree or external PC-aware kinship pairs")
+                    if lost:
+                        msg += (f". The structure also raised the KING-auto noise floor to phi "
+                                f"{king['threshold']:.3f} (requested {king['threshold_requested']:g}), "
+                                f"which can drop {lost} from kappa_g; PCs do not lower it "
+                                "(KING runs on genotypes), so pass pedigree or external "
+                                "PC-aware kinship pairs")
                 if rel_opt["structure_without_pcs"] == "error":
                     raise ValueError(msg)
                 warnings.warn(msg, RuntimeWarning, stacklevel=2)
@@ -1760,17 +1779,28 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # For KING-auto, "close" is the n-aware trigger cutoff (median +
         # z σ̂, E[null pairs] ≈ 1), not the 4-SD floor: that floor already
         # lets hundreds of noise pairs through at n = 20,000 (SG p20k §4).
-        # Below 1% related the leak is <= ~0.0014 even scaled linearly from
-        # 100%, so the refit's 1.3-3.8x stage-1 CPU buys nothing.
+        # Below 1% related the leak is estimated as <= ~0.0014 even
+        # scaled linearly from 100% (review simulations, n = 2,000,
+        # not archived), so the refit's 1.3-3.8x stage-1 CPU buys nothing.
         estimated = str(rel_info.get("source", "")).startswith("king-auto")
         if estimated:
             from mixmogam._relatedness import king_refit_trigger
 
             king = rel_info.get("king") or {}
+            # Count KING phi over the trigger cutoff, not the 4-SD Phi
+            # floor: under structure the floor used to drop 2nd-degree
+            # pairs before the trigger saw them.
+            pre = rel_info.get("king_prefloor") or {}
+            if pre.get("i") is not None and np.size(pre["i"]):
+                ti, tj, tphi = pre["i"], pre["j"], np.asarray(pre["r"], dtype=np.float64) / 2.0
+            else:
+                ti, tj, tphi = u.row, u.col, u.data / 2.0
+            loc = king.get("noise_location", king.get("noise_median", 0.0))
             trig = king_refit_trigger(
-                n, u.row, u.col, u.data / 2.0,
+                n, ti, tj, tphi,
                 noise_sd=float(king.get("noise_sd", 0.0)),
                 noise_median=float(king.get("noise_median", 0.0)),
+                noise_location=None if loc is None else float(loc),
                 relatedness_threshold=relatedness_threshold,
                 min_related=rel_opt["loco_refit_min_related"],
                 noise_tail_ratio=float(king.get("noise_tail_ratio", 1.0)),
@@ -1799,17 +1829,21 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             refit, refit_reason = False, None
         elif not refit and evidence and not family_folds:
             refit, refit_reason = True, "relatives"
-    # An explicit LDpred3 stage 1 has block-exact LOCO (SG §9e: no in-model
-    # leak), so the relatives auto-refit and family folds are not applied.
-    # loco_refit=True still records the intent, but LDpred3 scores do not
-    # take a refit flag; extra reports 'n/a (block-exact LOCO)'.
-    if stage1 not in ("enet", "auto"):
+    # ldpred3-inf is block-exact given the shared genome-wide h2 (review
+    # in-model null mean chi-square 1.048 without a second refit, next
+    # to 1.033 for refitted enet). lassosum2 and fast are not: their
+    # hyperparameters are chosen on all chromosomes (lassosum2 1.122
+    # without refit in the same simulations), so the relatives auto-refit
+    # and family folds apply to them.
+    if _ldpred3_block_exact_loco(stage1):
+        skipped_family = False
         if family_folds:
             family_folds, fam_labels = False, None
             if rel is not None:
                 rel_info["family_folds"] = {"applied": False,
                                             "reason": "n/a (block-exact LOCO)"}
-        if refit_reason == "relatives":
+            skipped_family = True
+        if refit_reason == "relatives" or skipped_family:
             refit, refit_reason = False, "n/a (block-exact LOCO)"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
@@ -1895,7 +1929,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                                    keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
-                                    keep_prediction=binary, **(stage1_kwargs or {}))
+                                    keep_prediction=binary, refit=False,
+                                    **(stage1_kwargs or {}))
         enet_mse = float(np.min(scores["mse"]))
         alt_mse = float(alt["mse"][0])
         pick = "ldpred3-inf" if alt_mse < enet_mse else "enet"
@@ -1911,7 +1946,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         scores["stage1_name"] = "enet"
     else:
         scores = ldpred3_stage1_scores(st, ys, h2, folds, held, method=stage1,
-                                       keep_prediction=binary, **(stage1_kwargs or {}))
+                                       keep_prediction=binary, refit=refit,
+                                       **(stage1_kwargs or {}))
         scores["stage1_name"] = stage1
     if st.v is not None:  # the held-out error per unit of working weight
         weight_scale = held.size / float(np.sum(st.v[held]))
@@ -1934,9 +1970,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "cv_converged": scores["cv_converged"],
              "loco_folds": int(loco_folds),
              "crossfit_folds": "family" if family_folds else "random",
-             "loco_refit": bool(folds is not None and refit and scores["stage1_name"] == "enet"),
-             "loco_refit_reason": ("n/a (block-exact LOCO)" if scores["stage1_name"] != "enet"
-                                   else (refit_reason if folds is not None and refit else None)),
+             "loco_refit": bool(scores.get("refit", False)),
+             "loco_refit_reason": (
+                 refit_reason if (scores.get("refit") or
+                                  refit_reason == "n/a (block-exact LOCO)")
+                 else None),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
     if scores["stage1_name"] != "enet" or "stage1_selection" in scores:
@@ -2334,6 +2372,17 @@ def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
     return folds
 
 
+
+def _ldpred3_block_exact_loco(stage1) -> bool:
+    """True for ``ldpred3-inf``: given the shared genome-wide h2, dropping
+    one chromosome's share of a block-diagonal fit *is* the leave-chromosome
+    out refit. ``ldpred3-lassosum2`` and ``ldpred3-fast`` choose
+    hyperparameters on all chromosomes, so they are not block-exact.
+    Tests and measurement scripts may monkeypatch this.
+    """
+    return stage1 == "ldpred3-inf"
+
+
 def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, grid, held,
                       n_threads: int, vb_max_iter: int, vb_tol: float,
                       keep_prediction: bool = False, folds=None, refit: bool = False,
@@ -2430,8 +2479,10 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
         resid, slope = score["resid"], score["offset_slope"]
     # Only the LOCO residuals (and predictions) are used; the engine's Gram
     # cache and the (m, groups) effects go before the calibration solves.
+    used_refit = bool(folds is not None and refit and np.any(h2j > 0))
     out = {"resid": resid, "best": best, "mse": mse, "cv_converged": cv_converged,
-           "loco_iterations": loco["iterations"], "loco_converged": loco["converged"]}
+           "loco_iterations": loco["iterations"], "loco_converged": loco["converged"],
+           "refit": used_refit}
     if slope is not None:
         out["offset_slope"] = slope
     if keep_prediction:

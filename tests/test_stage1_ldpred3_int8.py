@@ -588,8 +588,9 @@ def test_hardcall_needs_no_private_projection(ldp, monkeypatch):
 
 
 def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
-    """Explicit LDpred3 + relatives: no LOCO refit (block-exact LOCO), and
-    λ_g = 1/(κ_g c_X) is applied a single time. Family folds are skipped."""
+    """Explicit ldpred3-inf + relatives: no LOCO refit (block-exact LOCO
+    given shared h2), and λ_g = 1/(κ_g c_X) is applied a single time.
+    Family folds are skipped."""
     # Same construction as test_model_snps_and_relatedness_with_ldpred3:
     # relatives, but not strong structure (so the LDpred3 gate does not fire).
     G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
@@ -608,3 +609,22 @@ def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
     np.testing.assert_allclose(r.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
                                rtol=1e-10)
 
+
+def test_ldpred3_lassosum2_refit_with_relatives():
+    """lassosum2 is not block-exact: relatives auto-refit must run, and
+    extra['loco_refit'] must report the refit that actually ran."""
+    G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
+    kw = dict(stage1="ldpred3-lassosum2", stage1_kwargs={"block_size": 200},
+              model_snps_h2_check=False)
+    r = _hratt(y, gt, relatedness=pairs, **kw)
+    assert r.extra["stage1"] == "ldpred3-lassosum2"
+    assert not r.extra["structure"]["strong"]
+    assert r.extra["loco_refit"] is True
+    assert r.extra["loco_refit_reason"] == "relatives"
+    off = _hratt(y, gt, relatedness=pairs, relatedness_options={"loco_refit": False}, **kw)
+    assert off.extra["loco_refit"] is False
+    assert not np.allclose(r.f_stat, off.f_stat, rtol=1e-5, atol=1e-5)
+    inf = _hratt(y, gt, relatedness=pairs, stage1="ldpred3-inf",
+                 stage1_kwargs={"block_size": 200}, model_snps_h2_check=False)
+    assert inf.extra["loco_refit"] is False
+    assert inf.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"

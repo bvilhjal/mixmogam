@@ -32,19 +32,27 @@ the working phenotype on the projected standardized rows
 phenotype enters its own score, and the LD blocks are the correlations of
 those same rows (:func:`ld_blocks`; LDpred3's own panel builder expects
 non-negative dosages with negatives as missing calls and cannot carry them).
-The model is block-independent given its hyperparameters, so the LOCO score
-of a sample is exactly its genome-wide fitted value less its own group's
-share: the subtraction in
-:func:`~mixmogam.twostep._out_of_fold_loco` *is* the refit, unlike the
-variational engine whose block updates interact through the residual.
+The model is block-independent given its hyperparameters, so for
+``ldpred3-inf`` (shared genome-wide h2) the LOCO score of a sample is
+exactly its genome-wide fitted value less its own group's share: the
+subtraction in :func:`~mixmogam.twostep._out_of_fold_loco` *is* the
+leave-chromosome-out refit. ``ldpred3-lassosum2`` and ``ldpred3-fast``
+choose hyperparameters on all chromosomes, so that subtraction is not
+a full refit; with evidence of relatives, :func:`ldpred3_stage1_scores`
+re-fits leave-group-out (``refit=True``), the same k x groups pattern
+as the elastic net. The variational engine always needs that refit,
+because its block updates interact through the residual.
 Three consequences of that model are accepted and documented here:
 
 1. Cross-block LD is ignored; long-range-LD regions are fitted blockwise.
 2. Shared hyperparameters (the genome-wide ``h2`` of the infinitesimal fit,
    the ``(s, lambda)`` lassosum2 selects across blocks) leak the tested
-   chromosome's variants into the other chromosomes' effects second-order,
-   the same order BOLT-LMM and REGENIE accept. LOCO groups are kept
-   block-pure so nothing else crosses.
+   chromosome's variants into the other chromosomes' effects. For inf
+   that leak is second-order, the same order BOLT-LMM and REGENIE
+   accept, and the relatives auto-refit is skipped. For lassosum2 and
+   fast the leak is larger (in-model null mean chi-square 1.122 without
+   refit in review simulations); the relatives auto-refit is applied.
+   LOCO groups are kept block-pure so nothing else crosses.
 3. The LD reference is the analysis cohort itself and is shared across
    folds: only genotypes, never phenotypes, of a held-out fold enter its
    prediction through the LD, which is the usual unsupervised-preprocessing
@@ -485,7 +493,8 @@ def _lassosum2_s_floor(s_seq, lam_min: float):
 
 def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                           *, method: str, keep_prediction: bool = False,
-                          block_size: int = 500, **fit_kwargs) -> dict:
+                          block_size: int = 500, refit: bool = False,
+                          **fit_kwargs) -> dict:
     """Contract dictionary from cross-fitted LDpred3 LOCO scores.
 
     ``method`` is ``"ldpred3-inf"`` (the infinitesimal closed form at the
@@ -507,8 +516,14 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     ``"check"`` | ``"floor"`` | ``"ridge"``) are described in the module notes. The
     hold-out MSE of a fit excluding ``held`` is the candidate's
     model-selection score, on the same samples as the elastic-net
-    candidates'. ``stage1_info`` in the result records the LD build or
-    cache hit, its bytes and the fit times.
+    candidates'. With ``refit`` (the relatives / structure auto-refit
+    for lassosum2 and fast), each fold is re-fit k x groups times,
+    leaving out the tested group's blocks and re-selecting that method's
+    hyperparameters, instead of subtracting the group's share of a
+    genome-wide fit. ``ldpred3-inf`` does not need this when h2 is
+    shared. ``stage1_info`` in the result records the LD build or
+    cache hit, its bytes and the fit times. The returned dict includes
+    ``refit``, the flag that actually ran.
     """
     import time
 
@@ -548,7 +563,8 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                "offset_slope": np.zeros(G),
                "mse": np.array([float(np.mean(ys[held_mask] ** 2))]),
                "best": 0, "cv_converged": True, "loco_iterations": 0,
-               "loco_converged": True, "cv_grid": [method], "cv_best": method}
+               "loco_converged": True, "cv_grid": [method], "cv_best": method,
+               "refit": False}
         if keep_prediction:
             out["prediction"] = np.zeros((lg.n, G))
         return out
@@ -642,15 +658,91 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     fitted = lg.project(_fitted_unprojected(lg, effects[:, k]))
     mse = np.array([float(np.mean((ys[held_mask] - fitted[held_mask]) ** 2))])
 
-    prediction = _out_of_fold_loco(lg, effects[:, :k], folds)
+    used_refit = bool(refit and h2 > 0)
+    if used_refit:
+        prediction, n_leave = _ldpred3_leave_group_scores(
+            ldpred3, lg, covers, order, scale, marg, train_cols, folds, method, h2,
+            fit_kwargs, fast_opt, fast_diag)
+        info["n_fits"] = int(info.get("n_fits", 0)) + n_leave
+    else:
+        prediction = _out_of_fold_loco(lg, effects[:, :k], folds)
     info["predict_s"] = time.perf_counter() - t0
     out = {"mse": mse, "best": 0, "cv_converged": True,
            "loco_iterations": 0, "loco_converged": True,
-           "cv_grid": [method], "cv_best": method, "stage1_info": info}
+           "cv_grid": [method], "cv_best": method, "stage1_info": info,
+           "refit": used_refit}
     out.update(residualize_score(lg, ys, prediction))
     if keep_prediction:
         out["prediction"] = prediction
     return out
+
+
+
+def _ldpred3_leave_group_scores(ldpred3, lg, covers, order, scale, marg, train_cols, folds,
+                                method, h2, fit_kwargs, fast_opt, fast_diag):
+    """k x groups leave-group-out LDpred3 scores (``refit=True``).
+
+    Each block is group-pure. Dropping group ``g``'s blocks and re-fitting
+    (re-selecting lassosum2 / fast hyperparameters on the rest) is the
+    analogue of the elastic-net k x groups refit. Block indices are
+    recompacted: LDpred3 requires a cover that tiles 0..m_keep-1.
+    """
+    short = {"ldpred3-inf": "inf", "ldpred3-lassosum2": "lassosum2",
+             "ldpred3-fast": "fast"}[method]
+    k = int(np.max(np.asarray(folds))) + 1
+    G = lg.n_groups
+    order = np.asarray(order, dtype=np.int64)
+    layout = covers[0]
+    block_group = []
+    for _, idx in layout:
+        idx = np.asarray(idx).ravel()
+        block_group.append(int(lg.groups[order[idx[0]]]))
+    block_group = np.asarray(block_group, dtype=np.int64)
+    prediction = np.empty((lg.n, G))
+    n_leave = 0
+    n_sets = len(marg.labels)
+    val_cols = list(range(k + 1, n_sets))
+    for j in range(k):
+        blocks = covers[0] if len(covers) == 1 else covers[j]
+        beta_std, _ = ldpred3.standardize_betas(
+            marg.beta[:, train_cols[j]], marg.se[:, train_cols[j]],
+            float(marg.n_eff[train_cols[j]]))
+        beta_ord = beta_std[order]
+        if short == "lassosum2":
+            val_std, _ = ldpred3.standardize_betas(
+                marg.beta[:, val_cols[j]], marg.se[:, val_cols[j]],
+                float(marg.n_eff[val_cols[j]]))
+            val_ord = val_std[order]
+        rows = np.flatnonzero(np.asarray(folds) == j)
+        for g in range(G):
+            keep = [i for i, bg in enumerate(block_group) if bg != g]
+            if not keep:
+                prediction[rows, g] = 0.0
+                continue
+            sub, cat = [], []
+            offset = 0
+            for i in keep:
+                R, idx = blocks[i]
+                idx = np.asarray(idx).ravel()
+                sub.append((R, np.arange(offset, offset + idx.size)))
+                cat.append(idx)
+                offset += idx.size
+            cat = np.concatenate(cat)
+            kwargs = dict(fit_kwargs)
+            if short == "lassosum2":
+                kwargs["validation_beta"] = val_ord[cat]
+            if short == "fast":
+                kwargs = {**fast_opt, "seed": int(fast_opt["seed"]) + j * (G + 1) + 1 + g}
+            e = _fit_effects(ldpred3, sub, beta_ord[cat], float(marg.n_eff[train_cols[j]]),
+                             short, h2, kwargs, fast_diag)
+            n_leave += 1
+            with np.errstate(divide="ignore", invalid="ignore"):
+                e = np.where(scale[cat] > 0, e / np.where(scale[cat] > 0, scale[cat], 1.0), 0.0)
+            beta = np.zeros(lg.m)
+            beta[order[cat]] = e
+            # Unprojected z'beta, same units as _out_of_fold_loco.
+            prediction[rows, g] = _fitted_unprojected(lg, beta)[rows]
+    return prediction, n_leave
 
 
 def _fitted_unprojected(lg, beta: np.ndarray) -> np.ndarray:

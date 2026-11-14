@@ -477,11 +477,14 @@ def test_two_valued_quantitative_y_warns():
     yb = (y > np.median(y)).astype(np.float64)
     kw = dict(alphas=(-1.0, -0.25), he_probes=8, grid=[(0.0, 1.0)], vb_max_iter=40,
               random_state=1)
-    with pytest.warns(UserWarning, match="two values"):
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always", UserWarning)
         twostep.hratt(yb, gt, **kw)
+    n_two = sum("two values" in str(w.message) for w in rec)
+    assert n_two == 1, n_two  # a duplicate 0/1 warning must fail
     with warnings.catch_warnings(record=True) as rec:
         warnings.simplefilter("always", UserWarning)
         twostep.hratt(y, gt, **kw)
         twostep.hratt(yb, gt, trait="binary", **kw)
-    assert not any("two values" in str(w.message) for w in rec)
+    assert sum("two values" in str(w.message) for w in rec) == 0
 

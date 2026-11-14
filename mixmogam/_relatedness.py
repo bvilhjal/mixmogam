@@ -46,6 +46,9 @@ import warnings
 KING_THIRD_DEGREE = 0.0442
 KING_SECOND_DEGREE = 0.0884  # KING's 2nd-degree lower bound (phi 1/8 nominal)
 KING_FIRST_DEGREE = 0.177  # KING's 1st-degree lower bound (phi 1/4 nominal)
+# Nominal 3rd-degree / first-cousin kinship (2^-4). Distinct from
+# KING_THIRD_DEGREE, which is KING's lower 3rd-degree bound (2^-4.5).
+KING_COUSIN_DEGREE = 0.0625
 
 
 def dropped_degree(floor: float) -> str:
@@ -322,19 +325,40 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     estimator) of every sample pair on ``variants``, blockwise: sample rows
     in blocks of ``block`` against all samples, variants in chunks of
     ``chunk`` (memory O(block x n + n x chunk)). The noise floor is the
-    robust SD (1.4826 MAD) of phi over a seeded random subsample of
-    ``noise_pairs`` pairs (default 1e6, or all pairs if fewer exist),
-    taken from the same block products (no extra genotype pass, O(K)
-    memory). The kept pairs have phi > max(threshold, noise_sd_multiple x
-    SD). An empirical upper-quantile / Gaussian ratio on that subsample
-    (``noise_tail_ratio``) is also returned, for a heavier-than-Gaussian
-    tail check on the LOCO-refit trigger. Each row block decodes the KING
+    robust scale of phi over a seeded random subsample of
+    at most ``noise_pairs`` pairs (default 1e6), taken from the same
+    block products (no extra genotype pass, O(K) memory). When
+    n(n-1)/2 ≤ ``noise_pairs``, every unordered pair (i < j) is used;
+    otherwise the subsample is drawn with replacement over ordered
+    pairs (i, j), i ≠ j. It is not "all ordered pairs if fewer than
+    ``noise_pairs`` exist": a draw of size min(``noise_pairs``, n(n-1))
+    can still repeat pairs. The trigger's N is always n(n-1)/2 (all
+    unordered pairs), not the subsample size. The default scale is 1.4826·MAD. A two-population ancestry
+    mixture inflates that MAD (the gap between within- and
+    between-population pair means) and can push a 4-SD floor above
+    2nd-degree phi. When the empirical-to-Gaussian upper-quantile ratio
+    computed against the MAD is below 0.8 — a lighter-than-Gaussian
+    upper tail, the signature of that mixture, not of LD — the scale
+    and location switch to the MAD of the upper half of the subsample
+    (pairs at or above the overall median). That half is approximately
+    the within-population component, and related pairs are a tiny
+    fraction of it, so the scale does not drift with a few percent of
+    relatives. An upper-tail spacing estimator is not used, because
+    relatives live in that tail. The Phi floor is max(threshold,
+    location + noise_sd_multiple x SD). Pairs above ``threshold`` are
+    also returned unfiltered (``i_prefloor``, ``j_prefloor``,
+    ``r_prefloor``) so the LOCO-refit trigger can count them even if
+    the floor would drop them. ``noise_tail_ratio`` is then recomputed
+    at the chosen location and scale, for a heavier-than-Gaussian tail
+    check on the trigger. Each row block decodes the KING
     variants once: ceil(n / block) reads of them, 3 n^2 k flops (float32
     GEMM; the symmetric half is not exploited).
 
-    Returns {"i", "j", "r" (= 2 phi), "threshold", "threshold_requested",
-    "noise_sd", "noise_median", "noise_tail_ratio", "noise_n_pairs",
-    "n_variants", "seconds"}. Missing calls count as neither
+    Returns {"i", "j", "r" (= 2 phi, Phi floor), "i_prefloor",
+    "j_prefloor", "r_prefloor" (pairs with phi > threshold, before the
+    floor), "threshold", "threshold_requested", "noise_sd" (the scale used for the floor),
+    "noise_sd_mad", "noise_location", "noise_median", "noise_tail_ratio",
+    "noise_scale_from_structure", "noise_tail_ratio_mad", "noise_n_pairs", "n_variants", "seconds"}. Missing calls count as neither
     het nor hom (KING-robust ignores them; heterozygote counts per sample
     use the called variants only)."""
     import time
@@ -354,11 +378,16 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     # extra pass). Heterozygote counts complete during the first row block,
     # whose chunk sweep decodes every sample. Pairs above the requested
     # threshold are kept; the floor-raised threshold filters them at the end.
-    k = min(int(noise_pairs), n * (n - 1) if n > 1 else 0)
-    ra = rng.integers(0, n, k)
-    rb = rng.integers(0, n, k)
-    keep = ra != rb
-    ra, rb = ra[keep], rb[keep]
+    n_unord = n * (n - 1) // 2 if n > 1 else 0
+    if n_unord and n_unord <= int(noise_pairs):
+        ra, rb = np.triu_indices(n, k=1)
+    else:
+        # With-replacement draw over ordered pairs; i == j is dropped.
+        k = min(int(noise_pairs), n * (n - 1) if n > 1 else 0)
+        ra = rng.integers(0, n, k)
+        rb = rng.integers(0, n, k)
+        keep = ra != rb
+        ra, rb = ra[keep], rb[keep]
     phi_r = np.empty(ra.size)
     nhet = np.zeros(n)
     hexp = np.zeros(n)  # expected heterozygotes per sample under HWE
@@ -396,19 +425,72 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         r = r + s
         up = c > r
         I.append(r[up]); J.append(c[up]); V.append(phi[r[up] - s, c[up]])
-    med = float(np.median(phi_r)) if phi_r.size else 0.0
-    sd = float(1.4826 * np.median(np.abs(phi_r - med))) if phi_r.size else 0.0
-    tail_ratio = _king_tail_ratio(phi_r, med, sd)
-    thr = float(max(threshold, noise_sd_multiple * sd))
+    loc, sd, sd_mad, med, tail_ratio, from_structure, tail_mad = _king_noise_scale(phi_r)
+    # Floor is an absolute phi cut: location + k·σ (location ≈ 0 on an
+    # unstructured null; under structure it is the within-population centre).
+    thr = float(max(threshold, loc + noise_sd_multiple * sd))
     I, J, V = np.concatenate(I), np.concatenate(J), np.concatenate(V)
     ok = V > thr
-    I, J, V = I[ok], J[ok], V[ok]
-    return {"i": I, "j": J, "r": 2.0 * V,
+    I_f, J_f, V_f = I[ok], J[ok], V[ok]
+    return {"i": I_f, "j": J_f, "r": 2.0 * V_f,
+            "i_prefloor": I, "j_prefloor": J, "r_prefloor": 2.0 * V,
             "threshold": thr, "threshold_requested": float(threshold), "noise_sd": sd,
+            "noise_sd_mad": sd_mad, "noise_location": float(loc),
             "noise_median": med, "noise_tail_ratio": tail_ratio,
+            "noise_scale_from_structure": bool(from_structure),
+            "noise_tail_ratio_mad": float(tail_mad),
             "noise_n_pairs": int(phi_r.size),
             "n_variants": int(idx.size), "seconds": time.perf_counter() - t0,
             "median_F": F_med, "hom_alt_fraction": n_hom_alt / max(n_called, 1)}
+
+
+# Tail-ratio (vs the overall MAD) below this is treated as a
+# within/between-population mixture, not as LD or a heavy null tail.
+# Measured: ≈ 0.55-0.73 on two-pop Fst 0.05 panels, ≈ 0.9-1.0 on
+# unstructured, admixed, isolate, nuclear and sib panels.
+_KING_STRUCTURE_TAIL = 0.8
+
+
+def _king_noise_scale(phi_r):
+    """Location and scale of KING-auto pair-subsample noise.
+
+    Default: location = median, scale = 1.4826·MAD. If the
+    empirical-to-Gaussian upper-quantile ratio against that MAD is
+    below ``_KING_STRUCTURE_TAIL`` (0.8), the pairwise phi look like a
+    two-component ancestry mixture whose MAD is inflated by the
+    between-population gap. In that case the location and scale are
+    the median and 1.4826·MAD of the *upper half* (phi >= overall
+    median), which is approximately the within-population component.
+    Related pairs sit in the far upper tail of that half and are a
+    tiny fraction of all pairs, so they do not move the MAD. An
+    upper-quantile spacing estimator is not used.
+
+    Returns ``(location, scale, mad_scale, overall_median, tail_ratio,
+    from_structure, tail_ratio_mad)``. ``tail_ratio`` is recomputed at
+    the chosen location and scale (so a mixture does not inflate σ_eff);
+    ``tail_ratio_mad`` is the same ratio against the overall MAD, which
+    is what the 0.8 structure switch uses.
+    """
+    x = np.asarray(phi_r, dtype=np.float64).ravel()
+    x = x[np.isfinite(x)]
+    if x.size < 100:
+        med = float(np.median(x)) if x.size else 0.0
+        sd_mad = (float(1.4826 * np.median(np.abs(x - med))) if x.size else 0.0)
+        return med, sd_mad, sd_mad, med, 1.0, False, 1.0
+    med = float(np.median(x))
+    sd_mad = float(1.4826 * np.median(np.abs(x - med)))
+    tail_mad = _king_tail_ratio(x, med, sd_mad)
+    from_structure = bool(sd_mad > 0.0 and tail_mad < _KING_STRUCTURE_TAIL)
+    if from_structure:
+        upper = x[x >= med]
+        loc = float(np.median(upper))
+        sd = float(1.4826 * np.median(np.abs(upper - loc))) if upper.size else sd_mad
+        if sd <= 0.0:
+            loc, sd, from_structure = med, sd_mad, False
+    else:
+        loc, sd = med, sd_mad
+    tail = _king_tail_ratio(x, loc, sd)
+    return loc, sd, sd_mad, med, tail, from_structure, tail_mad
 
 
 def _king_tail_ratio(phi_r, med: float, sd: float) -> float:
@@ -416,11 +498,14 @@ def _king_tail_ratio(phi_r, med: float, sd: float) -> float:
 
     KING-robust noise is not exactly Gaussian (it depends on MAF, LD and
     ancestry). A ratio > 1 means a heavier-than-Gaussian upper tail; the
-    LOCO-refit trigger then inflates σ̂ by this factor. The quantile is
-    taken at a moderately central alpha (2%, ~2.05 σ under a Gaussian)
-    so a few percent of true related pairs in the subsample cannot inflate
-    it, while a heavier-than-Gaussian noise tail still can. Returns 1 when
-    the subsample is too small or σ̂ is 0.
+    LOCO-refit trigger then inflates σ̂ by this factor. ``med`` and ``sd``
+    should be the location and scale used for the floor (the upper-half
+    MAD under a detected mixture, otherwise the overall MAD), so a
+    two-component mixture does not inflate the ratio. The quantile is
+    taken at a moderately central alpha (2%,
+    ~2.05 σ under a Gaussian) so a few percent of true related pairs in
+    the subsample cannot inflate it, while a heavier-than-Gaussian noise
+    tail still can. Returns 1 when the subsample is too small or σ̂ is 0.
     """
     from scipy.stats import norm
 
@@ -439,28 +524,40 @@ def _king_tail_ratio(phi_r, med: float, sd: float) -> float:
 def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: float = 0.0,
                        relatedness_threshold: float = 0.025, min_related: float = 0.01,
                        expected_null: float = 1.0, noise_tail_ratio: float = 1.0,
-                       n_variants: int | None = None) -> dict:
+                       n_variants: int | None = None,
+                       noise_location: float | None = None) -> dict:
     """Whether KING-auto pairs are evidence of relatives for the LOCO refit.
 
-    The pairs that enter Phi are not changed. For the trigger only, a pair
-    counts as related if ``phi > max(relatedness_threshold, median + z σ_eff)``,
-    with σ_eff = σ̂ · max(1, tail_ratio) (the empirical-to-Gaussian upper
-    quantile ratio, so heavier-than-Gaussian tails raise the cutoff) and
-    z the standard-normal upper quantile at which the expected number of
-    null pairs among n(n-1)/2 is ``expected_null`` (default 1; z is about
-    √(2 ln(n²/2))). The cutoff is capped at ``KING_SECOND_DEGREE`` (0.0884,
-    the 2nd/3rd-degree boundary) so 2nd-degree relatives still count; if
-    the uncapped noise cutoff would exceed the cap, a warning is issued
-    that KING-auto has too few markers to distinguish 3rd-degree relatives
-    from noise, and a pedigree or external pairs should be supplied. The
-    refit itself is not disabled.
+    ``phi`` should be the KING-auto pairs *before* the 4-SD Phi floor
+    (pairs with phi > the requested threshold). The pairs that enter Phi
+    for kappa_g are a separate, floor-filtered set. For the trigger only,
+    a pair counts as related if
+    ``phi > max(relatedness_threshold, location + z σ_eff)``, with
+    location the noise-scale centre (``noise_location``, falling back to
+    ``noise_median``), σ_eff = σ̂ · max(1, tail_ratio) (the
+    empirical-to-Gaussian upper-quantile ratio, so heavier-than-Gaussian
+    tails raise the cutoff) and z the standard-normal upper quantile at
+    which the expected number of null pairs among N = n(n-1)/2 *all*
+    sample pairs (not the noise-subsample size) is ``expected_null``
+    (default 1; z is about √(2 ln(n²/2))). The cutoff is capped at
+    ``KING_SECOND_DEGREE`` (0.0884, the 2nd/3rd-degree boundary) so
+    2nd-degree relatives still count, *unless* the caller set
+    ``relatedness_threshold`` >= 0.0884: a user threshold at or above
+    the cap is respected and the cap is not applied. A warning is
+    issued once the effective cutoff exceeds ``KING_COUSIN_DEGREE``
+    (0.0625), not only when the cap binds: 3rd-degree / first-cousin
+    relatives then no longer count toward the trigger, and a pedigree
+    or external pairs should be supplied. If the uncapped noise cutoff
+    would also exceed the 0.0884 cap, the same warning (or a combined
+    one) says so; the cap still applies. The refit itself is not
+    disabled.
 
     Evidence then uses the same ``min_related`` sample-fraction rule as
     before (default 1%), applied to this quieter set. A handful of true
     close pairs below that fraction does not fire: the in-model leak is
-    negligible there (≤ ~0.0014 at 1% related, ≤ 0.006 at 10%, in the
-    CW mixed-family panels), so the 1.3-3.8x stage-1 cost of a refit is
-    not worth it. n² growth of 4-SD-floor noise pairs is what this
+    estimated as negligible there (≤ ~0.0014 at 1% related, ≤ 0.006 at
+    10%; 1.3-3.8× stage-1 cost of a refit) from review simulations
+    (n = 2,000; not archived), so the cost is not worth it. n² growth of 4-SD-floor noise pairs is what this
     cutoff stops from tripping the 1% rule (SG p20k §4: 244 pairs, 1.33%
     of samples, on an unrelated n=20,000 panel).
     """
@@ -473,9 +570,13 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
     n_pairs_all = n * (n - 1) // 2
     sd = float(noise_sd)
     med = float(noise_median)
+    loc = float(med if noise_location is None else noise_location)
+    if not np.isfinite(loc):
+        loc = med
     tail_ratio = float(noise_tail_ratio) if np.isfinite(noise_tail_ratio) else 1.0
     sd_eff = sd * max(1.0, tail_ratio)
     cap = float(KING_SECOND_DEGREE)
+    cousin = float(KING_COUSIN_DEGREE)
     floor = float(relatedness_threshold)
     cutoff_uncapped = floor
     capped = False
@@ -484,29 +585,42 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
         cutoff = floor
         n_exp = 0.0
     else:
-        # P(Z > z) = expected_null / N, so E[null exceedances] = expected_null
-        # under the (possibly tail-inflated) Gaussian.
+        # P(Z > z) = expected_null / N, with N = n(n-1)/2 all sample pairs
+        # (not the noise-subsample size), so E[null exceedances] =
+        # expected_null under the (possibly tail-inflated) Gaussian.
         p = min(max(float(expected_null) / n_pairs_all, 0.0), 1.0)
         z = 0.0 if p >= 1.0 else (float("inf") if p <= 0.0 else float(norm.isf(p)))
         if not np.isfinite(z) or sd_eff <= 0.0:
             cutoff_uncapped = floor
         else:
-            cutoff_uncapped = float(max(floor, med + z * sd_eff))
+            cutoff_uncapped = float(max(floor, loc + z * sd_eff))
         capped = cutoff_uncapped > cap and floor < cap
         cutoff = cutoff_uncapped if not capped else cap
-        z_eff = (cutoff - med) / sd_eff if sd_eff > 0.0 else float("inf")
+        z_eff = (cutoff - loc) / sd_eff if sd_eff > 0.0 else float("inf")
         n_exp = float(n_pairs_all * norm.sf(z_eff)) if np.isfinite(z_eff) else 0.0
-        if capped:
+        if capped or cutoff > cousin:
             markers = f" on {n_variants:,} variants" if n_variants else ""
-            warnings.warn(
-                f"relatedness='auto': the n-aware KING-auto refit-trigger cutoff would be "
-                f"phi {cutoff_uncapped:.4f} (median + z·σ̂{markers}, σ̂={sd:.4f}"
+            head = (
+                f"relatedness='auto': the n-aware KING-auto refit-trigger cutoff "
+                f"{'would be' if capped else 'is'} phi "
+                f"{(cutoff_uncapped if capped else cutoff):.4f} "
+                f"(location + z·σ̂{markers}, σ̂={sd:.4f}"
                 + (f", tail ratio {tail_ratio:.2f}" if tail_ratio > 1.0 else "")
-                + f"), above KING's 2nd/3rd-degree bound ({cap:g}). The trigger is "
-                f"capped at {cap:g} and may not distinguish 3rd-degree relatives from "
-                "noise; pass a pedigree or external KING / GCTA pairs. The LOCO refit "
-                "is not disabled",
-                RuntimeWarning, stacklevel=2)
+                + ")"
+            )
+            if capped:
+                head += (
+                    f", above KING's 2nd/3rd-degree bound ({cap:g}). The trigger "
+                    f"is capped at {cap:g}"
+                )
+            head += (
+                f". 3rd-degree relatives (phi {cousin:g}) no longer count toward "
+                "the trigger; pass a pedigree or external KING / GCTA pairs"
+            )
+            if capped:
+                head += ", which may also be needed to distinguish 3rd-degree relatives from noise"
+            head += ". The LOCO refit is not disabled"
+            warnings.warn(head, RuntimeWarning, stacklevel=2)
     ok = phi > cutoff if phi.size else np.zeros(0, dtype=bool)
     n_pairs = int(np.count_nonzero(ok))
     if n_pairs:
@@ -517,12 +631,13 @@ def king_refit_trigger(n: int, i, j, phi, *, noise_sd: float, noise_median: floa
     evidence = n_rel >= float(min_related) * n if n else False
     reason = (f"{n_pairs} pair(s) above trigger cutoff {cutoff:.4f}"
               + (f" (capped from {cutoff_uncapped:.4f})" if capped else "")
-              + f" (median {med:.4f} + z={z:.2f}·σ_eff, σ̂={sd:.4f}"
+              + f" (location {loc:.4f} + z={z:.2f}·σ_eff, σ̂={sd:.4f}"
               + (f", tail ratio {tail_ratio:.2f}" if tail_ratio != 1.0 else "")
               + f"; expected null {n_exp:.2f} of {n_pairs_all:,} pairs; "
               f"{n_rel} samples, {frac:.2%} of n={n:,}; "
               f"{'evidence' if evidence else 'no evidence'} at min_related={min_related:g})")
-    return {"noise_sd": sd, "noise_median": med, "noise_tail_ratio": tail_ratio,
+    return {"noise_sd": sd, "noise_median": med, "noise_location": loc,
+            "noise_tail_ratio": tail_ratio,
             "sd_eff": sd_eff, "z": z, "cutoff": cutoff,
             "cutoff_uncapped": float(cutoff_uncapped), "capped": bool(capped),
             "n_pairs": n_pairs, "n_expected_null": n_exp, "n_related": n_rel,
@@ -708,10 +823,29 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                           "coding and population structure, or pass a pedigree or external "
                           "pairs", RuntimeWarning,
                           stacklevel=3)
+        sd, mad = res["noise_sd"], res["noise_sd_mad"]
+        if res.get("noise_scale_from_structure") and sd > 0.0:
+            # tail_ratio against the overall MAD was < 0.8: a lighter
+            # upper tail than the MAD, the signature of a within- vs
+            # between-population mixture (not LD, which scales the
+            # whole distribution). The floor and trigger already use
+            # the upper-half MAD; this only flags that KING-auto
+            # ignores ancestry.
+            warnings.warn(
+                f"relatedness='auto': the pairwise KING phi distribution looks like an "
+                f"ancestry mixture (MAD σ̂ {mad:.4f} is {mad / sd:.1f}× the within-component "
+                f"scale {sd:.4f}). The noise floor and refit trigger use the "
+                "within-component scale so 2nd-degree pairs are not dropped. KING-auto "
+                "does not use ancestry PCs; pass a pedigree or external PC-aware pairs "
+                "if close relatives might be missed",
+                RuntimeWarning, stacklevel=3)
         if res["threshold"] > threshold:
-            # Population structure inflates the random-pair spread (the SG's
-            # Fst 0.05 panel without PCs: SD 0.039, floor 0.158), and above
-            # 0.0884 the floor drops 2nd-degree relatives from kappa_g.
+            # Population structure used to inflate 1.4826·MAD (the SG's
+            # Fst 0.05 panel without PCs: MAD SD 0.039, floor 0.158) and
+            # drop 2nd-degree relatives from kappa_g. The floor now uses
+            # the mixture-robust scale; this warning remains if it still sits
+            # above the requested threshold (distant relatives) or, in a
+            # badly under-powered panel, above 0.0884.
             lost = dropped_degree(res["threshold"])
             warnings.warn(
                 f"relatedness='auto': the KING noise SD on {res['n_variants']:,} variants is "
@@ -726,9 +860,13 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                 RuntimeWarning, stacklevel=3)
         rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
         info.update({"source": "king-auto", "king": {k: res[k] for k in (
-            "threshold", "threshold_requested", "noise_sd", "noise_median",
-            "noise_tail_ratio", "noise_n_pairs", "n_variants",
+            "threshold", "threshold_requested", "noise_sd", "noise_sd_mad",
+            "noise_location", "noise_median",
+            "noise_tail_ratio", "noise_scale_from_structure",
+            "noise_tail_ratio_mad", "noise_n_pairs", "n_variants",
             "seconds", "median_F", "hom_alt_fraction")},
+            "king_prefloor": {"i": res["i_prefloor"], "j": res["j_prefloor"],
+                              "r": res["r_prefloor"]},
             "king_on": on})
         return rel, info
     if isinstance(spec, (str, os.PathLike)):
