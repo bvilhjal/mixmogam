@@ -25,10 +25,13 @@ gt = Genotypes.load_plink("data/cohort", mmap=True)  # .bed/.bim/.fam, two-bit m
 gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```
 
-`mmap=True` reads calls straight from the .bed file, but only while you pass the
-object to `gwas` unchanged. `align_samples`, `filter_samples` and
-`filter_variants` return an in-memory copy, stored two bits per call (a quarter
-of the int8 size). Filter variants after
+`mmap=True` reads calls straight from the .bed file. Variant filtering and
+sample selection keep packed mapped inputs mapped: non-contiguous variants
+and changed sample sets are copied in bounded chunks to a temporary file
+(`TMPDIR`, or `directory=` on the filters). Budget disk for that subset.
+Unchanged samples and contiguous variants share read-only mapped storage;
+writable in-memory inputs keep independent copies when selected by indices.
+Filter variants after
 aligning samples, since `min_mac` and `max_missing` count the samples present.
 `mixmogam gwas` does not filter variants. No-calls are replaced by the
 variant's mean.
@@ -324,6 +327,17 @@ Uncached blocks are rebuilt on every sweep with the same arithmetic, and the
 cross-fit reuses the budget freed by the hold-out fit, so the cache size never
 changes the fitted model.
 
+The warning reports the exact bytes needed before Gram preparation starts.
+`extra["gram_cache"]` records `cv` and `loco` cache requirements, retained
+bytes, cached/total blocks and `sweep_gram_builds` (including blocks added
+on the first sweep). `joint_required_bytes` is the peak cache requirement
+for HRATT's two engines together; it excludes genotype pages, fitted effects,
+residuals and numerical scratch. For five folds, 128-variant blocks,
+float32 Grams and eleven covariate columns, the joint cache is approximately
+2,252 bytes per model SNP: about 3.25 GB for 1.44M SNPs. Larger budgets
+avoid repeated Gram products; they do not remove the genotype passes
+required by the model.
+
 Pass aligned covariates as `X=X`, including ancestry PCs under population or
 environmental confounding; the intercept is added internally. REML (HE with
 sampling weights) and one thread are the defaults. `random_state` (default 0)
@@ -388,7 +402,7 @@ the readers return them and as `Genotypes(G.T)` gives for a C-ordered
 (variants, samples) array: about 0.16 ns per call on one M2 Pro thread, against 1 ns
 for a C-ordered (samples, variants) array, which needs a transpose (unarchived
 measurements; CHANGELOG 2.0.0.dev7). Analysis
-entry points call `variant_major()` and make one int8 copy rather than
+association entry points call `variant_major()` and make one int8 copy rather than
 transposing on every pass; the caller's array is not modified.
 `np.asfortranarray(G)` (or `packed=True`) avoids the copy, and selecting or
 aligning samples keeps the given order.
@@ -400,6 +414,7 @@ block (`mixmogam.steps`):
 
 ```python
 from mixmogam.genotypes import Genotypes
+from mixmogam.io import iter_genotypes
 from mixmogam.io.bgen import iter_bgen_dosages
 from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
 
@@ -410,6 +425,9 @@ step1.save("height.npz")  # arrays and JSON, no pickles
 step1 = HrattStep1.load("height.npz")
 calls = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
 hratt_step2(step1, calls, n_threads=8, out="height.tsv.gz")
+# PGEN and VCF/BCF also stream without constructing a whole-file call array.
+calls = (block for c in range(1, 23) for block in iter_genotypes(f"chr{c}.pgen"))
+hratt_step2(step1, calls, n_threads=8, out="height_pgen.tsv.gz")
 dosages = (block for c in range(1, 23) for block in iter_bgen_dosages(f"chr{c}.bgen"))
 hratt_step2(step1, dosages, n_threads=8, out="height_imputed.tsv.gz")
 ```
@@ -423,6 +441,24 @@ is `hratt` itself. With `out=` the results are written as each block is
 tested (one path per step 1); without it they are returned. A list of step
 1s is tested in one read of the files, sharing the standardized blocks of
 traits fitted on the same samples and covariates.
+
+The CLI uses the same streamed readers for BED, PGEN, VCF/BCF and BGEN;
+`--chunk-mb` controls input blocks as well as step-2 blocks. It is a working
+buffer budget, not a process RAM limit: metadata, native indexes, decoded
+scratch and saved LOCO state are additional. One full variant is the
+minimum. EIGENSTRAT, TPED and HDF5 still use whole-file readers. Use `out=`
+for a large scan; collecting returned blocks/results retains them in RAM.
+
+At 500,000 samples and 10M variants, even two-bit hard calls occupy 1.25 TB.
+Fit step 1 on a separately prepared model panel, then scan the full panel
+in step 2; this avoids the full panel's initial normalization and subset
+heritability comparison. It also changes the panel used by those checks,
+so record that choice. Model-SNP selection, HE versus REML, and fewer LOCO
+refits are scientific choices, not automatic memory optimizations. A mapped
+panel still incurs every required disk pass. The dense exact method needs
+2 TB for a single float64 500,000-by-500,000 matrix, before decomposition
+workspaces. These storage fixes do not establish validated runtime or
+calibration at 500K by 10M.
 
 Dosages are standardized like calls (mean and population SD over the observed
 values, missing values at the mean) and tested in float64; integer dosages

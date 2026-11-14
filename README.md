@@ -12,7 +12,7 @@ single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
 BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
 ([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
-Version 2.1.0. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+Version 2.2.0. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 
@@ -184,9 +184,12 @@ files = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
 hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.gz")
 ```
 
-- Step 2 reads each file in blocks (`chunk_bytes`, default 256 MiB), selects step 1's samples
-  in every block (any order; other samples are ignored) and writes results as it goes, so
-  memory is one block plus the n x groups LOCO residuals.
+- Step 2 selects step 1's samples in every block (any order; other samples are ignored)
+  and writes results as it goes. The CLI streams BED, PGEN, VCF/BCF and BGEN input;
+  Python exposes these readers as `mixmogam.io.iter_genotypes`. `--chunk-mb`
+  budgets input and testing buffers (default 256 MiB), with one variant as the minimum.
+  Metadata, native indexes, decoded scratch and the n x groups LOCO residuals need
+  additional memory. Legacy EIGENSTRAT, TPED and HDF5 inputs still load whole files.
 - Hard calls get the statistics `hratt` gives the same variants. Dosages
   (`mixmogam.io.bgen.iter_bgen_dosages`, or `Dosages` blocks) are tested for unweighted
   quantitative traits with the lambda or kappa_g correction; binary, weighted and GLS tests
@@ -197,6 +200,13 @@ hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.g
   `denominator="spectral"` is available only in the one-call `hratt`.
 - Samples without a phenotype no longer copy a memory-mapped panel into memory:
   `filter_samples` repacks the kept samples into a temporary file (in `TMPDIR`) and maps it.
+  Variant filtering keeps mapped storage too. Unchanged samples and contiguous variants
+  share read-only mappings; other selections require disk space for the selected panel.
+
+These storage paths do not establish practical runtime at 500K samples by 10M variants:
+the packed calls alone occupy 1.25 TB and step 1 still makes repeated passes over its
+model panel. See the [resource guidance](docs/quickstart.md#biobank-scale-hratt-in-two-steps)
+and inspect `extra["gram_cache"]` for cache requirements and repeated Gram construction.
 
 ## Install
 
@@ -325,7 +335,7 @@ methods you use. Each paper's PMID and lookup URL is in
 
 | If you use | Cite |
 |---|---|
-| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.1.0 |
+| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.2.0 |
 | `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
 | `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
 | `method="hratt"`: its two-step design | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |

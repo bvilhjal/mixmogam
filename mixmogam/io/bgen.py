@@ -11,9 +11,9 @@ import numpy as np
 
 from mixmogam.genotypes import Dosages, Genotypes
 from ._hardcalls import (allocate_calls, allocate_metadata, set_metadata,
-                         store_calls, validate_samples, variant_limit)
+                         store_calls, validate_samples, variant_limit, block_variants)
 
-__all__ = ["read_bgen", "iter_bgen_dosages"]
+__all__ = ["read_bgen", "iter_bgen", "iter_bgen_dosages"]
 _READ_BYTES = 8 * 1024**2
 # Probability bytes per read of iter_bgen_dosages (three float64 per call).
 _DOSAGE_READ_BYTES = 256 * 1024**2
@@ -101,7 +101,7 @@ def _dosages(probabilities, missing, ploidy):
 
 
 @contextmanager
-def _checked_reader(path, sample_path, limit):
+def _checked_reader(path, sample_path, limit, *, metadata=True):
     """The open upstream reader with the checks every BGEN read applies:
     yields (reader, sample IDs, n, the m variants read, their metadata)."""
     path = Path(path)
@@ -123,42 +123,53 @@ def _checked_reader(path, sample_path, limit):
         if len(samples) != n:
             raise ValueError("BGEN sample count mismatch")
         m = total if limit is None else min(total, limit)
-        if np.any(reader.nalleles[:m] != 2):
-            raise ValueError("BGEN contains multiallelic records; only biallelic records are supported")
-        if np.any(reader.phased[:m]):
-            raise ValueError("phased BGEN probabilities are unsupported; use unphased diploid probabilities")
-        if np.any(reader.ncombinations[:m] != 3):
-            raise ValueError("BGEN contains non-diploid probability records")
-        meta = allocate_metadata(m)
-        for j in range(m):
-            alleles = reader.allele_ids[j].split(",")
-            if len(alleles) != 2:
-                raise ValueError("BGEN allele labels disagree with biallelic metadata")
-            set_metadata(meta, j, str(reader.chromosomes[j]), reader.positions[j],
-                         str(reader.ids[j]), alleles[0], alleles[1])
+        meta = _metadata(reader, 0, m) if metadata else None
         yield reader, samples, n, m, meta
 
 
-def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_variants=None):
+def _metadata(reader, start, stop):
+    if np.any(reader.nalleles[start:stop] != 2):
+        raise ValueError("BGEN contains multiallelic records; only biallelic records are supported")
+    if np.any(reader.phased[start:stop]):
+        raise ValueError("phased BGEN probabilities are unsupported; use unphased diploid probabilities")
+    if np.any(reader.ncombinations[start:stop] != 3):
+        raise ValueError("BGEN contains non-diploid probability records")
+    meta = allocate_metadata(stop - start)
+    for j in range(start, stop):
+        alleles = reader.allele_ids[j].split(",")
+        if len(alleles) != 2:
+            raise ValueError("BGEN allele labels disagree with biallelic metadata")
+        set_metadata(meta, j - start, str(reader.chromosomes[j]), reader.positions[j],
+                     str(reader.ids[j]), alleles[0], alleles[1])
+    return meta
+
+
+def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_variants=None,
+                     chunk_bytes=_DOSAGE_READ_BYTES):
     """Yield :class:`~mixmogam.genotypes.Dosages` blocks of a BGEN file:
     expected counts of the second listed allele, p(AB) + 2 p(BB), NaN where
     the record marks a call missing, in file order.
 
     The input contract and checks are those of :func:`read_bgen` (layout 2,
     compressed, unphased diploid biallelic records; real or Oxford sample
-    IDs). Each block holds ``chunk_variants`` variants (default: about 256
-    MiB of probabilities), so memory is bounded whatever the file size. For
+    IDs). ``chunk_bytes`` budgets probabilities (default 256 MiB), with
+    one variant as the minimum; ``chunk_variants`` explicitly overrides
+    that size. Masks, conversion scratch and the upstream metadata index
+    need additional memory. Mixmogam builds metadata per block. For
     HRATT's step 2 (:func:`mixmogam.steps.hratt_step2`), which tests
     dosages directly instead of thresholded hard calls.
     """
     limit = variant_limit(max_variants)
-    with _checked_reader(path, sample_path, limit) as (reader, samples, n, m, meta):
-        step = (max(1, _DOSAGE_READ_BYTES // max(24 * n, 1)) if chunk_variants is None
+    block_variants(1, chunk_bytes)
+    if (chunk_variants is not None and (isinstance(chunk_variants, (bool, np.bool_))
+            or not isinstance(chunk_variants, (int, np.integer)) or chunk_variants < 1)):
+        raise ValueError("chunk_variants must be a positive integer")
+    with _checked_reader(path, sample_path, limit, metadata=False) as (reader, samples, n, m, _):
+        step = (block_variants(n, chunk_bytes, bytes_per_call=24) if chunk_variants is None
                 else int(chunk_variants))
-        if step < 1:
-            raise ValueError("chunk_variants must be a positive integer")
         for start in range(0, m, step):
             stop = min(start + step, m)
+            meta = _metadata(reader, start, stop)
             probabilities, missing, ploidy = reader.read(
                 (slice(None), slice(start, stop)), dtype=np.float64,
                 max_combinations=3, return_missings=True, return_ploidies=True, num_threads=1)
@@ -166,8 +177,53 @@ def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_varian
                 raise ValueError("BGEN reader returned an unexpected block shape")
             values = _dosages(probabilities, missing, ploidy)
             del probabilities, missing, ploidy
-            yield Dosages(values, sample_ids=samples,
-                          **{key: value[start:stop] for key, value in meta.items()})
+            yield Dosages._from_validated(values, sample_ids=samples, **meta)
+            del values, meta
+
+
+def _threshold(hard_call_threshold):
+    if (isinstance(hard_call_threshold, (bool, np.bool_))
+            or not np.isscalar(hard_call_threshold)):
+        raise ValueError("hard_call_threshold must lie in (0.5, 1]")
+    try:
+        threshold = float(hard_call_threshold)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("hard_call_threshold must lie in (0.5, 1]") from exc
+    if not np.isfinite(threshold) or not 0.5 < threshold <= 1:
+        raise ValueError("hard_call_threshold must lie in (0.5, 1]")
+    return threshold
+
+
+def iter_bgen(path, *, hard_call_threshold, packed=True, sample_path=None,
+              chunk_bytes=64 * 1024**2, max_variants=None):
+    """Yield bounded hard-call blocks, using read_bgen's explicit threshold.
+
+    The byte budget covers probabilities, masks and conversion scratch,
+    with one complete variant as the minimum. The upstream file index is
+    separate; mixmogam metadata is built per block. Close on early exit.
+    """
+    limit = variant_limit(max_variants)
+    threshold = _threshold(hard_call_threshold)
+    block_variants(1, chunk_bytes)
+    with _checked_reader(path, sample_path, limit, metadata=False) as (reader, samples, n, m, _):
+        step = block_variants(n, chunk_bytes, bytes_per_call=64)
+        for start in range(0, m, step):
+            stop = min(start + step, m)
+            meta = _metadata(reader, start, stop)
+            probabilities, missing, ploidy = reader.read(
+                (slice(None), slice(start, stop)), dtype=np.float64,
+                max_combinations=3, return_missings=True, return_ploidies=True, num_threads=1)
+            if probabilities.shape[:2] != (n, stop - start):
+                raise ValueError("BGEN reader returned an unexpected block shape")
+            calls = _hard_calls(probabilities, missing, ploidy, threshold)
+            del probabilities, missing, ploidy
+            if packed:
+                from mixmogam._packed import PackedCalls
+                calls = PackedCalls.pack(calls)
+            else:
+                calls = np.asfortranarray(calls)
+            yield Genotypes._from_validated(calls, sample_ids=samples, **meta)
+            del calls, meta
 
 
 def read_bgen(path, *, hard_call_threshold, packed=False, sample_path=None, max_variants=None):
@@ -198,15 +254,7 @@ def read_bgen(path, *, hard_call_threshold, packed=False, sample_path=None, max_
     mixed ploidy/allele counts even when a prefix is requested.
     """
     limit = variant_limit(max_variants)
-    if (isinstance(hard_call_threshold, (bool, np.bool_))
-            or not np.isscalar(hard_call_threshold)):
-        raise ValueError("hard_call_threshold must lie in (0.5, 1]")
-    try:
-        threshold = float(hard_call_threshold)
-    except (TypeError, ValueError) as exc:
-        raise ValueError("hard_call_threshold must lie in (0.5, 1]") from exc
-    if not np.isfinite(threshold) or not 0.5 < threshold <= 1:
-        raise ValueError("hard_call_threshold must lie in (0.5, 1]")
+    threshold = _threshold(hard_call_threshold)
     with _checked_reader(path, sample_path, limit) as (reader, samples, n, m, meta):
         out = allocate_calls(n, m, packed)
         # Budget probabilities, library masks, reductions and packing scratch.

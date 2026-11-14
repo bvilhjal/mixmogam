@@ -6,7 +6,7 @@ import sys
 import numpy as np
 import pytest
 
-from mixmogam.io.vcf import read_vcf
+from mixmogam.io.vcf import read_vcf, iter_vcf
 
 
 def _vcf(tmp_path, rows=None, samples=("sB", "sA", "sC", "sD", "sE")):
@@ -127,3 +127,60 @@ def test_bcf_optional_real_reader(tmp_path, packed):
     np.testing.assert_array_equal(np.asarray(gt.G), [[0, 1], [1, 0], [2, 2], [-1, -1], [-1, 1]])
     assert gt.chromosome.tolist() == ["chr01", "X"]
     assert gt.allele1.tolist() == ["T", "A"]
+    blocks = list(iter_vcf(bcf, packed=packed, chunk_bytes=5))
+    assert len(blocks) == 2
+    np.testing.assert_array_equal(np.column_stack([np.asarray(b.G) for b in blocks]), np.asarray(gt.G))
+
+
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("compressed", [False, True])
+def test_vcf_stream_one_pass_bounded_storage(tmp_path, monkeypatch, packed, compressed):
+    import mixmogam.io.vcf as module
+    path = _vcf(tmp_path)
+    if compressed:
+        data = path.read_bytes()
+        path = tmp_path / "calls.vcf.gz"
+        path.write_bytes(gzip.compress(data))
+    ref = read_vcf(path)
+    calls, metadata, records = module.allocate_calls, module.allocate_metadata, module._records
+    passes, files = [], []
+
+    def checked_calls(n, m, packed):
+        assert n == 5 and m == 1
+        return calls(n, m, packed)
+
+    def checked_metadata(m):
+        assert m == 1
+        return metadata(m)
+
+    def one_pass(fh, limit):
+        passes.append(1)
+        files.append(fh)
+        return records(fh, limit)
+
+    monkeypatch.setattr(module, "allocate_calls", checked_calls)
+    monkeypatch.setattr(module, "allocate_metadata", checked_metadata)
+    monkeypatch.setattr(module, "_records", one_pass)
+    blocks = list(iter_vcf(path, packed=packed, chunk_bytes=5))
+    assert len(passes) == 1 and files[0].closed
+    assert len(blocks) == 2 and all(b.packed == packed for b in blocks)
+    assert blocks[0].sample_ids is blocks[1].sample_ids
+    np.testing.assert_array_equal(np.column_stack([np.asarray(b.G) for b in blocks]), ref.G)
+    for key in ("chromosome", "position", "variant_ids", "allele1", "allele2"):
+        np.testing.assert_array_equal(np.concatenate([getattr(b, key) for b in blocks]), getattr(ref, key))
+    stream = iter_vcf(path, chunk_bytes=5)
+    next(stream)
+    assert not files[-1].closed
+    stream.close()
+    assert files[-1].closed
+
+
+def test_vcf_stream_prefix_and_late_validation(tmp_path):
+    path = _vcf(tmp_path, ["1\t1\ta\tA\tG\t.\t.\t.\tGT\t0/1",
+                           "1\t2\tb\tA\tG\t.\t.\t.\tGT\t1"], samples=("s",))
+    assert list(iter_vcf(path, max_variants=0)) == []
+    assert len(list(iter_vcf(path, max_variants=1))) == 1
+    stream = iter_vcf(path, chunk_bytes=1)
+    assert np.asarray(next(stream).G).item() == 1
+    with pytest.raises(ValueError, match="diploid and biallelic"):
+        next(stream)

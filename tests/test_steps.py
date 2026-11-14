@@ -118,6 +118,60 @@ def test_step2_reads_a_mapped_bed_file_without_copying_the_panel(data, tmp_path)
     _assert_same(hratt_step2(step1, mapped, chunk_bytes=100 * ((N + 3) // 4)), hratt(y, gt, X))
 
 
+@pytest.mark.parametrize("format", ["vcf", "pgen"])
+def test_cli_step2_streams_input_before_testing(data, tmp_path, monkeypatch, format):
+    import mixmogam.io as io
+
+    pg = pytest.importorskip("pgenlib") if format == "pgen" else None
+    G, gt, y, X = data
+    step1 = hratt_step1(y, gt, X, heritability_method="he")
+    ref = hratt_step2(step1, gt)
+    fit = tmp_path / "fit.npz"
+    step1.save(fit)
+    path = tmp_path / f"calls.{format}"
+    if pg is None:
+        with path.open("w") as fh:
+            fh.write("##fileformat=VCFv4.2\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\t"
+                     + "\t".join(gt.sample_ids) + "\n")
+            codes = np.array(["0/0", "0/1", "1/1", "./."])
+            for j in range(M):
+                fh.write(f"{gt.chromosome[j]}\t{gt.position[j]}\t{gt.variant_ids[j]}\tC\tA\t.\t.\t.\tGT\t"
+                         + "\t".join(codes[G[:, j]]) + "\n")
+    else:
+        path.with_suffix(".psam").write_text("#IID\n" + "\n".join(gt.sample_ids) + "\n")
+        path.with_suffix(".pvar").write_text("#CHROM\tPOS\tID\tREF\tALT\n" + "".join(
+            f"{gt.chromosome[j]}\t{gt.position[j]}\t{gt.variant_ids[j]}\tC\tA\n" for j in range(M)))
+        with pg.PgenWriter(bytes(path), N, variant_ct=M, nonref_flags=False) as writer:
+            for j in range(M):
+                calls = G[:, j].copy()
+                calls[calls < 0] = -9
+                writer.append_biallelic(calls)
+    sizes = []
+    read = io.iter_genotypes
+
+    def bounded(*args, **kwargs):
+        for block in read(*args, **kwargs):
+            sizes.append(block.n_variants)
+            assert block.n_variants <= 37
+            yield block
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("step 2 loaded a whole file")
+
+    monkeypatch.setattr(io, "iter_genotypes", bounded)
+    monkeypatch.setattr(io, "read_genotypes", forbidden)
+    out = tmp_path / "result.tsv"
+    assert main(["step2", "--step1", str(fit), "--geno", str(path), "--packed",
+                 "--chunk-mb", str(37 * N / 1024**2), "--out", str(out)]) == 0
+    assert sum(sizes) == M and len(sizes) > 1
+    got = GwasResult.read_csv(out)
+    _assert_same(got, ref, rtol=1e-12)
+    np.testing.assert_array_equal(got.variant_ids, ref.variant_ids)
+    np.testing.assert_array_equal(got.effect_allele, ref.effect_allele)
+    np.testing.assert_array_equal(got.other_allele, ref.other_allele)
+    assert "gram_cache" in HrattStep1.load(fit).extra
+
+
 def test_several_traits_with_their_own_samples_share_the_blocks(data, tmp_path):
     G, gt, y, X = data
     keep = np.flatnonzero(np.arange(N) % 9 != 0)  # trait 2 misses every ninth sample

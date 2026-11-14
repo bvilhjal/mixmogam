@@ -488,6 +488,7 @@ def _cmd_gwas(args) -> int:
 
 
 def _cmd_step2(args) -> int:
+    from contextlib import closing
     from mixmogam.steps import HrattStep1, hratt_step2
 
     if len(args.out) != len(args.step1):
@@ -503,17 +504,20 @@ def _cmd_step2(args) -> int:
             if args.dosage:
                 from mixmogam.io.bgen import iter_bgen_dosages
 
-                yield from iter_bgen_dosages(path, sample_path=args.sample)
+                yield from iter_bgen_dosages(path, sample_path=args.sample,
+                                            chunk_bytes=args.chunk_mb * 1024**2)
             else:
-                from mixmogam.io import read_genotypes
+                from mixmogam.io import iter_genotypes
 
-                yield read_genotypes(path, format=args.geno_format, packed=args.packed,
-                                     mmap=args.mmap, hard_call_threshold=args.hard_call_threshold,
-                                     sample_path=args.sample)
+                yield from iter_genotypes(path, format=args.geno_format, packed=args.packed,
+                                          mmap=args.mmap, chunk_bytes=args.chunk_mb * 1024**2,
+                                          hard_call_threshold=args.hard_call_threshold,
+                                          sample_path=args.sample)
 
-    summary = hratt_step2(fits, sources(), n_threads=args.n_threads,
-                          chunk_bytes=args.chunk_mb * 1024**2, out=args.out,
-                          genome_build=args.genome_build)
+    with closing(sources()) as blocks:
+        summary = hratt_step2(fits, blocks, n_threads=args.n_threads,
+                              chunk_bytes=args.chunk_mb * 1024**2, out=args.out,
+                              genome_build=args.genome_build)
     print(f"wrote {summary['variants']:,} variants for {len(fits)} trait(s) to "
           f"{', '.join(map(str, args.out))}")
     return 0

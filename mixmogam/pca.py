@@ -6,7 +6,7 @@ from typing import Optional, Union
 
 import numpy as np
 
-from mixmogam.genotypes import Genotypes
+from mixmogam.genotypes import Genotypes, _QC_BLOCK_CELLS
 
 __all__ = ["principal_components"]
 
@@ -93,18 +93,21 @@ def principal_components(
     randomized_bytes = 8 * (n * m + 2 * (n + m) * ell + 4 * ell**2
                             + n * min(block, m))
     solver_bytes = svd_bytes if solver == "exact" else randomized_bytes
-    # allele_freqs uses blocks of 8192 int8 calls, a mask and a masked copy.
-    frequency_bytes = 3 * n * min(8192, G.n_variants) + 24 * G.n_variants
-    estimated_bytes = max(solver_bytes, frequency_bytes)
+    # QC bounds its tile by cells, even when n is large. Allow for the
+    # packed NumPy fallback's decoded codes/calls as well as the MAF/index
+    # vectors. The latter remain live during the solver.
+    qc_rows = min(8192, G.n_variants, max(1, _QC_BLOCK_CELLS // max(n, 1)))
+    metadata_bytes = 24 * G.n_variants
+    frequency_bytes = 8 * n * qc_rows + metadata_bytes
+    estimated_bytes = max(solver_bytes + metadata_bytes, frequency_bytes)
     if estimated_bytes > max_memory_gib * 1024**3:
         raise ValueError(f"PCA working-memory estimate {estimated_bytes / 1024**3:.2f} GiB "
                          f"exceeds max_memory_gib={max_memory_gib:g} for {n} samples and "
                          f"up to {m} markers; lower n_markers, use external PCs, or "
                          "explicitly increase max_memory_gib")
 
-    # Only after the guard: variant-major conversion may itself allocate a
-    # full int8 panel and must not precede the working-memory rejection.
-    G = G.variant_major()
+    # QC accepts either layout; decoding just the selected markers avoids
+    # an otherwise unnecessary full int8 copy of sample-major input.
     maf = G.allele_freqs(minor=True)
     common = np.flatnonzero(maf >= min_maf)  # NaN MAF (all-missing) never passes
     if common.size == 0:

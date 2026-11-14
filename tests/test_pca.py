@@ -135,3 +135,25 @@ def test_memory_budget_does_not_change_the_pcs():
     gt = Genotypes(structured_calls(n=40, m=60))
     np.testing.assert_array_equal(principal_components(gt, k=3, max_memory_gib=.01),
                                   principal_components(gt, k=3, max_memory_gib=4))
+
+
+def test_large_n_small_randomized_panel_reaches_bounded_qc(monkeypatch):
+    gt = Genotypes(structured_calls(n=12, m=20))
+    monkeypatch.setattr(gt, "n_samples", 500_000)
+    monkeypatch.setattr(gt, "n_variants", 10_000_000)
+    class ReachedQC(Exception):
+        pass
+    def reached(*args, **kwargs):
+        raise ReachedQC
+    monkeypatch.setattr(gt, "allele_freqs", reached)
+    with pytest.raises(ReachedQC):
+        principal_components(gt, k=10, n_markers=64, solver="randomized")
+
+
+def test_pca_does_not_copy_the_full_sample_major_panel(monkeypatch):
+    gt = Genotypes(structured_calls(n=40, m=60).copy(order="C"))
+    expected = principal_components(gt, k=3, n_markers=20)
+    def forbidden(*args, **kwargs):
+        pytest.fail("PCA copied the whole panel to change its layout")
+    monkeypatch.setattr(gt, "variant_major", forbidden)
+    np.testing.assert_array_equal(principal_components(gt, k=3, n_markers=20), expected)

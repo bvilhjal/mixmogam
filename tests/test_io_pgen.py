@@ -7,7 +7,7 @@ import sys
 import numpy as np
 import pytest
 
-from mixmogam.io.pgen import read_pgen
+from mixmogam.io.pgen import read_pgen, iter_pgen
 
 
 def _files(tmp_path, chrom="chr01", chrset=""):
@@ -145,3 +145,46 @@ def test_pgen_compressed_pvar_and_iid_only_psam(tmp_path):
     gt = read_pgen(prefix)
     assert gt.chromosome.tolist() == ["chr01", "2"]
     assert gt.sample_ids.tolist() == ["sB", "sA", "sC", "sD", "sE"]
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_pgen_stream_preserves_calls_metadata_and_bounds(tmp_path, monkeypatch, packed):
+    pytest.importorskip("pgenlib")
+    import mixmogam.io.pgen as module
+    path = _files(tmp_path)
+    ref = read_pgen(path)
+    metadata = module.allocate_metadata
+    decode = module._calls
+    sizes = []
+
+    def bounded_metadata(m):
+        assert m <= 1
+        return metadata(m)
+
+    def bounded_decode(reader, start, stop, n):
+        sizes.append(stop - start)
+        assert stop - start == 1
+        return decode(reader, start, stop, n)
+
+    monkeypatch.setattr(module, "allocate_metadata", bounded_metadata)
+    monkeypatch.setattr(module, "_calls", bounded_decode)
+    blocks = list(iter_pgen(path, packed=packed, chunk_bytes=5))
+    assert sizes == [1, 1]
+    assert all(b.packed == packed for b in blocks)
+    assert blocks[0].sample_ids is blocks[1].sample_ids
+    np.testing.assert_array_equal(np.column_stack([np.asarray(b.G) for b in blocks]), ref.G)
+    for key in ("chromosome", "position", "variant_ids", "allele1", "allele2"):
+        np.testing.assert_array_equal(np.concatenate([getattr(b, key) for b in blocks]), getattr(ref, key))
+    assert len(list(iter_pgen(path, chunk_bytes=5, max_variants=1))) == 1
+    assert list(iter_pgen(path, max_variants=0)) == []
+
+
+def test_pgen_stream_validates_each_block(tmp_path):
+    pytest.importorskip("pgenlib")
+    path = _files(tmp_path)
+    pvar = path.with_suffix(".pvar")
+    pvar.write_text(pvar.read_text().replace("2\t202", "X\t202"))
+    blocks = iter_pgen(path, chunk_bytes=5)
+    assert next(blocks).variant_ids.tolist() == ["rsA"]
+    with pytest.raises(ValueError, match="diploid autosomes"):
+        next(blocks)

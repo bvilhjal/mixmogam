@@ -1,9 +1,10 @@
 """Streamed stage-1 subsets: an on-disk two-bit cache of the model SNPs.
 
-HRATT's stage 1 on a variant subset (``model_snps``) normally copies the
-subset's calls into RAM, n k / 4 bytes: about 180 GB for 1.44M HapMap3+
-variants at n = 5e5. With ``model_snps_stream`` the rows are instead written
-once (one extraction pass that reads only the subset's rows of the panel) to
+HRATT's stage 1 on a variant subset (``model_snps``) uses n k / 4 packed
+bytes: about 180 GB for 1.44M HapMap3+ variants at n = 5e5. Mapped packed
+inputs keep subsets on disk automatically; in-memory inputs retain them
+in RAM. With ``model_snps_stream`` the rows are written once (one extraction
+pass that reads only the subset's rows of the panel) to
 a page-aligned file in PLINK BED row layout and memory-mapped read-only as
 :class:`~mixmogam._packed.PackedCalls`. Every compiled kernel then reads the
 same bytes it would read from the in-RAM copy, so all results are

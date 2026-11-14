@@ -6,7 +6,9 @@ stores four calls per byte in variant order, the layout the engine consumes;
 mapping defers reads until access but still scans the calls. Selecting
 samples from a mapped panel (`filter_samples`, as the CLI does for complete
 cases) repacks them into a temporary file in `TMPDIR` and maps that, so it
-needs disk rather than memory. HDF5 is kept for compatibility. The [25 October review](review-2026-10-25.md) compares them.
+needs disk rather than a resident copy. Variant filtering likewise keeps a
+mapped subset. Unchanged samples and contiguous variants share the original
+read-only mapping. HDF5 is kept for compatibility. The [25 October review](review-2026-10-25.md) compares them.
 
 `Genotypes.load(path, format="auto", packed=False)` and both CLI commands
 dispatch the inputs below. Auto-detection uses a filename suffix or
@@ -30,6 +32,19 @@ dataframe dependencies). VCF, PGEN and BGEN readers build packed output
 directly when asked. VCF makes two sequential passes to size the output and
 PGEN/BGEN read bounded blocks; for repeated VCF analyses, convert once to
 BED.
+
+For a one-pass scan use `mixmogam.io.iter_genotypes(path, chunk_bytes=...)`
+and consume each block before requesting the next. BED maps its calls;
+PGEN, VCF/BCF and thresholded BGEN yield bounded hard-call blocks with
+per-block metadata (BED retains the full BIM). `iter_vcf`, `iter_pgen`
+and `iter_bgen` are also available from their reader modules. The CLI
+`step2` uses these iterators and passes `--chunk-mb` to the readers;
+`Genotypes.load` still constructs a whole-file container. The budget covers
+call buffers, with one complete variant as the minimum; parser scratch,
+metadata and native file indexes are additional. Legacy EIGENSTRAT, TPED
+and HDF5 dispatch still loads the whole file. Validation happens as each
+block is read; a malformed later block raises and earlier output may
+already have been written. Close an iterator explicitly if stopping early.
 
 The inference engine accepts integral 0/1/2 calls and -1 for missing. VCF
 and PGEN use stored GT/hard calls, never DS values. BGEN conversion is

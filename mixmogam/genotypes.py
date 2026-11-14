@@ -226,12 +226,15 @@ class Genotypes:
         """Whether the calls are stored two bits each."""
         return isinstance(self.G, PackedCalls)
 
-    def variant_mask(self, variant_indices: np.ndarray) -> "Genotypes":
+    def variant_mask(self, variant_indices: np.ndarray, *, directory=None) -> "Genotypes":
         """New genotypes holding only the selected variants (indices or a
-        boolean mask), with their metadata; packed calls stay packed."""
+        boolean mask), with their metadata; mapped packed calls stay mapped.
+        Non-contiguous mapped selections use a temporary file in ``directory``
+        (default TMPDIR). Read-only contiguous selections share storage.
+        """
         idx = np.asarray(variant_indices)
         return self._from_validated(
-            self.G.take_variants(idx) if self.packed else self.G[:, idx],
+            self.G.take_variants(idx, directory=directory) if self.packed else self.G[:, idx],
             sample_ids=self.sample_ids,
             chromosome=self.chromosome[idx],
             position=self.position[idx],
@@ -245,6 +248,7 @@ class Genotypes:
         min_mac: float = 0.0,
         max_missing: float = 1.0,
         keep_poly: bool = True,
+        *, directory=None,
     ) -> "Genotypes":
         """Drop variants by minor-allele count and missingness; non-destructive."""
         if not np.isfinite(min_mac) or min_mac < 0:
@@ -260,7 +264,7 @@ class Genotypes:
             if keep_poly:
                 bad |= mac == 0
             keep[s] = ~bad
-        return self.variant_mask(np.nonzero(keep)[0])
+        return self.variant_mask(np.nonzero(keep)[0], directory=directory)
 
     def filter_samples(self, sample_indices, *, n_threads: int = 1,
                        directory=None) -> "Genotypes":
@@ -319,7 +323,10 @@ class Genotypes:
         if self.packed:
             calls = self.G.take_samples(np.asarray(cols, dtype=np.int64))
             if not found.all():
-                calls._set_missing(~found)  # take_samples owns its new data
+                if isinstance(calls.data, np.memmap):
+                    calls = calls.with_missing(~found)
+                else:
+                    calls._set_missing(~found)
         else:
             order = "F" if _variant_major(self.G) else "C"
             calls = np.full((wanted.size, self.n_variants), MISSING, dtype=np.int8, order=order)
@@ -422,9 +429,21 @@ class Dosages:
         if np.isinf(values).any() or (finite.size and (finite.min() < -1e-6 or finite.max() > 2 + 1e-6)):
             raise ValueError("dosages must lie in [0, 2], with NaN for a missing value")
         self.values = values
-        n, m = values.shape
+        self._metadata(sample_ids, chromosome, position, variant_ids, allele1, allele2)
+
+    @classmethod
+    def _from_validated(cls, values, **metadata):
+        """Internal reader path: probabilities and file-level IDs are checked once."""
+        self = object.__new__(cls)
+        self.values = values
+        self._metadata(_validated=True, **metadata)
+        return self
+
+    def _metadata(self, sample_ids, chromosome, position=None, variant_ids=None,
+                  allele1=None, allele2=None, *, _validated=False):
+        n, m = self.values.shape
         self.sample_ids = np.asarray(sample_ids)
-        if self.sample_ids.shape != (n,) or np.unique(self.sample_ids).size != n:
+        if self.sample_ids.shape != (n,) or (not _validated and np.unique(self.sample_ids).size != n):
             raise ValueError("dosages need one unique sample ID per row")
         self.chromosome = np.asarray(chromosome)
         self.position = np.arange(m, dtype=np.int64) if position is None else np.asarray(position)

@@ -233,6 +233,13 @@ def test_crossfit_extends_partial_cache_on_first_sweep(packed, q, monkeypatch):
         builds.append(len(counts))
         assert len(eng._grams) == (expected_blocks if extend else 2)
         assert sum(g.nbytes + c.nbytes for g, c in zip(eng._grams, eng._coefs)) <= budget
+        info = fit["gram_cache"]
+        assert info["cached_blocks_before_sweeps"] == 2
+        assert info["cached_blocks"] == len(eng._grams)
+        assert info["sweep_gram_builds"] == len(counts)
+        assert info["required_bytes"] == fit_size.sum()
+        assert info["joint_required_bytes"] == cv_size.sum() + fit_size.sum()
+        assert info["retained_bytes"] == sum(g.nbytes + c.nbytes for g, c in zip(eng._grams, eng._coefs))
         if extend:
             for b, (idx, _, z) in enumerate(eng._subblocks()):
                 if b >= len(eng._grams):
@@ -242,6 +249,33 @@ def test_crossfit_extends_partial_cache_on_first_sweep(packed, q, monkeypatch):
                 np.testing.assert_array_equal(eng._coefs[b], coefs)
     _assert_same(fits[0], fits[1])
     assert builds[0] - builds[1] == 2 * (expected_blocks - 2)
+
+
+def test_zero_cache_preparation_never_decodes(monkeypatch):
+    lg = _problem()
+    eng = VBEngine(lg, gram_cache_bytes=0)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("preparation decoded a block that cannot fit")
+        yield  # make the error occur only when the iterator is advanced
+
+    monkeypatch.setattr(eng, "_subblocks", forbidden)
+    eng._prepare_grams(np.array([-1]))
+    assert eng._grams is None
+
+
+def test_partial_cache_warning_precedes_decoding(monkeypatch):
+    lg = _problem()
+    eng = VBEngine(lg, gram_cache_bytes=1, _warn_on_partial=True)
+    required = eng._cache_sizes(0).sum()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("no block fits this cache budget")
+        yield
+
+    monkeypatch.setattr(eng, "_subblocks", forbidden)
+    with pytest.warns(RuntimeWarning, match=f"full cache needs {required} bytes"):
+        eng._prepare_grams(np.array([-1]))
 
 
 def _fits(cv, crossfit, Y, refit=False):

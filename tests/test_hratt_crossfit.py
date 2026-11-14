@@ -104,7 +104,9 @@ def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binar
     assert len(passes) == (6 if mode == "refit" else 2 if mode == "zero_h2" else 3)
     assert actual.keys() == expected.keys()
     for key in actual:
-        if mode == "refit" or (key == "mse" and sys.platform != "darwin"):
+        if isinstance(actual[key], dict):
+            assert actual[key] == expected[key]
+        elif mode == "refit" or (key == "mse" and sys.platform != "darwin"):
             # Accelerate rounds each GEMM row apart from the others; other
             # BLAS builds may round a row by its place in the product.
             np.testing.assert_allclose(actual[key], expected[key], rtol=1e-12, atol=1e-13, err_msg=key)

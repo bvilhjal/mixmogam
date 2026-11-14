@@ -11,10 +11,10 @@ import numpy as np
 
 from mixmogam.genotypes import Genotypes
 from ._hardcalls import (allocate_calls, allocate_metadata, set_metadata,
-                         store_calls, validate_samples, variant_limit)
+                         store_calls, validate_samples, variant_limit, block_variants)
 from .vcf import _open
 
-__all__ = ["read_pgen"]
+__all__ = ["read_pgen", "iter_pgen"]
 _READ_BYTES = 8 * 1024**2
 
 
@@ -102,6 +102,18 @@ def read_pgen(prefix, *, packed=False, max_variants=None):
     block, with one variant as the minimum; packed output is built directly.
     ``max_variants`` selects a prefix; fileset dimension checks remain global.
     """
+    with _pgen_reader(prefix, max_variants) as (reader, pvar, samples, m, autosomes):
+        meta = _metadata(pvar, 0, m, autosomes)
+        out = allocate_calls(len(samples), m, packed)
+        step = block_variants(len(samples), _READ_BYTES)
+        for start in range(0, m, step):
+            store_calls(out, start, _calls(reader, start, min(start + step, m), len(samples)))
+    return Genotypes(out, sample_ids=samples, **meta)
+
+
+@contextmanager
+def _pgen_reader(prefix, max_variants):
+    """Open and check the fileset once for either whole-file or streamed IO."""
     limit = variant_limit(max_variants)
     try:
         import pgenlib
@@ -122,27 +134,51 @@ def read_pgen(prefix, *, packed=False, max_variants=None):
             if reader.get_raw_sample_ct() != len(samples):
                 raise ValueError("PGEN/PSAM sample count mismatch")
             m = total if limit is None else min(total, limit)
-            meta = allocate_metadata(m)
-            for j in range(m):
-                chrom = pvar.get_variant_chrom(j).decode("utf-8")
-                if not _diploid_chromosome(chrom, autosomes):
-                    raise ValueError(f"PGEN chromosome {chrom!r}: only diploid autosomes and PAR are supported; "
-                                     "use VCF/BCF for explicit GT ploidy")
-                if pvar.get_allele_ct(j) != 2:
-                    raise ValueError(f"PGEN variant {j + 1}: only biallelic records are supported")
-                set_metadata(meta, j, chrom, pvar.get_variant_pos(j),
-                             pvar.get_variant_id(j).decode("utf-8"),
-                             pvar.get_allele_code(j, 0).decode("utf-8"),
-                             pvar.get_allele_code(j, 1).decode("utf-8"))
-            out = allocate_calls(len(samples), m, packed)
-            step = max(1, _READ_BYTES // max(len(samples), 1))
-            for start in range(0, m, step):
-                stop = min(start + step, m)
-                block = np.empty((stop - start, len(samples)), dtype=np.int8)
-                reader.read_range(start, stop, block, allele_idx=1)
-                if np.any((block != -9) & ((block < 0) | (block > 2))):
-                    raise ValueError("PGEN returned an invalid biallelic hard call")
-                block[block == -9] = -1
-                store_calls(out, start, block.T)
-                del block
-    return Genotypes(out, sample_ids=samples, **meta)
+            yield reader, pvar, samples, m, autosomes
+
+
+def _metadata(pvar, start, stop, autosomes):
+    meta = allocate_metadata(stop - start)
+    for j in range(start, stop):
+        chrom = pvar.get_variant_chrom(j).decode("utf-8")
+        if not _diploid_chromosome(chrom, autosomes):
+            raise ValueError(f"PGEN chromosome {chrom!r}: only diploid autosomes and PAR are supported; "
+                             "use VCF/BCF for explicit GT ploidy")
+        if pvar.get_allele_ct(j) != 2:
+            raise ValueError(f"PGEN variant {j + 1}: only biallelic records are supported")
+        set_metadata(meta, j - start, chrom, pvar.get_variant_pos(j),
+                     pvar.get_variant_id(j).decode("utf-8"),
+                     pvar.get_allele_code(j, 0).decode("utf-8"),
+                     pvar.get_allele_code(j, 1).decode("utf-8"))
+    return meta
+
+
+def _calls(reader, start, stop, n):
+    block = np.empty((stop - start, n), dtype=np.int8)
+    reader.read_range(start, stop, block, allele_idx=1)
+    if np.any((block != -9) & ((block < 0) | (block > 2))):
+        raise ValueError("PGEN returned an invalid biallelic hard call")
+    block[block == -9] = -1
+    return block.T
+
+
+def iter_pgen(prefix, *, packed=True, chunk_bytes=64 * 1024**2, max_variants=None):
+    """Yield PGEN hard-call blocks under :func:`read_pgen`'s input contract.
+
+    Calls and mixmogam metadata are retained for one block; pgenlib owns its
+    file index. ``chunk_bytes`` budgets decoded calls, with one variant as
+    the minimum. Validation, packing and the consumer use additional memory.
+    Close the iterator when stopping early to release the native readers.
+    """
+    block_variants(1, chunk_bytes)
+    with _pgen_reader(prefix, max_variants) as (reader, pvar, samples, m, autosomes):
+        step = block_variants(len(samples), chunk_bytes)
+        for start in range(0, m, step):
+            stop = min(start + step, m)
+            meta = _metadata(pvar, start, stop, autosomes)
+            calls = _calls(reader, start, stop, len(samples))
+            if packed:
+                from mixmogam._packed import PackedCalls
+                calls = PackedCalls.pack(calls)
+            yield Genotypes._from_validated(calls, sample_ids=samples, **meta)
+            del calls, meta

@@ -14,6 +14,20 @@ def variant_limit(value):
     return None if value is None else int(value)
 
 
+def block_variants(n, chunk_bytes, *, bytes_per_call=1):
+    """A bounded variant tile, allowing one full variant at minimum."""
+    if isinstance(chunk_bytes, (bool, np.bool_)) or not np.isscalar(chunk_bytes):
+        raise ValueError("chunk_bytes must be positive and finite")
+    try:
+        chunk_bytes = float(chunk_bytes)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("chunk_bytes must be positive and finite") from exc
+    if not np.isfinite(chunk_bytes) or chunk_bytes <= 0:
+        raise ValueError("chunk_bytes must be positive and finite")
+    # Bound metadata too, including when the sample count is tiny.
+    return max(1, min(8192, int(chunk_bytes // max(bytes_per_call * n, 1))))
+
+
 def allocate_calls(n, m, packed):
     if packed:
         return PackedCalls(np.empty((m, (n + 3) // 4), dtype=np.uint8), n)

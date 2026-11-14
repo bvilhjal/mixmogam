@@ -11,9 +11,9 @@ import numpy as np
 
 from mixmogam.genotypes import Genotypes
 from ._hardcalls import (allocate_calls, allocate_metadata, set_metadata,
-                         store_calls, validate_samples, variant_limit)
+                         store_calls, validate_samples, variant_limit, block_variants)
 
-__all__ = ["read_vcf"]
+__all__ = ["read_vcf", "iter_vcf"]
 
 _GT = re.compile(r"[/|]?([01.])[/|]([01.])\Z")
 _VCF_COLUMNS = "#CHROM POS ID REF ALT QUAL FILTER INFO FORMAT".split()
@@ -41,6 +41,40 @@ def _header(fh):
 
 def _records(fh, limit):
     return islice((line for line in fh if line.strip()), limit)
+
+
+def _text_record(line, samples, meta, j, calls):
+    fields = line.rstrip("\r\n").split("\t")
+    if len(fields) != 9 + len(samples):
+        raise ValueError("VCF record: sample column count mismatch")
+    chrom, pos, vid, ref, alt = fields[:5]
+    set_metadata(meta, j, chrom, pos, vid, ref, alt)
+    formats = fields[8].split(":")
+    if formats.count("GT") != 1:
+        raise ValueError(f"variant {vid}: exactly one GT FORMAT field is required")
+    index = formats.index("GT")
+    for i, value in enumerate(fields[9:]):
+        parts = value.split(":")
+        gt = parts[index] if index < len(parts) else ""
+        match = _GT.fullmatch(gt)
+        if match is None:
+            raise ValueError(f"variant {vid}, sample {samples[i]}: "
+                             f"GT {gt!r} must be diploid and biallelic")
+        a, b = match.groups()
+        calls[i, 0] = -1 if "." in (a, b) else int(a) + int(b)
+
+
+def _bcf_record(record, samples, meta, j, calls):
+    vid = record.id if record.id is not None else "."
+    alt = ",".join(record.alts or ())
+    set_metadata(meta, j, record.contig, record.pos, vid, record.ref, alt)
+    if "GT" not in record.format:
+        raise ValueError(f"variant {vid}: GT FORMAT field is required")
+    for i, sample in enumerate(samples):
+        gt = record.samples[sample]["GT"]
+        if gt is None or len(gt) != 2 or any(a not in (0, 1, None) for a in gt):
+            raise ValueError(f"variant {vid}, sample {sample}: GT must be diploid and biallelic")
+        calls[i, 0] = -1 if None in gt else sum(gt)
 
 
 def read_vcf(path, *, packed=False, max_variants=None):
@@ -80,24 +114,7 @@ def read_vcf(path, *, packed=False, max_variants=None):
         for j, line in enumerate(_records(fh, limit)):
             if j >= m:
                 raise ValueError("VCF record count changed between passes")
-            fields = line.rstrip("\r\n").split("\t")
-            if len(fields) != 9 + len(samples):
-                raise ValueError(f"VCF record {j + 1}: sample column count mismatch")
-            chrom, pos, vid, ref, alt = fields[:5]
-            set_metadata(meta, j, chrom, pos, vid, ref, alt)
-            formats = fields[8].split(":")
-            if formats.count("GT") != 1:
-                raise ValueError(f"variant {vid}: exactly one GT FORMAT field is required")
-            index = formats.index("GT")
-            for i, value in enumerate(fields[9:]):
-                parts = value.split(":")
-                gt = parts[index] if index < len(parts) else ""
-                match = _GT.fullmatch(gt)
-                if match is None:
-                    raise ValueError(f"variant {vid}, sample {samples[i]}: "
-                                     f"GT {gt!r} must be diploid and biallelic")
-                a, b = match.groups()
-                calls[i, 0] = -1 if "." in (a, b) else int(a) + int(b)
+            _text_record(line, samples, meta, j, calls)
             store_calls(out, j, calls)
             seen += 1
         if seen != m:
@@ -123,18 +140,63 @@ def _read_bcf(path, packed, limit):
         for j, record in enumerate(islice(fh, limit)):
             if j >= m:
                 raise ValueError("BCF record count changed between passes")
-            vid = record.id if record.id is not None else "."
-            alt = ",".join(record.alts or ())
-            set_metadata(meta, j, record.contig, record.pos, vid, record.ref, alt)
-            if "GT" not in record.format:
-                raise ValueError(f"variant {vid}: GT FORMAT field is required")
-            for i, sample in enumerate(samples):
-                gt = record.samples[sample]["GT"]
-                if gt is None or len(gt) != 2 or any(a not in (0, 1, None) for a in gt):
-                    raise ValueError(f"variant {vid}, sample {sample}: GT must be diploid and biallelic")
-                calls[i, 0] = -1 if None in gt else sum(gt)
+            _bcf_record(record, samples, meta, j, calls)
             store_calls(out, j, calls)
             seen += 1
         if seen != m:
             raise ValueError("BCF record count changed between passes")
     return Genotypes(out, sample_ids=samples, **meta)
+
+
+def _record_blocks(records, samples, step, packed, parse):
+    records = iter(records)
+    while True:
+        # Do not allocate another block at EOF (or read beyond a prefix).
+        first = next(records, None)
+        if first is None:
+            return
+        out = allocate_calls(len(samples), step, packed)
+        meta = allocate_metadata(step)
+        calls = np.empty((len(samples), 1), dtype=np.int8)
+        size = 0
+        for j in range(step):
+            record = first if j == 0 else next(records, None)
+            if record is None:
+                break
+            parse(record, samples, meta, j, calls)
+            store_calls(out, j, calls)
+            size += 1
+        G = out.take_variants(slice(0, size)) if packed else out[:, :size]
+        yield Genotypes._from_validated(G, sample_ids=samples,
+                                        **{key: value[:size] for key, value in meta.items()})
+        del out, G, meta, calls, first, record
+        if size < step:
+            return
+
+
+def iter_vcf(path, *, packed=True, chunk_bytes=64 * 1024**2, max_variants=None):
+    """Yield VCF/BCF hard-call blocks in one pass, with read_vcf's checks.
+
+    ``chunk_bytes`` budgets uncompressed calls (packing uses less), with
+    one variant as the minimum; parsing one text record and metadata add
+    overhead. Blocks own their calls. Close the iterator when stopping early.
+    """
+    limit = variant_limit(max_variants)
+    block_variants(1, chunk_bytes)
+    path = Path(path)
+    with _open(path, "rb") as fh:
+        is_bcf = fh.read(3) == b"BCF"
+    if is_bcf:
+        try:
+            import pysam
+        except ImportError as exc:
+            raise ImportError("BCF input requires the optional package pysam") from exc
+        with pysam.VariantFile(str(path)) as fh:
+            samples = validate_samples(list(fh.header.samples))
+            yield from _record_blocks(islice(fh, limit), samples,
+                                      block_variants(len(samples), chunk_bytes), packed, _bcf_record)
+    else:
+        with _open(path, "rt") as fh:
+            samples = _header(fh)
+            yield from _record_blocks(_records(fh, limit), samples,
+                                      block_variants(len(samples), chunk_bytes), packed, _text_record)

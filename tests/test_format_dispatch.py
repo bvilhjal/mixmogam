@@ -4,7 +4,7 @@ import numpy as np
 import pytest
 
 from mixmogam import Genotypes
-from mixmogam.io import read_genotypes
+from mixmogam.io import read_genotypes, iter_genotypes
 from mixmogam.io.eigenstrat import read_eigenstrat
 from mixmogam.io.hdf5 import read_hdf5, write_hdf5
 from mixmogam.io.plink import write_plink
@@ -24,6 +24,37 @@ def test_bed_path_prefix_and_mmap(tmp_path):
     with pytest.raises(ValueError, match="unique genotype format"):
         read_genotypes(prefix)
     np.testing.assert_array_equal(read_genotypes(prefix, format="plink").G, gt.G)
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_streamed_bed_dispatch_is_bounded_and_mapped(tmp_path, packed):
+    calls = np.arange(35).reshape(5, 7).astype(np.int8) % 4 - 1
+    gt = Genotypes(calls, allele1=["A"] * 7, allele2=["C"] * 7)
+    path = tmp_path / "panel"
+    write_plink(gt, path)
+    blocks = list(iter_genotypes(path.with_suffix(".bed"), packed=packed, chunk_bytes=10))
+    assert [b.n_variants for b in blocks] == [2, 2, 2, 1]
+    assert all(b.packed == packed for b in blocks)
+    if packed:
+        assert all(isinstance(b.G.data, np.memmap) and not b.G.data.flags.writeable for b in blocks)
+    assert all(b.sample_ids is blocks[0].sample_ids for b in blocks)
+    np.testing.assert_array_equal(np.column_stack([np.asarray(b.G) for b in blocks]), calls)
+
+
+@pytest.mark.parametrize("budget", [0, -1, np.nan, np.inf, True, [], "invalid"])
+def test_stream_rejects_invalid_budget_before_loading(budget):
+    with pytest.raises(ValueError, match="chunk_bytes"):
+        next(iter_genotypes("absent.vcf", chunk_bytes=budget))
+
+
+@pytest.mark.parametrize("path,options,message", [
+    ("absent.bgen", {}, "explicit hard_call_threshold"),
+    ("absent.vcf", {"mmap": True}, "mmap"),
+    ("absent.vcf", {"sample_path": "x"}, "only to BGEN"),
+])
+def test_stream_checks_format_options_before_loading(path, options, message):
+    with pytest.raises(ValueError, match=message):
+        next(iter_genotypes(path, **options))
 
 
 @pytest.mark.parametrize("options,message", [

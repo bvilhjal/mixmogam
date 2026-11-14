@@ -662,6 +662,24 @@ class VBEngine:
         self._scratch = {}  # float64 gather buffers, released after each pass
         self._warn_on_partial = _warn_on_partial
         self._cache_warned = False
+        self._joint_required_bytes = None
+
+    def _cache_sizes(self, folds):
+        """Per-block storage, from dimensions alone; never decode calls."""
+        k = np.fromiter((idx.size for idx, _ in self.lg.slices(self.sub_block)), dtype=np.int64)
+        return ((folds + int(self._full_slot)) * (k * (k + 1) // 2) * self.lg.dtype.itemsize
+                + (folds + 1) * k * self.lg.Q.shape[1] * 8)
+
+    def _cache_info(self, folds):
+        sizes = self._cache_sizes(folds)
+        info = {"budget_bytes": float(self.gram_cache_bytes),
+                "required_bytes": int(sizes.sum()), "total_blocks": int(sizes.size),
+                "cached_blocks": len(self._grams or []),
+                "retained_bytes": sum(g.nbytes + c.nbytes for g, c in
+                                      zip(self._grams or [], self._coefs or []))}
+        if self._joint_required_bytes is not None:
+            info["joint_required_bytes"] = self._joint_required_bytes
+        return info
 
     def _prepare_grams(self, col_fold):
         """Prepare only the row subsets used by this fit; full data is slot 0.
@@ -679,17 +697,22 @@ class VBEngine:
             self._grams = self._coefs = None
             self._gram_folds = needed
             self._full_slot = self._full_slot or full
-            q, item = self.lg.Q.shape[1], self.lg.dtype.itemsize
-            slots = needed.size + self._full_slot
-            budget = self.gram_cache_bytes
+            sizes = self._cache_sizes(needed.size)
+            count = int(np.searchsorted(np.cumsum(sizes), self.gram_cache_bytes, side="right"))
+            # Report the cache requirement before the expensive preparation,
+            # and never decode a block which cannot be retained.
+            if (self._warn_on_partial and not self._cache_warned
+                    and self.gram_cache_bytes > 0 and count < sizes.size):
+                warnings.warn(
+                    f"VB Gram cache holds {count} of {sizes.size} sub-blocks; "
+                    "the rest are recomputed every sweep. Increase "
+                    f"gram_cache_bytes (currently {self.gram_cache_bytes / 1024**3:.2f} GiB; "
+                    f"full cache needs {int(sizes.sum())} bytes) if memory permits.",
+                    RuntimeWarning, stacklevel=3)
+                self._cache_warned = True
             grams, coefs = [], []
             try:
-                for idx, _, Zs in self._subblocks():
-                    k = idx.size
-                    size = slots * (k * (k + 1) // 2) * item + (needed.size + 1) * k * q * 8
-                    if size > budget:
-                        break
-                    budget -= size
+                for idx, _, Zs in islice(self._subblocks(), count):
                     G, C = self._gram(Zs, idx, needed)
                     grams.append(G)
                     coefs.append(C)
@@ -697,15 +720,6 @@ class VBEngine:
                 self._scratch.clear()
             if grams:
                 self._grams, self._coefs = grams, coefs
-            total = sum(1 for _ in self.lg.slices(self.sub_block))
-            if (self._warn_on_partial and not self._cache_warned
-                    and self.gram_cache_bytes > 0 and len(grams) < total):
-                warnings.warn(
-                    f"VB Gram cache holds {len(grams)} of {total} sub-blocks; "
-                    "the rest are recomputed every sweep. Increase "
-                    f"gram_cache_bytes (currently {self.gram_cache_bytes / 1024**3:.2f} GiB) "
-                    "if memory permits.", RuntimeWarning, stacklevel=3)
-                self._cache_warned = True
         # Without cached Grams use only this fit's folds, including none for LOCO.
         active = self._gram_folds if self._grams is not None else needed
         gidx = np.zeros(col_fold.size, dtype=np.int64)
@@ -927,6 +941,8 @@ class VBEngine:
         rel = np.full(P, np.inf)
         zdt = self.lg.dtype
         gram_folds, gidx = self._prepare_grams(col_fold)
+        cached_before = len(self._grams or [])
+        sweep_gram_builds = 0
         used_slots = set(np.unique(gidx).tolist())  # Gram slots this fit reads
         slot = gidx if self._full_slot else gidx - 1  # their stored positions
         # HRATT can release its hold-out cache after joint preparation. Fill
@@ -1015,6 +1031,7 @@ class VBEngine:
                                 (gram_folds.size + 1) * k * q * 8)
                         cache = extend and b == len(self._grams) and size <= remaining
                         grams, coefs = self._gram(Zs, idx, gram_folds, None if cache else used_slots)
+                        sweep_gram_builds += 1
                         if cache:
                             self._grams.append(grams)
                             try:
@@ -1097,6 +1114,9 @@ class VBEngine:
         del R, work, delta, decoded
         out = {"beta": beta, "iterations": it, "converged": bool(rel.max() < tol),
                "rel_change": rel, "mask": mask}
+        out["gram_cache"] = {**self._cache_info(gram_folds.size),
+                             "cached_blocks_before_sweeps": cached_before,
+                             "sweep_gram_builds": sweep_gram_builds}
         if _compute_prediction:
             # Exact residual from the final effects (one pass, float64).
             prediction = self.predict(beta)
@@ -1220,6 +1240,16 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
     n_fit = 0
     if n_cv == sizes.size and sizes.size:
         n_fit = int(np.searchsorted(fit_bytes, budget - cv_bytes[-1], side="right"))
+    required = int(cv_bytes[-1] + fit_bytes[-1]) if sizes.size else 0
+    cv._joint_required_bytes = crossfit._joint_required_bytes = required
+    if crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
+        warnings.warn(
+            f"VB Gram cache holds {n_cv} of {sizes.size} sub-blocks for the hold-out fit and "
+            f"{n_fit} for the cross-fitted fits; uncached blocks are recomputed as needed. Increase "
+            f"gram_cache_bytes (currently {budget / 1024**3:.2f} GiB, shared by both; "
+            f"full joint cache needs {required} bytes) if memory permits.",
+            RuntimeWarning, stacklevel=3)
+        cv._cache_warned = crossfit._cache_warned = True
     grams_cv, coefs_cv, grams_fit, coefs_fit = [], [], [], []
 
     def build(b, idx, Zs):
@@ -1270,10 +1300,3 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
         cv._grams, cv._coefs = grams_cv, coefs_cv
     if grams_fit:
         crossfit._grams, crossfit._coefs = grams_fit, coefs_fit
-    if crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
-        warnings.warn(
-            f"VB Gram cache holds {n_cv} of {sizes.size} sub-blocks for the hold-out fit and "
-            f"{n_fit} for the cross-fitted fits; uncached blocks are recomputed as needed. Increase "
-            f"gram_cache_bytes (currently {budget / 1024**3:.2f} GiB, shared by both) "
-            "if memory permits.", RuntimeWarning, stacklevel=3)
-        cv._cache_warned = crossfit._cache_warned = True

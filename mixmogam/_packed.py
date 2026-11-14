@@ -242,13 +242,58 @@ class PackedCalls:
     def __len__(self) -> int:
         return self.shape[0]
 
-    def take_variants(self, variant_indices) -> "PackedCalls":
-        """Packed calls of the selected variants (rows copied, never decoded)."""
-        idx = _column_indices(variant_indices, self.shape[1]) if not isinstance(variant_indices, slice) else variant_indices
-        return PackedCalls(np.ascontiguousarray(self.data[idx]), self.shape[0])
+    def take_variants(self, variant_indices, *, directory=None) -> "PackedCalls":
+        """Select packed rows without decoding. Mapped inputs stay mapped.
+
+        A contiguous selection of read-only mapped rows shares storage;
+        other mapped selections are copied in bounded chunks to a temporary
+        file. Writable inputs retain independent copies for index arrays.
+        """
+        idx = _column_indices(variant_indices, self.shape[1])
+        if idx.ndim != 1:
+            raise IndexError("variant selection must be one-dimensional")
+        if isinstance(self.data, np.memmap) and idx.size and self.data.shape[1]:
+            if (not self.data.flags.writeable and
+                    (idx.size == 1 or np.all(np.diff(idx) == 1))):
+                return PackedCalls(self.data[idx[0]:idx[-1] + 1], self.shape[0])
+            return self._copy_variants_to_file(idx, directory=directory)
+        key = variant_indices if isinstance(variant_indices, slice) else idx
+        return PackedCalls(np.ascontiguousarray(self.data[key]), self.shape[0])
+
+    def _copy_variants_to_file(self, idx, *, directory=None, missing=None):
+        """Copy selected rows, optionally masking samples, with bounded RAM."""
+        import os
+        import tempfile
+
+        from mixmogam._stream import Readahead
+
+        nb = self.data.shape[1]
+        step = max(1, _SPILL_BYTES // max(nb, 1))
+        source = (Readahead.for_array(self.data, _SPILL_BYTES)
+                  if idx.size < 2 or np.all(np.diff(idx) >= 0) else None)
+        fd, path = tempfile.mkstemp(prefix="mixmogam-variants-", suffix=".bed", dir=directory)
+        try:
+            with os.fdopen(fd, "wb") as fh:
+                if source is not None:
+                    source.begin()
+                for start in range(0, idx.size, step):
+                    take = idx[start:start + step]
+                    if source is not None:
+                        source.at(take)
+                    data = np.asarray(self.data[take])
+                    if missing is not None:
+                        PackedCalls(data, self.shape[0])._set_missing(missing)
+                    fh.write(data.data)
+                    del data
+            mm = np.memmap(path, dtype=np.uint8, mode="r", shape=(idx.size, nb))
+        finally:
+            os.unlink(path)
+        return PackedCalls(mm, self.shape[0])
 
     def with_missing(self, samples) -> "PackedCalls":
         """A copy with every call of the masked samples set to a no-call."""
+        if isinstance(self.data, np.memmap) and self.data.size:
+            return self._copy_variants_to_file(np.arange(self.shape[1]), missing=samples)
         result = PackedCalls(self.data.copy(), self.shape[0])
         result._set_missing(samples)
         return result
@@ -277,13 +322,17 @@ class PackedCalls:
         per variant). Other sources are repacked in memory. ``n_threads``
         Numba workers repack variants in parallel; values are the same.
         ``in_memory=True`` repacks a mapped source in memory too (a block of
-        variants, say).
+        variants, say). Selecting every sample in its original order shares
+        read-only mapped storage unless ``in_memory=True``.
         """
         idx = np.asarray(sample_indices)
         rows = np.arange(self.shape[0], dtype=np.int64)[idx]
         n_new = rows.size
         nb = (n_new + 3) // 4
-        if (HAS_NUMBA and rows.ndim == 1 and isinstance(self.data, np.memmap)
+        if (not in_memory and isinstance(self.data, np.memmap) and not self.data.flags.writeable
+                and np.array_equal(rows, np.arange(self.shape[0]))):
+            return PackedCalls(self.data, self.shape[0])
+        if (rows.ndim == 1 and isinstance(self.data, np.memmap)
                 and not in_memory and self.shape[1] and nb):
             return self._take_samples_to_file(np.ascontiguousarray(rows), n_threads, directory)
         data = np.empty((self.shape[1], nb), dtype=np.uint8)
@@ -316,7 +365,9 @@ class PackedCalls:
 
         m, n_new = self.shape[1], rows.size
         nb = (n_new + 3) // 4
-        step = max(1, _SPILL_BYTES // max(self.data.shape[1], nb, 1))
+        # The NumPy fallback decodes a tile before selecting its samples.
+        per_row = max(self.data.shape[1], nb, 1) if HAS_NUMBA else max(8 * self.shape[0], nb, 1)
+        step = max(1, _SPILL_BYTES // per_row)
         source = Readahead.for_array(self.data, _SPILL_BYTES)
         fd, path = tempfile.mkstemp(prefix="mixmogam-samples-", suffix=".bed", dir=directory)
         try:
@@ -329,7 +380,11 @@ class PackedCalls:
                     if source is not None:
                         source.at(np.arange(start, stop))
                     out = buffer[: stop - start]
-                    self._repack(self.data[start:stop], rows, out, n_threads)
+                    if HAS_NUMBA:
+                        self._repack(self.data[start:stop], rows, out, n_threads)
+                    else:
+                        calls = PackedCalls(self.data[start:stop], self.shape[0])
+                        out[:] = PackedCalls.pack(np.asarray(calls)[rows]).data
                     fh.write(out.data)
             mm = np.memmap(path, dtype=np.uint8, mode="r", shape=(m, nb))
         finally:

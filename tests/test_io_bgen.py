@@ -8,7 +8,7 @@ import zlib
 import numpy as np
 import pytest
 
-from mixmogam.io.bgen import read_bgen, _hard_calls
+from mixmogam.io.bgen import read_bgen, iter_bgen, iter_bgen_dosages, _hard_calls
 
 
 @pytest.fixture
@@ -189,3 +189,64 @@ def test_bgen_optional_real_reader(tmp_path, compressed, packed):
     assert gt.chromosome.tolist() == ["chr01"]
     assert gt.variant_ids.tolist() == ["chip1"]
     assert gt.allele1.tolist() == ["T"]
+    streamed = list(iter_bgen(path, hard_call_threshold=0.9, packed=packed, chunk_bytes=1))
+    assert len(streamed) == 1
+    np.testing.assert_array_equal(np.asarray(streamed[0].G), np.asarray(gt.G))
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_bgen_stream_bounded_calls_and_metadata(fake_bgen, monkeypatch, packed):
+    import mixmogam.io.bgen as module
+    path, reader = fake_bgen
+    metadata = module.allocate_metadata
+
+    def bounded_metadata(m):
+        assert m == 1
+        return metadata(m)
+
+    monkeypatch.setattr(module, "allocate_metadata", bounded_metadata)
+    stream = iter_bgen(path, hard_call_threshold=0.9, packed=packed, chunk_bytes=64 * 5)
+    first = next(stream)
+    assert reader.blocks == [slice(0, 1)] and not reader.closed
+    second = next(stream)
+    with pytest.raises(StopIteration):
+        next(stream)
+    assert reader.closed and reader.blocks == [slice(0, 1), slice(1, 2)]
+    assert first.sample_ids is second.sample_ids
+    assert first.packed == second.packed == packed
+    np.testing.assert_array_equal(np.column_stack([np.asarray(first.G), np.asarray(second.G)]),
+                                  [[0, 2], [1, 0], [2, 1], [-1, -1], [-1, -1]])
+    assert first.variant_ids.tolist() == ["chip1"] and second.variant_ids.tolist() == ["chip2"]
+    assert first.allele1.tolist() == ["T"] and second.allele1.tolist() == ["G"]
+    stream = iter_bgen(path, hard_call_threshold=0.9, chunk_bytes=1)
+    next(stream)
+    reader.closed = False
+    stream.close()
+    assert reader.closed
+
+
+def test_bgen_dosage_stream_budget_metadata_and_validation(fake_bgen, monkeypatch):
+    import mixmogam.io.bgen as module
+    path, reader = fake_bgen
+    metadata = module.allocate_metadata
+    sizes = []
+
+    def bounded_metadata(m):
+        sizes.append(m)
+        assert m == 1
+        return metadata(m)
+
+    monkeypatch.setattr(module, "allocate_metadata", bounded_metadata)
+    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5)
+    a, b = list(stream)
+    assert sizes == [1, 1] and reader.closed
+    assert a.sample_ids is b.sample_ids
+    np.testing.assert_allclose(np.column_stack([a.values, b.values]),
+                                [[0, 2], [1, 0], [2, 1.1], [0.9, 0.5], [np.nan, 0.11]])
+    reader.ploidy = reader.ploidy.copy()
+    reader.ploidy[0, 1] = 1
+    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5)
+    next(stream)
+    with pytest.raises(ValueError, match="non-diploid"):
+        next(stream)
+    assert reader.closed

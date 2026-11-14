@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-11-14
+
+### Fixed
+
+- Mapped packed variant selections now stay mapped: read-only contiguous
+  selections share storage; other selections copy packed rows to a temporary
+  file in bounded chunks. Identity sample selections share read-only maps.
+  Sample repacking stays on disk without Numba too, and missing-ID alignment
+  no longer tries to modify a read-only mapped result.
+- PCA's memory guard now uses the actual bounded QC tile and includes
+  retained marker metadata. PCA no longer copies a whole sample-major int8
+  panel to variant-major storage before extracting its marker panel.
+- Step 2 now streams PGEN, VCF/BCF and hard-call BGEN inputs instead of
+  loading each whole file before chunking. VCF streaming needs one record
+  pass; PGEN and BGEN construct mixmogam metadata per block. The CLI passes
+  its chunk budget to hard-call and dosage readers and closes them on error.
+  Input validation and counted-allele conventions are unchanged.
+
+### Added
+
+- `mixmogam.io.iter_genotypes` and reader-specific `iter_pgen`, `iter_vcf`
+  and `iter_bgen`; existing whole-file APIs remain available. Legacy
+  EIGENSTRAT, TPED and HDF5 dispatch still uses whole-file readers.
+- `extra["gram_cache"]` reports CV/LOCO cache requirements, actual retained
+  bytes, occupancy and Gram blocks built during sweeps. Partial-cache warnings
+  report exact full-cache requirements before preparation; preparation no
+  longer decodes a block that cannot fit. Model defaults are unchanged.
+
 ## [2.1.0] - 2026-11-14
 
 ### Added

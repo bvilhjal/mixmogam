@@ -943,6 +943,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              "calibration_ratios": inf["cal"]["ratios"], "spectral_k": inf["cal"].get("k"),
              "cv_grid": list(grid), "cv_r2": r2, "cv_best": grid[best],
              "cv_iterations": cv["iterations"], "cv_converged": cv["converged"],
+             "gram_cache": {"cv": cv["gram_cache"]},
              "use_mixture": bool(use_mixture)}
     # The CV fit's (m, folds x grid) effects and (n, folds x grid) residuals,
     # predictions and masks are not needed once its scores are taken.
@@ -958,6 +959,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     # Only the residuals of the LOCO fit are used; the engine's Gram cache
     # and the (m, groups) effects go before the LD scores need memory.
     loco_iterations, loco_converged = loco["iterations"], loco["converged"]
+    extra["gram_cache"]["loco"] = loco["gram_cache"]
     resid = loco["resid"]
     del loco, eng
     rs = _retro_stats(st, resid)
@@ -1594,7 +1596,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     (b) with ``model_snps="hm3"``, an autosome on which matching kept under
     half of the map's variants although the panel has variants there; (c)
     ``"auto"`` keeping more than 80% of the variants (the subset copy then
-    costs memory for little time). Informational, in
+    costs storage for little time saved). Informational, in
     ``extra["model_snps"]["notes"]``: an HE h2 ratio (subset / every
     variant) below 0.85. Both HE fits use the alpha that HE selects on the
     full panel (``h2_check["alpha"]``). The ratio measures tagging, not
@@ -1608,8 +1610,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     (nuclear families with low-frequency causal variants: +0.044 in the null
     mean chi-square); there a 20% 'auto' subset or every variant is safer.
 
-    ``model_snps_stream`` keeps the subset on disk instead of in RAM (n k / 4
-    bytes, 180 GB for HapMap3+ at n = 5e5): one pass writes the subset's
+    Mapped packed inputs keep their subsets mapped automatically. For other
+    inputs, ``model_snps_stream`` keeps the subset on disk instead of in RAM
+    (n k / 4 bytes, 180 GB for HapMap3+ at n = 5e5): one pass writes the subset's
     rows to a page-aligned two-bit file that every stage-1 pass maps and
     reads sequentially, with read-ahead and drop-behind advice so resident
     memory does not grow with the subset. Results are bit-identical to the
@@ -1619,7 +1622,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     panel, the subset and the samples are unchanged; default: a temporary
     file, unlinked once mapped), ``threshold_bytes``, ``window_bytes``
     (read-ahead, default 64 MiB) and ``verify`` (re-hash a reused file).
-    Default ``None``: the in-RAM copy. ``extra["model_snps"]["stream"]``
+    Default ``None`` uses ordinary selection (mapped for mapped packed
+    inputs, otherwise in RAM). ``extra["model_snps"]["stream"]``
     records the decision, path, size, cache hit and extraction time.
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
@@ -2153,6 +2157,8 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
         extra["stage1_selection"] = scores["stage1_selection"]
     if "stage1_info" in scores:
         extra["stage1_info"] = scores.pop("stage1_info")
+    if "gram_cache" in scores:
+        extra["gram_cache"] = scores["gram_cache"]
     if "offset_slope" in scores and not binary:
         extra["offset_slope"] = scores["offset_slope"]
     if heritability_method == "he":
@@ -2327,8 +2333,8 @@ def _model_snp_setup(st: _Setup, gt, model_snps, options, n_threads: int,
     from the prepared moments (no genotype pass), and so do the subset's
     moments (the panel's rows, bit-identical to preparing them again).
     With ``stream`` (normalized ``model_snps_stream``) the subset's calls
-    are a memory-mapped on-disk cache instead of an in-RAM copy (see
-    :mod:`mixmogam._stream`).
+    use the reusable on-disk cache (see :mod:`mixmogam._stream`). Ordinary
+    selection also keeps mapped packed inputs on disk, in a temporary file.
     """
     from mixmogam._thin import resolve_model_snps
 
@@ -2487,7 +2493,7 @@ def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float,
              predicted_inflation=pred, excess=float(struct["excess"]))
     if str(info["source"]).startswith("auto") and frac > AUTO_KEEP_WARN:
         emit("auto_keeps_most", f"'auto' kept {k:,} of {m:,} variants ({100 * frac:.0f}%); the "
-                                "subset copy costs memory for little time. Use "
+                                "subset copy costs storage for little time saved. Use "
                                 "model_snps_options={'max_snps': ...}, stricter thinning, or "
                                 "model_snps=None.", frac=frac)
     return out
@@ -2669,6 +2675,7 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     mse = np.mean((ys[held, None] - eng.predict(cv["beta"], rows=held)) ** 2, axis=0)
     best = int(np.argmin(mse))
     cv_converged = cv["converged"]
+    gram_cache = {"cv": cv["gram_cache"]}
     del cv  # the (m, grid) effects and (n, grid) mask are not needed again
 
     # (1e) LOCO elastic-net scores
@@ -2708,7 +2715,9 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     used_refit = bool(folds is not None and refit and np.any(h2j > 0))
     out = {"resid": resid, "best": best, "mse": mse, "cv_converged": cv_converged,
            "loco_iterations": loco["iterations"], "loco_converged": loco["converged"],
-           "refit": used_refit}
+           "refit": used_refit, "gram_cache": gram_cache}
+    if "gram_cache" in loco:
+        gram_cache["loco"] = loco["gram_cache"]
     if slope is not None:
         out["offset_slope"] = slope
     if keep_prediction:
