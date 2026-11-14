@@ -1136,11 +1136,6 @@ def _he_alpha(st: _Setup, f: np.ndarray, alphas, n_probes: int, rng, *, fit_h2=F
     return result
 
 
-# TODO(SG): the docstring below calls alpha the "LDAK-Thin power" (the weights
-# are Speed et al. 2017's frequency weights without LD weights, not LDAK-Thin,
-# Speed et al. 2020) and calls ``loco_folds=1`` "LDAK-KVIK's design" (LDAK-KVIK
-# adds effect calibration models on top, so in-sample HRATT without them is not
-# LDAK-KVIK's design).
 def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           max_loco_groups: int = 25, alphas=HRATT_ALPHAS,
           alpha_method: str = "he", he_probes: int = 32,
@@ -1165,7 +1160,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     documentation, but not LDAK-KVIK: variance fitting, the variational
     sweep and the calibration solves are this package's own (below), and
     results differ from the reference program's. (1a) structure test;
-    (1b) the LDAK-Thin power alpha is chosen among ``alphas`` by randomized
+    (1b) the frequency-weight power alpha (Speed et al. 2017, no LD
+    weights) is chosen among ``alphas`` by randomized
     Haseman-Elston regression (``alpha_method="he"``, all alphas in one
     pass; :func:`_he_alpha`) or by the REML likelihood of each weighted
     kinship (``"reml"``, one REML fit per alpha), and h2 is then estimated
@@ -1191,8 +1187,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     statistics and lambda' their GRAMMAR-Gamma calibration (the BOLT-LMM-inf
     constant). The phenotype is analysed on the unit-variance scale; effect
     sizes are returned in phenotype units. In-sample LOCO fits
-    (``loco_folds=1``: LDAK-KVIK's design and this package's earlier
-    default) absorb part of each effect into the score, which attenuates
+    (``loco_folds=1``: this package's earlier default) absorb part of each effect into the score, which attenuates
     effect estimates (by about a third in simulations, with unchanged
     p-values there), and can give rare binary outcomes offsets that nearly
     separate the cases.
@@ -1484,11 +1479,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     family-aware saddlepoint is not implemented.
 
     A subset's stage 1 sees only the polygenic signal its SNPs tag. In
-    simulated nuclear families (n = 2,000) the median null chi-square
-    (lambda_GC) rose from 1.016 with every variant to 1.040, 1.101 and
-    1.237 with subsets of 50%, 20% and 5% of the variants: the LOCO scores
-    removed less of the relatives' shared polygenic signal (their slope
-    stayed calibrated). So ``extra["model_snps"]["warnings"]`` (also
+    simulated nuclear families the median null chi-square (lambda_GC)
+    rose as the subset shrank (internal simulations, not archived): the
+    LOCO scores removed less of the relatives' shared polygenic signal
+    (their slope stayed calibrated). So ``extra["model_snps"]["warnings"]`` (also
     issued as RuntimeWarnings) records: (a) a predicted rise of the null
     mean chi-square above 0.02, the structure-test excess (for relatives
     about sum_{j != i} K_ij^2 averaged over samples, e.g. 0.25 times the
