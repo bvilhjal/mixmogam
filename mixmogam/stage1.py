@@ -323,12 +323,18 @@ def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs, diag=
     """One LDpred3 fit's standardized effects, in the block cover's order;
     ``diag`` (a list) collects the fast chain's h2 / p estimates and mixing."""
     if method == "fast":
+        import warnings
         kw = dict(fit_kwargs)
-        res = ldpred3.ldpred3_fast(
-            blocks, beta_std, n_eff, h2_init=float(min(max(h2, 1e-3), 0.99)),
-            p_init=kw["p_init"], burn_in=kw["burn_in"], num_iter=kw["num_iter"],
-            seed=kw["seed"], width=kw["width"], landmarks=kw["landmarks"],
-            reach=kw["reach"], layout_seed=kw["layout_seed"])
+        # ldpred3 0.10.4 emits this once per fit; HRATT already warned once
+        # per stage-1 call (below), so swallow the per-fold copies.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="LDpred3-fast is experimental", category=UserWarning)
+            res = ldpred3.ldpred3_fast(
+                blocks, beta_std, n_eff, h2_init=float(min(max(h2, 1e-3), 0.99)),
+                p_init=kw["p_init"], burn_in=kw["burn_in"], num_iter=kw["num_iter"],
+                seed=kw["seed"], width=kw["width"], landmarks=kw["landmarks"],
+                reach=kw["reach"], layout_seed=kw["layout_seed"])
         if diag is not None:
             h2m = _chain_mixing(res.h2_path) if res.h2_path is not None else {}
             p_path = (res.p_rao_blackwell_path if res.p_rao_blackwell_path is not None
@@ -485,10 +491,12 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     ``method`` is ``"ldpred3-inf"`` (the infinitesimal closed form at the
     genome-wide ``h2`` of the variance fit), ``"ldpred3-lassosum2"``
     (penalty selected per fold by pseudo-validation on that fold's own rows)
-    or ``"ldpred3-fast"`` (LDpred3-auto on the fast layout: int8 dense
-    sub-blocks plus an int8 Nystrom landmark factor, within group-pure
-    blocks of ``fast_block_size`` variants, so the LOCO subtraction stays
-    exact given the shared h2 and p; a seeded Gibbs chain per fold).
+    or ``"ldpred3-fast"`` (experimental LDpred3-auto on the fast layout:
+    int8 dense sub-blocks plus an int8 Nystrom landmark factor, within
+    group-pure blocks of ``fast_block_size`` variants, so the LOCO
+    subtraction stays exact given the shared h2 and p; a seeded Gibbs
+    chain per fold; warns once and records ``ldpred3_version`` and
+    ``experimental=True`` in ``stage1_info``).
     ``fit_kwargs`` (with ``block_size``) pass to lassosum2, except the LD
     options: ``ld`` (``"f32"``, the default float32 blocks, or an int8 /
     hard-call representation of :mod:`mixmogam._ld8`), ``ld_cache``
@@ -548,7 +556,22 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     # FastLD stores int8 (dense sub-blocks + int8 Nystrom factor) whatever
     # the dense source it is built from.
     info = {"ld": "fast-int8" if method == "ldpred3-fast" else ld, "ld_source": ld,
-            "method": method, "ld_split": ld_split, "ld_psd": ld_psd}
+            "method": method, "ld_split": ld_split, "ld_psd": ld_psd,
+            "ldpred3_version": getattr(ldpred3, "__version__", None)}
+    if method == "ldpred3-fast":
+        import warnings
+        info["experimental"] = True
+        try:
+            from ldpred3.methods import FAST_EXPERIMENTAL_WARNING as _fast_msg
+        except ImportError:  # pragma: no cover - ldpred3 < 0.10.4
+            _fast_msg = ("LDpred3-fast is experimental: int8 rounding can make the "
+                         "working LD indefinite even when the source is positive "
+                         "semidefinite. The independent-Gibbs update does not repair "
+                         "this. Prediction and architecture estimates require "
+                         "validation against native-LD fits.")
+        warnings.warn(
+            f"stage1 'ldpred3-fast' is experimental (ldpred3 {ldpred3.__version__}): {_fast_msg}",
+            UserWarning, stacklevel=3)
     t0 = time.perf_counter()
     marg = fold_marginals(lg, ys, folds, held)
     info["marginals_s"] = time.perf_counter() - t0

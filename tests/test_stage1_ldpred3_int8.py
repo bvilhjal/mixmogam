@@ -266,6 +266,8 @@ def test_ldpred3_fast_loco_stage1(trait_panel, tmp_path):
     assert _corr(_chi2(a), _chi2(inf)) > 0.95
     assert a.extra["stage1_info"]["ld"] == "fast-int8"
     assert a.extra["stage1_info"]["ld_source"] == "d8-hardcall"
+    assert a.extra["stage1_info"]["ldpred3_version"] == ldpred3.__version__
+    assert a.extra["stage1_info"]["experimental"] is True
     ch = a.extra["stage1_info"]["fast_chains"]
     assert len(ch) == 3 and all(np.isfinite(d["h2_est"]) and d["rhat_h2"] is not None for d in ch)
     # FastLD covers cache on disk as npz + json (no pickle)
@@ -283,6 +285,28 @@ def test_ldpred3_fast_loco_stage1(trait_panel, tmp_path):
     assert np.array_equal(_chi2(c3), _chi2(a), equal_nan=True)
     with pytest.raises(ValueError, match="unknown keywords"):
         _hratt(y, gt, X, stage1="ldpred3-fast", stage1_kwargs={"bogus": 1})
+
+
+def test_ldpred3_fast_warns_once_and_records_experimental(trait_panel):
+    """ldpred3 0.10.4 warns that fast is experimental; HRATT surfaces it
+    once per call (not once per fold) and records it in stage1_info."""
+    gt, y, X = trait_panel
+    opts = {"ld": "d8-hardcall", "fast_block_size": 300, "width": 120, "landmarks": 8,
+            "burn_in": 20, "num_iter": 20, "seed": 1}
+    with pytest.warns(UserWarning, match=r"ldpred3-fast.*experimental") as rec:
+        twostep.hratt(y, gt, X, loco_folds=2, random_state=0, stage1="ldpred3-fast",
+                      stage1_kwargs=opts)
+    # one HRATT warning; the per-fold ldpred3 warnings are swallowed
+    msgs = [str(w.message) for w in rec.list if "experimental" in str(w.message).lower()]
+    assert sum(m.startswith("stage1 'ldpred3-fast'") for m in msgs) == 1
+
+
+def test_fast_ldpred3_imports_on_pinned_package():
+    from ldpred3.fast import FastLD
+    import ldpred3.fast as fast_mod
+    from ldpred3.diagnostics import scalar_mixing
+    assert FastLD is fast_mod.FastLD and callable(scalar_mixing)
+    assert ldpred3.__version__  # recorded in stage1_info
 
 
 def test_fast_blocks_stay_group_pure(trait_panel):
