@@ -19,7 +19,7 @@ OUT = ROOT / "report"
 WORKLOADS = {
     "exact": r"Exact LOCO, 3{,}000/44{,}000",
     "mlmm": r"MLMM, ten steps, 2{,}000/50{,}000",
-    "bolt-inf": r"BOLT-LMM-inf, 10{,}000/30{,}000",
+    "bolt-inf": r"BOLT-style inf (mixmogam), 10{,}000/30{,}000",
     "kvik-reml": r"HRATT with REML, 10{,}000/30{,}000",
     "kvik-he-uncached-4t": r"HRATT-HE, no cache, four threads, 20{,}000/20{,}000",
 }

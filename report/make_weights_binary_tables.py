@@ -5,6 +5,8 @@ Reads the archive's pooled rates (aggregate.csv) and pre-registered criteria
 (criteria.json), and writes two table bodies plus a manifest of input and
 output hashes. Rates are observed over expected rejections of null variants,
 pooled over replicates; lambda_GC is evaluated on MAF >= 5% variants.
+Only HRATT and its own variants are tabulated; the archive's external-program
+rows are skipped.
 """
 import csv
 import hashlib
@@ -54,8 +56,6 @@ def quantitative_rows(index):
     for fst, scenario in cells:
         entries = [("HRATT", "hratt-w", "p"), ("normal tails", "hratt-w", "p_normal"),
                    ("sandwich (HC0)", "hratt-w", "p_hc0")]
-        entries.append(("LDAK-KVIK" if scenario == "S0" else "LDAK sandwich",
-                        "ldak-kvik" if scenario == "S0" else "linear-w", "p"))
         for i, (label, method, variant) in enumerate(entries):
             lam = get(index, fst, "quantitative", None, scenario, method, variant, "maf>=0.05")
             low = get(index, fst, "quantitative", None, scenario, method, variant, "maf<0.05")
@@ -83,11 +83,8 @@ def binary_rows(index):
                    ("normal tails", method, "p_normal")]
         if not weighted:
             entries.append(("model-based variance", "hratt-bin", "p_model"))
-        if scenario in ("S0", "S5-1:1", "S5-1:4"):
-            if weighted:
-                entries.append(("HRATT, unweighted", "hratt-bin", "p"))
-            if fst == 0.0:
-                entries.append(("LDAK-KVIK", "ldak-kvik-bin", "p"))
+        if weighted and scenario in ("S5-1:1", "S5-1:4"):
+            entries.append(("HRATT, unweighted", "hratt-bin", "p"))
         for i, (label, m, variant) in enumerate(entries):
             lam = get(index, fst, "binary", prev, scenario, m, variant, "maf>=0.05")
             r = get(index, fst, "binary", prev, scenario, m, variant)

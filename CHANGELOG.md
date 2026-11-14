@@ -89,6 +89,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   group are dropped there, `method="auto"` is resolved once for both
   groups, and HRATT `sample_weights` are split with the samples.
 
+### Removed
+
+- Comparisons with LDAK-KVIK and LDAK from the README, the docs, the benchmark
+  guides and the research report, including its abstract, tables and figures.
+  The report's phensim, 20,000-marker, sample-ladder and case-control displays
+  keep only mixmogam's methods. `report/make_ldak_kvik_figures.py` is now
+  `report/make_phensim_figures.py` and writes nothing into the archives.
+  Attribution of HRATT's design to LDAK-KVIK (Hof & Speed 2025) stays. Benchmark
+  drivers, protocols and archived results are unchanged; external-program runs in
+  them are kept for provenance only.
+
+### Changed
+
+- Documentation and report labels: mixmogam's `bolt-inf` and `bolt` methods are
+  shown as "BOLT-style inf (mixmogam)" and "BOLT-style mixture (mixmogam)", so
+  they are not read as the BOLT-LMM program. Speed statements now give the
+  measured times of mixmogam's own methods instead of rankings ("fastest",
+  "cheapest"), and the README links current documentation on `master` instead
+  of the v2.0.1 tag. `report/report_manifest.json` was regenerated.
+- Package metadata: the description no longer says "super-efficient" (pyproject,
+  CITATION.cff title, package docstring), and the development status is 4 - Beta.
+  `gwas(method="bolt")` without a mixture now notes "BOLT-style inf (mixmogam)
+  statistics" in `extra["note"]`.
+- README: the stratified HapMap3-subset excess is attributed to the earlier
+  subset structure test (HRATT now runs it on every variant), and the subset
+  section points to `relatedness=` (kappa_g) for family inflation.
+  `report/README.md` notes that the HAPNEST runs were not rerun after the
+  relabel (only the generator hash in `hapnest_manifest.json` changed).
+- `report/mixmogam_report.pdf` was rebuilt with Tectonic from the current LaTeX
+  source (47 pages, was 51), so it no longer carries the external-program
+  comparisons or the old labels; the stale-PDF notes in `report/README.md` and
+  `report_manifest.json` were removed.
+
 ## [2.0.2.dev1] - 2026-11-03
 
 ### Fixed

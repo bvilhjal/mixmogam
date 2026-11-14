@@ -39,16 +39,16 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-10-29-release-2.0.0",
+        "revision": "2026-11-14-mixmogam-methods-only",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
         "benchmark_package_version": "2.0.0.dev8",
         "benchmark_commit": "d550c41212fb4eca72858893d7ef7c6b89d4398a",
-        "revision_state": ("Release 2.0.0: packaging, citation and data-provenance documentation "
-                           "and the version string only. The PDF is byte-identical to the "
-                           "dev8-benchmark-rerun revision; no estimator changed, and historical "
-                           "results retain their own versions."),
+        "revision_state": ("Documentation and report sources only: external-program comparisons "
+                           "removed, mixmogam's BOLT-style methods labelled as such and comparative "
+                           "claims audited; no estimator changed. The committed PDF was rebuilt "
+                           "with Tectonic from this revision's LaTeX source and displays."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

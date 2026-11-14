@@ -54,15 +54,15 @@ Use enough components to span the ancestry structure, K - 1 for K discrete
 populations. In a simulated panel of four populations with
 population-specific environments, two components left 58% of the environment
 in the trait and three left 0.3%. With three, every method converged and
-agreed with official LDAK-KVIK. With two, the BOLT-LMM mixture, HRATT-HE and
+they agreed. With two, BOLT-style mixture (mixmogam), HRATT-HE and
 HRATT-REML hit their iteration caps and returned the statistics of failed
-fits, while the exact path and BOLT-LMM-inf converged
+fits, while the exact path and BOLT-style inf (mixmogam) converged
 ([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
 `principal_components(..., return_info=True)` reports the
 `explained_variance_ratio`, which shows where the spectrum drops off.
 
 Check `extra["cv_converged"]` and `extra["loco_converged"]` before reading any
-HRATT or BOLT-LMM statistic. `hratt` always reports both; `bolt` reports them
+HRATT or BOLT-style mixture (mixmogam) statistic. `hratt` always reports both; `bolt` reports them
 only when the mixture is used (`extra["use_mixture"]`); `exact` and `bolt-inf`
 have no flag because a failed solve raises. The accompanying `RuntimeWarning`
 is shown once per session by default, so test the flags yourself when looping
@@ -81,7 +81,7 @@ from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
 result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
-result = gwas(y, gt, method="bolt-inf")      # BOLT-LMM-inf-style, K-free
+result = gwas(y, gt, method="bolt-inf")      # BOLT-style inf (mixmogam), K-free
 result = gwas(y, gt, method="bolt")          # two-Gaussian mixture
 result = gwas(y, gt, method="hratt")         # elastic net, after LDAK-KVIK
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
@@ -313,8 +313,11 @@ object has vanished` crashes while Numba saved a kernel in concurrent
 simulation runs, which a per-run `NUMBA_CACHE_DIR` stopped. Results do not
 depend on the cache, only the first-call compile time does.
 During parallel sweeps the workers spin between launches instead of sleeping
-at once (as OpenMP does on Apple silicon), 1.1-1.25x faster at four threads on
-a wide panel for 1.5-2x the CPU time; set `KMP_BLOCKTIME` or
+at once (as OpenMP does on Apple silicon): in the 26 October speed review whole HRATT
+runs at four threads were 1.12-1.24x faster than with sleeping workers on a
+5,000 x 40,000 panel, 1.55x on 1,000 x 10,000 (a strong-structure refit) and
+1.01-1.03x on 20,000 x 10,000, for 1.5-2x the process CPU time; two threads
+gained 1.06x and one thread is unchanged; set `KMP_BLOCKTIME` or
 `OMP_WAIT_POLICY` to keep the runtime's own policy.
 
 No float copy of the genotypes is kept; every pass decodes them. For large

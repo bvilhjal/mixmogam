@@ -99,8 +99,9 @@ for method in ["exact", "bolt-inf", "bolt", "hratt"]:
 
 - `exact` is the reference at this size, and `method="auto"` picks it up to
   5,000 samples (`bolt-inf` above). The other engines avoid the O(n³)
-  factorizations and use less memory, which pays only at larger n; at
-  n = 1,500 they are slower.
+  factorizations, which pays at larger n. In this single run at n = 1,500,
+  `bolt-inf` took 1.0 s against 2.3 s for `exact`, while `bolt` and `hratt`
+  took about 20 s.
 - `bolt` and `hratt` give larger −log10 p at the QTL than `exact` (57-61 vs 43
   at the strongest one). Part of that may be power from a non-infinitesimal
   prior, but the statistics also differ (retrospective score tests against an

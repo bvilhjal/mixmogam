@@ -301,7 +301,7 @@ fixed offsets (coefficient one). A group's score is dropped when it
 anti-predicts (non-positive coefficient), lies in the covariates' span, or its
 fixed-offset fit also diverges.
 
-An in-sample fit (`loco_folds=1`, LDAK-KVIK's design) puts a fraction near
+An in-sample fit (`loco_folds=1`) puts a fraction near
 df/n of each sample's own phenotype into its score.
 - It absorbs that fraction of every association. Effects were a third too
   small in simulations; p-values were unaffected because the residual
@@ -317,11 +317,6 @@ Each fold's predictor excludes that fold's outcomes, but variance components
 and prior selection still use the whole trait, so the procedure as a whole is
 not independent of the held-out outcomes. In the pilots, cross-fitting reduced
 effect attenuation and extreme null offsets.
-
-LDAK-KVIK instead calibrates effects by the slope of effects without the score
-on effects against the residual. Under structure that reference is
-confounded (at Fst 0.05 the slope was 1.24 for MAF 1-5% and 1.37 above, and
-QTL effects came out 15% large), and it cannot repair binary offsets.
 
 Dropping a group's share of a genome-wide fit costs five fits rather than five
 per group. Without structure it matched per-group refits (null lambda_GC
@@ -339,8 +334,8 @@ implementations: REML instead of MC REML for BOLT-LMM; HRATT's
 single-component HE rather than LDAK-KVIK's partitioned HE with large-effect
 exclusions, followed by REML h2 by default (`alpha_method="reml"` scans REML
 likelihoods instead); no LD thinning in the LDAK-Thin weights; a 1% relative
-CV R^2 margin before BOLT-LMM uses the mixture (BOLT's threshold is
-unpublished); median matching instead of the LDSC intercept when LD scores do
+CV R^2 margin before BOLT-style mixture (mixmogam) uses the mixture (BOLT-LMM's
+threshold is unpublished); median matching instead of the LDSC intercept when LD scores do
 not vary (coefficient of variation < 0.2). As in BOLT-LMM, mixture p-values
 come with the infinitesimal model's effects and standard errors; slopes
 against in-sample mixture residuals were attenuated, and calibrating their
@@ -545,13 +540,13 @@ Null lambda_GC by structure-loading quintile (the share of z_j in the top-10
 kinship eigenvectors), six replicates, from the earlier implementation
 (archive `20261003T081812Z-structure-calibration`):
 
-| data | exact LOCO | `bolt-inf` | + spectral | KVIK-style (now `hratt`) | + spectral |
+| data | exact LOCO | `bolt-inf` | + spectral | `hratt` (earlier version) | + spectral |
 |---|---|---|---|---|---|
 | simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
 | *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 | 0.97-1.03 |
 
-FPR at p < 0.01 follows suit (strong simulated structure: BOLT-LMM-inf
+FPR at p < 0.01 follows suit (strong simulated structure: BOLT-style inf (mixmogam)
 2.45% → 0.11%, spectral 1.06-1.37%, exact 1.11-1.31%). Through HRATT's lambda
 rule the transferred correction flattens the gradient but leaves about 7%
 overall inflation under strong simulated structure.

@@ -23,8 +23,8 @@ REPS = 3
 WORKLOADS = {  # name: (label, has a two-bit twin)
     "exact": (r"Exact LOCO, 3{,}000/44{,}000", False),
     "mlmm": (r"MLMM, ten steps, 2{,}000/50{,}000", False),
-    "bolt-inf": (r"BOLT-LMM-inf, 10{,}000/30{,}000", True),
-    "bolt": (r"BOLT-LMM, 10{,}000/30{,}000", True),
+    "bolt-inf": (r"BOLT-style inf (mixmogam), 10{,}000/30{,}000", True),
+    "bolt": (r"BOLT-style mixture (mixmogam), 10{,}000/30{,}000", True),
     "hratt-reml": (r"HRATT with REML, 10{,}000/30{,}000", True),
     "hratt-he": (r"HRATT-HE, 10{,}000/30{,}000", True),
     "hratt-he-4t": (r"HRATT-HE, four threads, 20{,}000/20{,}000", True),
