@@ -66,8 +66,9 @@ each part's Gram (and, for hard calls, its call and covariate products) is
 accumulated in the same single pass, and a training set's Gram is the total
 less its excluded parts, re-centred and renormalised on its own rows. Build
 flops are unchanged (the parts partition the samples); storage and cache are
-k + 1 covers, keyed additionally by the partition (the folds depend only on
-n and the seed, so traits of one panel still share them).
+k + 1 covers, keyed additionally by the partition, source calls and covariate
+projection. Only exact matches can reuse training covers; whole-cohort
+``"all"`` covers retain their approximate reuse with overlap diagnostics.
 
 D8 spectrum (``stage1_kwargs["ld_psd"]``). D8 rounding adds a symmetric error
 E with ||E||_2 about 2 sigma sqrt(k), sigma = 1 / (127 sqrt 12), and pushes
@@ -265,8 +266,8 @@ def ld_blocks(lg, order: np.ndarray, scale: np.ndarray, block_size: int = 500) -
     projected rows are the covariate-adjusted LD the marginal regressions
     imply.
     """
-    if not isinstance(block_size, (int, np.integer)) or block_size <= 0:
-        raise ValueError("block_size must be a positive integer")
+    from mixmogam._ld8 import _validate_block_size
+    block_size = _validate_block_size(block_size)
     order = np.asarray(order, dtype=np.int64)
     scale = np.asarray(scale, dtype=np.float64)[order]
     groups = lg.groups[order]  # non-decreasing: blocks stop at group changes
@@ -372,18 +373,19 @@ def _stage1_blocks(lg, order, scale, method, block_size, ld, ld_cache, ld_tile, 
     from mixmogam import _ld8
 
     cache = _ld8.resolve_cache(ld_cache)
-    size = int(fast_opt["fast_block_size"]) if method == "ldpred3-fast" else int(block_size)
+    size = (_ld8._validate_block_size(fast_opt["fast_block_size"], "fast_block_size")
+            if method == "ldpred3-fast" else _ld8._validate_block_size(block_size))
     extra = None
     if method == "ldpred3-fast":
         extra = ("fast", fast_opt["width"], fast_opt["landmarks"], fast_opt["reach"],
                  fast_opt["layout_seed"], fast_opt.get("_psd"))
     n_covers = 1 if split is None else len(split[2])
-    fp_digest = None
-    if split is not None:
-        # Per-training-set covers are exact: key on the partition and samples.
-        import hashlib
-        fp_digest = hashlib.sha256(_ld8.sample_fingerprints(lg).tobytes()).hexdigest()[:16]
-        extra = (extra, "split", _ld8.split_cache_extra(split[0]), fp_digest)
+    if split is not None and cache is not None:
+        # Exact training LD needs all calls and the projection, not just
+        # the sampled fingerprints used to estimate cohort overlap.
+        from mixmogam._stream import panel_fingerprint
+        extra = (extra, "split", _ld8.split_cache_extra(split[0]), panel_fingerprint(lg.gt),
+                 _ld8._covariate_digest(lg))
     keys = None
     if cache is not None:
         base = _ld8.ld_cache_key(lg, order, size, ld, extra)
@@ -397,12 +399,13 @@ def _stage1_blocks(lg, order, scale, method, block_size, ld, ld_cache, ld_tile, 
                         ld_cache_overlap=chk["overlap"], ld_cache_coverage=chk["coverage"],
                         ld_cache_fst=chk["fst"], ld_cache_exact=chk["exact"],
                         ld_cache_covariates_match=chk["covariates_match"])
-            if chk["overlap"] > 0.0:
+            reusable = chk["exact"] if split is not None else chk["overlap"] > 0.0
+            if reusable:
                 for w in chk["warnings"]:
                     import warnings
                     warnings.warn(f"LD cache reuse: {w}", RuntimeWarning, stacklevel=4)
                 return [c[0] for c in got]
-            info["ld_cache"] = "stale"  # no shared sample: another panel; rebuild
+            info["ld_cache"] = "stale"  # train covers need exact reuse; all needs overlap
     c0, t0, cells0 = time.process_time(), time.perf_counter(), _ld8.COUNTER["cells"]
     if split is None:
         covers = [_ld8.build_blocks(lg, order, scale, size, ld, ld_tile)]
@@ -538,7 +541,7 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     ld_tile = fit_kwargs.pop("ld_tile", None)
     ld_split = fit_kwargs.pop("ld_split", "all")
     ld_psd = fit_kwargs.pop("ld_psd", None)
-    from mixmogam._ld8 import LD_KINDS
+    from mixmogam._ld8 import LD_KINDS, _validate_block_size
     if ld not in LD_KINDS:
         raise ValueError(f"stage1_kwargs['ld'] must be one of {list(LD_KINDS)}, got {ld!r}")
     if ld_split not in ("all", "train"):
@@ -555,6 +558,9 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                 fast_opt[key_] = fit_kwargs.pop(key_)
         if fit_kwargs:
             raise ValueError(f"stage1 'ldpred3-fast' got unknown keywords {sorted(fit_kwargs)}")
+        _validate_block_size(fast_opt["fast_block_size"], "fast_block_size")
+    else:
+        _validate_block_size(block_size)
     if h2 <= 0:  # no polygenic variance: no scores, as in the elastic-net path
         held_mask = _held_mask(lg.n, held)
         ys = np.asarray(ys, dtype=np.float64).ravel()

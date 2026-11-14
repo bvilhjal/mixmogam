@@ -1,6 +1,6 @@
 """Mixed linear models for genome-wide association mapping (research implementation)."""
 
-__version__ = "2.0.2.dev1"
+__version__ = "2.0.2.dev2"
 
 __all__ = [
     "LMM",

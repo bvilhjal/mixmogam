@@ -51,7 +51,7 @@ with ``stage1_kwargs={"ld": ...}``:
 Covariates and row weights: (b) needs an unweighted model (``row_scale``
 None), as the LDpred3 stage 1 already does.
 
-The cache (:class:`LDCache`) keeps built covers keyed by the variants (the
+The cohort cache (:class:`LDCache`, ``ld_split="all"``) keeps built covers keyed by the variants (the
 model-SNP set: positions, IDs, alleles, LOCO groups), variant order, block
 size, representation and the format / ldpred3 / quantizer versions -- not by
 samples or covariates, so a cohort cover is reused for trait subsets and
@@ -70,8 +70,9 @@ doi:10.1016/j.xhgg.2022.100136).
 Each reuse records the sample overlap (per-sample call fingerprints), an allele-frequency F_ST
 proxy against the build cohort and whether the reuse is exact (same samples
 and covariates), and warns below 50 % overlap or above F_ST 0.01.
-``ld_split="train"`` covers stay exact (their key includes the sample
-partition and the sample fingerprints). In memory, or in a directory (dense
+``ld_split="train"`` keys additionally include the sample partition, source
+calls and covariate projection, and require exact reuse. Covers live in
+memory, or in a directory (dense
 covers as one ``.npy`` payload memory-mapped on reuse with a validated
 JSON layout; FastLD covers as ``.npz`` arrays; nothing is unpickled).
 """
@@ -219,8 +220,16 @@ def hardcall_block(lg, idx: np.ndarray, *, tile: Optional[int] = None,
     return (out, R) if return_float else out
 
 
+def _validate_block_size(block_size, name="block_size") -> int:
+    if (isinstance(block_size, (bool, np.bool_))
+            or not isinstance(block_size, (int, np.integer)) or block_size <= 0):
+        raise ValueError(f"{name} must be a positive integer")
+    return int(block_size)
+
+
 def _cover_layout(lg, order: np.ndarray, block_size: int):
     """Group-pure blocks over the permutation ``order`` (as stage1.ld_blocks)."""
+    block_size = _validate_block_size(block_size)
     groups = lg.groups[order]
     start, out = 0, []
     while start < order.size:
@@ -238,8 +247,7 @@ def build_blocks(lg, order: np.ndarray, scale: np.ndarray, block_size: int = 500
 
     if kind not in LD_KINDS:
         raise ValueError(f"ld must be one of {list(LD_KINDS)}, got {kind!r}")
-    if not isinstance(block_size, (int, np.integer)) or block_size <= 0:
-        raise ValueError("block_size must be a positive integer")
+    block_size = _validate_block_size(block_size)
     order = np.asarray(order, dtype=np.int64)
     if kind in ("f32", "d8-proj"):
         blocks = ld_blocks(lg, order, scale, block_size)

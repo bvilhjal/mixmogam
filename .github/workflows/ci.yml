@@ -103,6 +103,8 @@ jobs:
           tar -xzf dist/*.tar.gz -C /tmp/mixmogam-sdist
           cd /tmp/mixmogam-sdist/mixmogam-*
           python -m build --wheel
+          python -m pip install ".[test]"
+          python -m pytest -q tests/test_stage1_hm3.py::test_map_bundled_and_fixture
       - name: Check installed wheel
         run: |
           python -m pip install --force-reinstall dist/*.whl

@@ -1,6 +1,7 @@
 """Streamed stage-1 subsets (model_snps_stream=): equivalence, cache, edges."""
 
 import json
+import mmap
 import os
 
 import numpy as np
@@ -114,6 +115,15 @@ def test_cache_roundtrip_reuse_and_invalidation(tmp_path):
     # another subset: another key
     c = gwas(y, gt, method="hratt", model_snps=idx[1:], model_snps_stream=opt)
     assert c.extra["model_snps"]["stream"]["path"] != s["path"]
+    # A corrupted payload is caught even when the source identity matches.
+    with open(s["path"], "r+b") as fh:
+        fh.seek(_stream.HEADER_BYTES + 5)
+        byte = fh.read(1)
+        fh.seek(-1, 1)
+        fh.write(bytes([byte[0] ^ 255]))
+    e = gwas(y, gt, method="hratt", model_snps=idx, model_snps_stream=opt)
+    assert e.extra["model_snps"]["stream"]["reason"] == "stale"
+    _same(a, e)
     # an edited panel with the same fingerprint: moments differ -> rebuilt
     G = gt.G.data.copy()
     G[idx[0]] = G[idx[1]]
@@ -121,20 +131,49 @@ def test_cache_roundtrip_reuse_and_invalidation(tmp_path):
                     position=gt.position, variant_ids=gt.variant_ids)
     old = _stream.panel_fingerprint
     try:
-        _stream.panel_fingerprint = lambda g: old(gt)
+        _stream.panel_fingerprint = lambda g, take=None: old(gt, take)
         d = gwas(y, gt2, method="hratt", model_snps=idx, model_snps_stream=opt)
     finally:
         _stream.panel_fingerprint = old
     sd = d.extra["model_snps"]["stream"]
     assert sd["path"] == s["path"] and sd["reason"] == "stale" and not sd["cache_hit"]
     _same(d, gwas(y, gt2, method="hratt", model_snps=idx))
-    # a corrupted file is caught by verify=True
-    with open(s["path"], "r+b") as fh:
-        fh.seek(_stream.HEADER_BYTES + 5)
-        fh.write(b"\x00")
-    e = gwas(y, gt2, method="hratt", model_snps=idx, model_snps_stream=opt)
-    assert e.extra["model_snps"]["stream"]["reason"] == "stale"
-    _same(d, e)
+
+
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("verify", [False, True])
+def test_cache_detects_permuted_calls_with_identical_moments(tmp_path, monkeypatch, packed, verify):
+    rng = np.random.default_rng(430)
+    n, m = 120, 200
+    G = rng.binomial(2, 0.3, (n, m)).astype(np.int8)
+    probes = np.unique(np.linspace(0, m - 1, 64).astype(np.int64))
+    idx = np.setdiff1d(np.arange(m), probes)
+    changed = G.copy()
+    changed[:, idx] = changed[rng.permutation(n)[:, None], idx]
+    panels = [Genotypes(PackedCalls.pack(g) if packed else g) for g in (G, changed)]
+    Q = np.ones((n, 1)) / np.sqrt(n)
+    lgs = [LocoGenotypes(gt, np.zeros(m, int), Q) for gt in panels]
+    np.testing.assert_array_equal(lgs[0].mean, lgs[1].mean)
+    np.testing.assert_array_equal(lgs[0].sd, lgs[1].sd)
+    fp = _stream.panel_fingerprint(panels[1], idx)
+    monkeypatch.setattr(_stream, "_CHUNK_BYTES", 1024)  # hash across many chunks
+    assert _stream.panel_fingerprint(panels[1], idx) == fp
+    opt = {"cache_dir": str(tmp_path), "verify": verify}
+
+    def cached(j):
+        return _stream.open_subset_cache(panels[j], idx, lgs[j].mean[idx], lgs[j].sd[idx], opt)
+
+    _, old = cached(0)
+    calls, new = cached(1)
+    assert new["key"] != old["key"] and not new["cache_hit"]
+    np.testing.assert_array_equal(np.asarray(calls[:, :]), changed[:, idx])
+    assert cached(1)[1]["cache_hit"]
+    # Calls outside the requested subset cannot change its payload.
+    if packed:
+        panels[1].G.data[probes[0]] ^= 255
+    else:
+        panels[1].G[:, probes[0]] = 2 - panels[1].G[:, probes[0]]
+    assert cached(1)[1]["cache_hit"]
 
 
 def test_memmapped_bed_panel(tmp_path):
@@ -148,6 +187,20 @@ def test_memmapped_bed_panel(tmp_path):
     b = gwas(y, gm, method="hratt", model_snps=idx,
              model_snps_stream={"mode": "on", "cache_dir": str(tmp_path), "window_bytes": 1})
     _same(a, b)
+
+
+def test_fingerprint_hashes_mapping_views_and_private_changes(tmp_path):
+    gt, _, _ = _panel(n=40, m=90)
+    write_plink(gt, str(tmp_path / "p"))
+    gm = read_plink(str(tmp_path / "p"), mmap=True)
+    views = [Genotypes(PackedCalls(gm.G.data[s:s + 40], 40)) for s in (0, 40)]
+    assert _stream.panel_fingerprint(views[0]) != _stream.panel_fingerprint(views[1])
+    private = np.memmap(tmp_path / "p.bed", dtype=np.uint8, mode="c", offset=3, shape=(90, 10))
+    gc = Genotypes(PackedCalls(private, 40))
+    before = _stream.panel_fingerprint(gc)
+    private[1] ^= 255
+    assert _stream.panel_fingerprint(gc) != before
+    np.testing.assert_array_equal(gm.G.data, gt.G.data)
 
 
 def test_auto_threshold(tmp_path):
@@ -202,13 +255,14 @@ def test_readahead_bounds_and_passes(tmp_path):
     calls, info = _stream.open_subset_cache(gt, idx, np.zeros(idx.size), np.zeros(idx.size),
                                             {"cache_dir": str(tmp_path)})
     ra = _stream.Readahead.for_array(calls.data, 8192)
-    assert ra is not None and ra.base == 0 and ra.row_bytes == 1001
+    assert ra is not None and ra.row_bytes == 1001
+    assert ra.base == _stream.HEADER_BYTES % mmap.ALLOCATIONGRANULARITY
     ra.begin()
     for s in range(0, idx.size, 9):
         ra.at(np.arange(s, min(idx.size, s + 9)))
     assert ra._behind > 0 and ra.calls > 2
     ra.at(np.arange(0, 9))
-    assert ra._behind == 0
+    assert ra._behind == ra.base - ra.base % mmap.PAGESIZE
     assert np.array_equal(np.asarray(calls.data), gt.G.data[idx])
     assert _stream.Readahead.for_array(np.zeros((3, 3), np.uint8), 10) is None
 
@@ -284,7 +338,8 @@ def test_readahead_thread_on_temp_cache(tmp_path, monkeypatch):
                                             {"cache_dir": None})
     assert not os.path.exists(info["path"])            # unlinked, still readable by fd
     ra = _stream.Readahead.for_array(calls.data, 1 << 16, prefetch="thread")
-    assert ra.prefetcher is not None and ra.file_offset == _stream.HEADER_BYTES
+    assert ra.prefetcher is not None
+    assert ra.file_offset + ra.base == _stream.HEADER_BYTES
     ra.begin()
     # Check the thread on the first request, which asks for a window beyond
     # the slice. Driving the whole pass first is racy: if the thread is not

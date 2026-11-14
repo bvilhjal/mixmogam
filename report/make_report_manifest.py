@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-14-mixmogam-methods-only",
+        "revision": "2026-11-14-adversarial-review-fixes",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -48,9 +48,10 @@ def main():
         "revision_state": ("integrate/stage1 report sources: external-program comparisons "
                            "removed, mixmogam's BOLT-style methods labelled as such and comparative "
                            "claims audited. The report's evidence is the archived benchmarks above; "
-                           "integrate's stage-1 and relatedness code changes are documented in "
+                           "the stage-1 and relatedness code changes, including the subsequent "
+                           "cache identity and pairwise missing-call fixes, are documented in "
                            "README.md, docs/ and CHANGELOG.md, not re-benchmarked in the report. "
-                           "The committed PDF was rebuilt with Tectonic from this revision's "
+                           "The delivered PDF was rebuilt with Tectonic from this revision's "
                            "LaTeX source and displays."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),

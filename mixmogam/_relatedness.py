@@ -261,6 +261,7 @@ def king_relatedness(gt, variants=None, *, min_phi: float = KING_THIRD_DEGREE,
     hh = np.zeros((n, n))
     opp = np.zeros((n, n))
     nhet = np.zeros(n)
+    lost = None
     used = 0
     for i in range(0, idx.size, block):
         take = idx[i:i + block]
@@ -277,8 +278,12 @@ def king_relatedness(gt, variants=None, *, min_phi: float = KING_THIRD_DEGREE,
         ab = A @ B.T
         opp += ab + ab.T
         nhet += H.sum(1)
-    nmin = np.maximum(np.minimum(nhet[:, None], nhet[None, :]), 1.0)
-    phi = (hh - 2 * opp) / (2 * nmin) + 0.5 - (nhet[:, None] + nhet[None, :]) / (4 * nmin)
+        if np.any(G < 0):
+            if lost is None:
+                lost = np.zeros_like(hh)
+            lost += H @ (G < 0).astype(np.float32).T
+    het = nhet[:, None] if lost is None else nhet[:, None] - lost
+    phi = _king_phi(hh, opp, het, het.T)
     iu = np.triu_indices(n, 1)
     v = phi[iu]
     s = v > min_phi
@@ -305,6 +310,18 @@ def _king_indicators(G: np.ndarray):
     """float32 het / hom-ref / hom-alt indicators of int8 calls (-1 missing)."""
     return ((G == 1).astype(np.float32), (G == 0).astype(np.float32),
             (G == 2).astype(np.float32))
+
+
+def _king_phi(hh, opp, het_i, het_j):
+    """Between-family KING from counts restricted to jointly called loci.
+
+    With no heterozygotes in either member the estimator is undefined;
+    such a pair supplies no evidence of positive kinship.
+    """
+    nmin = np.minimum(het_i, het_j)
+    den = np.maximum(nmin, 1.0)
+    phi = (hh - 2 * opp) / (2 * den) + 0.5 - (het_i + het_j) / (4 * den)
+    return np.where(nmin > 0, phi, 0.0)
 
 
 def _king_variants(gt, mean, exclude, min_maf: float, cap: int) -> np.ndarray:
@@ -359,9 +376,10 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     "j_prefloor", "r_prefloor" (pairs with phi > threshold, before the
     floor), "threshold", "threshold_requested", "noise_sd" (the scale used for the floor),
     "noise_sd_mad", "noise_location", "noise_median", "noise_tail_ratio",
-    "noise_scale_from_structure", "noise_tail_ratio_mad", "noise_n_pairs", "n_variants", "seconds"}. Missing calls count as neither
-    het nor hom (KING-robust ignores them; heterozygote counts per sample
-    use the called variants only)."""
+    "noise_scale_from_structure", "noise_tail_ratio_mad", "noise_n_pairs", "n_variants", "seconds"}. Every pair's counts, including its two
+    heterozygote counts, exclude markers missing in either sample.
+    Missing calls require two extra block products and accumulators;
+    complete calls use the three-product path above."""
     import time
 
     t0 = time.perf_counter()
@@ -399,6 +417,7 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
         e = min(n, s + block)
         hh = np.zeros((e - s, n), dtype=np.float64)
         opp = np.zeros((e - s, n), dtype=np.float64)
+        lost_i = lost_j = None
         for take in chunks:
             Gc = calls(take)
             H, A, B = _king_indicators(Gc)
@@ -411,15 +430,21 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
                 n_called += int(called.sum())
             hh += H[s:e] @ H.T
             opp += A[s:e] @ B.T + B[s:e] @ A.T
+            if np.any(Gc < 0):
+                if lost_i is None:
+                    lost_i, lost_j = np.zeros_like(hh), np.zeros_like(hh)
+                missing = (Gc < 0).astype(np.float32)
+                lost_i += H[s:e] @ missing.T
+                lost_j += missing[s:e] @ H.T
         if s == 0:
             # Inbreeding F = 1 - observed / expected heterozygosity per
             # sample; KING-robust assumes outbred diploid calls (0/1/2).
             with np.errstate(divide="ignore", invalid="ignore"):
                 F = 1.0 - nhet / hexp
             F_med = float(np.nanmedian(F)) if np.isfinite(F).any() else 0.0
-            nhet = np.maximum(nhet, 1.0)
-        nm = np.minimum(nhet[s:e, None], nhet[None, :])
-        phi = (hh - 2 * opp) / (2 * nm) + 0.5 - (nhet[s:e, None] + nhet[None, :]) / (4 * nm)
+        het_i = nhet[s:e, None] if lost_i is None else nhet[s:e, None] - lost_i
+        het_j = nhet[None, :] if lost_j is None else nhet[None, :] - lost_j
+        phi = _king_phi(hh, opp, het_i, het_j)
         inb = (ra >= s) & (ra < e)
         phi_r[inb] = phi[ra[inb] - s, rb[inb]]
         r, c = np.nonzero(phi > threshold)

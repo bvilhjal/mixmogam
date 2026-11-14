@@ -166,6 +166,60 @@ def test_king_noise_floor_raises_threshold(fam):
     assert a.extra["relatedness"]["king"]["threshold"] > 0.025
 
 
+@pytest.mark.parametrize("packed", [False, True])
+@pytest.mark.parametrize("block", [1, 3, 20])
+def test_king_missing_calls_match_pairwise_complete_oracle(packed, block):
+    from mixmogam._packed import PackedCalls
+    from mixmogam._relatedness import king_relatedness
+    from mixmogam.genotypes import Genotypes
+
+    rng = np.random.default_rng(72)
+    G = rng.binomial(2, 0.3, (8, 73)).astype(np.int8)
+    G[2:, 11:][rng.random((6, 62)) < 0.35] = -1
+    G[-2] = -1  # no jointly called loci
+    G[-1] = 0   # no heterozygotes
+    gt = Genotypes(PackedCalls.pack(G) if packed else G)
+    expected = {}
+    for i in range(len(G)):
+        for j in range(i + 1, len(G)):
+            called = (G[i] >= 0) & (G[j] >= 0)
+            a, b = G[i, called].astype(float), G[j, called].astype(float)
+            nhet = min(np.count_nonzero(a == 1), np.count_nonzero(b == 1))
+            # Independent squared-distance form of the KING estimator.
+            phi = 0.5 - np.sum((a - b) ** 2) / (4 * nhet) if nhet else 0.0
+            if phi > 0:
+                expected[i, j] = 2 * phi
+    res = king_pairs(gt, np.arange(G.shape[1]), 0, block=block, chunk=7,
+                     noise_pairs=0, noise_sd_multiple=0)
+    got = dict(zip(zip(res["i"], res["j"]), res["r"]))
+    proto = king_relatedness(gt, min_phi=0, min_maf=0, block=7).upper.tocoo()
+    for found in (got, dict(zip(zip(proto.row, proto.col), proto.data))):
+        assert found.keys() == expected.keys()
+        for pair in expected:
+            assert found[pair] == pytest.approx(expected[pair], abs=1e-14)
+
+
+def test_king_parent_child_degree_survives_missing_calls():
+    from mixmogam.genotypes import Genotypes
+
+    rng = np.random.default_rng(72)
+    m = 50_000
+    hap = rng.binomial(1, 0.3, (3, m)).astype(np.int8)
+    parent = hap[0] + hap[1]
+    child = np.where(rng.integers(2, size=m), hap[0], hap[1]) + hap[2]
+    G = np.vstack([parent, child])
+    G[1, rng.random(m) < 0.3] = -1
+    common = np.all(G >= 0, axis=0)
+    estimates = []
+    for calls in (G, G[:, common]):
+        res = king_pairs(Genotypes(calls), np.arange(calls.shape[1]), 0.177,
+                         noise_pairs=0, noise_sd_multiple=0)
+        assert list(zip(res["i"], res["j"])) == [(0, 1)]
+        estimates.append(res["r"][0] / 2)
+    assert estimates[0] == estimates[1]
+    assert abs(estimates[0] - 0.25) < 0.01
+
+
 # 7. inputs
 def test_readers_alignment_and_duplicates(tmp_path, fam):
     G, gt, y, pairs, causal, sub = fam

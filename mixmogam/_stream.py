@@ -15,10 +15,11 @@ window (``MADV_WILLNEED``, asynchronous), and the mapping of slices already
 passed is dropped (``MADV_DONTNEED``; clean file pages, re-read from the page
 cache or disk if needed again).
 
-Cache files are keyed by a fingerprint of the panel, the subset's indices
-and the samples, and reused only when the header matches and the stored
-per-variant means and SDs equal the panel's freshly prepared moments (which
-the panel's setup computes anyway), so an edited panel is rebuilt.
+Cache files are keyed by the source BED's file identity, or a hash of every
+selected call for an in-memory panel, plus the subset's indices and samples.
+Reuse also requires matching freshly prepared per-variant means and SDs.
+Reusable caches of in-memory panels require an additional bounded hashing
+pass; temporary caches and read-only BED source files do not.
 """
 
 from __future__ import annotations
@@ -40,7 +41,7 @@ from mixmogam._packed import PackedCalls
 __all__ = ["Prefetcher", "Readahead", "stream_options", "open_subset_cache",
            "panel_fingerprint"]
 
-VERSION = 1
+VERSION = 2
 MAGIC = b"MIXMOGAM-STAGE1-SUBSET\n"
 HEADER_BYTES = 4096
 _CHUNK_BYTES = 64 * 1024**2
@@ -278,21 +279,31 @@ def _sha(*parts) -> str:
     return h.hexdigest()
 
 
-def panel_fingerprint(gt) -> dict:
+def panel_fingerprint(gt, idx=None) -> dict:
     """Identity of the panel's calls: file, size, mtime and offset for a
-    memory-mapped BED; otherwise the shape and a hash of 64 spread variants."""
+    memory-mapped BED; otherwise hash every selected call in bounded chunks.
+    ``idx=None`` hashes all variants. Moments and sampled markers cannot
+    distinguish sample permutations at other variants."""
     G = gt.G
     data = G.data if isinstance(G, PackedCalls) else None
-    if isinstance(data, np.memmap) and getattr(data, "filename", None):
-        st = os.stat(data.filename)
-        return {"kind": "bed-mmap", "path": os.path.realpath(data.filename), "size": st.st_size,
-                "mtime_ns": st.st_mtime_ns, "offset": int(data.offset), "shape": list(data.shape)}
+    if (isinstance(data, np.memmap) and getattr(data, "filename", None)
+            and data.mode == "r" and isinstance(data.base, mmap.mmap)):
+        try:
+            st = os.stat(data.filename)
+        except FileNotFoundError:
+            pass  # an unlinked temporary stream still has readable mapped calls
+        else:
+            return {"kind": "bed-mmap", "path": os.path.realpath(data.filename), "size": st.st_size,
+                    "mtime_ns": st.st_mtime_ns, "offset": int(data.offset), "shape": list(data.shape)}
+    # Hash writable / copy-on-write mappings and views: their current bytes
+    # or starting address need not be represented by the file's metadata.
     n, m = G.shape
-    take = np.unique(np.linspace(0, m - 1, num=min(64, m)).astype(np.int64)) if m else np.empty(0, np.int64)
-    rows = (np.ascontiguousarray(G.data[take]) if data is not None
-            else np.ascontiguousarray(np.asarray(G[:, take])))
+    idx = np.arange(m) if idx is None else np.asarray(idx, dtype=np.int64)
+    h = hashlib.sha256()
+    for rows in _packed_rows(gt, idx):
+        h.update(rows.data)
     return {"kind": "array", "packed": data is not None, "shape": [int(n), int(m)],
-            "sample_sha256": _sha(rows.tobytes())}
+            "calls_sha256": h.hexdigest()}
 
 
 def _moments_sha(mean, sd) -> str:
@@ -312,7 +323,8 @@ def open_subset_cache(gt, idx: np.ndarray, mean: np.ndarray, sd: np.ndarray,
     n = int(gt.n_samples)
     nb = (n + 3) // 4
     k = int(idx.size)
-    fp = panel_fingerprint(gt)
+    keep = options.get("cache_dir") is not None
+    fp = panel_fingerprint(gt, idx) if keep else {"kind": "temporary"}
     ids = np.asarray(gt.sample_ids).astype(str)
     meta = {"version": VERSION, "n": n, "k": k, "row_bytes": nb, "header_bytes": HEADER_BYTES,
             "panel": fp, "idx_sha256": _sha(idx.tobytes()),
@@ -320,7 +332,6 @@ def open_subset_cache(gt, idx: np.ndarray, mean: np.ndarray, sd: np.ndarray,
             "moments_sha256": _moments_sha(mean, sd)}
     key = _sha(json.dumps({k_: meta[k_] for k_ in ("version", "n", "k", "panel", "idx_sha256",
                                                     "samples_sha256")}, sort_keys=True))[:32]
-    keep = options.get("cache_dir") is not None
     directory = options["cache_dir"] if keep else tempfile.gettempdir()
     path = os.path.join(directory, f"mixmogam-stage1-{key}.bed")
     info = {"path": path, "bytes": k * nb, "kept": keep, "key": key}
@@ -371,6 +382,26 @@ def _file_sha(path: str) -> str:
     return h.hexdigest()
 
 
+def _packed_rows(gt, idx):
+    """Bounded chunks of selected BED rows, shared by hashing and writing."""
+    G = gt.G
+    packed = isinstance(G, PackedCalls)
+    source = Readahead.for_array(G.data, _CHUNK_BYTES) if packed else None
+    if source is not None:
+        source.begin()
+    row_bytes = (gt.n_samples + 3) // 4 if packed else gt.n_samples
+    step = max(1, _CHUNK_BYTES // max(row_bytes, 1))
+    for start in range(0, idx.size, step):
+        take = idx[start : start + step]
+        if source is not None and np.all(np.diff(take) > 0):
+            source.at(take)
+        rows = (np.ascontiguousarray(G.data[take]) if packed
+                else PackedCalls.pack(np.ascontiguousarray(np.asarray(G[:, take]))).data)
+        yield np.ascontiguousarray(rows, dtype=np.uint8)
+    if source is not None:
+        source.begin()  # restart markers (no state kept)
+
+
 def _write_rows(gt, idx: np.ndarray, nb: int, path: str) -> str:
     """One pass over the subset's rows of the panel: header, then rows."""
     h = hashlib.sha256()
@@ -378,23 +409,9 @@ def _write_rows(gt, idx: np.ndarray, nb: int, path: str) -> str:
     head = MAGIC + json.dumps({"version": VERSION, "n": int(gt.n_samples), "k": int(idx.size),
                                "row_bytes": nb}).encode()
     header[: len(head)] = head
-    G = gt.G
-    packed = isinstance(G, PackedCalls)
-    source = Readahead.for_array(G.data, _CHUNK_BYTES) if packed else None
-    if source is not None:
-        source.begin()
-    step = max(1, _CHUNK_BYTES // max(nb, 1))
     with open(path, "wb") as fh:
         fh.write(bytes(header))
-        for start in range(0, idx.size, step):
-            take = idx[start : start + step]
-            if source is not None and np.all(np.diff(take) > 0):
-                source.at(take)
-            rows = (np.ascontiguousarray(G.data[take]) if packed
-                    else PackedCalls.pack(np.ascontiguousarray(np.asarray(G[:, take]))).data)
-            rows = np.ascontiguousarray(rows, dtype=np.uint8)
+        for rows in _packed_rows(gt, idx):
             h.update(rows.data)
             fh.write(rows.data)
-    if source is not None:
-        source.begin()  # restart markers (no state kept)
     return h.hexdigest()

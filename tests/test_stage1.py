@@ -13,6 +13,108 @@ from mixmogam import stage1, twostep
 from mixmogam.genotypes import Genotypes
 
 
+@pytest.mark.parametrize("bad", [0, -1, 1.5, True, np.bool_(False), np.nan, np.inf, "5"])
+def test_ld_block_layout_rejects_invalid_sizes(bad):
+    from mixmogam import _ld8
+
+    # Invalid sizes must fail before touching genotypes or entering a loop.
+    with pytest.raises(ValueError, match="block_size must be a positive integer"):
+        _ld8._cover_layout(None, np.arange(3), bad)
+    assert _ld8._validate_block_size(np.int64(3)) == 3
+
+
+@pytest.mark.parametrize("method", ["ldpred3-inf", "ldpred3-fast"])
+@pytest.mark.parametrize("split", ["all", "train"])
+@pytest.mark.parametrize("h2", [0, 0.5])
+@pytest.mark.parametrize("bad", [0, -1, 1.5, True])
+def test_stage1_rejects_invalid_block_size_before_fitting(method, split, h2, bad, monkeypatch):
+    gt, y, _ = _panel(7, n=30, m=12)
+    st, ys = _setup_y(gt, y)
+
+    def unexpected_import():
+        pytest.fail("invalid block size reached the optional fitter")
+
+    monkeypatch.setattr(stage1, "_import_ldpred3", unexpected_import)
+    name = "fast_block_size" if method == "ldpred3-fast" else "block_size"
+    with pytest.raises(ValueError, match=f"{name} must be a positive integer"):
+        stage1.ldpred3_stage1_scores(st, ys, h2, np.arange(30) % 2, np.arange(6),
+                                     method=method, ld_split=split, **{name: bad})
+
+
+@pytest.mark.parametrize("kind", ["f32", "d8-hardcall"])
+@pytest.mark.parametrize("disk", [False, True])
+def test_train_ld_cache_requires_current_covariates_and_calls(tmp_path, kind, disk):
+    from mixmogam import _ld8
+
+    rng = np.random.default_rng(54)
+    n, m = 160, 80
+    ancestry = rng.normal(size=n)
+    freq = 1 / (1 + np.exp(-ancestry))
+    G = rng.binomial(2, freq[:, None], (n, m)).astype(np.int8)
+    chrom = np.repeat([1, 2], m // 2)
+    gt = Genotypes(G, chromosome=chrom)
+    y = rng.normal(size=n)
+    lg0 = _setup_y(gt, y)[0].lg
+    lg1 = _setup_y(gt, y, ancestry[:, None])[0].lg
+    cache = _ld8.LDCache(str(tmp_path) if disk else None)
+    split = _ld8.split_parts(n, np.arange(n) % 4, np.arange(n) % 5 == 0)
+
+    def build(lg, cache):
+        info = {}
+        covers = stage1._stage1_blocks(lg, np.arange(m), np.sqrt(lg.zz / n),
+                                       "ldpred3-inf", 40, kind, cache, None, {}, None, info, split)
+        return covers, info
+
+    old, old_info = build(lg0, cache)
+    # Load from disk, rather than merely reading LDCache's in-memory copy.
+    if disk:
+        cache = _ld8.LDCache(str(tmp_path))
+    got, info = build(lg1, cache)
+    fresh, _ = build(lg1, None)
+    assert info["ld_cache"] == "miss" and info["ld_key"] != old_info["ld_key"]
+    assert not np.array_equal(old[0][0][0], got[0][0][0])
+    for cached_cover, fresh_cover in zip(got, fresh):
+        for (R, idx), (Rf, idxf) in zip(cached_cover, fresh_cover):
+            np.testing.assert_array_equal(R, Rf)
+            np.testing.assert_array_equal(idx, idxf)
+    assert build(lg1, cache)[1]["ld_cache"] == "hit"
+
+    # Reordering calls outside the 32 sample-identification markers keeps
+    # those fingerprints and all moments fixed, but changes training LD.
+    probes = np.unique(np.linspace(0, m - 1, 32).round().astype(int))
+    idx = np.setdiff1d(np.arange(m), probes)
+    G2 = G.copy()
+    G2[:, idx] = G2[rng.permutation(n)[:, None], idx]
+    lg2 = _setup_y(Genotypes(G2, chromosome=chrom), y, ancestry[:, None])[0].lg
+    np.testing.assert_array_equal(_ld8.sample_fingerprints(lg1), _ld8.sample_fingerprints(lg2))
+    np.testing.assert_array_equal(lg1.mean, lg2.mean)
+    assert build(lg2, cache)[1]["ld_cache"] == "miss"
+
+    # Even a matching key cannot authorize training LD with inexact metadata.
+    blocks, meta = cache.get(info["ld_key"])
+    cache.put(info["ld_key"], blocks, {**meta, "covariates": "stale"})
+    assert build(lg1, cache)[1]["ld_cache"] == "rebuilt"
+
+
+def test_train_ld_cache_reuses_unlinked_streamed_calls():
+    from mixmogam import _ld8, _stream
+
+    gt, y, _ = _panel(9, n=60, m=30)
+    lg = _setup_y(gt, y)[0].lg
+    idx = np.arange(gt.n_variants)
+    split = _ld8.split_parts(lg.n, np.arange(lg.n) % 2, np.arange(lg.n) % 5 == 0)
+    cache = _ld8.LDCache()
+    for expected in ("miss", "hit"):
+        calls, _ = _stream.open_subset_cache(gt, idx, lg.mean, lg.sd, {})
+        # A new temporary stream is unlinked immediately after mapping.
+        streamed = Genotypes(calls, chromosome=gt.chromosome, position=gt.position)
+        slg = _setup_y(streamed, y)[0].lg
+        info = {}
+        stage1._stage1_blocks(slg, idx, np.sqrt(slg.zz / slg.n), "ldpred3-inf", 10,
+                             "f32", cache, None, {}, None, info, split)
+        assert info["ld_cache"] == expected
+
+
 def _panel(seed, n=300, m=120, n_chrom=3, h2=0.5):
     """Independent markers on three chromosomes with a polygenic trait."""
     rng = np.random.default_rng(seed)

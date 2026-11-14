@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2.dev2] - 2026-11-14
+
 ### Added
 
 - KING-auto's LOCO-refit trigger is noise-aware at large n. The trigger
@@ -201,6 +203,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     after an earlier step fails.
 
 ### Fixed
+
+- Persistent stage-1 subset caches hash every selected in-memory call in
+  bounded chunks. Sample permutations that preserve variant moments can
+  no longer reuse stale calls; the cache format is now version 2.
+- Training LD caches include the covariate projection and source calls in
+  their key and reject inexact reuse. Whole-cohort LD reuse is unchanged.
+- KING counts both samples' heterozygotes only at jointly called markers,
+  preventing missing calls from lowering kinship and hiding close relatives.
+  Pairs without informative heterozygotes provide no positive kinship evidence.
+- Stage-1 block sizes must be positive integers before fitting or cache lookup,
+  including training splits, FastLD and zero-heritability fits; zero no longer
+  leaves the block-layout loop stuck.
+- Source distributions include the HapMap3 test fixture, checked by CI from
+  the extracted archive. Tests now respect OS mapping alignment and tolerate
+  floating-point roundoff between repeated BLAS calls.
+- Rebuilt the methods-report PDF from its current LaTeX source and refreshed
+  its input hashes. Historical benchmark evidence is unchanged.
 
 - CLI: `--relatedness` now moves `--method auto` to HRATT, like `--trait`,
   `--weights`, `--stage1` and `--model-snps`. `--relatedness-threshold` and

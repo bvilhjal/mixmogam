@@ -173,7 +173,8 @@ def test_default_ld_is_the_unchanged_float32_path(trait_panel):
     gt, y, X = trait_panel
     a = _hratt(y, gt, X, stage1="ldpred3-inf", stage1_kwargs={"block_size": 200})
     b = _hratt(y, gt, X, stage1="ldpred3-inf", stage1_kwargs={"block_size": 200, "ld": "f32"})
-    assert np.array_equal(_chi2(a), _chi2(b), equal_nan=True)
+    # Separate BLAS calls can differ by a few ulps (notably Accelerate).
+    np.testing.assert_allclose(_chi2(a), _chi2(b), rtol=1e-12, atol=1e-14)
     assert a.extra["stage1_info"]["ld"] == "f32"
     e = _hratt(y, gt, X)
     assert "stage1_info" not in e.extra and "stage1" not in e.extra
