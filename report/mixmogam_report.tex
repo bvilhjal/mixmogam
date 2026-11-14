@@ -61,8 +61,9 @@ genetic null at 1\% and HRATT 0.64\%; two genotype PCs brought these to
 0.94\% and 0.92\%. We extended HRATT to case-control outcomes and
 sampling weights. In prespecified simulations the weighted test stayed
 calibrated under selection on the outcome, where the sandwich variance
-rejected up to 26 times too often; cross-fitted LOCO scores brought effect
-bias within 2\% in most cells; and covariate-specific genotype
+rejected up to 26 times too often at $10^{-4}$; cross-fitted LOCO scores
+brought quantitative effect bias within 2\% without selection on the outcome,
+against 28--36\% attenuation with in-sample scores; and covariate-specific genotype
 distributions with principal components removed inflation from
 ancestry-dependent weights. Two criteria failed: weighted effects under selection on the
 outcome were 5.4\% low (Monte Carlo standard error 2.1\%), and weighted fits
@@ -956,7 +957,9 @@ fixed approximation.
 \subsection{Matched phensim benchmark}
 \label{sec:phensim-design}
 
-We froze a factorial protocol before examining association outcomes and
+``Matched'' means that every method reads the same exported genotype files,
+phenotypes, covariates and seeds, so differences between methods are not
+differences in input. We froze a factorial protocol before examining association outcomes and
 used an excluded pilot to check interoperability and resource demands.
 Each cell has six independent genotype and phenotype replicates,
 $n=800$ diploid samples, and $m=6{,}000$ markers on six equal chromosomes.
@@ -2315,9 +2318,11 @@ repeat matched its stored arrays exactly.
 The Atwell control rerun again recovered six of seven controls with every
 method: A1 failed on Mo98/MOT1 and A2 passed because HRATT and BOLT-style inf
 recovered all controls found by exact LOCO. Four of eight HRATT scans had a
-non-converged stage; A2 does not exclude such fits. The earlier archive did
-not record comparable convergence fields, so we cannot tell whether
-convergence got worse.
+non-converged stage; A2 does not exclude such fits. The 17 October run's
+in-tree driver did not record these fields, but its exploratory follow-up
+(\code{exploratory/}\allowbreak\code{hratt\_convergence.csv}) found both
+stages unconverged in five of the eight scans
+(Section~\ref{sec:atwell-results}), so convergence did not get worse.
 
 \FloatBarrier
 
@@ -2429,16 +2434,16 @@ The priorities are ordered by dependence: reliable input identity and
 reproducible reference comparisons come before claims about a new
 method's power or speed.
 
-\subsection{Priority 1: broaden the matched-input reference benchmark}
+\subsection{Priority 1: build a matched-input reference benchmark}
 
 \textbf{Hypothesis.} With input handling and nuisance definitions matched,
-the local implementations reproduce an independent Gaussian reference,
-and the remaining differences from external programs can be explained.
+mixmogam's implementations reproduce an independent Gaussian reference,
+and any differences from established programs can be explained.
 
 \textbf{Experiment.} Keep the input contract of
 Section~\ref{sec:phensim-design} and add missing calls, admixed and related
-samples, demographic LD, larger panels and more replicates, with official
-BOLT-LMM, REGENIE and Quickdraws. Generate large
+samples, demographic LD, larger panels and more replicates, and run
+BOLT-LMM, REGENIE and Quickdraws on the same inputs. Generate large
 cohorts from a HAPNEST-model reference tuned on one subset and audited
 (frequencies, LD decay, PCs, donor sharing) on another, varying sample
 size and marker density separately. Cross projected HE and REML with
@@ -2551,7 +2556,9 @@ and failure boundary.
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. Earlier report sections describe
 package version 2.0.0.dev6 and the unreleased changes after it; the new
-benchmark section identifies 2.0.0.dev8 and its commit. The known-covariance experiment uses baseline commit
+benchmark section identifies 2.0.0.dev8 and its commit. Version 2.0.2.dev1
+(3 November) later changed the REML covariate basis and fixed-seed stochastic
+REML fits; none of the results here has been rerun with it. The known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/}\allowbreak\code{denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-}\allowbreak\code{manuscript-}\allowbreak\code{geometry} beneath

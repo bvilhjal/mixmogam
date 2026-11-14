@@ -20,10 +20,12 @@ linear model on the same machinery.
 
 `gwas(y, gt, method=...)` tests every SNP against a polygenic model built
 without its own chromosome. With the tested SNP inside the kinship, the
-polygenic term absorbs part of its effect (proximal contamination). In the
-2026-10-03 large-n simulation the exact non-LOCO scan was deflated (lambda_GC
-0.91 at n = 4,000, 0.85 at n = 10,000), and in sim study S3 LOCO raised
-locus-level power at n = 4,000 from 0.33 to 0.51. More than 25 chromosomes
+polygenic term absorbs part of its effect (proximal contamination). In
+historical simulations from 3 October (three seeds per scenario, before later
+fixes), the exact non-LOCO scan was deflated (lambda_GC 0.91 at n = 4,000 and
+0.85 at n = 10,000), and in scenario S3 (n = 4,000, 30 large QTLs) LOCO raised
+locus-level power from 0.33 to 0.51
+([archive](../benchmarks/results/20261003T120104Z-sim-study/NOTES.md)). More than 25 chromosomes
 are merged into 25 contiguous groups of balanced size.
 
 | method | residual tested against | calibration |
@@ -42,10 +44,10 @@ with the departures listed below; it is not LDAK-KVIK.
 A kinship models covariance. It does not remove a systematic environmental
 mean along an ancestry axis, which needs explicit covariates (`X`) such as the
 top principal components (`mixmogam.pca`, or `--pcs` on the command line). In
-sim study S2 (two demes, F_ST 0.02, an environment on deme carrying 50% of the
-variance), exact LOCO gave lambda_GC 1.27, and null SNPs in the top 1% of
-loading on the environment had mean chi2 2.27; with PC1 these fell to 1.11 and
-1.13. Non-LOCO's 0.98 there is the same offset hidden by proximal-contamination
+the historical S2 stress test (two demes, F_ST 0.02, an environment on deme
+carrying 50% of the variance; report Section 4.4), exact LOCO gave an all-variant
+lambda_GC of 1.27, and QTL-free SNPs in the top 1% of environmental loading had
+mean chi2 2.27; with PC1 these fell to 1.11 and 1.13. Non-LOCO's 0.98 there is the same offset hidden by proximal-contamination
 deflation.
 
 ## Exact engine
@@ -393,9 +395,10 @@ The block-independent model has three accepted consequences:
 The fitters are deterministic (the infinitesimal closed form; lassosum2 with
 per-fold pseudo-validation on the fold's own rows), so the statistics carry no
 Monte Carlo noise. The LDpred3 options are quantitative-only and need
-`loco_folds >= 2`; binary traits keep the elastic-net stage 1. Their appeal is
-not accuracy, where little gain is expected, but a near-n-independent cost per
-fit once the LD is built (folds, grid points and traits share one LD).
+`loco_folds >= 2`; binary traits keep the elastic-net stage 1. They are meant
+to save cost, not to add accuracy (little gain is expected there): once the LD
+is built, folds, grid points and traits share it, so each further fit should
+cost little. This has not yet been benchmarked.
 
 ### Case-control outcomes and sampling weights
 

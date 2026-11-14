@@ -1,5 +1,16 @@
 # Quickstart
 
+This page walks through a typical analysis: load genotypes and phenotypes, add
+ancestry principal components (PCs), run a LOCO scan, then the optional extras.
+You need mixmogam installed (`python -m pip install "mixmogam[fast]"`, Python >= 3.10),
+hard-called genotypes (PLINK, PGEN, VCF/BCF, or BGEN with a hard-call threshold) and a
+phenotype file keyed by sample ID.
+
+Terms used below: LOCO, leave-one-chromosome-out; REML, restricted maximum
+likelihood; HE, Haseman-Elston regression; EMMA/EMMAX, the mixed-model fit and plug-in
+F test behind `exact`; MLMM, the multi-locus mixed model; GxE,
+gene-by-environment interaction; Kish effective sample size, n adjusted for unequal weights.
+
 ## Load genotypes
 
 ```python
@@ -14,9 +25,10 @@ gt = Genotypes.load_plink("data/cohort", mmap=True)  # .bed/.bim/.fam, two-bit m
 gt = gt.filter_variants(min_mac=5, max_missing=0.1)
 ```
 
-`mmap=True` leaves the calls in the mapped file only while the object goes to
-`gwas` untouched; `align_samples`, `filter_samples` and `filter_variants` copy
-them into memory, packed (a quarter of the int8 bytes). Filter variants after
+`mmap=True` reads calls straight from the .bed file, but only while you pass the
+object to `gwas` unchanged. `align_samples`, `filter_samples` and
+`filter_variants` return an in-memory copy, stored two bits per call (a quarter
+of the int8 size). Filter variants after
 aligning samples, since `min_mac` and `max_missing` count the samples present.
 `mixmogam gwas` does not filter variants. No-calls are replaced by the
 variant's mean.
@@ -51,10 +63,10 @@ case fractions vary with ancestry or the environment tracks it; their scale
 does not matter.
 
 Use enough components to span the ancestry structure, K - 1 for K discrete
-populations. In a simulated panel of four populations with
-population-specific environments, two components left 58% of the environment
-in the trait and three left 0.3%. With three, every method converged and
-they agreed. With two, BOLT-style mixture (mixmogam), HRATT-HE and
+populations. In one simulated replicate of four populations with
+population-specific environments (1,000 x 10,000), two components left 58% of
+the environment in the trait and three left 0.3%. With three, every method
+converged and they agreed. With two, BOLT-style mixture (mixmogam), HRATT-HE and
 HRATT-REML hit their iteration caps and returned the statistics of failed
 fits, while the exact path and BOLT-style inf (mixmogam) converged
 ([archive](../benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).

@@ -1,13 +1,15 @@
 # mixmogam
 
-Mixed linear models for genome-wide association studies, with
-leave-one-chromosome-out (LOCO) testing by default. Quantitative traits work
-with every method; HRATT also handles case-control outcomes and sampling
-weights. The core needs only NumPy and SciPy. Numba accelerates the optional
-kernels, and the two-step methods warn without it because their Python
-fallbacks are much slower (single fits on one 1,000 x 20,000 panel: 4.8 times
-the fit time for BOLT-style inf (mixmogam), 68 times for HRATT-HE and 187 times for
-BOLT-style mixture (mixmogam)).
+mixmogam fits linear mixed models for genome-wide association studies (GWAS) in
+Python. By default each variant is tested against a polygenic background fitted
+without its own chromosome (leave-one-chromosome-out, LOCO). Every method handles
+quantitative traits; HRATT also handles case-control outcomes and sampling weights.
+
+The core needs only NumPy and SciPy. For the two-step methods, install the `fast`
+extra (Numba): without it they fall back to much slower Python code and warn. In
+single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
+BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
+([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
 Development version 2.0.2.dev1. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
@@ -16,10 +18,16 @@ Development version 2.0.2.dev1. Changes are in the [changelog](https://github.co
 | `gwas(..., method=)` | Implementation |
 |---|---|
 | `"exact"` | EMMAX with an exact REML refit per LOCO group, by Cholesky factorizations |
-| `"bolt-inf"` | BOLT-style inf (mixmogam): an infinitesimal model after BOLT-LMM-inf, with CG solves and retrospective calibration |
-| `"bolt"` | BOLT-style mixture (mixmogam): a two-Gaussian mixture after BOLT-LMM, with variational fitting and cross-validation |
+| `"bolt-inf"` | BOLT-style inf (mixmogam): an infinitesimal model after BOLT-LMM-inf, solved by conjugate gradients (CG), with retrospective calibration |
+| `"bolt"` | BOLT-style mixture (mixmogam): a two-Gaussian mixture prior after BOLT-LMM, with variational fitting and cross-validation |
 | `"hratt"` | HRATT: cross-fitted elastic-net LOCO scores and structure-dependent calibration; quantitative or case-control, optionally sampling-weighted |
 | `"auto"` | `exact` through 5,000 samples; `bolt-inf` above |
+
+Throughout these docs, *BOLT-style inf* and *BOLT-style mixture* mean mixmogam's
+`bolt-inf` and `bolt`, never the BOLT-LMM program.
+
+New here? Jump to [Install](#install) and the [Quickstart](#quickstart); the HRATT
+and large-panel options below can wait until you need them.
 
 ## HRATT
 
@@ -29,10 +37,13 @@ LDAK-KVIK. Step 1 fits an elastic-net LOCO predictor under LDAK's heritability
 model; step 2 runs retrospective score tests with a structure-dependent
 calibration. The LOCO scores are cross-fitted as in REGENIE, so each fold's
 predictor is trained on the other samples, while variance components and
-model selection still use the whole trait. `heritability_method="he"`
-replaces the REML stage by projected single-component HE (diagnostics in
-`result.extra["he_variance"]`); the default `"auto"` is REML, or HE when
-sampling weights are given.
+model selection still use the whole trait.
+
+Heritability is fitted by REML (restricted maximum likelihood) by default, or by
+projected single-component HE (Haseman-Elston regression) with
+`heritability_method="he"`; the default `"auto"` picks HE when sampling weights
+are given. This README calls the two settings HRATT-REML and HRATT-HE; HE
+diagnostics are in `result.extra["he_variance"]`.
 
 ```python
 gwas(y01, gt, X, method="hratt", trait="binary")      # case-control
@@ -78,7 +89,7 @@ mixmogam hm3 match --geno imputed                       # the match report only
 mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenance
 ```
 
-**Human data: `"hm3"`, the documented default.**
+**Human data: `"hm3"` (recommended).**
 - By default it uses the 1,444,196 HapMap3+ variants of ldpred3's UK Biobank European LD
   reference (Privé's `map_hm3_plus.rds`, figshare
   [10.6084/m9.figshare.21305061](https://doi.org/10.6084/m9.figshare.21305061), CC BY 4.0).
@@ -107,7 +118,7 @@ mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenanc
 - r² is estimated on 10,000 samples drawn at random with seed 0, so a file sorted by cohort or
   ancestry does not bias it.
 
-**`None` (the library default)** fits stage 1 on every variant. Results are byte-identical to
+**`None` (the default)** fits stage 1 on every variant, with results byte-identical to
 earlier versions.
 
 <!-- katla: overselling note, defer to NR M1/M2 label -->
@@ -158,11 +169,6 @@ calibrated in unrelated samples. HRATT warns, and records the details in
   points to `relatedness=` for relatives, as well as to PCs and a larger subset.
 - HapMap3 matching kept under half of the map's variants on a chromosome that has variants.
 - `"auto"` keeps more than 80% of the variants.
-
-The two-step methods and `denominator="spectral"` (a mixmogam extension whose
-use with mixture and elastic-net statistics is heuristic) are research
-implementations; the [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md) list where they depart from
-the original programs.
 
 ## Install
 
@@ -247,14 +253,21 @@ measurement details.
 
 ## Interpretation and limitations
 
+- The two-step methods (`bolt-inf`, `bolt`, `hratt`) are research
+  implementations inspired by BOLT-LMM, REGENIE and LDAK-KVIK, not those
+  programs. `denominator="spectral"` is a mixmogam extension, and its use
+  with mixture and elastic-net statistics is heuristic. The
+  [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md)
+  list where they depart from those programs.
 - Each test is an association conditional on the covariates and a fitted
   polygenic covariance, not evidence of causation.
 - `exact` refers to the matrix algebra. EMMAX still plugs estimated variance
   components into the F test.
 - Neither LOCO nor a kinship removes an environment that tracks ancestry;
   that needs covariates spanning the ancestry structure (K - 1 principal
-  components for K populations). In a four-population panel, three PCs made
-  every method converge and agree (lambda_GC 1.06-1.10 on null variants).
+  components for K populations). In one replicate of a four-population panel
+  (1,000 x 10,000), three PCs made every method converge and agree (lambda_GC
+  1.06-1.10 on null variants).
   With none, or two, BOLT-style mixture (mixmogam) and both HRATT paths did not converge,
   while `exact` and BOLT-style inf (mixmogam) stayed near calibration
   ([archive](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).

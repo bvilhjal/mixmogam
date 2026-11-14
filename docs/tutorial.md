@@ -27,8 +27,8 @@ from mixmogam.simulate import simulate_genotypes, simulate_traits
 G = simulate_genotypes(n=1500, m=15000, n_pop=5, pop_fst=0.35, seed=11)   # (m, n)
 gt = Genotypes(G.T, chromosome=np.repeat(np.arange(1, 11), 1500),
                position=np.tile(np.arange(1500) * 1000, 10))
-sim = simulate_traits(G, h2=0.6, n_causal=8, seed=12)
-y = sim["y"]
+sim = simulate_traits(G, h2=0.6, n_causal=8, seed=12, effect_dist="normal")
+y, causal = sim["y"], sorted(int(c) for c in sim["causal"])
 ```
 
 With real data you would instead use `Genotypes.load_plink(prefix)`,
@@ -70,7 +70,7 @@ into the kinship (proximal contamination). The top hits:
 
 ```python
 from mixmogam.plotting import plot_manhattan, plot_qq
-plot_manhattan(result, highlight=causal_indices)   # red rings = true QTL
+plot_manhattan(result, highlight=causal)           # red rings = true QTL (from section 1)
 plot_qq(result.p)
 ```
 
@@ -85,7 +85,8 @@ effects (−log10 p of 0.1–3.3), and no method below finds them either.
 
 ```python
 for method in ["exact", "bolt-inf", "bolt", "hratt"]:
-    r = gwas(y, gt, method=method)
+    kw = {} if method == "exact" else {"random_state": 0}   # two-step methods are seeded
+    r = gwas(y, gt, method=method, **kw)
 ```
 
 | method | time | λ_GC | Bonferroni hits | QTL found | hits far from a QTL |
@@ -102,17 +103,16 @@ for method in ["exact", "bolt-inf", "bolt", "hratt"]:
   factorizations, which pays at larger n. In this single run at n = 1,500,
   `bolt-inf` took 1.0 s against 2.3 s for `exact`, while `bolt` and `hratt`
   took about 20 s.
-- `bolt` and `hratt` give larger −log10 p at the QTL than `exact` (57-61 vs 43
-  at the strongest one). Part of that may be power from a non-infinitesimal
-  prior, but the statistics also differ (retrospective score tests against an
-  F test), so compare calls and calibration rather than raw p-values.
+- `bolt` and `hratt` give larger −log10 p at the strongest QTL than `exact`
+  (57-61 against 43). Read nothing into that here: neither fit converged (next
+  point), and their retrospective score tests are a different statistic from
+  the F test. Compare calls and calibration, not raw p-values.
 - Both `bolt` and `hratt` warned "variational fit did not converge" here
   (`result.extra["cv_converged"]` and `["loco_converged"]` are `False`), and
-  `bolt` has the highest λ (1.14). The cause is the five populations the model
-  was not adjusted for: on a 3,000-variant version of this panel both
-  converged once the covariates included K - 1 = 4 principal components (the
-  15,000-variant run was not repeated). Check those flags before trusting a
-  two-step fit.
+  `bolt` has the highest λ (1.14). The likely cause is the five populations
+  the model was not adjusted for: add K - 1 = 4 principal components
+  (`X=pcs`, as in section 5) and check the flags again. Always check them
+  before trusting a two-step fit.
 - 6/8 for `bolt` against 5/8 is one SNP in one simulation; the matched
   benchmarks are in the report.
 
@@ -123,10 +123,16 @@ liability are cases. Under structure, include ancestry PCs, because the score
 test models allele frequencies from the covariates:
 
 ```python
+from mixmogam import kinship
+from mixmogam.pca import principal_components
+
 K = kinship.realized_relationship(gt)             # for MLMM and LMM below
 pcs = principal_components(gt, k=4)               # built-in ancestry PCs
-rb = gwas(y01, gt, X=pcs, method="hratt", trait="binary")
-rw = gwas(y,   gt, X=pcs, method="hratt", sample_weights=w)   # e.g. 1/P(participation)
+y01 = (y > np.quantile(y, 0.8)).astype(float)     # top 20% of the liability are cases
+rng = np.random.default_rng(5)                    # simulated participation weights
+w = 1.0 / np.clip(1 / (1 + np.exp(-(0.4 * y + 0.2 * rng.standard_normal(len(y))))), 0.15, 1)
+rb = gwas(y01, gt, X=pcs, method="hratt", trait="binary", random_state=0)
+rw = gwas(y,   gt, X=pcs, method="hratt", sample_weights=w, random_state=0)
 ```
 
 `mixmogam pca --geno prefix --k 4 --out pcs.txt` writes these as a

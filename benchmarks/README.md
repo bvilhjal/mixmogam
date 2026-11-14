@@ -12,7 +12,10 @@ Several older drivers (`ldak_kvik_comparison.py`, `ldak_kvik_reference.py`,
 `hratt_thread_scaling.py` and `hratt_weights_binary.py`) also ran an external
 reference program (`--ldak`) under their archived protocols. Those outputs stay
 in the archives for provenance; this page and the report describe only
-mixmogam's methods.
+mixmogam's methods. These drivers still need that program, so the commands
+below keep `--ldak`: `kvik_scale.py` refuses a `--methods` list without
+`ldak-kvik`, and `scaling_ladder.py` and `ldak_kvik_comparison.py` hash or run
+the binary that `--ldak` names.
 
 The current numbers are in the
 [29 October evidence bundle](results/20261029-report-evidence/README.md): the
@@ -109,7 +112,7 @@ The same driver at m = 20,000 and n from 1,000 to 50,000 gives the
 [sample-size ladder](results/20261026T161500Z-kvik-sample-scaling/README.md).
 Both HRATT paths scale approximately linearly (local exponents 0.86 and 0.96),
 BOLT-style inf (mixmogam) superlinearly (1.21, its CG count growing from 10 to 22), and
-`exact` cubically, so it stops at n = 2,500.
+`exact`, whose dense factorizations scale as n^3, was run only to n = 2,500.
 
 With `--structured`, the driver runs four populations with
 population-specific environments, without covariates and with two or three
