@@ -132,7 +132,9 @@ GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` can miss 2nd-d
 relatives: with 80/20 two-population structure and no PCs it recovered only 6-17 of 20 such
 pairs, and under strong LD (m_eff around 800) they could not be reliably separated from noise
 (internal review simulations, not archived in this repo); there, pass a pedigree or pairs
-instead. The default
+instead. When `"auto"` sees a two-population mixture it uses the within-population noise
+scale, so 2nd-degree pairs are kept, and warns that this may also add false related pairs.
+The default
 `relatedness_correction="auto"` then means `"kappa"`: each statistic is divided by its
 expected null inflation kappa_g (times a covariate factor) instead of applying a global
 lambda. Without `relatedness=`, `"auto"` means `"lambda"`: a single structure lambda when the
