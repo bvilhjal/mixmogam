@@ -273,7 +273,9 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "king_max_variants": 50_000, "king_min_maf": 0.05, "king_max_n": 50_000,
                        "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
                        "kappa_floor": 0.2, "loco_refit": "auto",
-                       "loco_refit_min_s2": 0.005}
+                       "loco_refit_min_s2": 0.005,
+                       "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
+                       "king_max_abs_f": 0.5, "kinship_variants": None}
 
 # KING-robust from a sample block against all samples, keeping pairs above a
 # threshold: O(block x n) memory, never the n x n matrix.
@@ -337,18 +339,32 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     ra, rb = ra[keep], rb[keep]
     phi_r = np.empty(ra.size)
     nhet = np.zeros(n)
+    hexp = np.zeros(n)  # expected heterozygotes per sample under HWE
+    n_hom_alt = 0
+    n_called = 0
     I, J, V = [], [], []
     for s in range(0, n, block):
         e = min(n, s + block)
         hh = np.zeros((e - s, n), dtype=np.float64)
         opp = np.zeros((e - s, n), dtype=np.float64)
         for take in chunks:
-            H, A, B = _king_indicators(calls(take))
+            Gc = calls(take)
+            H, A, B = _king_indicators(Gc)
             if s == 0:
                 nhet += H.sum(1)
+                called = (Gc >= 0)
+                f = np.where(called, Gc, 0).sum(0) / np.maximum(2 * called.sum(0), 1)
+                hexp += called.astype(np.float32) @ (2 * f * (1 - f)).astype(np.float32)
+                n_hom_alt += int(B.sum())
+                n_called += int(called.sum())
             hh += H[s:e] @ H.T
             opp += A[s:e] @ B.T + B[s:e] @ A.T
         if s == 0:
+            # Inbreeding F = 1 - observed / expected heterozygosity per
+            # sample; KING-robust assumes outbred diploid calls (0/1/2).
+            with np.errstate(divide="ignore", invalid="ignore"):
+                F = 1.0 - nhet / hexp
+            F_med = float(np.nanmedian(F)) if np.isfinite(F).any() else 0.0
             nhet = np.maximum(nhet, 1.0)
         nm = np.minimum(nhet[s:e, None], nhet[None, :])
         phi = (hh - 2 * opp) / (2 * nm) + 0.5 - (nhet[s:e, None] + nhet[None, :]) / (4 * nm)
@@ -365,7 +381,8 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     I, J, V = I[ok], J[ok], V[ok]
     return {"i": I, "j": J, "r": 2.0 * V,
             "threshold": thr, "threshold_requested": float(threshold), "noise_sd": sd,
-            "n_variants": int(idx.size), "seconds": time.perf_counter() - t0}
+            "n_variants": int(idx.size), "seconds": time.perf_counter() - t0,
+            "median_F": F_med, "hom_alt_fraction": n_hom_alt / max(n_called, 1)}
 
 
 def align_pairs(id1, id2, r, sample_ids, *, source: str = "pairs") -> tuple:
@@ -426,10 +443,13 @@ def read_grm_sparse(prefix: str, sample_ids) -> tuple:
                        source=os.path.basename(prefix) + ".grm.sp")
 
 
-def unrelated_set(rel: Relatedness) -> np.ndarray:
+def unrelated_set(rel: Relatedness, min_phi: float = 0.0) -> np.ndarray:
     """A maximal unrelated set: greedily drop the sample in the most
-    remaining pairs until no pair is left (ties: the higher index).
-    Returns the kept row indices, sorted."""
+    remaining pairs with phi = r / 2 > ``min_phi`` (0: every listed pair)
+    until no such pair is left (ties: the higher index). Returns the kept
+    row indices, sorted."""
+    if min_phi > 0:
+        rel = rel.threshold_phi(min_phi)
     K = (rel.Koff != 0).astype(np.int8).tocsr()
     deg = np.diff(K.indptr).astype(np.int64)
     alive = np.ones(rel.n, dtype=bool)
@@ -489,6 +509,23 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                           stacklevel=3)
         res = king_pairs(gt, idx, threshold, noise_pairs=options["king_noise_pairs"],
                          noise_sd_multiple=options["king_noise_sd_multiple"], rng=rng)
+        F, homalt = res["median_F"], res["hom_alt_fraction"]
+        coding = ("haploid or 0/1-coded calls (no homozygous-alternative calls)" if homalt == 0
+                  else f"median inbreeding F = {F:+.2f}")
+        if abs(F) > options["king_max_abs_f"] or homalt == 0:
+            raise ValueError(
+                f"relatedness='auto': {coding}; KING-robust assumes outbred diploid 0/1/2 "
+                "genotypes and is invalid here (it calls most pairs related). Pass a pedigree "
+                "Relatedness or external pairs, or raise relatedness_options['king_max_abs_f']")
+        if abs(F) > 0.05:
+            warnings.warn(f"relatedness='auto': {coding}; KING-robust kinship is biased for "
+                          "inbred or excess-heterozygosity samples", RuntimeWarning, stacklevel=3)
+        if res["i"].size > 5 * n:
+            warnings.warn(f"relatedness='auto': {res['i'].size:,} pairs for {n:,} samples (> 5 "
+                          "per sample) is implausible for close relatives; check the genotype "
+                          "coding and population structure, or pass a pedigree or external "
+                          "pairs", RuntimeWarning,
+                          stacklevel=3)
         if res["threshold"] > threshold:
             warnings.warn(
                 f"relatedness='auto': the KING noise SD on {res['n_variants']:,} variants is "
@@ -498,7 +535,8 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                 RuntimeWarning, stacklevel=3)
         rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
         info.update({"source": "king-auto", "king": {k: res[k] for k in (
-            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds")},
+            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds",
+            "median_F", "hom_alt_fraction")},
             "king_on": on})
         return rel, info
     if isinstance(spec, (str, os.PathLike)):

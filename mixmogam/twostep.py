@@ -1503,12 +1503,26 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             model_idx=None if model_info is None else model_info["indices"],
             threshold=relatedness_threshold, options=rel_opt,
             rng=np.random.default_rng([seed, 0x4B49]))
-        keep = unrelated_set(rel)
-        struct_unrel = (struct_all if keep.size == n else
-                        structure_test(st_test, structure_snps, np.random.default_rng([seed, 0x5553]),
-                                       samples=keep))
-        struct = {**struct_unrel, "on": "unrelated", "n_unrelated": int(keep.size),
-                  "all_samples": struct_all}
+        # Only pairs closer than unrelated_min_phi (3rd degree) are split:
+        # dropping every listed pair (distant pedigree links, KING noise)
+        # left 38 of 2,000 samples on the SG's isolate panel.
+        keep = unrelated_set(rel, min_phi=rel_opt["unrelated_min_phi"])
+        if keep.size < min(rel_opt["unrelated_min_n"], n):
+            warnings.warn(
+                f"relatedness: the unrelated set (no pair with phi > "
+                f"{rel_opt['unrelated_min_phi']:g}) has {keep.size} of {n} samples, under "
+                f"relatedness_options['unrelated_min_n'] = {rel_opt['unrelated_min_n']}; the "
+                "structure test uses every sample instead, which relatives can trip (a "
+                "possibly spurious ancestry-PC warning; the LOCO refit is on with relatives "
+                "anyway)", RuntimeWarning, stacklevel=2)
+            struct = {**struct_all, "on": "all (unrelated set too small)",
+                      "n_unrelated": int(keep.size), "all_samples": struct_all}
+        else:
+            struct_unrel = (struct_all if keep.size == n else
+                            structure_test(st_test, structure_snps,
+                                           np.random.default_rng([seed, 0x5553]), samples=keep))
+            struct = {**struct_unrel, "on": "unrelated", "n_unrelated": int(keep.size),
+                      "all_samples": struct_all}
         rel_info.update({"correction": relatedness_correction, **rel.summary(),
                          "s2": float(2.0 * np.sum(rel.upper.data ** 2) / n),
                          "n_unrelated": int(keep.size)})

@@ -271,3 +271,43 @@ def test_loco_refit_option_and_no_close_pairs():
     assert d.extra["loco_refit"] and d.extra["loco_refit_reason"] == "relatives"
     with pytest.raises(ValueError, match="loco_refit"):
         hratt(y, gt, relatedness=far, relatedness_options={"loco_refit": "yes"})
+
+
+# P3: the unrelated set splits close pairs only, with a minimum size; KING
+# 'auto' refuses haploid / inbred coding.
+def test_unrelated_set_threshold_and_min_size():
+    rel = Relatedness(5, [0, 1, 2], [1, 2, 3], [0.5, 0.05, 0.02])  # phi 0.25, 0.025, 0.01
+    assert unrelated_set(rel).size == 3  # every pair split
+    keep = unrelated_set(rel, min_phi=0.0442)
+    assert keep.size == 4 and not ({0, 1} <= set(keep))
+    G, gt, y, pairs, causal = family_panel(seed=3, n_fam=30, kids=4, m=2000, n_causal=100)
+    with pytest.warns(RuntimeWarning, match="unrelated set"):
+        r = hratt(y, gt, relatedness=pairs, random_state=1, model_snps_h2_check=False)
+    s = r.extra["structure"]
+    assert s["on"].startswith("all") and s["n_unrelated"] < 100
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", RuntimeWarning)
+        r2 = hratt(y, gt, relatedness=pairs, random_state=1, model_snps_h2_check=False,
+                   relatedness_options={"unrelated_min_n": 10})
+    assert r2.extra["structure"]["on"] == "unrelated"
+
+
+@pytest.mark.parametrize("coding", ["haploid01", "inbred02"])
+def test_king_auto_refuses_haploid_or_inbred(coding):
+    rng = np.random.default_rng(0)
+    n, m = 300, 3000
+    f = rng.uniform(0.1, 0.5, m)
+    hap = (rng.random((n, m)) < f).astype(np.int8)
+    from mixmogam import Genotypes
+    G = hap if coding == "haploid01" else 2 * hap
+    gt = Genotypes(G, chromosome=np.repeat([1, 2], m // 2), position=np.arange(m) * 10_000 + 1)
+    y = rng.standard_normal(n)
+    with pytest.raises(ValueError, match="KING-robust assumes outbred diploid"):
+        hratt(y, gt, relatedness="auto", random_state=1, model_snps_h2_check=False)
+
+
+def test_king_auto_records_inbreeding_on_outbred(fam):
+    G, gt, y, pairs, causal, sub = fam
+    a = _run(y, gt, model_snps=sub, relatedness="auto")
+    k = a.extra["relatedness"]["king"]
+    assert abs(k["median_F"]) < 0.05 and k["hom_alt_fraction"] > 0.05
