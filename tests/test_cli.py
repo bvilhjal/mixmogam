@@ -119,12 +119,15 @@ def test_gwas_cli_equals_api_bitwise_weighted_binary_pcs(dataset, tmp_path):
 
 @pytest.mark.external
 def test_gwas_cli_stage1_flag_matches_the_api(dataset, tmp_path):
+    # The CLI fixture is a 3-population panel; LDpred3 refuses strong
+    # structure after the covariates unless ancestry PCs are included.
     out = tmp_path / "cli.csv"
     base = ["gwas", "--geno", dataset["prefix"], "--pheno", dataset["pheno1"],
-            "--covar", str(dataset["tmp"] / "cov.txt"),
+            "--covar", str(dataset["tmp"] / "cov.txt"), "--pcs", "3",
             "--method", "hratt", "--stage1", "ldpred3-inf"]
     assert main([*base, "--out", str(out)]) == 0
-    api = _api(dataset, tmp_path / "api.csv", method="hratt", stage1="ldpred3-inf")
+    api = _api(dataset, tmp_path / "api.csv", method="hratt", stage1="ldpred3-inf",
+               pcs=3)
     assert out.read_bytes() == api.read_bytes()
 
 
