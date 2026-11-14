@@ -420,30 +420,48 @@ def _two_pop(n=800, m=1200, fst=0.1, seed=0):
 
 
 def test_strong_structure_gate_and_auto_fallback():
-    """Strong structure after the covariates: lassosum2 refuses
-    (block-diagonal LD cannot absorb ancestry), inf runs with a warning,
-    auto keeps the refitted elastic net; ancestry covariates lift the gate;
-    the override runs lassosum2."""
+    """Strong structure after the covariates: every LDpred3 stage 1 refuses
+    (block-diagonal LD cannot absorb ancestry) with advice to add PCs, the
+    override runs with a warning, the elastic net and auto warn and auto
+    keeps the refitted elastic net; ancestry covariates lift the gate."""
     gt, y, pop = _two_pop()
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        with pytest.raises(ValueError, match="strong population structure"):
-            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-lassosum2")
+    for s1 in ("ldpred3-inf", "ldpred3-lassosum2", "ldpred3-fast"):
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            with pytest.raises(ValueError, match="(?s)strong population structure.*principal components"):
+                twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1=s1)
+    with pytest.warns(RuntimeWarning, match="elastic-net stage 1 with the lambda calibration"):
         r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="auto")
     sel = r.extra["stage1_selection"]
     assert sel["chosen"] == "enet" and sel["reason"].startswith("strong structure")
     assert r.extra["loco_refit"]
-    with pytest.warns(RuntimeWarning, match="strong population structure"):
-        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf")
+    with pytest.warns(RuntimeWarning, match="null lambda_GC still reached 1.01-1.13"):
+        twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="enet")
+    with pytest.warns(RuntimeWarning, match="allow_strong_structure=True"):
+        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
+                          stage1_kwargs={"allow_strong_structure": True})
     assert r.extra["stage1"] == "ldpred3-inf"
-    with pytest.warns(RuntimeWarning, match="strong population structure"):
-        twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-lassosum2",
-                      stage1_kwargs={"allow_strong_structure": True})
     with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
+        warnings.simplefilter("error", RuntimeWarning)
+        warnings.filterwarnings("ignore", message="(?!.*population structure)")
         r = twostep.hratt(y, gt, pop[:, None].astype(float), loco_folds=2, random_state=0,
                           stage1="ldpred3-inf")
     assert not r.extra["structure"]["strong"] and r.extra["stage1"] == "ldpred3-inf"
+
+
+def test_strong_structure_warning_with_relatedness():
+    """With relatedness kappa_g replaces lambda, so the structure warning
+    says nothing removes the ancestry; LDpred3 still refuses."""
+    gt, y, pop = _two_pop()
+    with pytest.warns(RuntimeWarning, match="kappa_g replaces the lambda calibration"):
+        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="enet",
+                          relatedness="auto")
+    assert r.extra["structure"]["strong"]
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        with pytest.raises(ValueError, match="principal components"):
+            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
+                          relatedness="auto")
 
 
 def test_weights_gate_and_auto_fallback():
