@@ -394,3 +394,54 @@ def test_structure_without_pcs_warns_or_errors():
         hratt(y, gt, X=pcs, relatedness=empty, random_state=1,
               relatedness_options={"structure_without_pcs": "error"})
     assert not any("no covariates" in str(x.message) for x in w)
+
+
+# (i) loco_refit='auto' needs evidence of relatives: supplied pairs count from
+# one pair, KING-auto pairs need >= 1% of samples related.
+def test_refit_evidence_king_auto_needs_min_related_fraction():
+    G, gt, y, pairs, causal = family_panel(seed=7, kids=0, n_fam=300, m=4000, n_causal=100)
+    from mixmogam import Genotypes
+
+    def twins(k):  # duplicate k samples: k pairs with phi 0.5 that KING finds
+        rows = np.r_[np.arange(G.shape[0]), np.arange(k)]
+        g2 = Genotypes(G[rows], chromosome=gt.chromosome, position=gt.position)
+        return g2, np.r_[y, y[:k] + 0.1], (np.arange(k), G.shape[0] + np.arange(k), np.full(k, 1.0))
+
+    g1, y1, p1 = twins(1)  # 2 of 601 related: 0.3%
+    a = _run(y1, g1, relatedness="auto")
+    ra = a.extra["relatedness"]
+    assert ra["n_pairs_above_threshold"] >= 1 and ra["related_fraction"] < 0.01
+    assert not ra["relatives_evidence"] and not a.extra["loco_refit"]
+    b = _run(y1, g1, relatedness=p1)  # the same pair supplied: counts
+    assert b.extra["loco_refit"] and b.extra["loco_refit_reason"] == "relatives"
+    g10, y10, _ = twins(10)  # 20 of 610: 3.3%
+    c = _run(y10, g10, relatedness="auto")
+    assert c.extra["relatedness"]["related_fraction"] >= 0.01
+    assert c.extra["loco_refit"] and c.extra["loco_refit_reason"] == "relatives"
+    G2, gt2, y2, _, _ = family_panel(seed=8, n_fam=100, kids=2, m=4000, n_causal=100)
+    d = _run(y2, gt2, relatedness="auto")  # nuclear families: KING-auto still refits
+    assert d.extra["relatedness"]["related_fraction"] > 0.9 and d.extra["loco_refit"]
+
+
+# (v) family folds: opt-in, no refit, in-model nulls calibrated
+def test_family_folds_opt_in_calibrated_without_refit():
+    G, gt, y, pairs, causal = family_panel(seed=0, n_fam=200, kids=4, m=8000, c2=0.3, h2=0.5)
+    r = _run(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "family"})
+    assert r.extra["crossfit_folds"] == "family" and not r.extra["loco_refit"]
+    ff = r.extra["relatedness"]["family_folds"]
+    assert ff["largest_family"] == 6 and max(ff["fold_sizes"]) - min(ff["fold_sizes"]) <= 6
+    assert _null_mean(r, causal) < 1.02
+    assert _run(y, gt, relatedness=pairs).extra["crossfit_folds"] == "random"
+    with pytest.raises(ValueError, match="crossfit_folds"):
+        hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "kin"})
+
+
+def test_family_folds_fall_back_when_a_family_is_too_large():
+    G, gt, y, pairs, causal = family_panel(seed=6, n_fam=60, kids=2, m=3000, n_causal=100)
+    n = gt.n_samples
+    chain = (np.arange(n - 1), np.arange(1, n), np.full(n - 1, 0.25))  # one component
+    with pytest.warns(RuntimeWarning, match="cannot balance"):
+        r = hratt(y, gt, relatedness=chain, random_state=1, model_snps_h2_check=False,
+                  relatedness_options={"crossfit_folds": "family"})
+    assert r.extra["crossfit_folds"] == "random" and r.extra["loco_refit"]
+

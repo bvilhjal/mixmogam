@@ -1267,9 +1267,17 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in
     ``extra["structure"]``). The cross-fitted LOCO scores are refitted per
-    group (k x groups fits) whenever any pair has phi >
-    ``relatedness_threshold``, as well as under strong structure
-    (``extra["loco_refit_reason"]``):
+    group (k x groups fits) when there is evidence of relatives, as well as
+    under strong structure (``extra["loco_refit_reason"]``). Evidence is
+    any supplied pair (pedigree, register, ``.kin0`` / ``.grm.sp`` file or
+    arrays) with phi > ``relatedness_threshold``; for ``"auto"`` (KING
+    estimated here) at least ``relatedness_options["loco_refit_min_related"]``
+    (1%) of the samples must be in such a pair, since its noise floor
+    passes 0-1 spurious pairs on unrelated panels and the leak grows with
+    the related fraction (paired in-model null excess -0.007 to +0.001 at
+    1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100% in the CW's mixed
+    nuclear-family panels; ``extra["relatedness"]["related_fraction"]``).
+    Why the refit:
     the folds split families, so a genome-wide fit's chromosome-g model SNPs
     absorb family-shared noise of the test samples' relatives and dropping
     their share leaves it in the residual (null model SNPs read a mean
@@ -1277,7 +1285,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     rising with n; refitted 0.99-1.04). ``relatedness_options={"loco_refit":
     False}`` disables this safety rule for research comparisons only (in-model
     nulls can be inflated; not recommended),
-    ``True`` forces it. ``"gls"`` (opt-in, unweighted quantitative)
+    ``True`` forces it. ``"crossfit_folds": "family"`` (opt-in; default
+    ``"random"``) instead keeps each family (connected pairs with phi >
+    ``relatedness_threshold``) in one fold, which removes the same leak
+    without the refit's 1.3-3.8x stage-1 CPU: calibrated in the SG's grid
+    (unlinked 0.999, in-model 1.008), but the families' shared signal stays
+    in the residual, so QTL chi-square is 0.66-0.92x the refit's in
+    family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
+    CPU binds. When the largest family exceeds n / (2 k) samples the folds
+    cannot balance and it falls back to random folds with the refit, with a
+    warning. ``"gls"`` (opt-in, unweighted quantitative)
     whitens the residual with a sparse family covariance instead. It gains
     power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
     families with a 5% subset) but is prospective: under families ascertained
@@ -1474,6 +1491,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
         if rel_opt["loco_refit"] not in ("auto", True, False):
             raise ValueError("relatedness_options['loco_refit'] must be 'auto', True or False")
+        if rel_opt["crossfit_folds"] not in ("random", "family"):
+            raise ValueError("relatedness_options['crossfit_folds'] must be 'random' or 'family'")
         if rel_opt["structure_without_pcs"] not in ("warn", "error"):
             raise ValueError("relatedness_options['structure_without_pcs'] must be 'warn' or 'error'")
         if rel_opt["denominator"] not in ("exact", "gamma"):
@@ -1586,15 +1605,44 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     # relatives, and dropping g's share afterwards leaves it in the residual
     # (in-model null mean chi2 1.06-1.19 at c2 = 0.2, growing with n).
     refit, refit_reason = bool(struct["strong"]), ("structure" if struct["strong"] else None)
+    family_folds, fam_labels = False, None
     if rel is not None:
         mode = rel_opt["loco_refit"]
-        close = rel.upper.data[rel.upper.data / 2.0 > relatedness_threshold]
-        rel_info["n_pairs_above_threshold"] = int(close.size)
+        u = rel.upper.tocoo()
+        close = u.data / 2.0 > relatedness_threshold
+        n_rel = int(np.unique(np.r_[u.row[close], u.col[close]]).size)
+        rel_info["n_pairs_above_threshold"] = int(close.sum())
+        rel_info["related_fraction"] = n_rel / n
+        # (i) Evidence for relatives: supplied pairs (pedigree, register,
+        # external KING / GCTA files) count from one pair. KING-auto pairs
+        # need >= loco_refit_min_related (1%) of samples in a close pair: on
+        # unrelated panels its 4-SD floor still passes 0-1 noise pairs (SG,
+        # 2 of 3 seeds at n = 2,000), while the leak the refit removes grows
+        # with the related fraction (paired in-model excess -0.007..+0.001 at
+        # 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100%; CW mixed panels,
+        # specA-fixes-cw.md), so below 1% it is <= ~0.0014 even scaled
+        # linearly from 100%, and the refit's 1.3-3.8x stage-1 CPU buys nothing.
+        estimated = str(rel_info.get("source", "")).startswith("king-auto")
+        evidence = n_rel >= rel_opt["loco_refit_min_related"] * n if estimated else n_rel > 0
+        rel_info["relatives_evidence"] = bool(evidence)
+        if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1:
+            fam_labels = _family_components(rel, relatedness_threshold)
+            largest = int(np.bincount(fam_labels).max())
+            rel_info["family_folds"] = {"largest_family": largest}
+            if largest > n / (2 * int(loco_folds)):
+                warnings.warn(
+                    f"relatedness_options['crossfit_folds'] = 'family': the largest family "
+                    f"(connected pairs with phi > {relatedness_threshold:g}) has {largest:,} of "
+                    f"{n:,} samples, over n / (2 k) = {n / (2 * int(loco_folds)):,.0f}, so whole "
+                    "families cannot balance the folds; using random folds (with the LOCO "
+                    "refit) instead", RuntimeWarning, stacklevel=2)
+                fam_labels = None
+            family_folds = fam_labels is not None
         if mode is True:
             refit, refit_reason = True, refit_reason or "forced"
         elif mode is False:
             refit, refit_reason = False, None
-        elif not refit and close.size:
+        elif not refit and evidence and not family_folds:
             refit, refit_reason = True, "relatives"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
@@ -1618,7 +1666,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     held = _holdout(n, cv_fraction, rng, strata=st.y_raw if binary else None)
     folds = None
     if loco_folds > 1:
-        folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
+        if family_folds:
+            folds = _family_folds(fam_labels, int(loco_folds), rng)
+            rel_info["family_folds"]["fold_sizes"] = np.bincount(folds, minlength=int(loco_folds)).tolist()
+        else:
+            folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
     if stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=refit,
@@ -1662,6 +1714,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "cv_best": scores.get("cv_best", grid[scores["best"]]),
              "cv_converged": scores["cv_converged"],
              "loco_folds": int(loco_folds),
+             "crossfit_folds": "family" if family_folds else "random",
              "loco_refit": bool(folds is not None and refit and scores["stage1_name"] == "enet"),
              "loco_refit_reason": (refit_reason if folds is not None and refit
                                    and scores["stage1_name"] == "enet" else None),
@@ -2015,6 +2068,30 @@ def _holdout(n: int, fraction: float, rng, strata=None) -> np.ndarray:
     held = [rng.choice(members, size=max(1, int(round(fraction * members.size))), replace=False)
             for members in (np.flatnonzero(strata == label) for label in np.unique(strata))]
     return np.sort(np.concatenate(held))
+
+
+def _family_components(rel, threshold: float) -> np.ndarray:
+    """Connected components of the pairs with phi > ``threshold`` (one
+    label per sample; unrelated samples are singletons)."""
+    from scipy.sparse.csgraph import connected_components
+
+    return connected_components(rel.threshold_phi(threshold).Koff, directed=False)[1]
+
+
+def _family_folds(labels: np.ndarray, k: int, rng) -> np.ndarray:
+    """(v) Cross-fit folds that keep each family (component) whole: largest
+    first (random order within a size) into the currently smallest fold.
+    Binary case/control strata are not balanced on top of this."""
+    sizes = np.bincount(labels)
+    order = rng.permutation(sizes.size)
+    order = order[np.argsort(-sizes[order], kind="stable")]
+    load = np.zeros(k, dtype=np.int64)
+    fold_of = np.empty(sizes.size, dtype=np.int64)
+    for c in order:
+        f = int(np.argmin(load))
+        fold_of[c] = f
+        load[f] += sizes[c]
+    return fold_of[labels]
 
 
 def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:

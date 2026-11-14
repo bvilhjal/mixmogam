@@ -287,7 +287,8 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "kappa_floor": 0.2, "loco_refit": "auto",
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
                        "king_max_abs_f": 0.5, "kinship_variants": None,
-                       "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn"}
+                       "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn",
+                       "loco_refit_min_related": 0.01, "crossfit_folds": "random"}
 
 # KING-robust from a sample block against all samples, keeping pairs above a
 # threshold: O(block x n) memory, never the n x n matrix.
