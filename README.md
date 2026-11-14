@@ -104,18 +104,21 @@ mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenanc
 **`None` (the library default)** fits stage 1 on every variant. Results are byte-identical to
 earlier versions.
 
-**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag. In simulated
-nuclear families (n = 2,000), lambda_GC on null SNPs was:
+**What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag. In a
+pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet archived under
+`benchmarks/results/`), lambda_GC on null SNPs was:
 
-| Stage-1 SNPs | lambda_GC |
+| Stage-1 SNPs | lambda_GC (± SE) |
 |---|---|
-| Every variant | 1.016 |
-| 50% subset | 1.040 |
-| 20% subset | 1.101 |
-| 5% subset | 1.237 |
+| Every variant | 1.016 ± 0.004 |
+| 50% subset | 1.040 ± 0.005 |
+| 20% subset | 1.101 ± 0.008 |
+| 5% subset | 1.237 ± 0.010 |
 
-The LOCO scores removed less of the relatives' shared signal. In unrelated samples the
-subsets stayed calibrated.
+The LOCO scores removed less of the relatives' shared signal. In the same study's unrelated,
+unstratified samples the subsets stayed calibrated within Monte Carlo error; with population
+stratification the HM3 subset added 0.02-0.05 to the null mean chi-square, because the
+structure test run on the subset flagged strong structure.
 
 **Warnings.** HRATT therefore warns, and records the details in
 `result.extra["model_snps"]["warnings"]`, when:
