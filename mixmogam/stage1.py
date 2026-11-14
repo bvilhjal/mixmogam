@@ -50,6 +50,29 @@ Three consequences of that model are accepted and documented here:
    prediction through the LD, which is the usual unsupervised-preprocessing
    allowance.
 
+Per-fold LD (``stage1_kwargs["ld_split"] = "train"``). By default (``"all"``)
+every fold's fit reads one cover built from all n rows, while its marginals
+use only that fold's training rows. ``"train"`` gives each training set its
+own cover: the sample partition (fold x hold-out membership) has 2k parts,
+each part's Gram (and, for hard calls, its call and covariate products) is
+accumulated in the same single pass, and a training set's Gram is the total
+less its excluded parts, re-centred and renormalised on its own rows. Build
+flops are unchanged (the parts partition the samples); storage and cache are
+k + 1 covers, keyed additionally by the partition (the folds depend only on
+n and the seed, so traits of one panel still share them).
+
+D8 spectrum (``stage1_kwargs["ld_psd"]``). D8 rounding adds a symmetric error
+E with ||E||_2 about 2 sigma sqrt(k), sigma = 1 / (127 sqrt 12), and pushes
+the smallest eigenvalue of a (near-)singular block below zero. lassosum2
+fits (1 - s) R + s I, PSD iff s / (1 - s) >= -lambda_min; the default
+smallest s = 0.2 tolerates lambda_min >= -0.25. ``"check"`` (the D8 default)
+records each block's lambda_min (LAPACK up to 2,000 variants, Lanczos
+above) and warns when that tolerance is exceeded; ``"floor"`` raises
+lassosum2's smallest s to (c / (1 + c)), c = -min lambda_min + 1e-3 (exact,
+no requantising), and for the other fits replaces each negative block by
+(R + c I) / (1 + c), requantised and checked; ``"ridge"`` does the latter for
+every fit; ``"off"`` skips the check (the f32 default).
+
 The fitters are deterministic (``ldpred3_inf``'s closed form, lassosum2's
 coordinate descent with pseudo-validation on the fold's own rows), so the
 stage-1 statistics carry no Monte Carlo noise. LDpred3 is an optional
@@ -66,7 +89,18 @@ import numpy as np
 __all__ = ["STAGE1_METHODS", "MarginalFits", "fold_marginals", "column_scale",
            "residualize_score", "ld_blocks", "ldpred3_stage1_scores"]
 
-STAGE1_METHODS = ("enet", "ldpred3-inf", "ldpred3-lassosum2", "auto")
+STAGE1_METHODS = ("enet", "ldpred3-inf", "ldpred3-lassosum2", "ldpred3-fast", "auto")
+
+# stage1_kwargs keys this module consumes (the rest go to the fitter):
+# ``ld`` (see :mod:`mixmogam._ld8`), ``ld_cache`` (None, an LDCache or a
+# directory), ``ld_tile`` (samples per hard-call tile), ``ld_split`` and
+# ``ld_psd`` (module notes), and for
+# ``ldpred3-fast`` the layout and chain controls below.
+_LD_KEYS = ("ld", "ld_cache", "ld_tile", "ld_split", "ld_psd")
+_FAST_KEYS = ("width", "landmarks", "reach", "burn_in", "num_iter", "seed", "fast_block_size",
+              "p_init", "layout_seed")
+_FAST_DEFAULTS = {"width": 2500, "landmarks": 64, "fast_block_size": 6000, "burn_in": 300,
+                  "num_iter": 100, "seed": 0, "p_init": 0.02, "reach": None, "layout_seed": 0}
 
 
 @dataclass
@@ -263,8 +297,54 @@ def _import_ldpred3():
     return ldpred3
 
 
-def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs) -> np.ndarray:
-    """One LDpred3 fit's standardized effects, in the block cover's order."""
+def _chain_mixing(path) -> dict:
+    """Single-chain diagnostics of a sampled scalar path: its two halves
+    treated as two chains (ldpred3.diagnostics.scalar_mixing: rank-normalised
+    split R-hat and bulk ESS)."""
+    x = np.asarray(path, dtype=np.float64).ravel()
+    x = x[np.isfinite(x)]
+    n = (x.size // 4) * 4
+    if n < 16:
+        return {"rhat": float("nan"), "ess_bulk": float("nan")}
+    try:
+        from ldpred3.diagnostics import scalar_mixing
+        mix = scalar_mixing({"v": x[-n:].reshape(2, n // 2)})
+        return {"rhat": float(mix["rhat"]["v"]), "ess_bulk": float(mix["ess_bulk"]["v"])}
+    except Exception:  # noqa: BLE001  (diagnostics only)
+        a, b = x[-n:].reshape(2, n // 2)
+        w = (a.var(ddof=1) + b.var(ddof=1)) / 2
+        bvar = (n // 2) * np.var([a.mean(), b.mean()], ddof=1)
+        vp = (n // 2 - 1) / (n // 2) * w + bvar / (n // 2)
+        return {"rhat": float(np.sqrt(vp / w)) if w > 0 else float("nan"),
+                "ess_bulk": float("nan")}
+
+
+def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs, diag=None):
+    """One LDpred3 fit's standardized effects, in the block cover's order;
+    ``diag`` (a list) collects the fast chain's h2 / p estimates and mixing."""
+    if method == "fast":
+        import warnings
+        kw = dict(fit_kwargs)
+        # ldpred3 0.10.4 emits this once per fit; HRATT already warned once
+        # per stage-1 call (below), so swallow the per-fold copies.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore", message="LDpred3-fast is experimental", category=UserWarning)
+            res = ldpred3.ldpred3_fast(
+                blocks, beta_std, n_eff, h2_init=float(min(max(h2, 1e-3), 0.99)),
+                p_init=kw["p_init"], burn_in=kw["burn_in"], num_iter=kw["num_iter"],
+                seed=kw["seed"], width=kw["width"], landmarks=kw["landmarks"],
+                reach=kw["reach"], layout_seed=kw["layout_seed"])
+        if diag is not None:
+            h2m = _chain_mixing(res.h2_path) if res.h2_path is not None else {}
+            p_path = (res.p_rao_blackwell_path if res.p_rao_blackwell_path is not None
+                      else res.p_path)
+            pm = _chain_mixing(p_path) if p_path is not None else {}
+            diag.append({"h2_est": float(res.h2_est), "p_est": float(res.p_est),
+                         "n_iter": int(res.n_iter), "rhat_h2": h2m.get("rhat"),
+                         "ess_h2": h2m.get("ess_bulk"), "rhat_p": pm.get("rhat"),
+                         "ess_p": pm.get("ess_bulk")})
+        return np.asarray(res.beta_est, dtype=np.float64)
     if method == "inf":
         if fit_kwargs:
             raise ValueError(f"stage1 'ldpred3-inf' takes no fit keywords, got {sorted(fit_kwargs)}")
@@ -274,23 +354,192 @@ def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs) -> np
         blocks, beta_std, **fit_kwargs).beta_est, dtype=np.float64)
 
 
+def _stage1_blocks(lg, order, scale, method, block_size, ld, ld_cache, ld_tile, fast_opt,
+                   ldpred3, info, split=None):
+    """The LD covers a fit reads, from ``ld_cache`` when it holds them: one
+    cover (``split`` None, the whole cohort's rows) or one per training set
+    (``split = (labels, n_parts, excluded)``, :func:`mixmogam._ld8.split_parts`)."""
+    import time
+
+    from mixmogam import _ld8
+
+    cache = _ld8.resolve_cache(ld_cache)
+    size = int(fast_opt["fast_block_size"]) if method == "ldpred3-fast" else int(block_size)
+    extra = None
+    if method == "ldpred3-fast":
+        extra = ("fast", fast_opt["width"], fast_opt["landmarks"], fast_opt["reach"],
+                 fast_opt["layout_seed"], fast_opt.get("_psd"))
+    n_covers = 1 if split is None else len(split[2])
+    fp_digest = None
+    if split is not None:
+        # Per-training-set covers are exact: key on the partition and samples.
+        import hashlib
+        fp_digest = hashlib.sha256(_ld8.sample_fingerprints(lg).tobytes()).hexdigest()[:16]
+        extra = (extra, "split", _ld8.split_cache_extra(split[0]), fp_digest)
+    keys = None
+    if cache is not None:
+        base = _ld8.ld_cache_key(lg, order, size, ld, extra)
+        keys = [base] if split is None else [f"{base}-s{j}" for j in range(n_covers)]
+        t0 = time.perf_counter()
+        got = [cache.get(key) for key in keys]
+        if all(c is not None for c in got):
+            chk = _ld8.reuse_check(lg, got[0][1])
+            info.update(ld_cache="hit", ld_key=keys[0], ld_load_s=time.perf_counter() - t0,
+                        ld_bytes=sum(_ld8.cover_nbytes(c[0]) for c in got),
+                        ld_cache_overlap=chk["overlap"], ld_cache_coverage=chk["coverage"],
+                        ld_cache_fst=chk["fst"], ld_cache_exact=chk["exact"],
+                        ld_cache_covariates_match=chk["covariates_match"])
+            if chk["overlap"] > 0.0:
+                for w in chk["warnings"]:
+                    import warnings
+                    warnings.warn(f"LD cache reuse: {w}", RuntimeWarning, stacklevel=4)
+                return [c[0] for c in got]
+            info["ld_cache"] = "stale"  # no shared sample: another panel; rebuild
+    c0, t0, cells0 = time.process_time(), time.perf_counter(), _ld8.COUNTER["cells"]
+    if split is None:
+        covers = [_ld8.build_blocks(lg, order, scale, size, ld, ld_tile)]
+    else:
+        covers = _ld8.build_split_blocks(lg, order, size, ld, split[0], split[1], split[2],
+                                         ld_tile)
+    info.update(ld_build_s=time.perf_counter() - t0, ld_build_cpu_s=time.process_time() - c0,
+                ld_hardcall_cells=_ld8.COUNTER["cells"] - cells0)
+    if method == "ldpred3-fast":
+        c0, t0 = time.process_time(), time.perf_counter()
+        covers = [_psd_cover(c, fast_opt.get("_psd", "off"), info, method, None) for c in covers]
+        covers = [ldpred3.fast_ld_blocks(c, width=fast_opt["width"],
+                                         landmarks=fast_opt["landmarks"],
+                                         reach=fast_opt["reach"], seed=fast_opt["layout_seed"])
+                  for c in covers]
+        info["ld_build_s"] += time.perf_counter() - t0
+        info["ld_build_cpu_s"] += time.process_time() - c0
+    info.update(ld_cache=("rebuilt" if info.get("ld_cache") == "stale" else "miss")
+                if cache is not None else "off",
+                ld_bytes=sum(_ld8.cover_nbytes(c) for c in covers))
+    if cache is not None:
+        t0 = time.perf_counter()
+        meta = _ld8.cover_meta(lg)
+        for key, c in zip(keys, covers):
+            cache.put(key, c, meta)
+        info.update(ld_key=keys[0], ld_store_s=time.perf_counter() - t0)
+    return covers
+
+
+_PSD_MODES = ("off", "check", "floor", "ridge")
+_PSD_EPS = 1e-3
+
+
+def _psd_cover(blocks, mode, info, method, ctx):
+    """Spectrum check / floor of one dense cover (``stage1_kwargs['ld_psd']``).
+
+    ``"check"`` records each block's lambda_min (LAPACK below 2,000
+    variants, Lanczos above) in ``info['ld_spectrum']``; ``"ridge"`` also
+    floors every block with lambda_min < 0 to (R + c I) / (1 + c),
+    requantised for D8, with c doubled from -lambda_min + 1e-3 until the
+    stored block is PSD; ``"floor"`` is ``"ridge"`` except for lassosum2,
+    whose own LD shrinkage (1 - s) R + s I is PSD for s / (1 - s) >=
+    -lambda_min, so it raises the smallest s instead (exact, no requantising;
+    :func:`_lassosum2_s_floor`)."""
+    import time
+    import warnings
+
+    from mixmogam import _ld8
+
+    if mode == "off" or not blocks or not all(isinstance(R, np.ndarray) for R, _ in blocks):
+        return blocks
+    t0 = time.perf_counter()
+    spec = _ld8.cover_spectrum(blocks)
+    lam = spec["lambda_min"]
+    rec = info.setdefault("ld_spectrum", [])
+    entry = {k: v for k, v in spec.items() if k != "lambda_min"}
+    out = blocks
+    if mode == "ridge" or (mode == "floor" and method != "ldpred3-lassosum2"):
+        out, cs = [], []
+        for (R, idx), l in zip(blocks, lam):
+            R2, c, _ = _ld8.ridge_block_d8(R, float(l), margin=_PSD_EPS) if l < 0 else (R, 0.0, l)
+            out.append((R2, idx))
+            cs.append(c)
+        cs = np.asarray(cs)
+        entry.update(ridge_blocks=int(np.sum(cs > 0)), ridge_max=float(cs.max()),
+                     ridge_mean_nonzero=float(cs[cs > 0].mean()) if np.any(cs > 0) else 0.0)
+    entry["spectrum_s"] = time.perf_counter() - t0
+    rec.append(entry)
+    if mode == "check" and method == "ldpred3-lassosum2" and ctx is not None:
+        s_min = min(ctx)
+        if spec["min"] < -s_min / (1.0 - s_min):
+            warnings.warn(f"an LD block has lambda_min {spec['min']:.3f} below -s/(1-s) = "
+                          f"{-s_min / (1 - s_min):.3f} of lassosum2's smallest s = {s_min}; "
+                          "its (1-s)R + sI is indefinite (stage1_kwargs ld_psd='floor' raises s)",
+                          RuntimeWarning, stacklevel=4)
+    return out
+
+
+def _lassosum2_s_floor(s_seq, lam_min: float):
+    """The lassosum2 s grid raised so (1 - s) R + s I is PSD for every block:
+    s >= c / (1 + c), c = -lam_min + 1e-3 (unchanged when lam_min >= 0)."""
+    if lam_min >= 0:
+        return tuple(s_seq), 0.0
+    c = -float(lam_min) + _PSD_EPS
+    s_min = c / (1.0 + c)
+    return tuple(sorted({float(max(s, s_min)) for s in s_seq})), s_min
+
+
 def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                           *, method: str, keep_prediction: bool = False,
                           block_size: int = 500, **fit_kwargs) -> dict:
     """Contract dictionary from cross-fitted LDpred3 LOCO scores.
 
     ``method`` is ``"ldpred3-inf"`` (the infinitesimal closed form at the
-    genome-wide ``h2`` of the variance fit) or ``"ldpred3-lassosum2"``
-    (penalty selected per fold by pseudo-validation on that fold's own rows).
-    ``fit_kwargs`` (with ``block_size``) pass to lassosum2. The hold-out MSE
-    of a fit excluding ``held`` is the candidate's model-selection score,
-    on the same samples as the elastic-net candidates'.
+    genome-wide ``h2`` of the variance fit), ``"ldpred3-lassosum2"``
+    (penalty selected per fold by pseudo-validation on that fold's own rows)
+    or ``"ldpred3-fast"`` (experimental LDpred3-auto on the fast layout:
+    int8 dense sub-blocks plus an int8 Nystrom landmark factor, within
+    group-pure blocks of ``fast_block_size`` variants, so the LOCO
+    subtraction stays exact given the shared h2 and p; a seeded Gibbs
+    chain per fold; warns once and records ``ldpred3_version`` and
+    ``experimental=True`` in ``stage1_info``).
+    ``fit_kwargs`` (with ``block_size``) pass to lassosum2, except the LD
+    options: ``ld`` (``"f32"``, the default float32 blocks, or an int8 /
+    hard-call representation of :mod:`mixmogam._ld8`), ``ld_cache``
+    (reuse a cover across traits) and ``ld_tile``; ``ldpred3-fast`` takes
+    ``width``, ``landmarks``, ``reach``, ``burn_in``, ``num_iter``,
+    ``seed``, ``p_init``, ``layout_seed`` and ``fast_block_size``. The
+    ``ld_split`` (``"all"`` | ``"train"``) and ``ld_psd`` (``"off"`` |
+    ``"check"`` | ``"floor"`` | ``"ridge"``) are described in the module notes. The
+    hold-out MSE of a fit excluding ``held`` is the candidate's
+    model-selection score, on the same samples as the elastic-net
+    candidates'. ``stage1_info`` in the result records the LD build or
+    cache hit, its bytes and the fit times.
     """
+    import time
+
     lg = st.lg
     k = 0 if folds is None else int(np.max(np.asarray(folds))) + 1
     if not k:
         raise ValueError("stage1 'ldpred3-*' needs cross-fitted scores (loco_folds >= 2)")
     folds = np.asarray(folds, dtype=np.int64)
+    fit_kwargs = dict(fit_kwargs)
+    ld = fit_kwargs.pop("ld", "f32")
+    ld_cache = fit_kwargs.pop("ld_cache", None)
+    ld_tile = fit_kwargs.pop("ld_tile", None)
+    ld_split = fit_kwargs.pop("ld_split", "all")
+    ld_psd = fit_kwargs.pop("ld_psd", None)
+    from mixmogam._ld8 import LD_KINDS
+    if ld not in LD_KINDS:
+        raise ValueError(f"stage1_kwargs['ld'] must be one of {list(LD_KINDS)}, got {ld!r}")
+    if ld_split not in ("all", "train"):
+        raise ValueError(f"stage1_kwargs['ld_split'] must be 'all' or 'train', got {ld_split!r}")
+    if ld_psd is None:
+        ld_psd = "check" if ld.startswith("d8") else "off"
+    if ld_psd not in _PSD_MODES:
+        raise ValueError(f"stage1_kwargs['ld_psd'] must be one of {list(_PSD_MODES)}, "
+                         f"got {ld_psd!r}")
+    fast_opt = dict(_FAST_DEFAULTS)
+    if method == "ldpred3-fast":
+        for key_ in _FAST_KEYS:
+            if key_ in fit_kwargs:
+                fast_opt[key_] = fit_kwargs.pop(key_)
+        if fit_kwargs:
+            raise ValueError(f"stage1 'ldpred3-fast' got unknown keywords {sorted(fit_kwargs)}")
     if h2 <= 0:  # no polygenic variance: no scores, as in the elastic-net path
         held_mask = _held_mask(lg.n, held)
         ys = np.asarray(ys, dtype=np.float64).ravel()
@@ -304,7 +553,28 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
             out["prediction"] = np.zeros((lg.n, G))
         return out
     ldpred3 = _import_ldpred3()
+    # FastLD stores int8 (dense sub-blocks + int8 Nystrom factor) whatever
+    # the dense source it is built from.
+    info = {"ld": "fast-int8" if method == "ldpred3-fast" else ld, "ld_source": ld,
+            "method": method, "ld_split": ld_split, "ld_psd": ld_psd,
+            "ldpred3_version": getattr(ldpred3, "__version__", None)}
+    if method == "ldpred3-fast":
+        import warnings
+        info["experimental"] = True
+        try:
+            from ldpred3.methods import FAST_EXPERIMENTAL_WARNING as _fast_msg
+        except ImportError:  # pragma: no cover - ldpred3 < 0.10.4
+            _fast_msg = ("LDpred3-fast is experimental: int8 rounding can make the "
+                         "working LD indefinite even when the source is positive "
+                         "semidefinite. The independent-Gibbs update does not repair "
+                         "this. Prediction and architecture estimates require "
+                         "validation against native-LD fits.")
+        warnings.warn(
+            f"stage1 'ldpred3-fast' is experimental (ldpred3 {ldpred3.__version__}): {_fast_msg}",
+            UserWarning, stacklevel=3)
+    t0 = time.perf_counter()
     marg = fold_marginals(lg, ys, folds, held)
+    info["marginals_s"] = time.perf_counter() - t0
     order = np.argsort(lg.groups, kind="stable")
     # Column indices of MarginalFits: k fold training complements, the
     # hold-out complement, then the matching validation sets.
@@ -312,10 +582,32 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     train_cols = list(range(k + 1))
     val_cols = list(range(k + 1, n_sets))
     scale = marg.scale[order]
-    blocks = ld_blocks(lg, order, marg.scale, block_size)
+    split = None
+    if ld_split == "train":
+        from mixmogam._ld8 import split_parts
+        split = split_parts(lg.n, folds, _held_mask(lg.n, held))
+    if method == "ldpred3-fast":
+        fast_opt["_psd"] = ld_psd if ld_psd in ("floor", "ridge") else "off"
+    covers = _stage1_blocks(lg, order, marg.scale, method, block_size, ld, ld_cache, ld_tile,
+                            fast_opt, ldpred3, info, split)
+    fast_opt.pop("_psd", None)
+    s_default = None
+    if method == "ldpred3-lassosum2":
+        import inspect
+        s_default = tuple(fit_kwargs.get(
+            "s_seq", inspect.signature(ldpred3.lassosum2).parameters["s_seq"].default))
+    if method != "ldpred3-fast":
+        covers = [_psd_cover(c, ld_psd, info, method, s_default) for c in covers]
+        if method == "ldpred3-lassosum2" and ld_psd == "floor":
+            lam_min = min(e["min"] for e in info["ld_spectrum"])
+            fit_kwargs["s_seq"], info["s_floor"] = _lassosum2_s_floor(s_default, lam_min)
+            info["s_seq"] = list(fit_kwargs["s_seq"])
 
+    c0, t0 = time.process_time(), time.perf_counter()
+    fast_diag = [] if method == "ldpred3-fast" else None
     effects = np.zeros((lg.m, len(train_cols)))
     for j, c in enumerate(train_cols):
+        blocks = covers[0] if len(covers) == 1 else covers[j]
         beta_std, _ = ldpred3.standardize_betas(
             marg.beta[:, c], marg.se[:, c], float(marg.n_eff[c]))
         kwargs = dict(fit_kwargs)
@@ -324,23 +616,37 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
                 marg.beta[:, val_cols[j]], marg.se[:, val_cols[j]],
                 float(marg.n_eff[val_cols[j]]))
             kwargs["validation_beta"] = val_std[order]
+        if method == "ldpred3-fast":
+            kwargs = {**fast_opt, "seed": int(fast_opt["seed"]) + j}
         e = _fit_effects(ldpred3, blocks, beta_std[order], float(marg.n_eff[c]),
-                         "inf" if method == "ldpred3-inf" else "lassosum2",
-                         h2, kwargs)
+                         {"ldpred3-inf": "inf", "ldpred3-lassosum2": "lassosum2",
+                          "ldpred3-fast": "fast"}[method], h2, kwargs, fast_diag)
         with np.errstate(divide="ignore", invalid="ignore"):
             e = np.where(scale > 0, e / np.where(scale > 0, scale, 1.0), 0.0)
         effects[order, j] = e  # back to variant index order
+    info.update(solve_s=time.perf_counter() - t0, solve_cpu_s=time.process_time() - c0,
+                n_fits=len(train_cols))
+    if fast_diag is not None:
+        info["fast_chains"] = fast_diag
+        rh = [d["rhat_h2"] for d in fast_diag if d.get("rhat_h2") is not None]
+        info["fast_max_rhat_h2"] = float(np.nanmax(rh)) if rh and np.any(np.isfinite(rh)) else None
+        if info["fast_max_rhat_h2"] is not None and info["fast_max_rhat_h2"] > 1.1:
+            import warnings
+            warnings.warn(f"ldpred3-fast: h2 chain split R-hat {info['fast_max_rhat_h2']:.2f} > 1.1; "
+                          "raise burn_in / num_iter", RuntimeWarning, stacklevel=3)
 
     # Held-out candidate score: the fit excluding the hold-out, genome-wide.
     from mixmogam.twostep import _out_of_fold_loco  # late: the patchable seam
+    t0 = time.perf_counter()
     held_mask = _held_mask(lg.n, held)
     fitted = lg.project(_fitted_unprojected(lg, effects[:, k]))
     mse = np.array([float(np.mean((ys[held_mask] - fitted[held_mask]) ** 2))])
 
     prediction = _out_of_fold_loco(lg, effects[:, :k], folds)
+    info["predict_s"] = time.perf_counter() - t0
     out = {"mse": mse, "best": 0, "cv_converged": True,
            "loco_iterations": 0, "loco_converged": True,
-           "cv_grid": [method], "cv_best": method}
+           "cv_grid": [method], "cv_best": method, "stage1_info": info}
     out.update(residualize_score(lg, ys, prediction))
     if keep_prediction:
         out["prediction"] = prediction

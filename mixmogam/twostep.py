@@ -1192,7 +1192,42 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     hold-out (lassosum2 is not a candidate). The LDpred3
     options need the separate ``ldpred3`` package, quantitative traits and
     ``loco_folds >= 2``; ``stage1_kwargs`` (``block_size``, lassosum2's fit
-    keywords) configure them. Variance components and prior selection still
+    keywords) configure them. Opt-in prototypes (stage1-ldpred3-int8):
+    ``stage1="ldpred3-fast"`` (LDpred3-auto on int8 dense sub-blocks plus an
+    int8 landmark factor, in group-pure blocks), ``stage1_kwargs["ld"]`` in
+    ``"f32"`` (default), ``"d8-proj"`` (the float32 blocks rounded to int8
+    D8), ``"d8-hardcall"`` (D8 built from the hard calls with the
+    covariates removed as a rank-q correction; no float rows formed) or
+    ``"f32-hardcall"``, and ``stage1_kwargs["ld_cache"]`` (an
+    :class:`mixmogam._ld8.LDCache` or a directory) to reuse a built cover
+    across traits of one panel, covariates and model-SNP subset;
+    ``extra["stage1_info"]`` records the LD build or cache hit and the fit
+    times. ``stage1_kwargs["ld_split"] = "train"`` builds one cover per
+    cross-fit training set (the LD of exactly the rows whose marginals the
+    fit reads; same pass, k + 1 times the storage), and
+    ``stage1_kwargs["ld_psd"]`` (``"check"``, the D8 default: per-block
+    lambda_min recorded, a warning when lassosum2's smallest s cannot keep
+    (1 - s) R + s I PSD; ``"floor"``: raise lassosum2's smallest s, or ridge
+    the blocks of the other fits; ``"ridge"``; ``"off"``) guards the int8
+    spectrum. ``model_snps`` and ``relatedness`` combine with every LDpred3
+    option. Gates: an explicit LDpred3 stage 1 refuses ``sample_weights``
+    (weighted marginals do not follow LDpred3's beta_hat ~ N(R beta, R/N))
+    and refuses every LDpred3 stage 1 (``ldpred3-inf``, ``-lassosum2``,
+    ``-fast``) under strong structure after the covariates (block-diagonal
+    LD cannot absorb ancestry; inf's leak grows with N / m through its
+    ridge m / (N h2); add ancestry PCs to ``X``, or pass
+    ``stage1_kwargs["allow_strong_structure"]=True``, which runs with a
+    warning); ``"auto"`` keeps the elastic net in both cases, and the
+    elastic net itself warns under strong structure (null lambda_GC
+    1.01-1.13 without PCs; with ``relatedness`` the lambda calibration is
+    replaced by kappa_g and the warning is stronger: up to ~1.2).
+    (Behaviour change from 5fd7806f, where all ran silently; a3c523d6 had
+    narrowed the refusal to lassosum2, which was reverted.) With ``model_snps`` the h2 shared by the
+    LDpred3 fits (the inf ridge m / (N h2), fast's h2_init) is the model-SNP
+    GRM's REML h2, not the full panel's (HM3 smoke: 0.44 vs 0.69), so
+    LDpred3-inf shrinks more on a subset; this is consistent with the
+    subset model but not with a full-panel h2. A two-valued ``y`` with an LDpred3 stage 1
+    warns (use ``trait="binary"``). Variance components and prior selection still
     use the whole trait, and the genome-wide h2 the infinitesimal fit shares
     over its blocks leaks the tested chromosome second-order (documented in
     :mod:`mixmogam.stage1`).
@@ -1482,7 +1517,8 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if np.unique(yv[np.isfinite(yv)]).size == 2:
             warnings.warn("y takes two values but trait='quantitative': it is fitted as a "
                           "Gaussian trait (a linear probability model); for case-control "
-                          "data use trait='binary'", UserWarning, stacklevel=2)
+                          "data use trait='binary'. To silence this, pass trait='binary' or "
+                          "filter UserWarning", UserWarning, stacklevel=2)
     if heritability_method not in ("auto", "he", "reml"):
         raise ValueError("heritability_method must be 'auto', 'he' or 'reml'")
     weighted = sample_weights is not None
@@ -1516,6 +1552,15 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                              "working model keeps the elastic-net stage 1")
         if loco_folds < 2:
             raise ValueError(f"stage1 {stage1!r} needs cross-fitted scores: loco_folds >= 2")
+        if weighted and stage1 != "auto":
+            # LDpred3's working model beta_hat ~ N(R beta, R / N) needs the
+            # marginals' noise covariance to be the LD the fit uses. Under
+            # sampling weights the weighted slopes' noise covariance is the
+            # w^2-weighted LD over Kish's n, the signal's the w-weighted LD:
+            # a per-fold Kish n fixes the scale only (stage1-int8-ldpred-cw.md).
+            raise ValueError(f"stage1 {stage1!r} needs unweighted samples: under sample_weights "
+                             "the weighted marginal regressions do not follow LDpred3's "
+                             "beta_hat ~ N(R beta, R / N) model; use stage1='enet'")
     n_threads = _validate_n_threads(n_threads)
     if loco_folds > gt.n_samples:
         raise ValueError("loco_folds exceeds the number of samples")
@@ -1524,8 +1569,6 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if model_snps is not None:
         if denominator == "spectral":
             raise ValueError("model_snps is not available with denominator='spectral'")
-        if stage1 != "enet":
-            raise ValueError("model_snps applies to the elastic-net stage 1 (stage1='enet')")
     elif model_snps_options is not None:
         raise ValueError("model_snps_options needs model_snps='auto' or 'hm3'")
     elif model_snps_include is not None:
@@ -1636,12 +1679,15 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             if no_cov:
                 # P5: kappa_g replaces lambda, so with no covariates nothing
                 # corrects the structure (SG grid, no PCs: null mean chi2
-                # 1.05-1.08 against <= 1.013 with lambda).
+                # 1.05-1.08 against <= 1.013 with lambda; LDpred3 1.4-2.9
+                # in the same simulations).
                 msg = ("strong population structure among unrelated samples and no covariates: "
-                       "with relatedness= kappa_g replaces lambda, which corrected part of it, "
-                       "so structured variants can be inflated (null mean chi-square 1.05-1.08 "
-                       "in simulation against <= 1.013 with lambda); include ancestry principal "
-                       "components among the covariates")
+                       "with relatedness= kappa_g replaces the lambda calibration, which "
+                       "corrected part of it, so nothing removes the ancestry left in the "
+                       "LOCO scores (null mean chi-square 1.05-1.08 in simulation against "
+                       "<= 1.013 with lambda; null lambda_GC up to ~1.2 for the elastic net "
+                       "and ~1.4-2.9 for LDpred3 stage 1s without PCs, in simulations). "
+                       "Include ancestry principal components among the covariates")
                 king = rel_info.get("king") or {}
                 if king.get("threshold", 0.0) > king.get("threshold_requested", np.inf):
                     from mixmogam._relatedness import dropped_degree
@@ -1659,9 +1705,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
                 warnings.warn(msg, RuntimeWarning, stacklevel=2)
             else:
                 warnings.warn("strong population structure remains among unrelated samples "
-                              "after the covariates; kappa_g corrects for relatives, not for "
-                              "structure, so include ancestry principal components among the "
-                              "covariates", RuntimeWarning, stacklevel=2)
+                              "after the covariates, and with relatedness set kappa_g replaces "
+                              "the lambda calibration: kappa_g corrects for relatives, not for "
+                              "structure, so nothing removes the ancestry left in the LOCO "
+                              "scores (null lambda_GC up to ~1.2 for the elastic net and "
+                              "~1.4-2.9 for LDpred3 stage 1s without PCs, in simulations). "
+                              "Include ancestry principal components among the covariates",
+                              RuntimeWarning, stacklevel=2)
     # The LOCO refit (k x groups fits, each without its group's variants).
     # Strong structure needs it; so do relatives (SG specA-benchmark §2b):
     # cross-fit folds split families, so fold f's genome-wide fit lets
@@ -1708,6 +1758,18 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             refit, refit_reason = False, None
         elif not refit and evidence and not family_folds:
             refit, refit_reason = True, "relatives"
+    # An explicit LDpred3 stage 1 has block-exact LOCO (SG §9e: no in-model
+    # leak), so the relatives auto-refit and family folds are not applied.
+    # loco_refit=True still records the intent, but LDpred3 scores do not
+    # take a refit flag; extra reports 'n/a (block-exact LOCO)'.
+    if stage1 not in ("enet", "auto"):
+        if family_folds:
+            family_folds, fam_labels = False, None
+            if rel is not None:
+                rel_info["family_folds"] = {"applied": False,
+                                            "reason": "n/a (block-exact LOCO)"}
+        if refit_reason == "relatives":
+            refit, refit_reason = False, "n/a (block-exact LOCO)"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
@@ -1735,7 +1797,59 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             rel_info["family_folds"]["fold_sizes"] = np.bincount(folds, minlength=int(loco_folds)).tolist()
         else:
             folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
-    if stage1 == "auto" and h2 > 0:
+    stage1_kwargs = dict(stage1_kwargs or {})
+    allow_strong = bool(stage1_kwargs.pop("allow_strong_structure", False))
+    ldp_strong = stage1 not in ("enet", "auto") and struct["strong"] and h2 > 0
+    if ldp_strong and not allow_strong:
+        # LDpred3's block-diagonal LD has no cross-chromosome (ancestry)
+        # terms, so without PCs every LDpred3 fit can load ancestry onto its
+        # blocks and leak it into the LOCO scores. inf's leak is set by its
+        # ridge m / (N h2): nearly inert at N/m <~ 0.15, inflated above it
+        # in simulations (CW panels N/m ~ 0.6: null lambda_GC 1.46-1.60,
+        # type-I 4.8-6.3x at 1e-3; 1.4-2.9 with kappa_g only; SG
+        # reproduction, sg.md 11); biobank HM3 runs sit near N/m ~ 0.36.
+        # lassosum2: 1.3-1.5 (2-12 with kappa_g only); fast's auto Gibbs
+        # fit shrinks less than inf.
+        err = (f"stage1 {stage1!r}: the structure test finds strong population structure "
+               "after the covariates, and LDpred3's block-diagonal LD cannot absorb "
+               "ancestry (null lambda_GC 1.2-1.6, up to ~2.9 with relatedness, in "
+               "simulations without PCs). Add ancestry principal components to X; or use "
+               "stage1='enet' or 'auto' (stage1_kwargs allow_strong_structure=True "
+               "overrides)")
+        if kappa_on and rel_info is not None and not str(rel_info.get("source", "")).startswith("king-auto"):
+            err += (" If relatedness was supplied as a pedigree or pair file, relatives "
+                    "missing from it can also trip the structure test")
+        raise ValueError(err)
+    if ldp_strong:
+        warnings.warn(f"stage1 {stage1!r} under strong population structure after the covariates "
+                      "(allow_strong_structure=True): block-diagonal LD cannot absorb ancestry "
+                      "and null calibration can fail (lambda_GC 1.2-1.6 without PCs, in "
+                      "simulations); add ancestry principal components to X",
+                      RuntimeWarning, stacklevel=2)
+    elif (struct["strong"] and h2 > 0 and stage1 in ("enet", "auto") and not kappa_on
+          and not (weighted or trait == "binary")):
+        # The refitted elastic net plus the lambda calibration is the best
+        # stage 1 without PCs, but not exact: null lambda_GC 1.01-1.13 in the
+        # CW / SG structure panels (sg.md 11). With kappa_g (no lambda) the
+        # warning above covers it; weighted / binary traits warn above too.
+        warnings.warn("strong population structure remains after the covariates: the elastic-net "
+                      "stage 1 with the lambda calibration is the most robust choice without PCs, "
+                      "but null lambda_GC still reached 1.01-1.13 in simulations; include "
+                      "ancestry principal components among the covariates",
+                      RuntimeWarning, stacklevel=2)
+    if stage1 == "auto" and h2 > 0 and (weighted or struct["strong"]):
+        # The LDpred3 candidate needs unweighted samples and no strong
+        # structure after the covariates (see the gates above).
+        scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
+                                   keep_prediction=binary, folds=folds, refit=refit,
+                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
+        scores["stage1_selection"] = {"heldout_mse_enet": float(np.min(scores["mse"])),
+                                      "heldout_mse_ldpred3": float("nan"), "chosen": "enet",
+                                      "reason": ("sample_weights" if weighted else
+                                                 "strong structure")
+                                      + ": LDpred3 candidate skipped"}
+        scores["stage1_name"] = "enet"
+    elif stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
@@ -1780,14 +1894,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "loco_folds": int(loco_folds),
              "crossfit_folds": "family" if family_folds else "random",
              "loco_refit": bool(folds is not None and refit and scores["stage1_name"] == "enet"),
-             "loco_refit_reason": (refit_reason if folds is not None and refit
-                                   and scores["stage1_name"] == "enet" else None),
+             "loco_refit_reason": ("n/a (block-exact LOCO)" if scores["stage1_name"] != "enet"
+                                   else (refit_reason if folds is not None and refit else None)),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
     if scores["stage1_name"] != "enet" or "stage1_selection" in scores:
         extra["stage1"] = scores["stage1_name"]
     if "stage1_selection" in scores:
         extra["stage1_selection"] = scores["stage1_selection"]
+    if "stage1_info" in scores:
+        extra["stage1_info"] = scores.pop("stage1_info")
     if "offset_slope" in scores and not binary:
         extra["offset_slope"] = scores["offset_slope"]
     if heritability_method == "he":
