@@ -177,7 +177,7 @@ boundary. The Gaussian calculation also avoids division by tiny v.
   randomized basis (width 128) serves both the REML deflation and the
   preconditioner. The calibration SNPs' prospective solves share the LOCO
   residuals' CG passes: polymorphic SNPs are drawn first and the first
-  `n_calibration` with GRAMMAR chi2 < 5 are kept afterwards (rejection
+  `n_calibration` with GRAMMAR chi2 < 5 (Amin et al. 2007, as in Loh et al. 2015) are kept afterwards (rejection
   sampling), with a short second solve if too few qualify.
 - **Variational Bayes** (`_vb`): iterated conditional posterior means, fitted
   for every cross-validation fold x hyperparameter, every cross-fitting fold
@@ -230,10 +230,10 @@ boundary. The Gaussian calculation also avoids division by tiny v.
   panels.
 
 HRATT normally selects the frequency-weight exponent `alpha` by randomized
-single-component HE, then fits heritability by REML. Alpha is chosen from -1,
+single-component HE (Haseman & Elston 1972; Wu & Sankararaman 2018), then fits heritability by REML. Alpha is chosen from -1,
 -0.75, -0.5, -0.25 and 0 by the HE fit score (the sum of y_i y_j K_ij over
 i != j, squared, over the sum of K_ij^2), with the second moment from
-`he_probes` = 32 Rademacher probes, all from one genotype pass.
+`he_probes` = 32 Rademacher probes (Hutchinson 1990), all from one genotype pass.
 `heritability_method="he"` reuses the selected alpha's products to fit
 `vg K + ve (I - QQ')` with nonnegative variance components in the covariate
 residual space, a different estimator rather than a faster REML.
@@ -252,7 +252,8 @@ weights, less the covariates).
 
 The prior on each variant's effect is elastic-net: p Laplace + (1 - p)
 N(0, F h2_j / (1 - p)), with h2_j = w_j h2 / sum(w) and
-w_j = [f_j (1 - f_j)]^(1 + alpha), the LDAK-Thin weights without LD thinning.
+w_j = [f_j (1 - f_j)]^(1 + alpha), the LDAK-Thin weights (Speed et al. 2012,
+2017) without LD thinning.
 (p, F) is chosen from ten points (`HRATT_GRID`, LDAK-KVIK's grid) by held-out
 error. A random `cv_fraction` (0.1) of the samples, stratified by case status
 for binary traits, is held out; all ten models are fitted to the rest in one
@@ -322,6 +323,13 @@ and prior selection still use the whole trait, so the procedure as a whole is
 not independent of the held-out outcomes. In the pilots, cross-fitting reduced
 effect attenuation and extreme null offsets.
 
+The attenuation and its removal by cross-fitting are archived
+(`benchmarks/results/20261005-hratt-weights-binary/`, -32% to -36% in-sample;
+`benchmarks/results/20261006-hratt-followups/`, -2.0% to +0.9% cross-fitted).
+The case offsets (+43 against -0.4) and the REML median of 0.10 were not
+found in `benchmarks/results/`. <!-- TODO(archive): rerun and archive the
+offset and REML figures, or delete them. -->
+
 Dropping a group's share of a genome-wide fit costs five fits rather than five
 per group. Without structure it matched per-group refits (null lambda_GC
 0.975-1.023 against 0.975-1.018, with the same QTL effects and power). Under
@@ -344,11 +352,84 @@ single-component HE rather than LDAK-KVIK's partitioned HE with large-effect
 exclusions, followed by REML h2 by default (`alpha_method="reml"` scans REML
 likelihoods instead); no LD thinning in the LDAK-Thin weights; a 1% relative
 CV R^2 margin before BOLT-style mixture (mixmogam) uses the mixture (BOLT-LMM's
-threshold is unpublished); median matching instead of the LDSC intercept when LD scores do
+threshold is unpublished: Loh et al. 2015 say the mixture must beat the infinitesimal
+model "by at least a specified amount", and the BOLT-LMM manual that it runs "only if an
+increase in power is expected"; neither gives the amount); median matching instead of the LDSC intercept when LD scores do
 not vary (coefficient of variation < 0.2). As in BOLT-LMM, mixture p-values
 come with the infinitesimal model's effects and standard errors; slopes
 against in-sample mixture residuals were attenuated, and calibrating their
 p-values did not repair the effects.
+
+### What is new in HRATT, and what has precedent
+
+HRATT is mostly assembled from published parts; its name is not a claim of a
+new method family. Precedent, with the source each part was checked against:
+
+- Two-step design, the 512-SNP inter-chromosome structure test, the alpha grid
+  (-1, -0.75, -0.5, -0.25, 0) chosen by randomized HE, the ten-point (p, F)
+  elastic-net grid with a 90/10 hold-out, the lambda rule (one without strong
+  structure, else mean-matched to GRAMMAR-Gamma-calibrated ridge statistics
+  over SNPs with lambda U < 6 and lambda' T < 6) and weighted linear regression
+  for binary step 1: LDAK-KVIK (Hof & Speed 2025), checked against its
+  technical documentation (ldak-kvik.com/docs/technical) and source
+  (github.com/dougspeed/LDAK), not the paper's Methods. The docs write the
+  lambda equation as lambda sum T = lambda' sum U, the reciprocal of their
+  own sentence; mixmogam follows the sentence (lambda = lambda' sum T / sum U).
+- Frequency weights: the LDAK-Thin model (Speed et al. 2012, 2017), without
+  LD thinning.
+- Variance moments: HE regression (Haseman & Elston 1972), Rademacher trace
+  probes (Hutchinson 1990), their combination (Wu & Sankararaman 2018).
+- Out-of-fold whole-genome predictions: REGENIE's level 0 (Mbatchou et al.
+  2021; the level-0 ridge fits predict each held-out fold, regenie
+  `src/Step1_Models.cpp`), and cross-validated in-cohort predictors for
+  mixed models (Mefford et al. 2020).
+- A polygenic score in the association model with a fitted coefficient:
+  PGS-adjusted GWAS (Campos et al. 2023).
+- The per-group relatedness factor kappa_g: MASTOR's retrospective variance
+  (Jakobsdottir & McPeek 2013), used in the same spirit by BOLT-LMM (Loh et
+  al. 2015). The `"vc"` option imitates fastGWA's sparse-relatedness model
+  (Jiang et al. 2019); pairs come from KING (Manichaikul et al. 2010) or a
+  GCTA sparse GRM (Yang et al. 2011).
+  <!-- TODO(verify): fastGWA's sparse-GRM cut-off (0.05 is commonly quoted)
+  against Jiang et al. 2019 Methods (mixmogam's default 0.025 is on phi, i.e.
+  0.05 on the GRM's 2 phi scale); `"vc"` fits the LOCO residual, not the
+  phenotype. -->
+- `stage1="ldpred3-*"`: LDpred2 and lassosum2 (Privé et al. 2020, 2022).
+- The spectral denominator: a heuristic variant of exact eigen-based
+  statistics (Kang et al. 2008; Lippert et al. 2011; Svishcheva et al. 2012).
+- Elsewhere: EBIC for stepwise selection (Chen & Chen 2008); polygenic GxE
+  (Sul et al. 2016); SLQ (Ubaru, Chen & Saad 2017) and randomized subspace
+  iteration (Halko, Martinsson & Tropp 2011).
+
+Plausibly new, none of it yet shown by ablation to help:
+
+- cross-fitting the LDAK-KVIK elastic-net predictor (LDAK-KVIK builds its
+  final and LOCO predictors "using all samples", `boltbayesr.c` in the LDAK
+  source);
+- a per-group least-squares slope clipped to [0, 1];
+- one-pass HE selection of alpha with probes shared across exponents;
+- MASTOR's factor reduced to one value per LOCO group;
+- the structure-conditional switch between dropping a group's share of a
+  genome-wide fit and refitting each group.
+
+Ablations needed before any of these is claimed as an improvement (each with
+null-chromosome calibration, power at matched error rates, the effect-size
+slope and replicate seeds):
+
+1. in-sample (`loco_folds=1`, LDAK-KVIK-like) against cross-fitted scores at
+   matched hyperparameters;
+2. fixed offset (coefficient one) against the fitted slope, with and without
+   the [0, 1] clip;
+3. drop-share against per-group refit on a grid of structure strengths around
+   the switch, with and without PCs;
+4. single-component HE against REML and partitioned randomized HE, for alpha
+   and h2;
+5. LDAK-Thin weights against unweighted (alpha = -1) and fixed-alpha kinships;
+6. per-group kappa against a global factor and the `"vc"` component, with
+   close relatives present;
+7. spectral against constant and exact denominators;
+8. elastic net against `ldpred3-inf` and `ldpred3-lassosum2` at matched
+   marker sets.
 
 ### Stage-1 predictor seam
 
@@ -513,7 +594,9 @@ selection work on the two-bit codes without a decoded temporary.
 
 One-pass consumers decode 16 MiB slices (at least 256 variants, at most
 512 MiB) into reused buffers, or straight into float64 tiles where they need
-float64 rows. BOLT-LMM's in-sample LD scores stream each chromosome in
+float64 rows. The `bolt` method's in-sample LD scores (BOLT-LMM itself reads a
+reference LD-score table, `--LDscoresFile`; in-sample scores are a mixmogam
+departure) stream each chromosome in
 position order, compute each pair once and keep their working tiles within
 `max_memory_gib` (an `ld_scores` argument, default 1.0 GiB, that `bolt` does
 not expose). PLINK decoding and genotype validation also use bounded tiles.
