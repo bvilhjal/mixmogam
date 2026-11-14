@@ -275,9 +275,16 @@ def test_readahead_thread_on_temp_cache(tmp_path, monkeypatch):
     ra = _stream.Readahead.for_array(calls.data, 1 << 16, prefetch="thread")
     assert ra.prefetcher is not None and ra.file_offset == _stream.HEADER_BYTES
     ra.begin()
-    for s in range(0, idx.size, 9):
-        ra.at(np.arange(s, min(idx.size, s + 9)))
+    # Check the thread on the first request, which asks for a window beyond
+    # the slice. Driving the whole pass first is racy: if the thread is not
+    # scheduled before the last slice, the final request has target == pos
+    # (end of file), nothing is left to prefetch and bytes stays 0 forever.
     import time
-    time.sleep(0.1)
+    ra.at(np.arange(0, 9))
+    deadline = time.monotonic() + 5
+    while ra.prefetcher.stats["bytes"] == 0 and time.monotonic() < deadline:
+        time.sleep(0.01)
     assert ra.prefetcher.stats["bytes"] > 0
+    for s in range(9, idx.size, 9):
+        ra.at(np.arange(s, min(idx.size, s + 9)))
     assert np.array_equal(np.asarray(calls.data), gt.G.data[idx])
