@@ -222,7 +222,8 @@ measurement details.
   ([archive](https://github.com/bvilhjal/mixmogam/blob/v2.0.1/benchmarks/results/20261025T201718Z-kvik-covariates-small/README.md)).
   Check `extra["cv_converged"]` and `extra["loco_converged"]`.
 - Only HRATT models binary outcomes and weights. A 0/1 phenotype passed
-  without `trait="binary"` is fitted as Gaussian, without a warning.
+  without `trait="binary"` is fitted as Gaussian, and HRATT warns; use
+  `trait="binary"` for case-control data.
 - `bolt` mixture p-values come with infinitesimal-model effects and standard
   errors (`extra["effect_method"] == "bolt-inf"`).
 - A genome-wide lambda near one can hide miscalibration within SNP groups.

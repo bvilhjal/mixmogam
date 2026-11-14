@@ -43,6 +43,18 @@ import warnings
 
 # KING kinship boundaries (Manichaikul et al. 2010): 3rd degree from 2^-4.5.
 KING_THIRD_DEGREE = 0.0442
+KING_SECOND_DEGREE = 0.0884  # KING's 2nd-degree lower bound (phi 1/8 nominal)
+KING_FIRST_DEGREE = 0.177  # KING's 1st-degree lower bound (phi 1/4 nominal)
+
+
+def dropped_degree(floor: float) -> str:
+    """Closest relatives a KING floor of ``floor`` can drop: '' when it is
+    below the 2nd-degree bound."""
+    if floor > KING_FIRST_DEGREE:
+        return "1st-degree relatives (phi 0.25: parents, offspring, full sibs)"
+    if floor > KING_SECOND_DEGREE:
+        return "2nd-degree relatives (phi 0.125)"
+    return ""
 
 
 class Relatedness:
@@ -272,7 +284,13 @@ def king_relatedness(gt, variants=None, *, min_phi: float = KING_THIRD_DEGREE,
 RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5000,
                        "king_max_variants": 50_000, "king_min_maf": 0.05, "king_max_n": 50_000,
                        "king_noise_pairs": 30_000, "king_noise_sd_multiple": 4.0,
-                       "kappa_floor": 0.2}
+                       "kappa_floor": 0.2, "loco_refit": "auto",
+                       "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
+                       "king_max_abs_f": 0.5, "kinship_variants": None,
+                       "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn",
+                       "loco_refit_min_related": 0.01, "crossfit_folds": "random",
+                       "carrier_families_p": 1e-4, "carrier_families_max": 3,
+                       "carrier_families_max_maf": 0.05}
 
 # KING-robust from a sample block against all samples, keeping pairs above a
 # threshold: O(block x n) memory, never the n x n matrix.
@@ -336,18 +354,32 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     ra, rb = ra[keep], rb[keep]
     phi_r = np.empty(ra.size)
     nhet = np.zeros(n)
+    hexp = np.zeros(n)  # expected heterozygotes per sample under HWE
+    n_hom_alt = 0
+    n_called = 0
     I, J, V = [], [], []
     for s in range(0, n, block):
         e = min(n, s + block)
         hh = np.zeros((e - s, n), dtype=np.float64)
         opp = np.zeros((e - s, n), dtype=np.float64)
         for take in chunks:
-            H, A, B = _king_indicators(calls(take))
+            Gc = calls(take)
+            H, A, B = _king_indicators(Gc)
             if s == 0:
                 nhet += H.sum(1)
+                called = (Gc >= 0)
+                f = np.where(called, Gc, 0).sum(0) / np.maximum(2 * called.sum(0), 1)
+                hexp += called.astype(np.float32) @ (2 * f * (1 - f)).astype(np.float32)
+                n_hom_alt += int(B.sum())
+                n_called += int(called.sum())
             hh += H[s:e] @ H.T
             opp += A[s:e] @ B.T + B[s:e] @ A.T
         if s == 0:
+            # Inbreeding F = 1 - observed / expected heterozygosity per
+            # sample; KING-robust assumes outbred diploid calls (0/1/2).
+            with np.errstate(divide="ignore", invalid="ignore"):
+                F = 1.0 - nhet / hexp
+            F_med = float(np.nanmedian(F)) if np.isfinite(F).any() else 0.0
             nhet = np.maximum(nhet, 1.0)
         nm = np.minimum(nhet[s:e, None], nhet[None, :])
         phi = (hh - 2 * opp) / (2 * nm) + 0.5 - (nhet[s:e, None] + nhet[None, :]) / (4 * nm)
@@ -364,7 +396,8 @@ def king_pairs(gt, variants, threshold: float, *, block: int = 2048, chunk: int 
     I, J, V = I[ok], J[ok], V[ok]
     return {"i": I, "j": J, "r": 2.0 * V,
             "threshold": thr, "threshold_requested": float(threshold), "noise_sd": sd,
-            "n_variants": int(idx.size), "seconds": time.perf_counter() - t0}
+            "n_variants": int(idx.size), "seconds": time.perf_counter() - t0,
+            "median_F": F_med, "hom_alt_fraction": n_hom_alt / max(n_called, 1)}
 
 
 def align_pairs(id1, id2, r, sample_ids, *, source: str = "pairs") -> tuple:
@@ -425,31 +458,72 @@ def read_grm_sparse(prefix: str, sample_ids) -> tuple:
                        source=os.path.basename(prefix) + ".grm.sp")
 
 
-def unrelated_set(rel: Relatedness) -> np.ndarray:
-    """A maximal unrelated set: greedily drop the sample in the most
-    remaining pairs until no pair is left (ties: the higher index).
-    Returns the kept row indices, sorted."""
-    K = (rel.Koff != 0).astype(np.int8).tocsr()
-    deg = np.diff(K.indptr).astype(np.int64)
-    alive = np.ones(rel.n, dtype=bool)
+def unrelated_set(rel: Relatedness, min_phi: float = 0.0) -> np.ndarray:
+    """A maximal unrelated set (no kept pair with phi = r / 2 > ``min_phi``;
+    0: every listed pair): repeatedly keep the open sample with the fewest
+    open relatives and drop those relatives (ties: the lower index). Returns
+    the kept row indices, sorted.
+
+    Minimum-degree selection, not maximum-degree removal: on the SG's
+    isolate panel (2,000 sampled first cousins of each other, 3.6 cousins
+    each, phi 1/16) removal kept 775 of an exact maximum of 822-824 (MILP),
+    selection 795-828. A maximum independent set is NP-hard in general;
+    this greedy is within a few % of it on the simulated pedigrees."""
     import heapq
 
-    heap = [(-d, -i) for i, d in enumerate(deg) if d > 0]
+    if min_phi > 0:
+        rel = rel.threshold_phi(min_phi)
+    K = rel.Koff.tocsr()
+    ind, ptr = K.indices, K.indptr
+    deg = np.diff(ptr).astype(np.int64)
+    state = np.zeros(rel.n, dtype=np.int8)  # 0 open, 1 kept, 2 dropped
+    state[deg == 0] = 1
+    heap = [(int(d), i) for i, d in enumerate(deg) if d > 0]
     heapq.heapify(heap)
     while heap:
         d, i = heapq.heappop(heap)
-        d, i = -d, -i
-        if not alive[i] or deg[i] == 0:
+        if state[i] or d != deg[i]:
             continue
-        if d != deg[i]:
-            heapq.heappush(heap, (-deg[i], -i))
-            continue
-        alive[i] = False
-        nb = K.indices[K.indptr[i]:K.indptr[i + 1]]
-        nb = nb[alive[nb]]
-        deg[nb] -= 1
-        deg[i] = 0
-    return np.flatnonzero(alive)
+        state[i] = 1
+        for j in ind[ptr[i]:ptr[i + 1]]:
+            if state[j] == 0:
+                state[j] = 2
+                for k in ind[ptr[j]:ptr[j + 1]]:
+                    if state[k] == 0:
+                        deg[k] -= 1
+                        heapq.heappush(heap, (int(deg[k]), int(k)))
+    return np.flatnonzero(state == 1)
+
+
+def carrier_families(lg, rel: Relatedness, idx, threshold: float) -> np.ndarray:
+    """(iv) Distinct families among the minor-allele carriers of variants
+    ``idx`` (``lg``: their LocoGenotypes): connected components of the
+    carriers' own pairs with phi > ``threshold``. Unrelated carriers count
+    one each; carriers linked only through non-carriers count apart (in a
+    cousin-rich isolate the full pair graph is one giant component, which
+    would call every variant one family). One decode of ``idx``."""
+    from scipy.sparse.csgraph import connected_components
+
+    from mixmogam._standardize import decode_table
+
+    idx = np.asarray(idx, dtype=np.int64)
+    out = np.zeros(idx.size, dtype=np.int64)
+    if not idx.size:
+        return out
+    K = rel.threshold_phi(threshold).Koff.tocsr()
+    minor_is_counted = lg.mean[idx] / 2.0 <= 0.5
+    lut = np.where(minor_is_counted[:, None], np.array([0.0, 1.0, 1.0, 0.0]),
+                   np.array([1.0, 1.0, 0.0, 0.0])).astype(np.float32)
+    step = 256  # decode in row tiles: memory O(256 n)
+    for a in range(0, idx.size, step):
+        b = min(idx.size, a + step)
+        C = np.empty((b - a, lg.n), dtype=np.float32)
+        decode_table(lg.gt.G, idx[a:b], lut[a:b], C, 1, compiled=lg._compiled)
+        for r in range(b - a):
+            car = np.flatnonzero(C[r] > 0)
+            out[a + r] = (car.size if car.size <= 1 else
+                          connected_components(K[car][:, car], directed=False)[0])
+    return out
 
 
 def covariate_factor(rel: Relatedness, Q: np.ndarray, n_eff: float) -> tuple:
@@ -488,16 +562,43 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
                           stacklevel=3)
         res = king_pairs(gt, idx, threshold, noise_pairs=options["king_noise_pairs"],
                          noise_sd_multiple=options["king_noise_sd_multiple"], rng=rng)
+        F, homalt = res["median_F"], res["hom_alt_fraction"]
+        coding = ("haploid or 0/1-coded calls (no homozygous-alternative calls)" if homalt == 0
+                  else f"median inbreeding F = {F:+.2f}")
+        if abs(F) > options["king_max_abs_f"] or homalt == 0:
+            raise ValueError(
+                f"relatedness='auto': {coding}; KING-robust assumes outbred diploid 0/1/2 "
+                "genotypes and is invalid here (it calls most pairs related). Pass a pedigree "
+                "Relatedness or external pairs, or raise relatedness_options['king_max_abs_f']")
+        if abs(F) > 0.05:
+            warnings.warn(f"relatedness='auto': {coding}; KING-robust kinship is biased for "
+                          "inbred or excess-heterozygosity samples", RuntimeWarning, stacklevel=3)
+        if res["i"].size > 5 * n:
+            warnings.warn(f"relatedness='auto': {res['i'].size:,} pairs for {n:,} samples (> 5 "
+                          "per sample) is implausible for close relatives; check the genotype "
+                          "coding and population structure, or pass a pedigree or external "
+                          "pairs", RuntimeWarning,
+                          stacklevel=3)
         if res["threshold"] > threshold:
+            # Population structure inflates the random-pair spread (the SG's
+            # Fst 0.05 panel without PCs: SD 0.039, floor 0.158), and above
+            # 0.0884 the floor drops 2nd-degree relatives from kappa_g.
+            lost = dropped_degree(res["threshold"])
             warnings.warn(
                 f"relatedness='auto': the KING noise SD on {res['n_variants']:,} variants is "
                 f"{res['noise_sd']:.4f}, so pairs with phi <= {res['threshold']:.4f} "
                 f"({options['king_noise_sd_multiple']:g} SD) are dropped instead of <= "
-                f"{threshold:g}; pass pedigree or external KING pairs for distant relatives",
+                f"{threshold:g}"
+                + (f"; this floor is above KING's 2nd-degree bound (0.0884), so {lost} "
+                   "can be dropped too, usually because population structure inflates the "
+                   "random-pair spread. Pass pedigree or external (PC-aware) kinship pairs"
+                   if lost else
+                   "; pass pedigree or external KING pairs for distant relatives"),
                 RuntimeWarning, stacklevel=3)
         rel = Relatedness(n, res["i"], res["j"], res["r"], source=f"king-auto ({on})")
         info.update({"source": "king-auto", "king": {k: res[k] for k in (
-            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds")},
+            "threshold", "threshold_requested", "noise_sd", "n_variants", "seconds",
+            "median_F", "hom_alt_fraction")},
             "king_on": on})
         return rel, info
     if isinstance(spec, (str, os.PathLike)):
@@ -508,10 +609,48 @@ def resolve_relatedness(spec, gt, *, mean, model_idx, threshold: float, options:
             rel, dropped = read_kin0(path, gt.sample_ids)
         rel = rel.threshold_phi(threshold)
         info.update({"source": rel.source, "dropped_pairs": dropped})
-        return rel, info
-    rel = as_relatedness(spec, n)
-    info["source"] = rel.source or "pairs"
+    else:
+        rel = as_relatedness(spec, n)
+        info["source"] = rel.source or "pairs"
+    info.update(_kinship_overlap(gt, options, model_idx))
     return rel, info
+
+
+def _kinship_overlap(gt, options: dict, model_idx) -> dict:
+    """P4: external kinship estimated on the stage-1 model SNPs under-corrects
+    (KING on model SNPs left the null mean chi-square at up to 1.09 in the
+    SG's grid: the fit anti-correlates the residuals of pairs that look
+    related on its own SNPs). With ``options["kinship_variants"]`` (the
+    variants the pairs were estimated on: indices, a mask, IDs, or a path
+    to a file of IDs, e.g. PLINK ``.prune.in``) the overlap with the model
+    SNPs is recorded and a warning issued above ``kinship_max_model_overlap``
+    of them. Without it nothing can be checked (recorded as None)."""
+    kv = options.get("kinship_variants")
+    if kv is None:
+        return {"kinship_model_overlap": None}
+    from mixmogam._thin import _resolve_indices
+
+    if isinstance(kv, (str, os.PathLike)):
+        with open(os.fspath(kv)) as fh:
+            kv = np.array([ln.split()[0] for ln in fh if ln.strip()])
+    kidx = _resolve_indices(gt, kv, "kinship_variants", strict=False)
+    model = (np.arange(gt.n_variants) if model_idx is None
+             else np.asarray(model_idx, dtype=np.int64))
+    if kidx.size == 0:
+        warnings.warn("relatedness_options['kinship_variants'] matched no panel variant; the "
+                      "kinship-vs-model-SNP overlap was not checked", RuntimeWarning, stacklevel=4)
+        return {"kinship_model_overlap": None, "kinship_variants_matched": 0}
+    frac = float(np.isin(kidx, model).mean())
+    # Full stage 1 (no subset): every variant is a model SNP and KING on the
+    # whole panel calibrated in the SG grid; only subsets are guarded.
+    if model_idx is not None and frac > options["kinship_max_model_overlap"]:
+        warnings.warn(
+            f"relatedness: {frac:.0%} of the {kidx.size:,} variants the kinship was estimated "
+            "on are stage-1 model SNPs; kinship from model SNPs biases kappa_g down (null mean "
+            "chi-square up to 1.09 in simulation, worst with small subsets). Estimate it on "
+            "common variants that are not model SNPs, or use a pedigree", RuntimeWarning,
+            stacklevel=4)
+    return {"kinship_model_overlap": frac, "kinship_variants_matched": int(kidx.size)}
 
 
 def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact",

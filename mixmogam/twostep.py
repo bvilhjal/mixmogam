@@ -604,6 +604,37 @@ def _spectral_calibration_quadform(st: _Setup, bases: list, delta: float, snps: 
     return out
 
 
+def _carrier_family_columns(st: _Setup, p, rel, threshold, p_max, fam_max, maf_max,
+                            binary) -> dict:
+    """(iv) Per-variant ``carrier_families`` (NaN unless p < ``p_max`` and
+    MAF < ``maf_max``: common variants have carriers in many families, and
+    a hit's whole carrier graph would be costly) and
+    ``few_carrier_families`` (<= ``fam_max``). Saddlepoint tails assume
+    independent carriers; carriers clustered in 1-3 families read
+    1.2-2.3x nominal at 1e-3 under kappa_g in the SG's rare binary nulls,
+    in every MAC bin (specA-benchmark-sg.md §9c)."""
+    from mixmogam._relatedness import carrier_families
+
+    p = np.asarray(p, dtype=np.float64)
+    fam = np.full(p.size, np.nan)
+    half = st.lg.mean / 2.0
+    maf = np.minimum(half, 1.0 - half)
+    idx = np.flatnonzero(np.isfinite(p) & (p < p_max) & (maf < maf_max))
+    fam[idx] = carrier_families(st.lg, rel, idx, threshold)
+    few = np.zeros(p.size, dtype=bool)
+    few[idx] = fam[idx] <= fam_max
+    n_few = int(few.sum())
+    if binary and n_few:
+        warnings.warn(
+            f"relatedness: {n_few} variant(s) with p < {p_max:g} have their minor-allele "
+            f"carriers in <= {fam_max} families (few_carrier_families); the saddlepoint "
+            "assumes independent carriers and such tests read 1.2-2.3x nominal at 1e-3 in "
+            "simulated families. Confirm them in an unrelated subset", RuntimeWarning,
+            stacklevel=4)
+    return {"carrier_families": fam, "few_carrier_families": few,
+            "carrier_families_p": float(p_max), "n_few_carrier_families": n_few}
+
+
 def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResult:
     if any(extra.get(key) is False for key in ("cv_converged", "loco_converged")):
         warnings.warn("variational fit did not converge; inspect cv_converged/loco_converged before using results",
@@ -614,6 +645,9 @@ def _result(st: _Setup, gt, chi2, beta_z, se_z, extra: dict, p=None) -> GwasResu
         se = np.where(sd > 0, se_z / sd, np.nan)
     if p is None:
         p = stats.chi2.sf(chi2, 1)
+    ctx = extra.pop("_carrier_ctx", None)
+    if ctx is not None:
+        extra.update(_carrier_family_columns(st, p, *ctx))
     res = GwasResult(
         chromosome=np.asarray(gt.chromosome),
         position=np.asarray(gt.position),
@@ -1254,7 +1288,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     (n - tr(Q' Phi Q)) for the covariates Q; weighted tests multiply their
     retrospective variance by kappa_g, binary tests that of w (y - mu_g),
     and the saddlepoint takes lambda_g = 1 / kappa_g as its per-group
-    variance ratio. lambda is then 1. ``relatedness`` takes (i, j, r = 2
+    variance ratio. lambda is then 1. Without ``relatedness``, close
+    relatives are left to the structure lambda; with sampling weights that
+    path is unpredictable (null lambda 0.70-1.92 in simulated families), so
+    weighted analyses of related samples need ``relatedness``.
+    :func:`~mixmogam.association.gwas_by_group` applies ``relatedness``
+    inside each group only (pairs that cross the split are dropped); do not
+    split relatives across groups. ``relatedness`` takes (i, j, r = 2
     phi) arrays or a :class:`mixmogam._relatedness.Relatedness` (e.g. a
     pedigree's, :func:`~mixmogam._relatedness.pedigree_relatedness`: no
     genotype pass; preferred), a KING / PLINK 2 ``.kin0`` path or a GCTA
@@ -1264,13 +1304,76 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     that are not model SNPs (model SNPs bias kappa_g down through the fit),
     for n <= 50,000 only, keeping phi > max(``relatedness_threshold``, 4 x
     the KING noise SD from random pairs). The structure test is repeated on
-    a maximal unrelated set, which then decides the LOCO refit and the
-    ancestry-PC warning (relatives alone trip the all-sample test; both are
-    in ``extra["structure"]``). ``"gls"`` (opt-in, unweighted quantitative)
-    whitens the residual with a sparse family covariance instead;
-    ``"lambda"`` is the behaviour without ``relatedness``, ``"none"`` no
-    correction. ``extra["relatedness"]`` records the pairs, kappa_g, c_X
+    a maximal unrelated set, which then decides the ancestry-PC warning
+    (relatives alone trip the all-sample test; both are in
+    ``extra["structure"]``). The cross-fitted LOCO scores are refitted per
+    group (k x groups fits) when there is evidence of relatives, as well as
+    under strong structure (``extra["loco_refit_reason"]``). Evidence is
+    any supplied pair (pedigree, register, ``.kin0`` / ``.grm.sp`` file or
+    arrays) with phi > ``relatedness_threshold``; for ``"auto"`` (KING
+    estimated here) at least ``relatedness_options["loco_refit_min_related"]``
+    (1%) of the samples must be in such a pair, since its noise floor
+    passes 0-1 spurious pairs on unrelated panels and the leak grows with
+    the related fraction (paired in-model null excess -0.007 to +0.001 at
+    1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100% in the CW's mixed
+    nuclear-family panels; ``extra["relatedness"]["related_fraction"]``).
+    Why the refit:
+    the folds split families, so a genome-wide fit's chromosome-g model SNPs
+    absorb family-shared noise of the test samples' relatives and dropping
+    their share leaves it in the residual (null model SNPs read a mean
+    chi-square of 1.06-1.19 with household c2 = 0.2 in the SG's simulations,
+    rising with n; refitted 0.99-1.04). ``relatedness_options={"loco_refit":
+    False}`` disables this safety rule for research comparisons only (in-model
+    nulls can be inflated; not recommended),
+    ``True`` forces it. ``"crossfit_folds": "family"`` (opt-in; default
+    ``"random"``) instead keeps each family (connected pairs with phi >
+    ``relatedness_threshold``) in one fold, which removes the same leak
+    without the refit's 1.3-3.8x stage-1 CPU: calibrated in the SG's grid
+    (unlinked 0.999, in-model 1.008), but the families' shared signal stays
+    in the residual, so QTL chi-square is 0.66-0.92x the refit's in
+    family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
+    CPU binds. When the largest family exceeds n / (2 k) samples the folds
+    cannot balance and it falls back to random folds with the refit, with a
+    warning. ``"gls"`` (opt-in, unweighted quantitative)
+    whitens the residual with a sparse family covariance instead. It gains
+    power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
+    families with a 5% subset) but is prospective: under families ascertained
+    on the trait with a household effect its null mean chi-square read 1.017
+    (kappa 0.998), so it is never the default. ``"lambda"`` is the behaviour
+    without ``relatedness``, ``"none"`` no correction.
+
+    The maximal unrelated set of the structure test splits only pairs with
+    phi > ``relatedness_options["unrelated_min_phi"]`` (default 0.0442, 3rd
+    degree); below ``"unrelated_min_n"`` (100) samples the test falls back to
+    every sample, with a warning. Strong structure among the unrelated with
+    no covariates warns that kappa_g has replaced lambda
+    (``"structure_without_pcs": "error"`` raises instead). ``"auto"``
+    refuses haploid / 0-1-coded or inbred calls (median |F| >
+    ``"king_max_abs_f"``, 0.5; KING-robust assumes outbred diploids) and
+    warns at |F| > 0.05 or more than 5 n pairs. External kinship must not
+    be estimated on the stage-1 model SNPs (kappa_g is biased down: up to
+    1.09 in simulation with small subsets); pass the variants it was
+    estimated on as ``"kinship_variants"`` (indices, a mask, IDs or a path to
+    an ID list such as PLINK ``.prune.in``) and HRATT warns when more than
+    ``"kinship_max_model_overlap"`` (10%) of them are model SNPs; a ``.kin0``
+    file alone carries no variant list, so this cannot be checked otherwise.
+    ``extra["relatedness"]`` records the pairs, kappa_g, c_X, the checks
     and the KING settings.
+
+    Rare variants with relatives (MAF < ~5%): kappa_g corrects the variance
+    of the score, not its shape. When a variant's carriers cluster in a few
+    families the score is heavier-tailed than the saddlepoint's (or the
+    normal's) independent-carrier tail: binary nulls read 1.2-2.3x nominal
+    at 1e-3 (up to ~3.5x at 1e-4) in every MAC bin in the SG's simulations,
+    worst with carriers in 1-3 families; a MAC floor does not fix it. Each
+    variant with p < ``relatedness_options["carrier_families_p"]`` (1e-4)
+    and MAF < ``"carrier_families_max_maf"`` (0.05) gets
+    ``extra["carrier_families"]`` (distinct families among its
+    minor-allele carriers; NaN otherwise) and ``extra
+    ["few_carrier_families"]`` (<= ``"carrier_families_max"``, 3), also
+    exported as result columns; binary traits warn when any is flagged.
+    Confirm such hits in an unrelated subset (or by gene-dropping); a
+    family-aware saddlepoint is not implemented.
 
     A subset's stage 1 sees only the polygenic signal its SNPs tag. In
     simulated nuclear families (n = 2,000) the median null chi-square
@@ -1347,6 +1450,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     score, and it is anti-conservative for low-frequency variants (design
     notes).
 
+    A two-valued ``y`` with ``trait="quantitative"`` (the default) is
+    fitted as a Gaussian linear-probability model and warns; use
+    ``trait="binary"`` for case-control data.
     ``trait="binary"`` (outcomes 0/1) fits step 1 as weighted linear
     regression of the working response (y - mu0) / (mu0 (1 - mu0)), with
     working weights mu0 (1 - mu0) of the covariate-only null logistic fit
@@ -1371,6 +1477,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     """
     if trait not in ("quantitative", "binary"):
         raise ValueError("trait must be 'quantitative' or 'binary'")
+    if trait == "quantitative":
+        yv = np.asarray(y, dtype=np.float64).ravel()
+        if np.unique(yv[np.isfinite(yv)]).size == 2:
+            warnings.warn("y takes two values but trait='quantitative': it is fitted as a "
+                          "Gaussian trait (a linear probability model); for case-control "
+                          "data use trait='binary'", UserWarning, stacklevel=2)
     if heritability_method not in ("auto", "he", "reml"):
         raise ValueError("heritability_method must be 'auto', 'he' or 'reml'")
     weighted = sample_weights is not None
@@ -1441,6 +1553,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if unknown:
             raise ValueError(f"unknown relatedness_options: {sorted(unknown)}")
         rel_opt = {**RELATEDNESS_OPTIONS, **(relatedness_options or {})}
+        if rel_opt["loco_refit"] not in ("auto", True, False):
+            raise ValueError("relatedness_options['loco_refit'] must be 'auto', True or False")
+        if rel_opt["crossfit_folds"] not in ("random", "family"):
+            raise ValueError("relatedness_options['crossfit_folds'] must be 'random' or 'family'")
+        if rel_opt["structure_without_pcs"] not in ("warn", "error"):
+            raise ValueError("relatedness_options['structure_without_pcs'] must be 'warn' or 'error'")
         if rel_opt["denominator"] not in ("exact", "gamma"):
             raise ValueError("relatedness_options['denominator'] must be 'exact' or 'gamma'")
     else:
@@ -1489,20 +1607,107 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             model_idx=None if model_info is None else model_info["indices"],
             threshold=relatedness_threshold, options=rel_opt,
             rng=np.random.default_rng([seed, 0x4B49]))
-        keep = unrelated_set(rel)
-        struct_unrel = (struct_all if keep.size == n else
-                        structure_test(st_test, structure_snps, np.random.default_rng([seed, 0x5553]),
-                                       samples=keep))
-        struct = {**struct_unrel, "on": "unrelated", "n_unrelated": int(keep.size),
-                  "all_samples": struct_all}
+        # Only pairs closer than unrelated_min_phi (3rd degree) are split:
+        # dropping every listed pair (distant pedigree links, KING noise)
+        # left 38 of 2,000 samples on the SG's isolate panel.
+        keep = unrelated_set(rel, min_phi=rel_opt["unrelated_min_phi"])
+        if keep.size < min(rel_opt["unrelated_min_n"], n):
+            warnings.warn(
+                f"relatedness: the unrelated set (no pair with phi > "
+                f"{rel_opt['unrelated_min_phi']:g}) has {keep.size} of {n} samples, under "
+                f"relatedness_options['unrelated_min_n'] = {rel_opt['unrelated_min_n']}; the "
+                "structure test uses every sample instead, which relatives can trip (a "
+                "possibly spurious ancestry-PC warning; the LOCO refit is on with relatives "
+                "anyway)", RuntimeWarning, stacklevel=2)
+            struct = {**struct_all, "on": "all (unrelated set too small)",
+                      "n_unrelated": int(keep.size), "all_samples": struct_all}
+        else:
+            struct_unrel = (struct_all if keep.size == n else
+                            structure_test(st_test, structure_snps,
+                                           np.random.default_rng([seed, 0x5553]), samples=keep))
+            struct = {**struct_unrel, "on": "unrelated", "n_unrelated": int(keep.size),
+                      "all_samples": struct_all}
         rel_info.update({"correction": relatedness_correction, **rel.summary(),
                          "s2": float(2.0 * np.sum(rel.upper.data ** 2) / n),
                          "n_unrelated": int(keep.size)})
         if struct["strong"] and kappa_on:
-            warnings.warn("strong population structure remains among unrelated samples after the "
-                          "covariates; kappa_g corrects for relatives, not for structure, so "
-                          "include ancestry principal components among the covariates",
-                          RuntimeWarning, stacklevel=2)
+            no_cov = st_test.lg.Q.shape[1] <= 1  # intercept only
+            rel_info["structure_without_covariates"] = bool(no_cov)
+            if no_cov:
+                # P5: kappa_g replaces lambda, so with no covariates nothing
+                # corrects the structure (SG grid, no PCs: null mean chi2
+                # 1.05-1.08 against <= 1.013 with lambda).
+                msg = ("strong population structure among unrelated samples and no covariates: "
+                       "with relatedness= kappa_g replaces lambda, which corrected part of it, "
+                       "so structured variants can be inflated (null mean chi-square 1.05-1.08 "
+                       "in simulation against <= 1.013 with lambda); include ancestry principal "
+                       "components among the covariates")
+                king = rel_info.get("king") or {}
+                if king.get("threshold", 0.0) > king.get("threshold_requested", np.inf):
+                    from mixmogam._relatedness import dropped_degree
+
+                    # (ii) the same structure inflates KING-auto's noise floor
+                    # (SG: Fst 0.05, no PCs -> phi 0.158, 2nd degree lost)
+                    lost = dropped_degree(king["threshold"])
+                    msg += (f". The structure also raised the KING-auto noise floor to phi "
+                            f"{king['threshold']:.3f} (requested {king['threshold_requested']:g})"
+                            + (f", which can drop {lost} from kappa_g" if lost else "")
+                            + "; PCs do not lower it (KING runs on genotypes), so pass "
+                            "pedigree or external PC-aware kinship pairs")
+                if rel_opt["structure_without_pcs"] == "error":
+                    raise ValueError(msg)
+                warnings.warn(msg, RuntimeWarning, stacklevel=2)
+            else:
+                warnings.warn("strong population structure remains among unrelated samples "
+                              "after the covariates; kappa_g corrects for relatives, not for "
+                              "structure, so include ancestry principal components among the "
+                              "covariates", RuntimeWarning, stacklevel=2)
+    # The LOCO refit (k x groups fits, each without its group's variants).
+    # Strong structure needs it; so do relatives (SG specA-benchmark §2b):
+    # cross-fit folds split families, so fold f's genome-wide fit lets
+    # group g's model SNPs absorb family-shared noise of the test samples'
+    # relatives, and dropping g's share afterwards leaves it in the residual
+    # (in-model null mean chi2 1.06-1.19 at c2 = 0.2, growing with n).
+    refit, refit_reason = bool(struct["strong"]), ("structure" if struct["strong"] else None)
+    family_folds, fam_labels = False, None
+    if rel is not None:
+        mode = rel_opt["loco_refit"]
+        u = rel.upper.tocoo()
+        close = u.data / 2.0 > relatedness_threshold
+        n_rel = int(np.unique(np.r_[u.row[close], u.col[close]]).size)
+        rel_info["n_pairs_above_threshold"] = int(close.sum())
+        rel_info["related_fraction"] = n_rel / n
+        # (i) Evidence for relatives: supplied pairs (pedigree, register,
+        # external KING / GCTA files) count from one pair. KING-auto pairs
+        # need >= loco_refit_min_related (1%) of samples in a close pair: on
+        # unrelated panels its 4-SD floor still passes 0-1 noise pairs (SG,
+        # 2 of 3 seeds at n = 2,000), while the leak the refit removes grows
+        # with the related fraction (paired in-model excess -0.007..+0.001 at
+        # 1% related, <= 0.006 at <= 10%, 0.04-0.14 at 100%; CW mixed panels,
+        # specA-fixes-cw.md), so below 1% it is <= ~0.0014 even scaled
+        # linearly from 100%, and the refit's 1.3-3.8x stage-1 CPU buys nothing.
+        estimated = str(rel_info.get("source", "")).startswith("king-auto")
+        evidence = n_rel >= rel_opt["loco_refit_min_related"] * n if estimated else n_rel > 0
+        rel_info["relatives_evidence"] = bool(evidence)
+        if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1:
+            fam_labels = _family_components(rel, relatedness_threshold)
+            largest = int(np.bincount(fam_labels).max())
+            rel_info["family_folds"] = {"largest_family": largest}
+            if largest > n / (2 * int(loco_folds)):
+                warnings.warn(
+                    f"relatedness_options['crossfit_folds'] = 'family': the largest family "
+                    f"(connected pairs with phi > {relatedness_threshold:g}) has {largest:,} of "
+                    f"{n:,} samples, over n / (2 k) = {n / (2 * int(loco_folds)):,.0f}, so whole "
+                    "families cannot balance the folds; using random folds (with the LOCO "
+                    "refit) instead", RuntimeWarning, stacklevel=2)
+                fam_labels = None
+            family_folds = fam_labels is not None
+        if mode is True:
+            refit, refit_reason = True, refit_reason or "forced"
+        elif mode is False:
+            refit, refit_reason = False, None
+        elif not refit and evidence and not family_folds:
+            refit, refit_reason = True, "relatives"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
@@ -1525,10 +1730,14 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     held = _holdout(n, cv_fraction, rng, strata=st.y_raw if binary else None)
     folds = None
     if loco_folds > 1:
-        folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
+        if family_folds:
+            folds = _family_folds(fam_labels, int(loco_folds), rng)
+            rel_info["family_folds"]["fold_sizes"] = np.bincount(folds, minlength=int(loco_folds)).tolist()
+        else:
+            folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
     if stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
                                     keep_prediction=binary, **(stage1_kwargs or {}))
@@ -1542,7 +1751,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         scores["stage1_name"] = pick
     elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
-                                   keep_prediction=binary, folds=folds, refit=struct["strong"],
+                                   keep_prediction=binary, folds=folds, refit=refit,
                                    gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
         scores["stage1_name"] = "enet"
     else:
@@ -1568,7 +1777,11 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
              "cv_grid": scores.get("cv_grid", list(grid)), "cv_mse": scores["mse"],
              "cv_best": scores.get("cv_best", grid[scores["best"]]),
              "cv_converged": scores["cv_converged"],
-             "loco_folds": int(loco_folds), "loco_refit": bool(folds is not None and struct["strong"]),
+             "loco_folds": int(loco_folds),
+             "crossfit_folds": "family" if family_folds else "random",
+             "loco_refit": bool(folds is not None and refit and scores["stage1_name"] == "enet"),
+             "loco_refit_reason": (refit_reason if folds is not None and refit
+                                   and scores["stage1_name"] == "enet" else None),
              "loco_iterations": scores["loco_iterations"],
              "loco_converged": scores["loco_converged"]}
     if scores["stage1_name"] != "enet" or "stage1_selection" in scores:
@@ -1599,9 +1812,12 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
             A_rel = rsU["A"] if weighted else st_test.lg.project(resid)
             kap_g = _kappa_guard(rel.kappa(A_rel), rel_opt["kappa_floor"])
             del A_rel
-            if not weighted:
-                c_X, trq = covariate_factor(rel, st_test.lg.Q, st_test.n_eff)
-                rel_info["trace_QPhiQ"] = trq
+            # c_X: the genotype variance after covariates (z'Pz / n_eff, or
+            # zvar of the retrospective test on the unscaled design Q_raw)
+            # has expectation sigma^2 (n - tr(Q' Phi Q)) / n_eff, not sigma^2.
+            c_X, trq = covariate_factor(rel, st_test.Q_raw if weighted else st_test.lg.Q,
+                                        st_test.n_eff)
+            rel_info["trace_QPhiQ"] = trq
         elif relatedness_correction == "gls":
             Wp = st_test.lg.project(resid)
             gls = gls_stats(st_test.lg, Wp, rel, denominator=rel_opt["denominator"],
@@ -1614,6 +1830,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         if kap_g is not None:
             rel_info.update({"kappa": kap_g, "c_X": c_X})
         extra["relatedness"] = rel_info
+        extra["_carrier_ctx"] = (rel, relatedness_threshold, rel_opt["carrier_families_p"],
+                                 rel_opt["carrier_families_max"],
+                                 rel_opt["carrier_families_max_maf"], binary)
     lam = 1.0
     if struct["strong"] and h2 > 0 and relatedness_correction == "lambda":
         # At the HE residual-zero boundary, use the same declared noise
@@ -1647,7 +1866,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         # threshold.
         # kappa_g multiplies the retrospective variance (lambda_g = 1/kappa_g,
         # also the saddlepoint's variance ratio, per LOCO group)
-        lam_g = np.full(st.lg.n_groups, lam) if kap_g is None else 1.0 / kap_g
+        lam_g = np.full(st.lg.n_groups, lam) if kap_g is None else 1.0 / (kap_g * c_X)
         lam_j = lam_g[st.lg.groups]
         p, chi2, n_spa = _genotype_tails(st, rsU["A"], rsU["num"], rsU["V"],
                                          lam_j * rsU["chi2_retro"], lam_g if kap_g is not None
@@ -1918,6 +2137,30 @@ def _holdout(n: int, fraction: float, rng, strata=None) -> np.ndarray:
     return np.sort(np.concatenate(held))
 
 
+def _family_components(rel, threshold: float) -> np.ndarray:
+    """Connected components of the pairs with phi > ``threshold`` (one
+    label per sample; unrelated samples are singletons)."""
+    from scipy.sparse.csgraph import connected_components
+
+    return connected_components(rel.threshold_phi(threshold).Koff, directed=False)[1]
+
+
+def _family_folds(labels: np.ndarray, k: int, rng) -> np.ndarray:
+    """(v) Cross-fit folds that keep each family (component) whole: largest
+    first (random order within a size) into the currently smallest fold.
+    Binary case/control strata are not balanced on top of this."""
+    sizes = np.bincount(labels)
+    order = rng.permutation(sizes.size)
+    order = order[np.argsort(-sizes[order], kind="stable")]
+    load = np.zeros(k, dtype=np.int64)
+    fold_of = np.empty(sizes.size, dtype=np.int64)
+    for c in order:
+        f = int(np.argmin(load))
+        fold_of[c] = f
+        load[f] += sizes[c]
+    return fold_of[labels]
+
+
 def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
     """(1e) Fold labels 0..k-1 of the cross-fitted LOCO fits: a random split
     into near-equal folds, made within each stratum (one label per sample)
@@ -2159,11 +2402,15 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     lam_spa = lam
     lam_j = lam
     if rel is not None:
-        # Spec A: kappa_g of a_g = w (y - mu_g) multiplies V; the saddlepoint
-        # takes lambda_g = 1 / kappa_g as its per-group variance ratio.
+        # Spec A: kappa_g of a_g = w (y - mu_g) and c_X (zvar's covariate
+        # bias, on the unscaled design) multiply V; the saddlepoint takes
+        # lambda_g = 1 / (kappa_g c_X) as its per-group variance ratio.
+        from mixmogam._relatedness import covariate_factor
+
         kap = _kappa_guard(rel.kappa(A), kappa_floor)
-        extra["relatedness"]["kappa"] = kap
-        lam_spa = 1.0 / kap
+        c_X, trq = covariate_factor(rel, st.Q_raw, st.n_eff)
+        extra["relatedness"].update({"kappa": kap, "c_X": c_X, "trace_QPhiQ": trq})
+        lam_spa = 1.0 / (kap * c_X)
         lam_j = lam_spa[st.lg.groups]
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2_normal = np.where(valid, lam_j * U * U / V, np.nan)

@@ -132,8 +132,8 @@ result.extra["prevalence"]     # binary: (weighted) case fraction
 result.extra["offset_slope"]   # each LOCO group's fitted score coefficient
 ```
 
-Without `trait="binary"`, a 0/1 phenotype is fitted as a Gaussian trait, with no
-warning. Weights must be finite and positive (drop samples with zero weight) and
+Without `trait="binary"`, a 0/1 (or other two-valued) phenotype is fitted as a
+Gaussian trait, and HRATT warns; use `trait="binary"` for case-control data. Weights must be finite and positive (drop samples with zero weight) and
 are rescaled to mean one. With weights, `heritability_method="auto"` fits
 heritability by HE; REML is unavailable because the weights define no
 likelihood. Binary `beta` is a one-step log-odds approximation per counted
@@ -157,6 +157,72 @@ is given). Method-specific keywords raise the same way: `n_threads` belongs to
 `exact` and `hratt`; `gram_cache_bytes`, `vb_tol` and `vb_max_iter` to `bolt` and
 `hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
 `cv_fraction` to `hratt` alone.
+
+## Relatives
+
+HRATT's `relatedness=` argument (CLI `--relatedness`) corrects for close
+relatives through kappa_g instead of the structure lambda. Pass a pedigree
+(`mixmogam._relatedness.pedigree_relatedness`: no genotype pass; preferred), a
+KING / PLINK 2 `.kin0` path, a GCTA `.grm.sp` prefix, `(i, j, r)` arrays with
+`r = 2 phi`, or `"auto"` (KING-robust on common non-model SNPs). IDs in a file
+are aligned to `gt.sample_ids`. The default `relatedness_correction="kappa"`
+reports scores divided by kappa_g and the covariate factor c_X, and sets
+lambda to 1.
+
+This is the supported path for related samples, and it is required when
+`sample_weights` are also used. Without `relatedness=`, weighted tests in
+simulated families ranged from conservative to badly inflated (lambda
+0.70-1.92). Unweighted tests without it leave close relatives to the
+structure lambda, which is only a partial correction.
+
+Limits:
+
+- `"auto"` (KING-robust) only runs for n <= `relatedness_options["king_max_n"]`
+  (50,000). Biobank-scale analyses must supply a pedigree or a precomputed
+  pair file.
+- Phi keeps only pairs above `relatedness_threshold` (default 0.025; `"auto"`
+  may raise this to 4 times the KING noise SD). More distant relatedness is
+  left to the structure test, so include ancestry PCs among the covariates.
+- kappa_g replaces the structure lambda. With strong structure and no PCs,
+  that can leave structured variants inflated; pass PCs, or set
+  `relatedness_options["structure_without_pcs"] = "error"` to refuse the run.
+- `gwas_by_group` applies `relatedness=` inside each group only. Do not split
+  relatives across groups.
+
+Useful `relatedness_options` (defaults in
+`mixmogam._relatedness.RELATEDNESS_OPTIONS`):
+
+- `loco_refit`: `"auto"` (default) refits the per-chromosome stage 1 when there
+  is evidence of relatives or strong structure; `True` forces it, `False` turns
+  it off (research comparisons only; in-model nulls can inflate).
+- `loco_refit_min_related`: 0.01. For `"auto"` KING pairs, the refit needs at
+  least this fraction of samples in a close pair. A supplied pedigree or file
+  triggers the refit from a single pair above the threshold.
+- `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
+  the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x).
+- `unrelated_min_phi` / `unrelated_min_n`: the structure test uses a maximal
+  set with no pair closer than 3rd degree (phi 0.0442), and falls back to every
+  sample if that set is under 100.
+- `kinship_variants`: the variants an external KING / GRM file was estimated
+  on; HRATT warns when more than `kinship_max_model_overlap` (10%) of them are
+  stage-1 model SNPs.
+- `carrier_families_p` (1e-4), `carrier_families_max` (3),
+  `carrier_families_max_maf` (0.05): see the rare-variant caveat below.
+
+The command line accepts `--relatedness FILE|auto`, `--relatedness-threshold`,
+`--relatedness-correction` and `--kinship-variants`.
+
+With related samples, binary tests of variants with MAF below about 5% can be
+anti-conservative even after the kappa_g correction: in simulated families,
+null rare variants read 1.2-2.3x the nominal rate at p = 1e-3 (up to about
+3.5x at 1e-4), worst when the carriers sit in one to three families, at every
+minor-allele count. The saddlepoint assumes independent carriers; a minimum
+allele count does not fix it. Variants with p <
+`relatedness_options["carrier_families_p"]` (1e-4) and MAF < 5% get a
+`carrier_families` column (distinct families among the minor-allele carriers,
+from the close-pair graph) and `few_carrier_families` (three or fewer);
+binary scans warn when any is flagged. Confirm such hits in an unrelated
+subset, or by gene-dropping through the pedigree.
 
 HRATT's LOCO predictors are trained on the other folds (`loco_folds=5`), while
 variance components and model selection use the whole trait. In the tested
@@ -220,6 +286,14 @@ every thread count; parallel residual products may change rounding. Detected
 BLAS pools are limited internally, but Apple Accelerate needs the
 `VECLIB_MAXIMUM_THREADS` setting above, and the count cannot exceed Numba's
 configured limit. The first use of each kernel pays Numba's compilation.
+Compiled kernels are cached on disk (`cache=True`), by default next to the
+package's sources. When several processes or checkouts run at once (batch
+jobs, benchmark grids, several worktrees on one environment), give each run
+a writable cache of its own, e.g. `NUMBA_CACHE_DIR=$TMPDIR/numba-$JOB`:
+a shared or stale cache was behind intermittent `ReferenceError: underlying
+object has vanished` crashes while Numba saved a kernel in concurrent
+simulation runs, which a per-run `NUMBA_CACHE_DIR` stopped. Results do not
+depend on the cache, only the first-call compile time does.
 During parallel sweeps the workers spin between launches instead of sleeping
 at once (as OpenMP does on Apple silicon), 1.1-1.25x faster at four threads on
 a wide panel for 1.5-2x the CPU time; set `KMP_BLOCKTIME` or
@@ -299,8 +373,11 @@ without a phenotype or with a non-positive weight are dropped, and the count
 is printed. `--pcs K` appends the built-in PCs
 (`mixmogam pca` writes them for other settings); `--trait` and `--weights`
 select the HRATT weighted/binary path. `--weights FILE` is a sample ID (or
-FID IID) followed by one weight column, read like a covariate file, and
-`--n-threads` applies to `exact` and `hratt` only.
+FID IID) followed by one weight column, read like a covariate file;
+`--relatedness FILE|auto` (with `--relatedness-threshold`,
+`--relatedness-correction` and `--kinship-variants`) turns on the kappa_g
+correction for close relatives, and `--n-threads` applies to `exact` and
+`hratt` only.
 
 The same commands accept PGEN and VCF/BCF through `--geno`; `--packed`
 retains two-bit calls and `--mmap` maps BED directly. BGEN requires explicit

@@ -7,6 +7,7 @@ its variance when genotypes are exchangeable given the covariates, with
 the genotype saddlepoint in the tails, with or without sampling weights.
 """
 
+import warnings
 import weakref
 
 import numpy as np
@@ -466,3 +467,21 @@ def test_weighted_binary_hratt_is_deterministic_and_thread_and_storage_invariant
                                        rtol=32 * np.finfo(float).eps, atol=0)
         for key in ("h2", "alpha", "n_spa", "offset_sd"):
             assert other.extra[key] == serial.extra[key]
+
+
+def test_two_valued_quantitative_y_warns():
+    """A 0/1 y with trait='quantitative' warns; a continuous y, or trait='binary', does not."""
+    G = simulate_genotypes(n=80, m=200, seed=11)
+    gt = _gt(G, 5)
+    y = simulate_traits(G, h2=0.4, n_causal=8, seed=12)["y"]
+    yb = (y > np.median(y)).astype(np.float64)
+    kw = dict(alphas=(-1.0, -0.25), he_probes=8, grid=[(0.0, 1.0)], vb_max_iter=40,
+              random_state=1)
+    with pytest.warns(UserWarning, match="two values"):
+        twostep.hratt(yb, gt, **kw)
+    with warnings.catch_warnings(record=True) as rec:
+        warnings.simplefilter("always", UserWarning)
+        twostep.hratt(y, gt, **kw)
+        twostep.hratt(yb, gt, trait="binary", **kw)
+    assert not any("two values" in str(w.message) for w in rec)
+

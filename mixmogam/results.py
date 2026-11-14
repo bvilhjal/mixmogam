@@ -132,7 +132,7 @@ class GwasResult:
             return None if a is None else np.asarray(a)[idx]
 
         extra = dict(self.extra)
-        for key in ("ppa", "log_bf", "priors", "prior_variance"):
+        for key in ("ppa", "log_bf", "priors", "prior_variance") + _EXTRA_COLUMNS:
             if key in extra:
                 extra[key] = np.asarray(extra[key])[idx]
         return GwasResult(
@@ -335,6 +335,9 @@ class GwasResult:
                 if self.extra.get("effect_method") == "one-step-logistic":
                     key = _SCORE_COLUMNS.get(key, key)
                 data[key] = arr
+        for key in _EXTRA_COLUMNS:
+            if key in self.extra:
+                data[key] = np.asarray(self.extra[key])
         return pd.DataFrame(data)
 
     def _export_headcount(self):
@@ -353,7 +356,9 @@ class GwasResult:
         is omitted for binary and weighted scores because downstream readers
         often treat it as an effective size. An explicitly supplied ``n_eff``
         is separate. ``genome_build``, when declared, is a constant column.
-        Binary effects use beta_one_step/se_null_score headers. Other extra
+        Binary effects use beta_one_step/se_null_score headers. HRATT with
+        ``relatedness=`` adds ``carrier_families`` (NaN unless p <
+        ``carrier_families_p``) and ``few_carrier_families``. Other extra
         metadata is not serialized.
         """
         columns = {"chromosome": self.chromosome, "position": self.position, "p": self.p}
@@ -369,6 +374,9 @@ class GwasResult:
                 if self.extra.get("effect_method") == "one-step-logistic":
                     header = _SCORE_COLUMNS.get(header, header)
                 columns[header] = arr
+        for key in _EXTRA_COLUMNS:
+            if key in self.extra:
+                columns[key] = np.asarray(self.extra[key])
         opener = gzip.open if str(path).lower().endswith(".gz") else open
         with opener(path, "wt", newline="") as fh:
             writer = csv.writer(fh, delimiter=_delimiter(path, delimiter))
@@ -388,7 +396,7 @@ class GwasResult:
             names = next(reader, [])
             if len(set(names)) != len(names):
                 raise ValueError("duplicate result column names")
-            supported = (set(_CSV_OPTIONAL) | set(_SCORE_COLUMNS.values()) |
+            supported = (set(_CSV_OPTIONAL) | set(_SCORE_COLUMNS.values()) | set(_EXTRA_COLUMNS) |
                          {"chromosome", "chromosomes", "position", "positions", "p", "ps", "scores",
                           "n", "n_eff", "genome_build", "f_stats", "mafs"})
             columns = {name: [] for name in names if name in supported}
@@ -435,10 +443,17 @@ class GwasResult:
                 raise ValueError("CSV mixes fitted effects with one-step score estimates")
             kwargs.update(beta=col("beta_one_step"), se=col("se_null_score"),
                           extra={"effect_method": "one-step-logistic"})
-        return cls(chromosome=chrom,
-                   position=col("position", "positions", dtype=np.int64, required=True),
-                   p=col("p", "ps", "scores", required=True), n=n,
-                   n_eff=constant("n_eff"), genome_build=constant("genome_build", str), **kwargs)
+        found = {}
+        if "carrier_families" in names:
+            found["carrier_families"] = col("carrier_families")
+        if "few_carrier_families" in names:
+            found["few_carrier_families"] = col("few_carrier_families", dtype=str) == "True"
+        res = cls(chromosome=chrom,
+                  position=col("position", "positions", dtype=np.int64, required=True),
+                  p=col("p", "ps", "scores", required=True), n=n,
+                  n_eff=constant("n_eff"), genome_build=constant("genome_build", str), **kwargs)
+        res.extra.update(found)
+        return res
 
 
 _CSV_OPTIONAL = {
@@ -448,6 +463,10 @@ _CSV_OPTIONAL = {
 }
 
 _SCORE_COLUMNS = {"beta": "beta_one_step", "se": "se_null_score"}
+
+# Per-variant extras exported as columns when present: HRATT with
+# relatedness= (carrier families of variants with p < carrier_families_p).
+_EXTRA_COLUMNS = ("carrier_families", "few_carrier_families")
 
 
 def _delimiter(path, delimiter):
