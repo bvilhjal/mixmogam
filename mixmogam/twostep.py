@@ -1848,7 +1848,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
                       "weighted and binary traits model allele frequencies by the covariates, "
-                      "so include ancestry principal components among them",
+                      "so include ancestry principal components among them. Close relatives "
+                      "also make this test strong, and PCs do not correct them: if the samples "
+                      "include relatives, pass relatedness= (CLI --relatedness: a pedigree, a "
+                      "pair file or 'auto')",
                       RuntimeWarning, stacklevel=2)
     design = st.w if (st.w is not None and st.v is not None) else None
     vc = _hratt_variance(st, struct, alphas, alpha_method, heritability_method, he_probes, rng,
@@ -1910,7 +1913,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
         warnings.warn("strong population structure remains after the covariates: the elastic-net "
                       "stage 1 with the lambda calibration is the most robust choice without PCs, "
                       "but null lambda_GC still reached 1.01-1.13 in simulations; include "
-                      "ancestry principal components among the covariates",
+                      "ancestry principal components among the covariates. Close relatives "
+                      "also make this test strong, and PCs do not correct them: if the samples "
+                      "include relatives, pass relatedness= (CLI --relatedness: a pedigree, a "
+                      "pair file or 'auto')",
                       RuntimeWarning, stacklevel=2)
     if stage1 == "auto" and h2 > 0 and (weighted or struct["strong"]):
         # The LDpred3 candidate needs unweighted samples and no strong
@@ -2253,11 +2259,14 @@ def _model_snp_warnings(st: _Setup, st_full: _Setup, struct: dict, alpha: float,
                         f"{PREDICTED_INFLATION_WARN} (structure-test excess {struct['excess']:.3f}, "
                         f"z {struct['z']:.1f}, x h2 missed by the {k:,} model SNPs "
                         f"{info['h2_check']['h2_he_full'] - info['h2_check']['h2_he_subset']:.3f}). "
-                        "Relatives share polygenic signal the subset's LOCO scores miss. Enlarge "
-                        "model_snps (a 20% 'auto' subset or every variant) or compare lambda_GC / "
-                        "the LD-score intercept with a full stage-1 run on one trait. Under "
-                        "population stratification the excess also reflects structure, so the "
-                        "prediction is then an upper bound.",
+                        "Relatives share polygenic signal the subset's LOCO scores miss. If the "
+                        "samples include relatives, pass relatedness= (CLI --relatedness: a "
+                        "pedigree, a pair file or 'auto') so kappa_g corrects them, and include "
+                        "ancestry principal components among the covariates for structure. "
+                        "Otherwise enlarge model_snps (a 20% 'auto' subset or every variant) or "
+                        "compare lambda_GC / the LD-score intercept with a full stage-1 run on "
+                        "one trait. Under population stratification the excess also reflects "
+                        "structure, so the prediction is then an upper bound.",
              predicted_inflation=pred, excess=float(struct["excess"]))
     if str(info["source"]).startswith("auto") and frac > AUTO_KEEP_WARN:
         emit("auto_keeps_most", f"'auto' kept {k:,} of {m:,} variants ({100 * frac:.0f}%); the "

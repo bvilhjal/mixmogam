@@ -9,20 +9,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- KING-auto's LOCO-refit trigger is noise-aware at large n. The 4-SD floor
-  that fills Phi is unchanged, but the trigger counts only pairs with
-  phi > max(`relatedness_threshold`, median + z σ_eff). σ̂ is the 1.4826
-  MAD of a seeded random subsample of 1e6 pairs (or all pairs if fewer),
-  taken from the KING block products at no extra pass; σ_eff inflates σ̂
-  when that subsample's upper quantile is heavier than Gaussian. z is set
-  so the expected number of null pairs among n(n-1)/2 is about 1. The
-  cutoff is capped at KING's 2nd/3rd-degree bound (0.0884); if the noise
-  cutoff would exceed the cap, a warning recommends a pedigree or external
-  pairs and the refit is not disabled. The older 1% sample rule, applied
-  at the 4-SD floor, fired on an unrelated n=20,000 panel (SG p20k §4:
-  244 pairs, 1.33% of samples, floor 0.042). A handful of true close pairs
-  below 1% of samples still does not fire: the in-model leak is negligible
-  there. Pedigree and pair-file sources are unchanged.
+- KING-auto's LOCO-refit trigger is noise-aware at large n. The trigger
+  counts pre-floor KING pairs with phi > max(`relatedness_threshold`,
+  location + z σ_eff), using the same location and scale as the Phi floor;
+  σ_eff inflates σ̂ when the pair subsample's upper quantile is heavier
+  than Gaussian, and z is set so the expected number of null pairs among
+  all n(n-1)/2 is about 1. The cutoff is capped at KING's 2nd/3rd-degree
+  bound (0.0884) unless `relatedness_threshold` is at least 0.0884. A
+  warning recommending a pedigree or external pairs fires once the cutoff
+  exceeds 0.0625 (3rd-degree relatives and first cousins no longer count);
+  the refit is not disabled. The older 1% sample rule, applied at the 4-SD
+  floor, fired on an unrelated n=20,000 panel (SG p20k §4: 244 pairs, 1.33%
+  of samples, floor 0.042). A handful of true close pairs below 1% of
+  samples still does not fire: the in-model leak there was estimated at
+  <= ~0.0014 and the refit costs 1.3-3.8x the stage-1 CPU (review
+  simulations at n = 2,000, not archived). Pedigree and pair-file sources
+  are unchanged.
+- KING-auto noise floor: the noise scale no longer uses a plain pair MAD
+  that population structure inflates. Under a two-population mixture the
+  4-SD floor sat near 0.15 and dropped 2nd-degree pairs from Phi and from
+  the refit trigger. The floor is now location + 4 σ̂, where σ̂ is 1.4826 x
+  the MAD, or the upper-half MAD (and its location) when the MAD's
+  upper-tail ratio is below 0.8. When n(n-1)/2 <= `king_noise_pairs`
+  (default 1e6) every unordered pair is used; otherwise the pairs are drawn
+  with replacement over ordered pairs. KING-auto results are not
+  byte-identical to earlier stage-1 SHAs: raising `king_noise_pairs` from
+  30,000 to 1e6 also shifts the floor slightly on unstructured panels.
   `extra["relatedness"]["refit_trigger"]` records σ̂, the tail ratio, the
   cutoff, the observed and expected null counts, and the reason.
 - `integrate/stage1` brings in the stage-1 stream-cache readahead fix, the
@@ -30,8 +42,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   seam. A supplied pedigree or pair file is assumed complete: relatives
   missing from it deflate kappa_g, which makes the elastic-net + kappa_g
   correction over-conservative and can masquerade as strong structure. An
-  explicit LDpred3 stage 1 skips the relatives auto-refit and family folds
-  (`extra["loco_refit_reason"]` is `"n/a (block-exact LOCO)"`). Thresholds
+  explicit `ldpred3-inf` stage 1 skips the relatives auto-refit and family
+  folds (`extra["loco_refit_reason"]` is `"n/a (block-exact LOCO)"`), since
+  its LOCO is block-exact given the shared h2. Explicit `ldpred3-lassosum2`
+  and `ldpred3-fast` stage 1s now apply the relatives auto-refit: they pick
+  hyperparameters on all chromosomes, so the earlier "no in-model leak"
+  claim for them is withdrawn (in-model null mean chi-square 1.122 without
+  the refit against 1.033 for the refitted elastic net, in unarchived
+  review simulations). `extra["loco_refit"]` records the refit that
+  actually ran. Thresholds
   and lambda_GC figures in the no-PC / strong-structure warnings are
   simulation-derived. The two-valued-y warning (a 0/1 trait passed as
   quantitative) is silenced by `trait="binary"` or by filtering
@@ -55,10 +74,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     into the subset.
   - The default `None` leaves results byte-identical.
 - Subset warnings (also in `extra["model_snps"]["warnings"]`):
-  - the subset's HE h² is below 0.85 × the HE h² on all variants (one extra pass;
-    `model_snps_h2_check=False` turns it off);
-  - relatedness or residual structure combined with a small subset;
+  - a predicted rise of the null mean chi-square above 0.02 (structure-test
+    excess × the HE h² the subset misses; needs the h² check, one extra pass,
+    which `model_snps_h2_check=False` turns off);
+  - HapMap3 matching kept under half of the map on a chromosome;
   - `"auto"` keeps more than 80% of the variants.
+  A subset HE h² below 0.85 × the HE h² on all variants is a note in
+  `extra["model_snps"]["notes"]`, not a warning.
 - HRATT `relatedness=` (Spec A, kappa_g): follow-up fixes from the SG benchmark.
   - Relatives above `relatedness_threshold` keep the per-group LOCO refit
     (`extra["loco_refit_reason"]`). Without it in-model null SNPs were inflated
@@ -72,7 +94,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     (`loco_refit_min_related`), so KING noise pairs alone do not trigger it. Any
     supplied pair still triggers it.
   - `crossfit_folds="family"` (opt-in) keeps each family in one fold instead of
-    refitting. It is calibrated but loses QTL power (0.66-0.92x the refit's).
+    refitting. It is calibrated but loses QTL power (0.66-0.92x the refit's, in
+    unarchived review simulations at n = 2,000).
   - The unrelated set uses minimum-degree selection, which keeps more samples in
     cousin-rich cohorts (812-814 vs 775 of 2,000 on a simulated isolate).
   - The KING-auto noise-floor and no-PC warnings say when the floor drops
@@ -102,6 +125,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Explicit LDpred3 stage 1s (`stage1="ldpred3-*"`) refuse to run when the
+  structure test finds strong structure after the covariates. Add ancestry
+  PCs to `X` (CLI `--pcs K`), use `stage1="enet"` or `"auto"`, or pass
+  `stage1_kwargs={"allow_strong_structure": True}`. This is a user-visible
+  break from master, where these stage 1s ran without the gate.
 - Documentation and report labels: mixmogam's `bolt-inf` and `bolt` methods are
   shown as "BOLT-style inf (mixmogam)" and "BOLT-style mixture (mixmogam)", so
   they are not read as the BOLT-LMM program. Speed statements now give the
@@ -127,6 +155,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   with their source docs; they are not archived under `benchmarks/results/`.
   `report/report_manifest.json` hashes for CHANGELOG.md and README.md were
   refreshed after the merge into `integrate/stage1`; the PDF is unchanged.
+- HRATT's strong-structure warnings (weighted/binary and elastic-net + lambda)
+  and the model-SNP "related" warning now say that close relatives also make
+  the structure test strong and that PCs do not correct them, and point to
+  `relatedness=` (`--relatedness`). Only the message text changed.
+- Docs and report wording: the README follow-up sentence says the 6 October
+  run re-scored the same samples with revised code against its own criteria;
+  the +0.008 / +0.001 stratified-subset figures are labelled as a patched
+  older-code run; the `relatedness_correction` default is described as
+  `"auto"`; the model-SNP h² ratio is described as a note; the unsupported
+  "caps the inflation at 0.1" sentence (design notes and report) is replaced
+  by what the structure threshold measures; the report's non-convergence
+  statement covers the RegMap traits and PC runs, and its date is
+  14 November 2026. The report PDF and `report/report_manifest.json` were
+  regenerated.
 
 ## [2.0.2.dev1] - 2026-11-03
 

@@ -38,7 +38,7 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{29 October 2026\\\small Historical studies retain their original
+\date{14 November 2026\\\small Historical studies retain their original
 versions; the new benchmarks use 2.0.0.dev8}
 
 \begin{document}
@@ -72,7 +72,8 @@ known major genes; none found MOT1 on the prespecified raw scale, so the
 check failed (an exploratory log-scale rerun ranked MOT1 first). At 100,000 samples and 20,000 markers, 2.0.0.dev8 took a
 median 25.84 seconds for HRATT-HE and 101.77 for mixmogam's BOLT-style infinitesimal path. Apart from the RegMap check all evidence is simulated, the new
 timings come from one workstation, and some variational fits did not
-converge under strong confounding.
+converge: in confounded simulations, with or without two PCs, and in the
+RegMap check on traits whose heritability estimate reached its upper bound.
 \end{abstract}
 
 \section{Introduction}
@@ -842,8 +843,12 @@ ancestry signal over every chromosome, so dropping one chromosome's share
 leaves ancestry in its residual. At $F_{ST}=0.15$ without principal
 components, the null chromosome's $\lgc$ was 1.5--4.4, against 0.9--1.1
 refitted. HRATT refits each group when the structure test finds strong
-structure. Below the test's threshold of 0.1 in average inflation, dropping
-one of $G$ chromosomes' shares leaves roughly $1/G^2$ of it.
+structure: an excess of $n_\mathrm{eff}$ times the mean $r^2$ between
+unlinked SNPs, minus one, above 0.1 with $z>3$. That excess measures
+correlation between unlinked SNPs, not a trait's $\chi^2$ inflation, so it
+does not bound what dropping one group's share leaves below the threshold.
+That residual inflation in weakly structured samples has not been
+measured.
 
 \paragraph{Covariate-specific genotype distributions.}
 Equation~\eqref{eq:retro-variance} treats the genotypes as exchangeable
@@ -2394,8 +2399,10 @@ evidence are these.
  covariates and, being retrospective, differs from SAIGE's model-based
  one \citep{zhou2018}. Rarer outcomes, relatedness and real participation
  weights are untested.
- \item Variational fits did not always converge: under strong confounding
- in the scale study, and in four of eight Atwell HRATT scans. These fits
+ \item Variational fits did not always converge: in the scale study's
+ confounded cell, with or without two PCs; on five RegMap traits whose
+ heritability estimate reached its upper bound; and in four of eight Atwell
+ HRATT scans. These fits
  are included in the summaries and in the A2 criterion.
  \item Four-thread fits at 20,000 markers fail a strict array tolerance
  against one thread, although tested decisions are unchanged.

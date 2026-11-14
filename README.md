@@ -46,8 +46,11 @@ ancestry covariates when weights or case fractions vary with ancestry. Binary
 effects are one-step approximations, not fitted logistic effects. The weighted
 and binary paths are experimental: the
 [first validation](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261005-hratt-weights-binary/README.md)
-passed two of seven criteria and the
-[follow-up](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261006-hratt-followups/README.md) five.
+passed two of its seven pre-registered criteria. The
+[follow-up](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261006-hratt-followups/README.md)
+re-scored the same panels, traits and samples (regenerated from the first run's seeds; the
+genotype hashes match), plus new Fst 0.05 and principal-component cells, with the revised
+2.0.0.dev6 code, and passed five of its own seven pre-registered criteria.
 Cross-fitted effects were within 2% of the population slopes (in-sample
 scores: 28-36% low), except weighted effects under selection on the outcome
 (5.4% low), and weighted fits took 1.55 times as long as HRATT-HE against a
@@ -119,25 +122,31 @@ The LOCO scores removed less of the relatives' shared signal. A separate pre-mer
 coalescent simulation (n = 2,000, 3-5 replicates per cell, also unarchived) tested only the
 HapMap3 subset: it stayed calibrated in unrelated, unstratified samples. With population
 stratification it added 0.02-0.05 to the null mean chi-square when the structure test ran on
-the subset and flagged strong structure; HRATT now runs that test on every variant, which in
-the same simulation brought the excess to +0.008 ± 0.003 and +0.001 ± 0.004 with PCs.
+the subset and flagged strong structure. HRATT now runs that test on every variant. Running
+it on every variant brought the excess to +0.008 ± 0.003 and +0.001 ± 0.004 with PCs, but in a
+patched copy of older code (12 runs per demography), not a rerun of the shipped code.
 
 For the family inflation, pass the relatives: `hratt(..., relatedness=...)` (CLI
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
 GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). The default
-`relatedness_correction="kappa"` then divides each statistic by its expected null inflation
-kappa_g (times a covariate factor) instead of applying a global lambda. It does not correct
-population structure, so keep ancestry PCs. Details and options are in the `hratt`
+`relatedness_correction="auto"` then means `"kappa"`: each statistic is divided by its
+expected null inflation kappa_g (times a covariate factor) instead of applying a global
+lambda. Without `relatedness=`, `"auto"` means `"lambda"`: a single structure lambda when the
+structure test finds strong structure, otherwise none. kappa_g does not correct population
+structure, so keep ancestry PCs. Close relatives also make the structure test strong, and PCs
+do not correct them; HRATT's strong-structure warnings say so and point to `relatedness=`. Details and options are in the `hratt`
 docstring (`help(mixmogam.twostep.hratt)`).
 
-**Warnings.** HRATT therefore warns, and records the details in
+**Warnings and notes.** HRATT compares the subset's HE heritability with the same estimate
+on every variant (one extra panel pass; turn it off with `model_snps_h2_check=False` or
+`--no-model-snps-h2-check`). A ratio below 0.85 is only a note in
+`result.extra["model_snps"]["notes"]`, not a warning: HapMap3-like sets sit near 0.7 and are
+calibrated in unrelated samples. HRATT warns, and records the details in
 `result.extra["model_snps"]["warnings"]`, when:
-- the subset's HE heritability is below 0.85 × the same estimate on every variant. This
-  costs one extra panel pass; turn it off with `model_snps_h2_check=False` or
-  `--no-model-snps-h2-check`.
-- the structure test signals relatedness or residual structure (excess > 0.05) and the subset
-  is small (< 20% of the variants or < 500,000). The expected rise in the null mean chi-square,
-  about excess × the h² the subset misses, is reported.
+- the predicted rise in the null mean chi-square, the structure-test excess × the h² the
+  subset misses, is above 0.02 (needs the h² check, and `relatedness=` off). The warning
+  points to `relatedness=` for relatives, as well as to PCs and a larger subset.
+- HapMap3 matching kept under half of the map's variants on a chromosome that has variants.
 - `"auto"` keeps more than 80% of the variants.
 
 The two-step methods and `denominator="spectral"` (a mixmogam extension whose

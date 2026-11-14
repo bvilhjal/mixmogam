@@ -647,7 +647,6 @@ def test_king_refit_trigger_caps_at_second_degree_and_warns():
     """If the n-aware cutoff would exceed 0.0884, cap it, warn, and still
     count 2nd-degree pairs (phi 0.125). The refit is not disabled."""
     n, sd, med = 20_000, 0.020, 0.0  # z ~ 5.73 -> uncapped ~ 0.115 > 0.0884
-    rng = np.random.default_rng(0)
     # a few 2nd-degree pairs plus some 3rd-degree / noise just above 0.09
     i2, j2 = np.arange(400), 400 + np.arange(400)  # 800 samples, 4%
     phi2 = np.full(400, 0.125)

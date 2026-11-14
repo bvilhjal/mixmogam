@@ -325,9 +325,14 @@ structure it fails: a genome-wide fit spreads the ancestry signal over every
 chromosome, so dropping one chromosome's share leaves ancestry in its
 residual (at Fst 0.15 without principal components, null-chromosome
 lambda_GC 1.5-4.4 split against 0.9-1.1 refitted). HRATT therefore refits
-each group under strong structure. The test's threshold caps the average inflation
-unmodelled structure could cause at 0.1, and dropping one of G chromosomes'
-shares leaves roughly 1/G^2 of that.
+each group under strong structure. "Strong" means the structure test's
+excess (n_eff x the mean r^2 between unlinked SNPs, minus one) is above 0.1
+with z > 3. That excess measures correlation between unlinked SNPs, not the
+chi-square inflation of a trait, so it does not bound the inflation left
+below the threshold. Below it HRATT drops each group's share without a
+refit. The evidence for that is the unstructured comparison above; the
+leftover inflation in weakly structured samples below the threshold has not
+been measured.
 
 The docstrings of `mixmogam.twostep` list each departure from the reference
 implementations: REML instead of MC REML for BOLT-LMM; HRATT's
@@ -370,9 +375,18 @@ The block-independent model has three accepted consequences:
   (s, lambda) lassosum2 selects per fold) leak the tested chromosome into the
   other chromosomes' effects at second order, as in BOLT-LMM and REGENIE.
   Given the hyperparameters, block effects do not interact, so a sample's
-  fitted value less its own group's share is the fit without that group, and
-  no per-group refit is needed under strong structure (the lambda calibration
-  downstream still applies).
+  fitted value less its own group's share is the fit without that group.
+  For `ldpred3-inf` (one shared h2) that is the leave-chromosome-out fit,
+  and the relatives refit is skipped. `ldpred3-lassosum2` and `ldpred3-fast`
+  select hyperparameters on all chromosomes, so with relatives they refit
+  leave-group-out like the elastic net (lassosum2's in-model null mean
+  chi-square was 1.122 without the refit, in unarchived review simulations).
+  Under strong structure after the covariates, an explicit LDpred3 stage 1
+  refuses to run, because block-diagonal LD cannot absorb ancestry (null
+  lambda_GC 1.2-1.6 without PCs, in simulations at n <= 3,000 and one
+  n = 20,000 seed). Add ancestry PCs to `X` (`--pcs K` on the command line),
+  use `stage1="enet"` or `"auto"`, or pass
+  `stage1_kwargs={"allow_strong_structure": True}`.
 - The LD reference is the analysis cohort, shared across folds: a held-out
   fold's genotypes enter its prediction through the LD, never its phenotype.
 

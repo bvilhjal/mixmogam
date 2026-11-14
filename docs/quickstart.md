@@ -150,7 +150,9 @@ half the level in each tail.
 With ancestry covariates, the saddlepoint tail uses each sample's predicted
 allele frequency and assumes conditional Hardy-Weinberg equilibrium; an
 intercept-only design uses empirical genotype frequencies. HRATT warns when
-strong structure remains after the covariates. `gwas` raises TypeError for `trait`,
+strong structure remains after the covariates. Close relatives also make the
+structure test strong, and PCs do not correct them, so the warning also says
+to pass `relatedness=` (`--relatedness`) when the samples include relatives. `gwas` raises TypeError for `trait`,
 `sample_weights`, `spa_threshold`, `spa_two_sided`, `loco_folds`, `stage1` and
 `stage1_kwargs` with any other method, `auto` included (pass `method="hratt"`;
 only the command line moves `auto` to HRATT when `--trait`, `--weights` or `--stage1`
@@ -171,9 +173,10 @@ complete: every close relative of every sample is present. Relatives missing
 from it deflate kappa_g, so the elastic-net + kappa_g correction is
 over-conservative, and leftover residual sharing can trip the structure test
 and masquerade as strong structure (an explicit LDpred3 stage 1 then refuses
-the run). The default `relatedness_correction="kappa"`
-reports scores divided by kappa_g and the covariate factor c_X, and sets
-lambda to 1.
+the run). The default `relatedness_correction="auto"` means `"kappa"` when
+`relatedness=` is given: scores are divided by kappa_g and the covariate
+factor c_X, and lambda is 1. Without `relatedness=` it means `"lambda"` (the
+structure lambda when the structure test is strong, otherwise none).
 
 This is the supported path for related samples, and it is required when
 `sample_weights` are also used. Without `relatedness=`, weighted tests in
@@ -189,7 +192,13 @@ Limits:
   (50,000). Biobank-scale analyses must supply a pedigree or a precomputed
   pair file.
 - Phi keeps only pairs above `relatedness_threshold` (default 0.025; `"auto"`
-  may raise this to 4 times the KING noise SD). More distant relatedness is
+  may raise this to the KING noise location plus 4 times its SD). The SD is
+  1.4826 x the MAD of up to 1e6 random pairs (every pair when n(n-1)/2 <=
+  1e6). On a two-population panel that MAD is inflated by the gap between
+  within- and between-population pairs, so when its upper tail is lighter
+  than Gaussian (ratio below 0.8) the upper half of the pairs sets the
+  location and SD instead. Under two-population structure the floor
+  therefore no longer drops 2nd-degree pairs. More distant relatedness is
   left to the structure test, so include ancestry PCs among the covariates.
 - kappa_g replaces the structure lambda. With strong structure and no PCs,
   that can leave structured variants inflated; pass PCs, or set
@@ -203,21 +212,31 @@ Useful `relatedness_options` (defaults in
 - `loco_refit`: `"auto"` (default) refits the per-chromosome stage 1 when there
   is evidence of relatives or strong structure; `True` forces it, `False` turns
   it off (research comparisons only; in-model nulls can inflate). An explicit
-  LDpred3 stage 1 skips this refit (block-exact LOCO) and records
-  `loco_refit_reason` `"n/a (block-exact LOCO)"`.
+  `ldpred3-inf` stage 1 skips the relatives refit, because its LOCO is
+  block-exact given the shared h2, and records `loco_refit_reason` `"n/a
+  (block-exact LOCO)"`. `ldpred3-lassosum2` and `ldpred3-fast` choose their
+  hyperparameters on all chromosomes, so they are not block-exact: with
+  relatives they refit like the elastic net (in-model null mean chi-square
+  1.122 without the refit, against 1.033 for the refitted elastic net, in
+  review simulations not archived under `benchmarks/results/`).
+  `extra["loco_refit"]` records whether the refit actually ran.
 - `loco_refit_min_related`: 0.01. For `"auto"` KING pairs, the refit needs at
   least this fraction of samples in a pair above a noise-aware cutoff
-  (median + z σ_eff, with z set so the expected number of null pairs is
-  about 1, and σ_eff inflated if the empirical upper tail of a 1e6-pair
-  subsample is heavier than Gaussian). The cutoff is capped at 0.0884
-  (KING's 2nd/3rd-degree bound); if the noise cutoff would exceed the cap,
-  a warning recommends a pedigree or external pairs (the refit is not
-  disabled). The 4-SD floor that fills Phi still admits a number of noise
+  (location + z σ_eff, the floor's location and SD, with z set so the
+  expected number of null pairs among all n(n-1)/2 is about 1, and σ_eff
+  inflated if the upper tail of the pair subsample is heavier than
+  Gaussian). The trigger counts KING phi before the Phi floor. The cutoff is
+  capped at 0.0884 (KING's 2nd/3rd-degree bound) unless
+  `relatedness_threshold` is at least 0.0884. Once the cutoff exceeds 0.0625,
+  3rd-degree relatives and first cousins no longer count, and a warning
+  recommends a pedigree or external pairs (the refit is not disabled). The 4-SD floor that fills Phi still admits a number of noise
   pairs that grows with n², which at n = 20,000 can exceed 1% of samples
   (estimate from stage1-int8-ldpred-p20k-sg.md §4, not archived under
   `benchmarks/results/`); the trigger does not count those. A handful of
-  true close pairs below 1% of samples does not fire: the leak is
-  negligible there and the refit is expensive. A supplied pedigree or
+  true close pairs below 1% of samples does not fire: the leak there was
+  estimated at <= ~0.0014, and the refit costs 1.3-3.8x the stage-1 CPU
+  (both from review simulations at n = 2,000, not archived under
+  `benchmarks/results/`). A supplied pedigree or
   file triggers the refit from a single pair above the threshold.
 - `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
   the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x the
