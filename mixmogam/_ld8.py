@@ -27,8 +27,8 @@ with ``stage1_kwargs={"ld": ...}``:
         z_i'z_j = [XX_ij - mu_j XO_ij - mu_i XO_ji + mu_i mu_j OO_ij] / (sigma_i sigma_j)
 
     and projecting out the orthonormal covariate basis ``Q`` subtracts the
-    rank-q term ``c_i'c_j`` with ``c_i = Q'z_i`` (the prepared
-    ``_projection`` rows):
+    rank-q term ``c_i'c_j`` with ``c_i = Q'z_i``, accumulated in the same
+    tile pass as ``(X Q - mu O Q) / sigma``:
 
         Z_i'Z_j = z_i'z_j - c_i'c_j.
 
@@ -51,13 +51,18 @@ with ``stage1_kwargs={"ld": ...}``:
 Covariates and row weights: (b) needs an unweighted model (``row_scale``
 None), as the LDpred3 stage 1 already does.
 
-The cache (:class:`LDCache`) keeps built covers keyed by the panel's
-prepared moments (means, SDs, covariate coefficients, projected norms --
-functions of the calls and of ``Q``), the covariate basis, the LOCO groups,
-the variant order and block size and the representation, so traits that
-share a genotype panel, covariates and model-SNP subset reuse one build.
-In memory, or in a directory (one ``.npy`` payload memory-mapped on reuse,
-plus a JSON layout).
+The cache (:class:`LDCache`) keeps built covers keyed by the variants (the
+model-SNP set: positions, IDs, alleles, LOCO groups), variant order, block
+size, representation and the format / ldpred3 / quantizer versions -- not by
+samples or covariates, so a cohort cover is reused for trait subsets and
+other covariates (statistically safe: SG review Q3). Each reuse records the
+sample overlap (per-sample call fingerprints), an allele-frequency F_ST
+proxy against the build cohort and whether the reuse is exact (same samples
+and covariates), and warns below 50 % overlap or above F_ST 0.01.
+``ld_split="train"`` covers stay exact (their key includes the sample
+partition and the sample fingerprints). In memory, or in a directory (dense
+covers as one ``.npy`` payload memory-mapped on reuse with a validated
+JSON layout; FastLD covers as ``.npz`` arrays; nothing is unpickled).
 """
 
 from __future__ import annotations
@@ -65,13 +70,12 @@ from __future__ import annotations
 import hashlib
 import json
 import os
-import pickle
 from typing import Optional
 
 import numpy as np
 
 __all__ = ["LD_KINDS", "LDCache", "build_blocks", "hardcall_block", "quantize_d8",
-           "ld_cache_key", "cover_nbytes", "split_parts", "build_split_blocks",
+           "ld_cache_key", "cover_nbytes", "sample_fingerprints", "reuse_check", "split_parts", "build_split_blocks",
            "block_lambda_min", "cover_spectrum", "ridge_block_d8"]
 
 LD_KINDS = ("f32", "d8-proj", "d8-hardcall", "f32-hardcall")
@@ -80,7 +84,7 @@ _Q8 = 127.0
 _MAX_EXACT_TILE = 2**22
 # Bytes of one float32 (k, T) tile of calls.
 _TILE_BYTES = 32 * 1024**2
-_FORMAT = "mixmogam-ld8-v1"
+_FORMAT = "mixmogam-ld8-v2"
 
 # Decode tables (indexed by call & 3): the call with a no-call as -1, so one
 # decode gives both X = max(call, 0) and O = call >= 0.
@@ -109,10 +113,12 @@ def _sample_tile(k: int, n: int, tile: Optional[int]) -> int:
     return int(max(1, min(tile, n, _MAX_EXACT_TILE)))
 
 
-def hardcall_counts(lg, idx: np.ndarray, tile: Optional[int] = None):
+def hardcall_counts(lg, idx: np.ndarray, tile: Optional[int] = None, return_q: bool = False):
     """Exact (XX, XO, OO) call products (k, k) of variants ``idx`` (float64
     holding integers), one sample tile at a time. Missing calls enter O.
-    Returns also the per-variant called counts and call sums."""
+    Returns also the per-variant called counts and call sums, and with
+    ``return_q`` the covariate products X Q and O Q (k x q) from which the
+    covariate coefficients c = Q'z = (X Q - mu O Q) / sigma follow."""
     from mixmogam._standardize import decode_table
 
     idx = np.asarray(idx, dtype=np.int64)
@@ -126,6 +132,10 @@ def hardcall_counts(lg, idx: np.ndarray, tile: Optional[int] = None):
     OO = np.zeros((k, k))
     called = np.zeros(k)
     sums = np.zeros(k)
+    Q = np.asarray(lg.Q, dtype=np.float64)
+    q = Q.shape[1]
+    XQ = np.zeros((k, q))
+    OQ = np.zeros((k, q))
     buf = np.empty((k, T), dtype=np.float32)
     G = lg.gt.G
     for s0 in range(0, n, T):
@@ -155,6 +165,14 @@ def hardcall_counts(lg, idx: np.ndarray, tile: Optional[int] = None):
             cnt[J] = cJ
         called += cnt
         sums += rowsum
+        if q:
+            Qt = Q[s0:s1]
+            XQ += X.astype(np.float64) @ Qt
+            OQ += np.broadcast_to(Qt.sum(axis=0), (k, q))
+            if J.size:
+                OQ[J] += O_J.astype(np.float64) @ Qt - Qt.sum(axis=0)
+    if return_q:
+        return XX, XO, OO, called, sums, XQ, OQ
     return XX, XO, OO, called, sums
 
 
@@ -167,12 +185,13 @@ def hardcall_block(lg, idx: np.ndarray, *, tile: Optional[int] = None,
         raise ValueError("the hard-call LD build needs an unweighted model (no row_scale)")
     idx = np.asarray(idx, dtype=np.int64)
     n = lg.n
-    XX, XO, OO, _, _ = hardcall_counts(lg, idx, tile)
+    XX, XO, OO, _, _, XQ, OQ = hardcall_counts(lg, idx, tile, return_q=True)
     mu = lg.mean[idx]
     sd = lg.sd[idx]
     S = XX - mu[None, :] * XO - (mu[None, :] * XO).T + np.outer(mu, mu) * OO
     inv = np.where(sd > 0, 1.0 / np.where(sd > 0, sd, 1.0), 0.0)
-    C = lg._projection[idx]
+    # c_i = Q'z_i from the same pass (no private LocoGenotypes state).
+    C = (XQ - mu[:, None] * OQ) * inv[:, None]
     ZZ = S * np.outer(inv, inv) - C @ C.T
     m_row = -(C @ lg.Q.sum(axis=0)) / n if lg.Q.shape[1] else np.zeros(idx.size)
     ZZ -= n * np.outer(m_row, m_row)
@@ -233,31 +252,153 @@ def cover_nbytes(blocks) -> int:
 
 
 # --------------------------------------------------------------------------- cache
-def ld_cache_key(lg, order: np.ndarray, block_size: int, kind: str, extra=None) -> str:
-    """Hash of what a cover depends on: the panel's prepared moments (calls
-    and covariates enter through them), the covariate basis, the LOCO
-    groups, variant order, block size, representation and ``extra``."""
+_QUANTIZER = "d8:rint(127*clip(R,-1,1)),diag=127"
+_N_FINGERPRINT = 32  # 2 bits per call: one uint64 per sample
+
+
+def _versions() -> dict:
+    try:
+        import ldpred3
+        v = getattr(ldpred3, "__version__", "unknown")
+    except ImportError:  # pragma: no cover
+        v = "absent"
+    return {"format": _FORMAT, "ldpred3": v, "quantizer": _QUANTIZER}
+
+
+def _variant_digest(lg) -> str:
+    """Digest of the cover's variants (the model-SNP set): positions,
+    chromosomes, variant IDs and alleles when the genotypes carry them, the
+    LOCO groups and the variant count. Sample-independent."""
     h = hashlib.sha256()
-    h.update(_FORMAT.encode())
-    h.update(json.dumps([int(lg.n), int(lg.m), int(block_size), kind,
-                         str(np.dtype(lg.dtype)), repr(extra)]).encode())
-    for a in (lg.mean, lg.sd, lg._projection, lg.zz, lg.groups,
-              np.asarray(order, dtype=np.int64)):
-        h.update(np.ascontiguousarray(a).tobytes())
-    # Q (n x q) can be large: hash its bytes in chunks without a copy.
-    Q = np.ascontiguousarray(lg.Q)
-    h.update(str(Q.shape).encode())
-    flat = Q.reshape(-1).view(np.uint8)
-    for s in range(0, flat.size, 1 << 26):
-        h.update(flat[s : s + (1 << 26)].tobytes())
+    gt = lg.gt
+    h.update(str(int(lg.m)).encode())
+    for name in ("chromosome", "position", "variant_ids", "allele1", "allele2"):
+        v = getattr(gt, name, None)
+        if v is None:
+            h.update(f"{name}:none".encode())
+            continue
+        v = np.asarray(v)
+        if v.size != lg.m:
+            h.update(f"{name}:size{v.size}".encode())
+            continue
+        h.update(name.encode())
+        h.update(np.ascontiguousarray(v.astype(str) if v.dtype.kind in "OUS" else v).tobytes())
+    h.update(np.ascontiguousarray(lg.groups, dtype=np.int64).tobytes())
+    return h.hexdigest()
+
+
+def ld_cache_key(lg, order: np.ndarray, block_size: int, kind: str, extra=None) -> str:
+    """Cache key of a cover: the variants (:func:`_variant_digest`, i.e. the
+    model-SNP set), variant order, block size, representation, ``extra``
+    and the format / ldpred3 / quantizer versions. Samples and covariates are
+    deliberately *not* in the key: a cohort cover is reused for trait
+    subsets and other covariates, and :meth:`LDCache.check` records the
+    sample overlap and an allele-frequency (ancestry) check instead."""
+    h = hashlib.sha256()
+    h.update(json.dumps([_versions(), int(block_size), kind, str(np.dtype(lg.dtype)),
+                         repr(extra)]).encode())
+    h.update(_variant_digest(lg).encode())
+    h.update(np.ascontiguousarray(order, dtype=np.int64).tobytes())
     return h.hexdigest()[:32]
+
+
+def sample_fingerprints(lg) -> np.ndarray:
+    """One uint64 per sample: its calls (0/1/2, 3 missing) at up to 32
+    evenly spaced cover variants, two bits each. Identifies samples across
+    sample subsets without sample IDs (relatives identical at all 32 calls
+    collide, which only overstates the overlap)."""
+    from mixmogam._standardize import decode_table
+
+    m = int(lg.m)
+    idx = np.unique(np.linspace(0, m - 1, min(_N_FINGERPRINT, m)).round().astype(np.int64))
+    lut = np.ascontiguousarray(np.broadcast_to(np.array([0, 1, 2, 3], np.float32), (idx.size, 4)))
+    X = np.empty((idx.size, lg.n), dtype=np.float32)
+    decode_table(lg.gt.G, idx, lut, X, lg.n_threads, compiled=lg._compiled, start=0)
+    COUNTER["cells"] += X.size
+    codes = X.astype(np.uint64)
+    out = np.zeros(lg.n, dtype=np.uint64)
+    for j in range(idx.size):
+        out |= codes[j] << np.uint64(2 * j)
+    return out
+
+
+def _covariate_digest(lg) -> str:
+    Q = np.ascontiguousarray(lg.Q)
+    h = hashlib.sha256(str(Q.shape).encode())
+    flat = Q.reshape(-1).view(np.uint8)
+    for s0 in range(0, flat.size, 1 << 26):
+        h.update(flat[s0 : s0 + (1 << 26)].tobytes())
+    return h.hexdigest()[:16]
+
+
+def cover_meta(lg) -> dict:
+    """What a stored cover remembers about its build cohort."""
+    return {"fingerprints": sample_fingerprints(lg), "mean": np.asarray(lg.mean, dtype=np.float64),
+            "covariates": _covariate_digest(lg), "n": int(lg.n)}
+
+
+def reuse_check(lg, meta: dict, min_overlap: float = 0.5, max_fst: float = 0.01) -> dict:
+    """Sample overlap and ancestry check of reusing a cover built on
+    ``meta``'s cohort for ``lg``'s samples: ``overlap`` (fraction of the
+    current samples in the build cohort), ``coverage`` (fraction of the build
+    cohort present now), ``fst`` (mean squared allele-frequency difference
+    over mean p(1-p), a ratio-of-averages F_ST proxy over the cover's
+    variants; sampling noise alone gives about 1/(2 n_current)), ``exact``
+    (same samples in the same order and the same covariates) and
+    ``warnings``."""
+    fp = sample_fingerprints(lg)
+    old = np.asarray(meta["fingerprints"], dtype=np.uint64)
+    inn = np.isin(fp, old)
+    overlap = float(inn.mean()) if fp.size else 0.0
+    coverage = float(np.isin(old, fp).mean()) if old.size else 0.0
+    p1 = np.asarray(meta["mean"], dtype=np.float64) / 2.0
+    p2 = np.asarray(lg.mean, dtype=np.float64) / 2.0
+    pb = (p1 + p2) / 2.0
+    den = float(np.mean(pb * (1 - pb)))
+    fst = float(np.mean((p1 - p2) ** 2) / den) if den > 0 else 0.0
+    exact = bool(fp.size == old.size and np.array_equal(fp, old)
+                 and meta.get("covariates") == _covariate_digest(lg))
+    warn = []
+    if overlap < min_overlap:
+        warn.append(f"only {overlap:.0%} of the samples are in the cached LD cohort")
+    if fst > max_fst:
+        warn.append(f"allele frequencies differ from the cached LD cohort (F_ST proxy {fst:.3g})")
+    return {"overlap": overlap, "coverage": coverage, "fst": fst, "exact": exact,
+            "covariates_match": meta.get("covariates") == _covariate_digest(lg), "warnings": warn}
+
+
+def _fast_arrays(F) -> tuple:
+    arrays = {"payload": F.payload, "cuts": F.cuts, "factor": F.factor,
+              "col_start": F.col_start, "col_count": F.col_count}
+    construction = getattr(F, "construction", None)
+    try:
+        construction = json.loads(json.dumps(construction, default=float))
+    except (TypeError, ValueError):
+        construction = None
+    scalars = {"rank": int(F.rank), "scale": float(F.scale), "m": int(F.m),
+               "min_eig": None if F.min_eig is None else float(F.min_eig),
+               "min_eig_is_measured": bool(F.min_eig_is_measured), "construction": construction}
+    return arrays, scalars
+
+
+def _fast_from(arrays: dict, scalars: dict):
+    from ldpred3.fast import FastLD
+
+    return FastLD(payload=arrays["payload"], cuts=arrays["cuts"], factor=arrays["factor"],
+                  col_start=arrays["col_start"], col_count=arrays["col_count"],
+                  rank=scalars["rank"], scale=scalars["scale"], m=scalars["m"],
+                  min_eig=scalars["min_eig"], min_eig_is_measured=scalars["min_eig_is_measured"],
+                  construction=scalars["construction"])
 
 
 class LDCache:
     """Built LD covers keyed by :func:`ld_cache_key`: in memory, or in
-    ``directory`` (dense covers as one ``.npy`` payload, memory-mapped when
-    reused, and a ``.json`` layout; FastLD covers pickled). ``hits`` and
-    ``misses`` count lookups."""
+    ``directory``. Dense covers are one ``.npy`` payload (memory-mapped on
+    reuse) plus a ``.json`` layout validated against it; FastLD covers are an
+    ``.npz`` of their arrays (``allow_pickle=False``) plus a ``.json`` of
+    their scalars; the build cohort's sample fingerprints and allele means
+    are a ``-meta.npz``. Nothing is unpickled. ``hits`` and ``misses`` count
+    lookups."""
 
     def __init__(self, directory: Optional[str] = None, mmap: bool = True):
         self.directory = directory
@@ -268,72 +409,114 @@ class LDCache:
         if directory is not None:
             os.makedirs(directory, exist_ok=True)
 
-    def _paths(self, key):
-        base = os.path.join(self.directory, key)
-        return base + ".npy", base + ".json", base + ".pkl"
+    def _base(self, key):
+        return os.path.join(self.directory, key)
 
     def get(self, key):
+        """``(blocks, meta)`` or None."""
         if key in self._mem:
             self.hits += 1
             return self._mem[key]
         if self.directory is not None:
-            npy, js, pkl = self._paths(key)
-            if os.path.exists(js) and os.path.exists(npy):
-                with open(js) as fh:
-                    meta = json.load(fh)
-                if meta.get("format") == _FORMAT:
-                    flat = np.load(npy, mmap_mode="r" if self.mmap else None)
-                    blocks = []
-                    for (off, k, a) in meta["blocks"]:
-                        R = flat[off : off + k * k].reshape(k, k)
-                        blocks.append((R, np.arange(a, a + k)))
-                    self.hits += 1
-                    self._mem[key] = blocks
-                    return blocks
-            if os.path.exists(pkl):
-                with open(pkl, "rb") as fh:
-                    blocks = pickle.load(fh)
+            got = self._load(key)
+            if got is not None:
                 self.hits += 1
-                self._mem[key] = blocks
-                return blocks
+                self._mem[key] = got
+                return got
         self.misses += 1
         return None
 
-    def put(self, key, blocks) -> None:
-        self._mem[key] = blocks
+    def _load(self, key):
+        base = self._base(key)
+        js, mt = base + ".json", base + "-meta.npz"
+        if not (os.path.exists(js) and os.path.exists(mt)):
+            return None
+        with open(js) as fh:
+            layout = json.load(fh)
+        if layout.get("versions") != _versions():
+            return None
+        with np.load(mt, allow_pickle=False) as z:
+            meta = {"fingerprints": z["fingerprints"], "mean": z["mean"],
+                    "covariates": str(z["covariates"]), "n": int(z["n"])}
+        if layout["kind"] == "dense":
+            flat = np.load(base + ".npy", mmap_mode="r" if self.mmap else None, allow_pickle=False)
+            _validate_layout(layout, flat)
+            blocks = [(flat[off : off + k * k].reshape(k, k), np.arange(a, a + k))
+                      for off, k, a in layout["blocks"]]
+        elif layout["kind"] == "fast":
+            blocks = []
+            with np.load(base + ".npz", allow_pickle=False) as z:
+                for i, (sc, a, b) in enumerate(layout["blocks"]):
+                    arr = {f: z[f"b{i}_{f}"] for f in ("payload", "cuts", "factor",
+                                                        "col_start", "col_count")}
+                    F = _fast_from(arr, sc)
+                    if F.m != b - a:
+                        raise ValueError(f"LD cache {key}: FastLD block {i} size mismatch")
+                    blocks.append((F, np.arange(a, b)))
+        else:
+            return None
+        return blocks, meta
+
+    def put(self, key, blocks, meta: dict) -> None:
+        self._mem[key] = (blocks, meta)
         if self.directory is None:
             return
-        npy, js, pkl = self._paths(key)
+        base = self._base(key)
+        np.savez(base + "-meta.tmp.npz", fingerprints=np.asarray(meta["fingerprints"], np.uint64),
+                 mean=np.asarray(meta["mean"], np.float64), covariates=np.str_(meta["covariates"]),
+                 n=np.int64(meta["n"]))
         dense = all(isinstance(R, np.ndarray) for R, _ in blocks)
-        if dense and blocks:
-            dtypes = {R.dtype for R, _ in blocks}
-            if len(dtypes) == 1:
-                dt = dtypes.pop()
-                total = sum(R.size for R, _ in blocks)
-                flat = np.lib.format.open_memmap(npy + ".tmp.npy", mode="w+", dtype=dt,
-                                                 shape=(total,))
-                layout, off = [], 0
-                for R, idx in blocks:
-                    k = R.shape[0]
-                    flat[off : off + k * k] = np.ascontiguousarray(R).reshape(-1)
-                    layout.append((off, k, int(idx[0])))
-                    off += k * k
-                flat.flush()
-                del flat
-                os.replace(npy + ".tmp.npy", npy)
-                with open(js + ".tmp", "w") as fh:
-                    json.dump({"format": _FORMAT, "dtype": str(dt), "blocks": layout}, fh)
-                os.replace(js + ".tmp", js)
-                return
-        with open(pkl + ".tmp", "wb") as fh:
-            pickle.dump(blocks, fh, protocol=pickle.HIGHEST_PROTOCOL)
-        os.replace(pkl + ".tmp", pkl)
+        if dense and blocks and len({R.dtype for R, _ in blocks}) == 1:
+            dt = blocks[0][0].dtype
+            total = sum(R.size for R, _ in blocks)
+            flat = np.lib.format.open_memmap(base + ".tmp.npy", mode="w+", dtype=dt, shape=(total,))
+            lay, off = [], 0
+            for R, idx in blocks:
+                k = R.shape[0]
+                flat[off : off + k * k] = np.ascontiguousarray(R).reshape(-1)
+                lay.append((off, k, int(idx[0])))
+                off += k * k
+            flat.flush()
+            del flat
+            os.replace(base + ".tmp.npy", base + ".npy")
+            layout = {"versions": _versions(), "kind": "dense", "dtype": str(dt),
+                      "size": int(total), "blocks": lay}
+        else:
+            arrays, lay = {}, []
+            for i, (F, idx) in enumerate(blocks):
+                arr, sc = _fast_arrays(F)
+                for f, v in arr.items():
+                    arrays[f"b{i}_{f}"] = np.asarray(v)
+                lay.append((sc, int(idx[0]), int(idx[-1]) + 1))
+            np.savez(base + ".tmp.npz", **arrays)
+            os.replace(base + ".tmp.npz", base + ".npz")
+            layout = {"versions": _versions(), "kind": "fast", "blocks": lay}
+        os.replace(base + "-meta.tmp.npz", base + "-meta.npz")
+        with open(base + ".json.tmp", "w") as fh:
+            json.dump(layout, fh)
+        os.replace(base + ".json.tmp", base + ".json")
 
     def disk_bytes(self) -> int:
         if self.directory is None:
             return 0
         return sum(os.path.getsize(os.path.join(self.directory, f))
                    for f in os.listdir(self.directory))
+
+
+def _validate_layout(layout: dict, flat: np.ndarray) -> None:
+    """The JSON layout must tile the payload exactly: contiguous offsets,
+    k^2 entries per block, blocks covering 0..m-1 in order, matching dtype
+    and size."""
+    if str(flat.dtype) != layout["dtype"] or flat.ndim != 1 or flat.size != layout["size"]:
+        raise ValueError("LD cache payload does not match its layout (dtype or size)")
+    off_expect, a_expect = 0, 0
+    for off, k, a in layout["blocks"]:
+        if off != off_expect or a != a_expect or k <= 0:
+            raise ValueError("LD cache layout is not a contiguous tiling of its payload")
+        off_expect += k * k
+        a_expect += k
+    if off_expect != flat.size:
+        raise ValueError("LD cache layout does not cover its payload")
 
 
 def resolve_cache(spec) -> Optional[LDCache]:
@@ -444,7 +627,9 @@ def _split_sums_hardcall(lg, idx, labels, n_parts, tile):
     mu = lg.mean[idx]
     sd = lg.sd[idx]
     inv = np.where(sd > 0, 1.0 / np.where(sd > 0, sd, 1.0), 0.0)
-    C = np.asarray(lg._projection[idx], dtype=np.float64)
+    A_all = sum(a["A"] for a in acc)
+    B_all = sum(a["B"] for a in acc)
+    C = (A_all - mu[:, None] * B_all) * inv[:, None]  # c = Q'z over all rows
     out = []
     for p in range(n_parts):
         a = acc[p]

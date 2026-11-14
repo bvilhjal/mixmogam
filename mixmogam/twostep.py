@@ -1178,10 +1178,16 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     spectrum. ``model_snps`` and ``relatedness`` combine with every LDpred3
     option. Gates: an explicit LDpred3 stage 1 refuses ``sample_weights``
     (weighted marginals do not follow LDpred3's beta_hat ~ N(R beta, R/N))
-    and strong structure after the covariates (block-diagonal LD cannot
-    absorb ancestry; add ancestry PCs to ``X``, or pass
-    ``stage1_kwargs["allow_strong_structure"]=True``); ``"auto"`` keeps the
-    elastic net in both cases. A two-valued ``y`` with an LDpred3 stage 1
+    and refuses ``ldpred3-lassosum2`` under strong structure after the
+    covariates (block-diagonal LD cannot absorb ancestry; add ancestry PCs
+    to ``X``, or pass ``stage1_kwargs["allow_strong_structure"]=True``);
+    ``ldpred3-inf`` and ``ldpred3-fast`` then run with a warning; ``"auto"``
+    keeps the elastic net in both cases. (Behaviour change from 5fd7806f,
+    where both ran silently.) With ``model_snps`` the h2 shared by the
+    LDpred3 fits (the inf ridge m / (N h2), fast's h2_init) is the model-SNP
+    GRM's REML h2, not the full panel's (HM3 smoke: 0.44 vs 0.69), so
+    LDpred3-inf shrinks more on a subset; this is consistent with the
+    subset model but not with a full-panel h2. A two-valued ``y`` with an LDpred3 stage 1
     warns (use ``trait="binary"``). Variance components and prior selection still
     use the whole trait, and the genome-wide h2 the infinitesimal fit shares
     over its blocks leaks the tested chromosome second-order (documented in
@@ -1567,22 +1573,24 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     stage1_kwargs = dict(stage1_kwargs or {})
     allow_strong = bool(stage1_kwargs.pop("allow_strong_structure", False))
     ldp_strong = stage1 not in ("enet", "auto") and struct["strong"] and h2 > 0
-    if ldp_strong and not allow_strong:
-        # LDpred3's block-diagonal LD has no cross-chromosome terms, so it
-        # fits ancestry once per block; the LOCO subtraction then leaves the
-        # tested group's share of ancestry in its residual, and no scalar
-        # lambda removes a confounder that only ancestry-informative SNPs
-        # carry (null lambda_GC 1.6-1.8 after lambda without PCs, against
-        # 1.0-1.2 for the refitted elastic net; stage1-int8-ldpred-cw.md).
-        raise ValueError(f"stage1 {stage1!r}: the structure test finds strong population "
-                         "structure after the covariates; LDpred3's block-diagonal LD cannot "
-                         "absorb ancestry the way the refitted elastic net does. Add ancestry "
-                         "principal components to X, or use stage1='enet' or 'auto' "
+    if ldp_strong and stage1 == "ldpred3-lassosum2" and not allow_strong:
+        # LDpred3's block-diagonal LD has no cross-chromosome (ancestry)
+        # terms. lassosum2's pseudo-validated sparse fit loads ancestry onto
+        # a few blocks and its null calibration fails without PCs (SG
+        # harness: lambda_GC 1.61 +- 0.63, type-I 17x at 1e-3; CW: 1.39-1.40).
+        raise ValueError("stage1 'ldpred3-lassosum2': the structure test finds strong population "
+                         "structure after the covariates, and block-diagonal LD cannot absorb "
+                         "ancestry (null lambda_GC ~1.4-1.6 without PCs). Add ancestry principal "
+                         "components to X, or use stage1='ldpred3-inf', 'enet' or 'auto' "
                          "(stage1_kwargs allow_strong_structure=True overrides)")
     if ldp_strong:
-        warnings.warn(f"stage1 {stage1!r} under strong population structure "
-                      "(allow_strong_structure=True): check null-SNP calibration",
-                      RuntimeWarning, stacklevel=2)
+        # inf (and fast) are allowed: SG's harness found inf calibrated
+        # without PCs (0.97), but CW's two-population / admixture panels at
+        # n ~ 3,000 gave 1.46-1.60 (stage1-int8-ldpred-cw.md), so warn.
+        warnings.warn(f"stage1 {stage1!r} under strong population structure after the covariates: "
+                      "block-diagonal LD cannot absorb ancestry and null calibration can fail "
+                      "(lambda_GC up to 1.6 in CW's panels); include ancestry principal "
+                      "components in X or use stage1='enet'", RuntimeWarning, stacklevel=2)
     if stage1 == "auto" and h2 > 0 and (weighted or struct["strong"]):
         # The LDpred3 candidate needs unweighted samples and no strong
         # structure after the covariates (see the gates above).

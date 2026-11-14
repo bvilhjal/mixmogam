@@ -235,9 +235,12 @@ def test_ld_cache_reuses_one_build_across_traits(trait_panel, tmp_path):
     fresh = _hratt(y2, gt, X, stage1="ldpred3-inf",
                    stage1_kwargs={"block_size": 200, "ld": "d8-hardcall"})
     assert np.array_equal(_chi2(b), _chi2(fresh), equal_nan=True)
-    # other covariates: another key
+    assert b.extra["stage1_info"]["ld_cache_exact"]
+    # other covariates: the cohort cover is reused (SG Q3), flagged inexact
     c = _hratt(y, gt, X[:, :1], **kw)
-    assert c.extra["stage1_info"]["ld_cache"] == "miss"
+    ci = c.extra["stage1_info"]
+    assert ci["ld_cache"] == "hit" and not ci["ld_cache_exact"]
+    assert not ci["ld_cache_covariates_match"] and ci["ld_cache_overlap"] == 1.0
     # on disk: a new process (new LDCache) reads the memory-mapped payload
     for ld in ("d8-hardcall", "f32"):
         d = tmp_path / ld
@@ -261,11 +264,23 @@ def test_ldpred3_fast_loco_stage1(trait_panel, tmp_path):
     assert np.array_equal(_chi2(a), _chi2(b), equal_nan=True)  # seeded chains
     inf = _hratt(y, gt, X, stage1="ldpred3-inf", stage1_kwargs={"block_size": 300})
     assert _corr(_chi2(a), _chi2(inf)) > 0.95
-    # FastLD covers cache (pickled) too
+    assert a.extra["stage1_info"]["ld"] == "fast-int8"
+    assert a.extra["stage1_info"]["ld_source"] == "d8-hardcall"
+    ch = a.extra["stage1_info"]["fast_chains"]
+    assert len(ch) == 3 and all(np.isfinite(d["h2_est"]) and d["rhat_h2"] is not None for d in ch)
+    # FastLD covers cache on disk as npz + json (no pickle)
     kw = dict(stage1="ldpred3-fast", stage1_kwargs={**opts, "ld_cache": str(tmp_path / "f")})
     c1, c2 = _hratt(y, gt, X, **kw), _hratt(y, gt, X, **kw)
     assert c2.extra["stage1_info"]["ld_cache"] == "hit"
     assert np.array_equal(_chi2(c1), _chi2(c2), equal_nan=True) and np.array_equal(_chi2(c1), _chi2(a), equal_nan=True)
+    import os
+    files = os.listdir(tmp_path / "f")
+    assert not any(f.endswith(".pkl") for f in files) and any(f.endswith(".npz") for f in files)
+    # a fresh LDCache instance (as a new process) loads the npz cover
+    c3 = _hratt(y, gt, X, stage1="ldpred3-fast",
+                stage1_kwargs={**opts, "ld_cache": _ld8.LDCache(str(tmp_path / "f"))})
+    assert c3.extra["stage1_info"]["ld_cache"] == "hit"
+    assert np.array_equal(_chi2(c3), _chi2(a), equal_nan=True)
     with pytest.raises(ValueError, match="unknown keywords"):
         _hratt(y, gt, X, stage1="ldpred3-fast", stage1_kwargs={"bogus": 1})
 
@@ -405,21 +420,24 @@ def _two_pop(n=800, m=1200, fst=0.1, seed=0):
 
 
 def test_strong_structure_gate_and_auto_fallback():
-    """Strong structure after the covariates: explicit LDpred3 stage 1
-    refuses (block-diagonal LD cannot absorb ancestry), auto keeps the
-    refitted elastic net; ancestry covariates lift the gate; the override
-    runs with a warning."""
+    """Strong structure after the covariates: lassosum2 refuses
+    (block-diagonal LD cannot absorb ancestry), inf runs with a warning,
+    auto keeps the refitted elastic net; ancestry covariates lift the gate;
+    the override runs lassosum2."""
     gt, y, pop = _two_pop()
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
         with pytest.raises(ValueError, match="strong population structure"):
-            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf")
+            twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-lassosum2")
         r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="auto")
     sel = r.extra["stage1_selection"]
     assert sel["chosen"] == "enet" and sel["reason"].startswith("strong structure")
     assert r.extra["loco_refit"]
-    with pytest.warns(RuntimeWarning, match="allow_strong_structure"):
-        twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf",
+    with pytest.warns(RuntimeWarning, match="strong population structure"):
+        r = twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-inf")
+    assert r.extra["stage1"] == "ldpred3-inf"
+    with pytest.warns(RuntimeWarning, match="strong population structure"):
+        twostep.hratt(y, gt, None, loco_folds=2, random_state=0, stage1="ldpred3-lassosum2",
                       stage1_kwargs={"allow_strong_structure": True})
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -449,3 +467,67 @@ def test_binary_values_as_quantitative_warn_with_ldpred3():
     with warnings.catch_warnings():
         warnings.simplefilter("error", UserWarning)
         twostep.hratt(y, gt, None, loco_folds=2, random_state=1, stage1="ldpred3-inf")
+
+
+def test_cache_cohort_reuse_across_sample_subsets(trait_panel):
+    """Key = variants (model-SNP set) + layout + versions, not samples or
+    covariates: a trait on 80 % of the samples reuses the cohort cover and
+    records overlap / coverage / F_ST; a disjoint panel with the same
+    variants is rebuilt."""
+    gt, y, X = trait_panel
+    cache = _ld8.LDCache()
+    kw = dict(stage1="ldpred3-inf", stage1_kwargs={"block_size": 200, "ld": "d8-hardcall",
+                                                  "ld_cache": cache})
+    _hratt(y, gt, X, **kw)
+    keep = np.random.default_rng(3).random(y.size) < 0.8
+    G = np.asarray(gt.G)
+    sub = Genotypes(np.ascontiguousarray(G[keep]), chromosome=gt.chromosome, position=gt.position,
+                    variant_ids=gt.variant_ids)
+    r = _hratt(y[keep], sub, X[keep], **kw)
+    info = r.extra["stage1_info"]
+    assert info["ld_cache"] == "hit" and not info["ld_cache_exact"]
+    assert info["ld_cache_overlap"] > 0.99 and 0.7 < info["ld_cache_coverage"] < 0.9
+    assert info["ld_cache_fst"] < 0.01
+    fresh = _hratt(y[keep], sub, X[keep], stage1="ldpred3-inf",
+                   stage1_kwargs={"block_size": 200, "ld": "d8-hardcall"})
+    assert _corr(_chi2(r), _chi2(fresh)) > 0.999
+    # a different panel (no shared samples) with the same variant layout
+    other, _ = ld_panel(800, 1200, seed=99)
+    og = Genotypes(np.ascontiguousarray(other), chromosome=gt.chromosome, position=gt.position,
+                   variant_ids=gt.variant_ids)
+    r2 = _hratt(y, og, X, **kw)
+    assert r2.extra["stage1_info"]["ld_cache"] == "rebuilt"
+
+
+def test_cache_layout_validated_and_versioned(trait_panel, tmp_path):
+    import json
+    import os
+
+    gt, y, X = trait_panel
+    d = tmp_path / "c"
+    kw = dict(stage1="ldpred3-inf", stage1_kwargs={"block_size": 200, "ld": "d8-hardcall",
+                                                  "ld_cache": str(d)})
+    _hratt(y, gt, X, **kw)
+    js = [f for f in os.listdir(d) if f.endswith(".json")][0]
+    with open(d / js) as fh:
+        lay = json.load(fh)
+    assert lay["versions"]["ldpred3"] == ldpred3.__version__ and "quantizer" in lay["versions"]
+    bad = dict(lay, blocks=[[0, 7, 0]] + lay["blocks"][1:])
+    with open(d / js, "w") as fh:
+        json.dump(bad, fh)
+    with pytest.raises(ValueError, match="layout"):
+        _ld8.LDCache(str(d)).get(js[:-5])
+    # another ldpred3 version: the stored cover is ignored (a miss)
+    with open(d / js, "w") as fh:
+        json.dump(dict(lay, versions={**lay["versions"], "ldpred3": "0.0"}), fh)
+    assert _ld8.LDCache(str(d)).get(js[:-5]) is None
+
+
+def test_hardcall_needs_no_private_projection(ldp, monkeypatch):
+    G, gt = ldp
+    lg = _lg(G, gt.chromosome, np.random.default_rng(2).normal(size=(G.shape[0], 4)))
+    idx = np.arange(0, 200)
+    ref = _projected_corr(lg, idx)
+    lg._projection = None  # the hard-call build must not read it
+    _, R = _ld8.hardcall_block(lg, idx, return_float=True)
+    assert np.max(np.abs(R - ref)) < 2e-6
