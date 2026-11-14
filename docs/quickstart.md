@@ -344,12 +344,11 @@ object has vanished` crashes while Numba saved a kernel in concurrent
 simulation runs, which a per-run `NUMBA_CACHE_DIR` stopped. Results do not
 depend on the cache, only the first-call compile time does.
 During parallel sweeps the workers spin between launches instead of sleeping
-at once (as OpenMP does on Apple silicon): in the 26 October speed review whole HRATT
-runs at four threads were 1.12-1.24x faster than with sleeping workers on a
-5,000 x 40,000 panel, 1.55x on 1,000 x 10,000 (a strong-structure refit) and
-1.01-1.03x on 20,000 x 10,000, for 1.5-2x the process CPU time; two threads
-gained 1.06x and one thread is unchanged; set `KMP_BLOCKTIME` or
-`OMP_WAIT_POLICY` to keep the runtime's own policy.
+at once (as OpenMP does on Apple silicon). This shortens launch latency at the cost of
+1.5-2x the process CPU time during parallel fits
+([speed review](../benchmarks/results/20261026-hratt-speed-review/README.md)); one
+thread is unaffected. Set `KMP_BLOCKTIME` or `OMP_WAIT_POLICY` to keep the runtime's
+own policy.
 
 No float copy of the genotypes is kept; every pass decodes them. For large
 panels store the calls two bits each: `Genotypes.load_plink(prefix,

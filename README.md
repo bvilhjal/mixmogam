@@ -51,10 +51,13 @@ passed two of its seven pre-registered criteria. The
 re-scored the same panels, traits and samples (regenerated from the first run's seeds; the
 genotype hashes match), plus new Fst 0.05 and principal-component cells, with the revised
 2.0.0.dev6 code, and passed five of its own seven pre-registered criteria.
-Cross-fitted effects were within 2% of the population slopes (in-sample
-scores: 28-36% low), except weighted effects under selection on the outcome
-(5.4% low), and weighted fits took 1.55 times as long as HRATT-HE against a
-target of 1.3.
+With cross-fitted scores, quantitative effects were within 2% of the population
+slopes when there was no selection on the outcome (in-sample scores were 28-36% low).
+Weighted effects missed twice: 5.4% low under selection on the outcome (Monte Carlo
+SE 2.1%; weighted least squares was 4.0% low on the same samples), and 5.5% low at
+F_ST 0.05 without principal components. Binary one-step effects were within 3%, with
+Monte Carlo SEs of 4-9%. Weighted fits took 1.55 times as long as HRATT-HE, against
+a target of 1.3.
 
 ### Stage-1 model SNPs (large panels)
 
@@ -107,6 +110,7 @@ mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenanc
 **`None` (the library default)** fits stage 1 on every variant. Results are byte-identical to
 earlier versions.
 
+<!-- katla: overselling note, defer to NR M1/M2 label -->
 **What a subset costs.** Stage 1 sees only the polygenic signal its SNPs tag. In a
 pre-merge simulation of nuclear families (n = 2,000, 20 replicates; not yet archived under
 `benchmarks/results/`), lambda_GC on null SNPs was:
@@ -126,7 +130,7 @@ the subset and flagged strong structure. HRATT now runs that test on every varia
 it on every variant brought the excess to +0.008 ± 0.003 and +0.001 ± 0.004 with PCs, but in a
 patched copy of older code (12 runs per demography), not a rerun of the shipped code.
 
-For the family inflation, pass the relatives: `hratt(..., relatedness=...)` (CLI
+If your sample contains relatives, you can pass them: `hratt(..., relatedness=...)` (CLI
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
 GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` is reliable
 without population structure. Under structure the 4-SD MAD floor can sit
@@ -138,7 +142,8 @@ The default
 expected null inflation kappa_g (times a covariate factor) instead of applying a global
 lambda. Without `relatedness=`, `"auto"` means `"lambda"`: a single structure lambda when the
 structure test finds strong structure, otherwise none. kappa_g does not correct population
-structure, so keep ancestry PCs. Close relatives also make the structure test strong, and PCs
+structure, so keep ancestry PCs. The kappa_g correction is new and has no archived
+benchmark yet; check null calibration on your own data before relying on it. Close relatives also make the structure test strong, and PCs
 do not correct them; HRATT's strong-structure warnings say so and point to `relatedness=`. Details and options are in the `hratt`
 docstring (`help(mixmogam.twostep.hratt)`).
 
@@ -217,8 +222,11 @@ threads, two-bit storage and memory budgets for large HRATT fits, and
 
 ## Performance
 
-On one simulated 100,000 x 20,000 founder-block panel (2.0.0.dev8, one requested thread,
-Apple M2 Pro; the Accelerate thread pool itself could not be observed), three balanced-order repetitions of each mixmogam method gave:
+On one simulated 100,000 x 20,000 founder-block panel, three balanced-order repetitions of
+HRATT-HE and BOLT-style inf gave the times below (2.0.0.dev8, one requested thread, Apple
+M2 Pro; the Accelerate thread pool itself could not be observed). They have not been rerun
+since 2.0.2.dev1 changed fixed-seed stochastic REML fits, so read them as indicative for
+the current version:
 
 | Method | Median wall time | Median peak RSS |
 |---|---:|---:|

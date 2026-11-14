@@ -439,8 +439,10 @@ ancestry predicted both weights and allele frequency.
 
 Two departures from common practice follow from pilots. The Huber-White
 sandwich sum a^2 Z^2 of weighted GWAS replaces each genotype's variance by its
-own square; it was inflated 17-fold at 1e-3 for MAF 1-5% under selection on
-the outcome, because a few samples carry the score. The model-based logistic
+own square; under selection on the outcome it rejected 12 times too often at
+1e-3 for MAF 1-5% (26 times at 1e-4 over all MAF), because a few samples carry
+the score ([archive](../benchmarks/results/20261005-hratt-weights-binary/README.md)).
+The model-based logistic
 variance sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample
 LOCO offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets
 and 50 cases in 5,000).
@@ -460,9 +462,11 @@ alpha/2 in each tail of a skewed null. The
 [first validation](../benchmarks/results/20261005-hratt-weights-binary/README.md)
 (`benchmarks/hratt_weights_binary_plan.md`) found low-frequency tails
 5.75-fold at 1e-3 at Fst 0.05 when the weights depended on ancestry, and
-effects 32% attenuated by in-sample LOCO scores; the conditional-binomial
-tails, rho_j and cross-fitting answer those, and
-`benchmarks/hratt_followups_plan.md` validated them.
+effects 32% attenuated by in-sample LOCO scores. The conditional-binomial
+tails, rho_j and cross-fitting were designed to fix those; the prespecified
+[follow-up](../benchmarks/results/20261006-hratt-followups/README.md) passed five
+of seven criteria, failing on weighted effects under selection on the outcome
+(5.4% low) and on weighted run time (1.55 times HRATT-HE against a 1.3 target).
 
 ### Optional HRATT parallelism and memory budgets
 

@@ -776,9 +776,10 @@ Two common alternatives failed in pilots and are not used. The
 Huber--White sandwich $\sum_i a_{gi}^2x_{ij}^2$, with $x_{ij}$ the
 weighted covariate-adjusted genotype, replaces each genotype's variance by
 its own square. Under selection on the outcome a few samples carry each
-score: its test was inflated 17-fold at $\alpha=10^{-3}$ for minor allele
-frequency 1--5\%, where Equation~\eqref{eq:retro-variance} with the
-saddlepoint gave 0.75-fold. The model-based logistic variance
+score: its test rejected 12 times too often at $\alpha=10^{-3}$ for minor
+allele frequency 1--5\% (Table~\ref{tab:weights-quantitative}, S3), where
+Equation~\eqref{eq:retro-variance} with the saddlepoint gave 0.90 times the
+nominal rate. The model-based logistic variance
 $\sum_i\mu_i(1-\mu_i)\tilde g_{ij}^2$ of logistic score tests with
 saddlepoint tails \citep{dey2017,zhou2018,hof2025} trusts fitted
 probabilities that an in-sample LOCO offset overfits when cases are few:
