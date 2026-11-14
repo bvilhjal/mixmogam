@@ -84,10 +84,13 @@ gwas(y, gt, X, method="hratt", model_snps="hm3",
 ```
 
 ```
-mixmogam gwas --geno imputed --pheno y.txt --out r.csv --model-snps hm3 [--hm3-build GRCh38]
-mixmogam hm3 match --geno imputed                       # the match report only
+mixmogam gwas --geno imputed_hardcalls --pheno y.txt --out r.csv --model-snps hm3 [--hm3-build GRCh38]
+mixmogam hm3 match --geno imputed_hardcalls             # the match report only
 mixmogam hm3 info [--map hm3-ldpred2]                   # map size and provenance
 ```
+
+Imputed data must be hard-called first (for example BGEN with `--hard-call-threshold`);
+dosages are not supported.
 
 **Human data: `"hm3"` (recommended).**
 - By default it uses the 1,444,196 HapMap3+ variants of ldpred3's UK Biobank European LD
@@ -249,7 +252,8 @@ quicker (2.03 and 2.60 s against 2.57 and 2.77 s), and at 2,500 the default
 no external program is compared. The
 [evidence bundle](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/README.md) has
 the ladder, a longer-range-LD panel, 400,000- and 800,000-variant fits and the
-measurement details.
+measurement details. (Its tables also keep an external program's timings for
+provenance; they are not part of this documentation.)
 
 ## Interpretation and limitations
 

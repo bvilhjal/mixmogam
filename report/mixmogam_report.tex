@@ -1987,8 +1987,9 @@ minor allele frequency 1--5\%, null and mixed traits, and binary traits at
 Two of its seven criteria passed.
 
 Weighted quantitative tests were calibrated without structure
-(Table~\ref{tab:weights-quantitative}): $\lgc$ 0.995--1.003 and 0.94--0.99
-times the nominal rate at $\alpha=10^{-3}$, including selection on the
+(Table~\ref{tab:weights-quantitative}): $\lgc$ 0.995--1.003 and 0.94--1.00
+times the nominal rate at $\alpha=10^{-3}$ for minor allele frequency
+$\ge5\%$ (0.90--1.05 for 1--5\%), including selection on the
 outcome (S3), where the Huber--White sandwich rejected 12 times too often
 for minor allele frequency 1--5\%.
 Weighted HRATT gained power over the same test without a polygenic offset,
@@ -2228,17 +2229,17 @@ manifests and diagnostics are retained in the compact
 remain in the original local archives. The requested worker and
 native-library limits were one except where stated; the active Apple
 Accelerate thread pool could not be independently observed. Whole-process
-time includes startup and input handling. The sample-size and matched-genome
+time includes startup and input handling. The sample-size and 400,000-variant
 drivers observed load but did not forward their load limit to fit workers.
 
 Table~\ref{tab:dev8-ladder} fixes the marker count at 20,000 and varies
 the number of samples. Each entry is one run on a synthetic mixed trait.
 The panels share a 100-marker founder-block design but are distinct
-realizations, and the number of founders changes with sample size. From
-5,000 samples up HRATT-HE had the shortest single-run time of the three
-mixmogam methods run there (exact stops at 2,500), 3.27 against 4.00--4.13 seconds at 5,000 and 25.75
-against 47.07--102.20 at 100,000; at 1,000 and 2,500 samples BOLT-style
-inf was quicker. External programs are not compared. At 100,000,
+realizations, and the number of founders changes with sample size. In single
+runs, HRATT-HE took 3.27 seconds at 5,000 samples against 4.00--4.13 for the
+other two methods run there (exact stops at 2,500), and 25.75 against
+47.07--102.20 at 100,000; at 1,000 and 2,500 samples BOLT-style inf took
+less time. External programs are not compared. At 100,000,
 three further balanced-order repetitions on the same input gave median
 [minimum, maximum] seconds of 25.836 [25.565, 26.307] for HRATT-HE
 and 101.770 [101.540, 102.395] for BOLT-style inf. Median peak RSS was 2.491
@@ -2542,8 +2543,9 @@ speed gained by reusing matrix products.
 balanced order, CPU time and complete-fit boundaries. Vary
 sample size and marker density separately and report peak memory per
 genotype for int8 and two-bit calls, with setup, variance fitting,
-prediction and testing timed apart; REML and BOLT-style mixture still take 1.14 to
-1.23 times as long as with dev5's cache. Before accepting a looser
+prediction and testing timed apart. The target is clear: REML and BOLT-style
+mixture fits still take 1.14 to 1.23 times as long as with dev5's cache
+(Table~\ref{tab:streaming-paired}). Before accepting a looser
 numerical tolerance, test high LD, small residual variance and phenotypes
 near decision thresholds. HRATT's case-control and weighted tests need
 external validation at prevalence below 1\%, with related samples, real
@@ -2587,7 +2589,8 @@ using mixmogam baseline \code{db232216} and phensim baseline
 \code{4939124e} with the explicitly snapshotted simulator extensions.
 The generating and analysis driver is
 \code{benchmarks/}\allowbreak\code{ldak\_kvik\_comparison.py}, archived under
-its earlier name \code{kvik\_simulation.py};
+its earlier name \code{kvik\_simulation.py}; it also ran an external program,
+whose outputs stay in the archive for provenance and are not used here;
 the frozen plan, full package sources, complete inputs, raw p-values,
 commands, logs, diagnostics and resource measurements accompany its results.
 The separate \code{report/}\allowbreak\code{make\_phensim\_figures.py}

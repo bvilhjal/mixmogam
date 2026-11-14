@@ -40,7 +40,7 @@ from mixmogam.io.phenofile import read_phenotypes
 
 pheno = read_phenotypes("phenotypes.csv")    # wide, long, or PLINK; .gz also accepted
 samples, y = pheno.complete("FT")
-gt, _ = gt.align_samples(list(samples))
+gt, _ = gt.align_samples(samples)
 ```
 
 ## Covariates and ancestry PCs
@@ -93,9 +93,9 @@ from mixmogam import gwas
 
 result = gwas(y, gt)                         # n <= 5000: exact LOCO EMMAX
 result = gwas(y, gt, method="exact", n_threads=4)  # parallel standardization (fast extra)
-result = gwas(y, gt, method="bolt-inf")      # BOLT-style inf (mixmogam), K-free
-result = gwas(y, gt, method="bolt")          # two-Gaussian mixture
-result = gwas(y, gt, method="hratt")         # elastic net, after LDAK-KVIK
+result = gwas(y, gt, method="bolt-inf")      # BOLT-style inf: no kinship matrix formed
+result = gwas(y, gt, method="bolt")          # BOLT-style mixture (two-Gaussian prior)
+result = gwas(y, gt, method="hratt")         # HRATT: elastic-net two-step test
 result = gwas(y, gt, method="bolt-inf", denominator="spectral")  # structure-aware
 
 result.genomic_control()                     # lambda_GC (> 1 = inflation)
@@ -168,10 +168,13 @@ to pass `relatedness=` (`--relatedness`) when the samples include relatives. `gw
 `sample_weights`, `spa_threshold`, `spa_two_sided`, `loco_folds`, `stage1` and
 `stage1_kwargs` with any other method, `auto` included (pass `method="hratt"`;
 only the command line moves `auto` to HRATT when `--trait`, `--weights`, `--stage1`,
-`--model-snps` or `--relatedness` is given). Method-specific keywords raise the same way: `n_threads` belongs to
-`exact` and `hratt`; `gram_cache_bytes`, `vb_tol` and `vb_max_iter` to `bolt` and
-`hratt`; `cv_tol`, `he_probes`, `alpha_method`, `heritability_method` and
-`cv_fraction` to `hratt` alone.
+`--model-snps` or `--relatedness` is given). Method-specific keywords raise the same way:
+
+| Keyword | Accepted by |
+|---|---|
+| `n_threads` | `exact`, `hratt` |
+| `gram_cache_bytes`, `vb_tol`, `vb_max_iter` | `bolt`, `hratt` |
+| `cv_tol`, `he_probes`, `alpha_method`, `heritability_method`, `cv_fraction` | `hratt` |
 
 ## Relatives
 
@@ -328,7 +331,7 @@ fixes the trace probes, the hold-out and the fold assignment. The same seed
 and thread setup reproduce p-values exactly; other seeds change them, more so
 at small n, so report the seed. `exact` is deterministic and takes none.
 `heritability_method="he"` switches to projected single-component randomized
-HE, which differs from official LDAK's partitioned HE and requires the default
+HE (one variance component, not a partitioned fit); it requires the default
 `alpha_method="he"`. Inspect its boundary and precision diagnostics and the
 CV/LOCO convergence flags before interpreting a fit; trace-probe uncertainty
 is not a confidence interval for heritability.
@@ -372,8 +375,9 @@ not fully out of core.
 
 int8 arrays decode fastest variant-major, each variant's calls contiguous, as
 the readers return them and as `Genotypes(G.T)` gives for a C-ordered
-(variants, samples) array: about 0.16 ns per call on one thread, against 1 ns
-for a C-ordered (samples, variants) array, which needs a transpose. Analysis
+(variants, samples) array: about 0.16 ns per call on one M2 Pro thread since the
+October efficiency work (CHANGELOG), against 1 ns for a C-ordered (samples, variants)
+array, which needs a transpose. Analysis
 entry points call `variant_major()` and make one int8 copy rather than
 transposing on every pass; the caller's array is not modified.
 `np.asfortranarray(G)` (or `packed=True`) avoids the copy, and selecting or

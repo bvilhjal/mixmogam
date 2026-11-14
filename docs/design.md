@@ -337,7 +337,7 @@ leftover inflation in weakly structured samples below the threshold has not
 been measured.
 
 The docstrings of `mixmogam.twostep` list each departure from the reference
-implementations: REML instead of MC REML for BOLT-LMM; HRATT's
+implementations: stochastic Lanczos REML instead of BOLT-LMM's Monte Carlo REML; HRATT's
 single-component HE rather than LDAK-KVIK's partitioned HE with large-effect
 exclusions, followed by REML h2 by default (`alpha_method="reml"` scans REML
 likelihoods instead); no LD thinning in the LDAK-Thin weights; a 1% relative

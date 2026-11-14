@@ -6,8 +6,9 @@ behind mixmogam, the evidence for it and six research priorities; the
 [design notes](../docs/design.md) describe the methods and the
 [changelog](../CHANGELOG.md) the release history.
 
-The evidence includes matched simulations of mixmogam methods, paired
-workloads at 50,000 samples, a repeated 100,000-sample comparison, the
+The evidence includes simulations in which every mixmogam method reads the same
+inputs, paired workloads at 50,000 samples, repeated 100,000-sample timings of
+HRATT-HE and BOLT-style inf, the
 prespecified validation of HRATT's case-control and weighted tests
 (Sections 2.12, 4.11) and of cross-fitted scores and covariate-specific
 genotype distributions (2.13, 4.12), and a positive-control check on the
@@ -31,8 +32,9 @@ HE/REML and 20,000-variant results are 2.0.0.dev6 reruns on the archived
 inputs (the cross-fitted 20,000-variant fits again on 7 October, after their
 genotype products were threaded), each timed fit waiting for a one-minute load
 average below 5. Timings across days include host-condition differences.
-Runs archived before HRATT was named keep
-its earlier name.
+Runs archived before HRATT was named keep its earlier name, so archive IDs
+containing `kvik` (for example `20261006-phensim-kvik-dev6`) hold mixmogam's
+HRATT runs; any external-program outputs inside them are provenance only.
 
 | Evidence | Archive under `benchmarks/results/` | Interpretation |
 |---|---|---|

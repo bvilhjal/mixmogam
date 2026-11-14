@@ -2,8 +2,9 @@
 
 One simulated structured population, analysed from start to finish. Every
 number and figure below comes from
-[`tutorial/tutorial.py`](tutorial/tutorial.py), which runs in about a minute on
-a laptop (the two mixture/elastic-net fits take ~20 s each):
+[`tutorial/tutorial.py`](tutorial/tutorial.py). On a laptop each mixture or
+elastic-net fit takes about 20 s, and the script rewrites the three figures in
+`docs/tutorial/`:
 
 ```sh
 OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python docs/tutorial/tutorial.py
@@ -113,8 +114,8 @@ for method in ["exact", "bolt-inf", "bolt", "hratt"]:
   the model was not adjusted for: add K - 1 = 4 principal components
   (`X=pcs`, as in section 5) and check the flags again. Always check them
   before trusting a two-step fit.
-- 6/8 for `bolt` against 5/8 is one SNP in one simulation; the matched
-  benchmarks are in the report.
+- 6/8 for `bolt` against 5/8 is one SNP in one simulation; the replicated
+  simulations, where every method reads the same inputs, are in the report.
 
 ## 5. Case-control outcomes and sampling weights
 
