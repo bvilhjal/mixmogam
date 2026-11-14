@@ -129,6 +129,10 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--relatedness-correction", choices=("auto", "kappa", "lambda", "none", "gls"),
                       help="hratt: kappa (default with --relatedness), lambda (default without), none, "
                            "or gls (sparse family covariance, opt-in, unweighted quantitative)")
+    gwas.add_argument("--kinship-variants", metavar="FILE",
+                      help="--relatedness FILE: IDs of the variants the kinship was estimated on "
+                           "(one per line, e.g. PLINK .prune.in); warns when more than 10%% are "
+                           "stage-1 model SNPs")
     gwas.add_argument("--thin-min-maf", type=float, help="--model-snps auto: MAF threshold (default 0.01)")
     gwas.add_argument("--thin-max-r2", type=float, help="--model-snps auto: r2 threshold (default 0.5)")
     gwas.add_argument("--thin-window-kb", type=float, help="--model-snps auto: window in kb (default 100)")
@@ -371,6 +375,10 @@ def _cmd_gwas(args) -> int:
         kwargs["relatedness_threshold"] = args.relatedness_threshold
     if args.relatedness_correction is not None:
         kwargs["relatedness_correction"] = args.relatedness_correction
+    if args.kinship_variants is not None:
+        if args.relatedness is None:
+            raise ValueError("--kinship-variants needs --relatedness")
+        kwargs["relatedness_options"] = {"kinship_variants": args.kinship_variants}
     result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
                   genome_build=args.genome_build, **kwargs)
     info = result.extra.get("model_snps")
