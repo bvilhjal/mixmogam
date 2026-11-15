@@ -393,3 +393,65 @@ def test_ldpred3_lassosum2_takes_stage1_kwargs():
     kwargs = dict(LD_FAST, stage1_kwargs={"block_size": 40})
     result = twostep.hratt(y, gt, stage1="ldpred3-lassosum2", **kwargs)
     assert np.isfinite(np.asarray(result.f_stat)).all()
+
+
+def test_ld_cache_concurrent_puts_keep_payload_and_meta_paired(tmp_path, monkeypatch):
+    """Two cohorts share the 'all' key (samples are not in it). Concurrent
+    puts must not publish one cohort's payload with the other's meta, and
+    neither writer may crash on the shared temp names (review F13)."""
+    import threading
+    import time
+
+    from mixmogam import _ld8
+
+    gt, y, _ = _panel(13, n=60, m=40)
+    lgA = _setup_y(gt, y)[0].lg
+    keep = np.arange(lgA.n) % 2 == 0
+    lgB = _setup_y(gt.filter_samples(keep), y[keep])[0].lg
+    orderA = np.argsort(lgA.groups, kind="stable")
+    orderB = np.argsort(lgB.groups, kind="stable")
+    blocksA = _ld8.build_blocks(lgA, orderA, lgA.sd[orderA], 20, "f32")
+    blocksB = _ld8.build_blocks(lgB, orderB, lgB.sd[orderB], 20, "f32")
+    key = _ld8.ld_cache_key(lgA, orderA, 20, "f32")
+    assert key == _ld8.ld_cache_key(lgB, orderB, 20, "f32")
+    assert not np.array_equal(blocksA[0][0], blocksB[0][0])
+    metaA, metaB = _ld8.cover_meta(lgA), _ld8.cover_meta(lgB)
+
+    cache = _ld8.LDCache(str(tmp_path))
+    inside, release = threading.Event(), threading.Event()
+    real_om = np.lib.format.open_memmap
+    errors = []
+
+    def slow_om(*a, **k):
+        mm = real_om(*a, **k)
+        if threading.current_thread() is tA:
+            inside.set()
+            assert release.wait(timeout=30)
+        return mm
+
+    def put(blocks, meta):
+        try:
+            cache.put(key, blocks, meta)
+        except Exception as e:
+            errors.append(e)
+
+    monkeypatch.setattr(np.lib.format, "open_memmap", slow_om)
+    tA = threading.Thread(target=put, args=(blocksA, metaA))
+    tA.start()
+    assert inside.wait(timeout=30)  # A is mid-payload; B must wait, not interleave
+    tB = threading.Thread(target=put, args=(blocksB, metaB))
+    tB.start()
+    time.sleep(0.2)
+    release.set()
+    tA.join(30)
+    tB.join(30)
+    assert not errors, errors
+    got = _ld8.LDCache(str(tmp_path)).get(key)
+    assert got is not None
+    isA = np.array_equal(got[1]["fingerprints"], metaA["fingerprints"])
+    isB = np.array_equal(got[1]["fingerprints"], metaB["fingerprints"])
+    assert isA or isB
+    want = blocksA if isA else blocksB
+    for (R, idx), (Rw, idxw) in zip(got[0], want):
+        np.testing.assert_array_equal(R, Rw)
+        np.testing.assert_array_equal(idx, idxw)

@@ -365,5 +365,6 @@ permutations, two-kinship fits and Manhattan/QQ plots. The
 [tutorial](https://github.com/bvilhjal/mixmogam/blob/master/docs/tutorial.md) walks through one simulated analysis. Dated
 reviews ([3 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-03.md),
 [25 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-25.md),
-[29 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-29.md)) record corrections, measurements and
+[29 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-29.md),
+[14 November](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-11-14.md)) record corrections, measurements and
 release checks. The Python 2 package remains under the `v1.0-legacy` Git tag.

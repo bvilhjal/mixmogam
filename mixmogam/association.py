@@ -256,6 +256,28 @@ def gwas(
     return result
 
 
+def _full_panel_pairs(spec, n: int):
+    """Full-panel ``(i, j, r)`` arrays of an in-memory relatedness spec, or
+    None for specs resolved per group (``"auto"``, file paths, None)."""
+    from mixmogam._relatedness import Relatedness
+
+    if isinstance(spec, Relatedness):
+        if spec.n != n:
+            raise ValueError(f"relatedness is for {spec.n} samples, the panel has {n}")
+        u = spec.upper.tocoo()
+        return u.row.astype(np.int64), u.col.astype(np.int64), u.data.copy()
+    if isinstance(spec, (tuple, list)) and len(spec) == 3:
+        i = np.asarray(spec[0], dtype=np.int64).ravel()
+        j = np.asarray(spec[1], dtype=np.int64).ravel()
+        r = np.asarray(spec[2], dtype=np.float64).ravel()
+        if not (i.size == j.size == r.size):
+            raise ValueError("relatedness pairs: i, j and r differ in length")
+        if i.size and (min(i.min(), j.min()) < 0 or max(i.max(), j.max()) >= n):
+            raise ValueError("relatedness pairs index samples outside 0..n-1")
+        return i, j, r
+    return None
+
+
 def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "auto",
                   **kwargs) -> dict:
     """Separate GWAS in two non-overlapping groups and a test of their difference.
@@ -272,7 +294,11 @@ def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "
     itself) are dropped in that group, where the intercept absorbs them.
     ``method="auto"`` is resolved once, from the larger group, so both groups
     use the same method. ``sample_weights`` (HRATT) are split with the
-    samples; other options are passed to :func:`gwas` unchanged.
+    samples. In-memory relatedness (a :class:`~mixmogam._relatedness.Relatedness`
+    or ``(i, j, r)`` pairs in full-panel indices) is re-indexed into each
+    group, dropping pairs with either sample outside it; ``relatedness="auto"``
+    and pair-file paths are resolved within each group. Other options are
+    passed to :func:`gwas` unchanged.
 
     Returns a dict with ``groups`` (the two labels, sorted), ``results``
     (one GwasResult per group, in that order) and ``difference``, a
@@ -297,6 +323,7 @@ def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "
     if method == "auto":
         method = "exact" if max(idx.size for idx in members) <= EXACT_N_AUTO else "bolt-inf"
     weights = kwargs.pop("sample_weights", None)
+    rel_pairs = _full_panel_pairs(kwargs.get("relatedness"), gt.n_samples)
     results = []
     for idx in members:
         Xg = None
@@ -305,6 +332,13 @@ def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "
             Xg = Xg if Xg.shape[1] else None
         if weights is not None:
             kwargs["sample_weights"] = np.asarray(weights)[idx]
+        if rel_pairs is not None:
+            i, j, r = rel_pairs
+            pos = np.full(gt.n_samples, -1, dtype=np.int64)
+            pos[idx] = np.arange(idx.size)
+            a, b = pos[i], pos[j]
+            keep = (a >= 0) & (b >= 0)
+            kwargs["relatedness"] = (a[keep], b[keep], r[keep])
         results.append(gwas(y[idx], gt.filter_samples(idx), X=Xg, method=method, **kwargs))
     r0, r1 = results
     beta = r1.beta - r0.beta

@@ -844,10 +844,14 @@ def gls_prepare(Q, Wp, rel: Relatedness, sf, se, max_cluster: int = 5000) -> tup
 
 def gls_gamma(lg, vinv, n_gamma: int = 1000, rng=None) -> np.ndarray:
     """The ``"gamma"`` denominator of :func:`gls_stats`: per group, the mean
-    of z'Pz / z'z over ``n_gamma`` random variants of ``lg``."""
+    of z'Pz / z'z over ``n_gamma`` random variants of ``lg``. Monomorphic
+    variants (z'z = 0) are excluded from the draw: one in the calibration
+    would NaN the whole group's denominator."""
     rng = rng or np.random.default_rng(0)
-    m = lg.m
-    cal = np.sort(rng.choice(m, min(int(n_gamma), m), replace=False))
+    poly = np.flatnonzero(lg.zz > 0)
+    if poly.size == 0:
+        raise ValueError("GLS gamma calibration needs at least one polymorphic variant")
+    cal = np.sort(rng.choice(poly, min(int(n_gamma), poly.size), replace=False))
     Zc = lg.rows(cal)                          # projected rows
     gamma = np.empty(len(vinv))
     for g, (Vi, ViQ, M) in enumerate(vinv):

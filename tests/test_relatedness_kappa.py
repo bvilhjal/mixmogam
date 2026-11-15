@@ -1560,3 +1560,28 @@ def test_king_auto_mild_ld_8020_false_pairs_match_master_floor():
     assert stats["n_false"] <= n_master + 5, (
         f"{stats['n_false']} false Phi pairs; master_floor_pairs={n_master} "
         f"floor={king['threshold']:.4f} rec={stats['n_rec']}/{stats['n_true']}")
+
+
+def test_gls_gamma_skips_monomorphic_calibration_variants():
+    """A monomorphic variant drawn into the gamma calibration must not NaN
+    the whole group's denominator (review F12). n_gamma covers the panel,
+    so the monomorphic sites are guaranteed to be in the draw."""
+    from mixmogam.genotypes import Genotypes
+
+    rng = np.random.default_rng(11)
+    n, m = 200, 300
+    G = rng.integers(0, 3, size=(n, m)).astype(np.int8)
+    G[:, 50], G[:, 150], G[:, 250] = 1, 0, 2
+    gt = Genotypes(G, sample_ids=[f"s{i}" for i in range(n)],
+                   chromosome=np.repeat([1, 2, 3], 100),
+                   position=np.arange(m) * 1000 + 1,
+                   variant_ids=[f"v{j}" for j in range(m)])
+    y = G[:, 100] * 0.4 + rng.normal(size=n)
+    rel = (np.array([0]), np.array([1]), np.array([0.5]))
+    r = hratt(y, gt, loco_folds=2, random_state=1, relatedness=rel,
+              relatedness_correction="gls",
+              relatedness_options={"denominator": "gamma", "n_gamma": m})
+    poly = np.ones(m, dtype=bool)
+    poly[[50, 150, 250]] = False
+    assert np.isfinite(r.p[poly]).all()
+    assert np.isnan(r.p[~poly]).all()

@@ -354,3 +354,44 @@ def test_readahead_thread_on_temp_cache(tmp_path, monkeypatch):
     for s in range(9, idx.size, 9):
         ra.at(np.arange(s, min(idx.size, s + 9)))
     assert np.array_equal(np.asarray(calls.data), gt.G.data[idx])
+
+
+def test_subset_cache_concurrent_same_key_writers(tmp_path, monkeypatch):
+    """Parallel traits sharing a cache_dir write the same key; neither
+    writer may crash on a shared temp file, and the published cache must
+    be a valid hit (review F13)."""
+    import threading
+
+    gt, y, idx = _panel(n=60, m=42, seed=13, packed=False)
+    mean, sd = np.asarray(gt.G).mean(axis=0), np.asarray(gt.G).std(axis=0) + 0.1
+    opts = _stream.stream_options({"mode": "on", "cache_dir": str(tmp_path)})
+    barrier = threading.Barrier(2, timeout=30)
+    real_write = _stream._write_rows
+
+    def synced_write(gt_, idx_, nb, path):
+        sha = real_write(gt_, idx_, nb, path)
+        barrier.wait()  # both writers finish writing before either publishes
+        return sha
+
+    monkeypatch.setattr(_stream, "_write_rows", synced_write)
+    errors, results = [], []
+
+    def writer():
+        try:
+            calls, _ = _stream.open_subset_cache(gt, idx, mean[idx], sd[idx], opts)
+            results.append(np.asarray(calls.data))
+        except Exception as e:
+            errors.append(e)
+
+    threads = [threading.Thread(target=writer) for _ in range(2)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(30)
+    assert not errors, errors
+    assert len(results) == 2
+    np.testing.assert_array_equal(results[0], results[1])
+    calls, info = _stream.open_subset_cache(gt, idx, mean[idx], sd[idx], opts)
+    assert info["cache_hit"]
+    np.testing.assert_array_equal(np.asarray(calls.data), results[0])
+    assert not [f for f in os.listdir(tmp_path) if f.endswith(".tmp")]

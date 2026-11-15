@@ -317,9 +317,13 @@ class PackedCalls:
         with ``mmap=True``) gives a memory-mapped result: the repacked rows
         are written in bounded chunks to a temporary file in ``directory``
         (default: the system temp directory, ``TMPDIR``), which is mapped
-        read-only and unlinked, so resident memory stays about one chunk
+        read-only and unlinked, so the write buffer stays about one chunk
         whatever the panel size (disk use: the new panel, ceil(k / 4) bytes
-        per variant). Other sources are repacked in memory. ``n_threads``
+        per variant). Resident memory stays near one chunk where the kernel
+        honors ``MADV_DONTNEED`` (Linux); on macOS the drop-behind is
+        advisory and the scanned source's clean pages stay resident
+        (reclaimable, no footprint growth). Other sources are repacked in
+        memory. ``n_threads``
         Numba workers repack variants in parallel; values are the same.
         ``in_memory=True`` repacks a mapped source in memory too (a block of
         variants, say). Selecting every sample in its original order shares

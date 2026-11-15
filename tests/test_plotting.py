@@ -119,12 +119,25 @@ def test_manhattan_chromosome_blocks_do_not_overlap(result):
     assert all(lo_next > hi_prev for (_, hi_prev), (lo_next, _) in zip(edges, edges[1:]))
 
 
-def test_plot_cli_writes_both_pngs(result, tmp_path, capsys):
+def test_plot_cli_writes_both_pngs(result, tmp_path, capsys, monkeypatch):
+    import mixmogam.plotting as plotting
+
+    seen = {}
+    real = plotting.plot_manhattan
+
+    def spy(res, **kw):
+        seen.update(kw)
+        return real(res, **kw)
+
+    monkeypatch.setattr(plotting, "plot_manhattan", spy)
     csv = tmp_path / "gwas.csv"
     result.write_csv(str(csv))
     prefix = str(tmp_path / "fig")
-    rc = main(["plot", "--in", str(csv), "--out-prefix", prefix, "--title", "cli"])
+    rc = main(["plot", "--in", str(csv), "--out-prefix", prefix, "--title", "cli",
+               "--suggestive", "1e-4", "--label-top", "3"])
     assert rc == 0
+    # the CLI wires the flags through to the API (review F9)
+    assert seen["suggestive"] == 1e-4 and seen["label_top"] == 3
     assert (tmp_path / "fig_manhattan.png").stat().st_size > 1000
     assert (tmp_path / "fig_qq.png").stat().st_size > 1000
     assert "lambda_GC" in capsys.readouterr().out

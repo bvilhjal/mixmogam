@@ -134,7 +134,10 @@ exactly.
 
 `report_manifest.json` hashes the delivered PDF, its current inputs and the
 evidence manifest (pages are counted with `pdfinfo`). It does not update
-itself, so regenerate it whenever the PDF changes.
+itself, so regenerate it whenever the PDF or any hashed input changes
+(README.md, CHANGELOG.md, `mixmogam/__init__.py`, the report and benchmark
+READMEs/DESIGN, the `make_*.py` generators, the sub-manifests, and the
+tables/figures the LaTeX inputs).
 `report_manifest_20261017.json` is the previous revision's manifest, kept
 as is; its hashes need not match the current tree. `references.json` holds
 the verified bibliography identities and lookup URLs.

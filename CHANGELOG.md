@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- `gwas_by_group` re-indexes in-memory relatedness (a `Relatedness` or
+  `(i, j, r)` pairs in full-panel indices) into each group, dropping pairs
+  with either sample outside it. Before, the indices were passed through
+  unchanged and reinterpreted in each group's subset, so a pair meant for
+  one group was silently applied to the wrong samples in the other
+  (14 November review, F1). `relatedness="auto"` and pair-file paths were
+  already resolved per group; the docstrings now agree.
+- The GLS `"gamma"` denominator draws its calibration variants from the
+  polymorphic ones (`z'z > 0`). A monomorphic variant in the draw made the
+  group's gamma NaN and with it every p-value of the group; the exact
+  denominator was unaffected (review F12).
+- Persistent caches are safe for concurrent writers sharing a directory
+  (parallel traits): `LDCache` serializes a key's disk writes and reads
+  with an advisory lock, so two cohorts with the same `"all"` key (samples
+  are not in the key) can no longer publish one cohort's payload with the
+  other's metadata, or crash on the shared temp files; the stage-1 subset
+  cache writes through unique temp names (review F13). Single-writer use
+  is unchanged; the lock is a no-op where `fcntl` is unavailable.
+- `model_snps_include` regions on unrecognized contigs match the contig by
+  name: all unknown contigs normalize to the same code, so a region on one
+  scaffold could select another scaffold's variants at the same positions.
+  Dotted contig names (`GL000220.1:100-200`) now parse as regions
+  (review F4).
+
+### Changed
+
+- Tests defend the claimed numerical bounds: streamed step-2
+  weighted/binary/GLS comparisons at 3e-12 relative (measured worst
+  9.4e-13) and integer-dosage log10 p / beta at 1e-5 (measured worst
+  4.5e-6), replacing 1e-9 / 1e-4 (review F8). New regression tests: the
+  by-group relatedness re-indexing, the GLS-gamma monomorphic guard, the
+  contig-name region matching, both cache concurrency races (red without
+  the fixes), the thinning kernel's bit-identical rows against a
+  per-sample float32 reference, the CLI `step2 --dosage` wiring and
+  validation, `hm3 build` through the CLI, and the plot CLI's
+  `--suggestive` / `--label-top` wiring (reviews F6, F7, F9).
+- Documented the macOS drop-behind caveat: `MADV_DONTNEED` is advisory
+  there, so mapped scans keep the scanned source's clean pages resident
+  (reclaimable; the write buffer stays chunk-bounded and values are
+  unaffected); Linux drops the pages as documented (review F14).
+- `report/README.md` says to regenerate `report_manifest.json` whenever
+  the PDF **or any hashed input** changes, not only the PDF (review F5);
+  the manifest was regenerated after the 2.2.0 release edited three hashed
+  inputs without refreshing it (review F3). The quickstart documents the
+  plot CLI's `--suggestive`, `--label-top`, `--alpha`, `--no-threshold` and
+  `--title` options (review F10).
+
 ## [2.2.0] - 2026-11-14
 
 ### Fixed

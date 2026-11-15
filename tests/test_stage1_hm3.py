@@ -250,6 +250,19 @@ def test_cli_hm3(hm3map, tmp_path):
     # write_plink stores A/G placeholder alleles: most fixture SNPs mismatch
     assert ids_out.exists()
     assert main(["hm3", "info", "--map", hm3map]) == 0
+    # hm3 build: the CLI wiring of build_hm3_map (review F9)
+    table = tmp_path / "map.tsv"
+    table.write_text("chr\tpos\tpos_hg38\ta0\ta1\trsid\n"
+                     "1\t100\t110\tA\tG\trs1\n"
+                     "1\t200\tNA\tC\tT\trs2\n"
+                     "2\t300\t310\tG\tT\tbad_id\n")
+    built = tmp_path / "built.npz"
+    assert main(["hm3", "build", "--input", str(table), "--out", str(built),
+                 "--name", "cli-test", "--source", "test", "--licence", "CC0"]) == 0
+    hm_built = load_hm3(str(built))
+    assert hm_built["chr"].size == 3 and hm_built["meta"]["name"] == "cli-test"
+    assert int((hm_built["rsid"] < 0).sum()) == 1  # bad_id stored as no rsID
+    assert main(["hm3", "info", "--map", str(built)]) == 0
     assert main(["gwas", "--geno", prefix, "--pheno", str(pheno), "--out", str(out),
                  "--hm3-build", "GRCh37"]) == 2
     assert main(["gwas", "--geno", prefix, "--pheno", str(pheno), "--out", str(out),
@@ -267,6 +280,22 @@ def test_force_include_forms(panel_small):
     with pytest.raises(ValueError, match="ends before"):
         resolve_include(gt, ["1:10-5"])
     assert np.array_equal(resolve_include(gt, np.array([3, 1, 3]))[0], [1, 3])
+
+
+def test_force_include_unrecognized_contigs_match_by_name():
+    """Regions on unrecognized contigs select that contig's variants only:
+    they all normalize to -1, so matching the code would let one scaffold's
+    region select another's variants (review F4). Dotted names parse too."""
+    G = np.zeros((10, 4), dtype=np.int8)
+    gt = Genotypes(G, sample_ids=[f"s{i}" for i in range(10)],
+                   chromosome=np.array(["GL000220", "GL000221", "GL000220.1", "chr1"]),
+                   position=np.array([150, 150, 150, 150]),
+                   variant_ids=["a", "b", "c", "d"])
+    assert resolve_include(gt, ["GL000220:100-200"])[0].tolist() == [0]
+    assert resolve_include(gt, ["GL000220.1:100-200"])[0].tolist() == [2]
+    assert resolve_include(gt, ["chrGL000221:150"])[0].tolist() == [1]
+    assert resolve_include(gt, ["1:150"])[0].tolist() == [3]
+    assert resolve_include(gt, ["GL000999:100-200"])[1]["unmatched"] == ["GL000999:100-200"]
 
 
 @pytest.fixture(scope="module")

@@ -14,7 +14,11 @@ bit-identical; each stage-1 pass is one forward sequential scan of the file.
 bounded: before a slice is decoded the kernel is asked to read the next
 window (``MADV_WILLNEED``, asynchronous), and the mapping of slices already
 passed is dropped (``MADV_DONTNEED``; clean file pages, re-read from the page
-cache or disk if needed again).
+cache or disk if needed again). On macOS ``MADV_DONTNEED`` is advisory only
+(the kernel keeps the clean pages resident), so resident memory there grows
+with the scanned panel instead of staying near one window; the pages stay
+reclaimable (the footprint does not grow) and values are unaffected. Linux
+drops the pages as documented.
 
 Cache files are keyed by the source BED's file identity, or a hash of every
 selected call for an in-memory panel, plus the subset's indices and samples.
@@ -356,12 +360,28 @@ def open_subset_cache(gt, idx: np.ndarray, mean: np.ndarray, sd: np.ndarray,
             fd, path = tempfile.mkstemp(prefix="mixmogam-stage1-", suffix=".bed", dir=directory)
             os.close(fd)
             info["path"] = path
-        meta["data_sha256"] = _write_rows(gt, idx, nb, path + ".tmp")
-        os.replace(path + ".tmp", path)
+        # Unique temp names: concurrent same-key writers (parallel traits
+        # sharing a cache_dir) must not truncate each other's in-progress
+        # file. Same-key content is identical, so the last publish wins.
+        fd, tmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".tmp",
+                                   dir=directory)
+        os.close(fd)
+        try:
+            meta["data_sha256"] = _write_rows(gt, idx, nb, tmp)
+            os.replace(tmp, path)
+        finally:
+            if os.path.exists(tmp):
+                os.unlink(tmp)
         if keep:
-            with open(path + ".json.tmp", "w") as fh:
-                json.dump(meta, fh, indent=1, sort_keys=True)
-            os.replace(path + ".json.tmp", path + ".json")
+            fd, jtmp = tempfile.mkstemp(prefix=os.path.basename(path) + ".", suffix=".json.tmp",
+                                        dir=directory)
+            try:
+                with os.fdopen(fd, "w") as fh:
+                    json.dump(meta, fh, indent=1, sort_keys=True)
+                os.replace(jtmp, path + ".json")
+            finally:
+                if os.path.exists(jtmp):
+                    os.unlink(jtmp)
         info["data_sha256"] = meta["data_sha256"]
     info["extract_seconds"] = time.perf_counter() - t0
     info["cache_hit"] = hit

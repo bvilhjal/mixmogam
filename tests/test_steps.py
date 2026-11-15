@@ -104,10 +104,12 @@ def test_split_steps_other_tests_match_hratt(data, options):
     ref = hratt(y, gt, X, **options)
     step1 = hratt_step1(y, gt, X, **options)
     _assert_same(hratt_step2(step1, gt), ref)
-    # Products over other block shapes round apart in the last bits.
+    # Products over other block shapes round apart in the last bits: the
+    # measured worst is 9.4e-13 relative (gls f_stat, M2 Pro, 2026-11-14);
+    # 3e-12 is the CHANGELOG 2.1.0 bound, defended here (review F8).
     streamed = hratt_step2(step1, _per_chromosome(G, gt, np.random.default_rng(3)),
                            chunk_bytes=50 * ((N + 5 + 3) // 4))
-    _assert_same(streamed, ref, rtol=1e-9)
+    _assert_same(streamed, ref, rtol=3e-12)
 
 
 def test_step2_reads_a_mapped_bed_file_without_copying_the_panel(data, tmp_path):
@@ -172,6 +174,67 @@ def test_cli_step2_streams_input_before_testing(data, tmp_path, monkeypatch, for
     assert "gram_cache" in HrattStep1.load(fit).extra
 
 
+def test_cli_step2_dosage_wiring(data, tmp_path, monkeypatch):
+    """--dosage streams BGEN dosages through the CLI and its validation is
+    CLI-only wiring: the underlying paths are tested elsewhere (review F6)."""
+    import struct
+
+    G, gt, y, X = data
+    k = 80
+    step1 = hratt_step1(y, gt, X, heritability_method="he")
+    fit = tmp_path / "fit.npz"
+    step1.save(fit)
+    D = G[:, :k].astype(np.float64)
+    D[D < 0] = np.nan
+    dos = Dosages(D, sample_ids=gt.sample_ids, chromosome=gt.chromosome[:k],
+                  position=gt.position[:k], variant_ids=gt.variant_ids[:k],
+                  allele1=gt.allele1[:k], allele2=gt.allele2[:k])
+    ref = hratt_step2(step1, dos)
+
+    calls = G[:, :k]
+    probs = np.zeros((N, k, 3))
+    for c in (0, 1, 2):
+        probs[calls == c, c] = 1.0
+    missing = calls < 0
+    probs[missing] = 0.0
+
+    class Reader:
+        nsamples, nvariants = N, k
+        samples = gt.sample_ids
+        nalleles = np.full(k, 2)
+        ncombinations = np.full(k, 3)
+        phased = np.zeros(k, dtype=bool)
+        allele_ids = np.array(["A,C"] * k)
+        ids = gt.variant_ids[:k]
+        chromosomes = gt.chromosome[:k].astype(str)
+        positions = gt.position[:k]
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            pass
+
+        def read(self, index, **kwargs):
+            return (probs[index].copy(), missing[index].copy(),
+                    np.full(probs[index].shape[:2], 2, dtype=np.int32))
+
+    path = tmp_path / "d.bgen"
+    path.write_bytes(struct.pack("<IIII4sI", 20, 20, k, N, b"bgen", 9 | (1 << 31)))
+    monkeypatch.setitem(sys.modules, "bgen_reader",
+                        SimpleNamespace(open_bgen=lambda *a, **k_: Reader()))
+    out = tmp_path / "dos.tsv"
+    assert main(["step2", "--step1", str(fit), "--geno", str(path), "--dosage",
+                 "--chunk-mb", str(20 * N * 8 / 1024**2), "--out", str(out)]) == 0
+    got = GwasResult.read_csv(out)
+    np.testing.assert_allclose(got.p, ref.p, rtol=1e-9)
+    np.testing.assert_array_equal(got.variant_ids, ref.variant_ids)
+    assert main(["step2", "--step1", str(fit), "--geno", str(path), "--dosage",
+                 "--geno-format", "vcf", "--out", str(out)]) == 2
+    assert main(["step2", "--step1", str(fit), "--geno", str(path), "--dosage",
+                 "--hard-call-threshold", "0.9", "--out", str(out)]) == 2
+
+
 def test_several_traits_with_their_own_samples_share_the_blocks(data, tmp_path):
     G, gt, y, X = data
     keep = np.flatnonzero(np.arange(N) % 9 != 0)  # trait 2 misses every ninth sample
@@ -203,9 +266,11 @@ def test_integer_dosages_give_the_hard_call_statistics(data):
                   variant_ids=gt.variant_ids, allele1=gt.allele1, allele2=gt.allele2)
     got = hratt_step2(step1, dos, chunk_bytes=8 * N * 70)
     ref = hratt_step2(step1, gt)
-    # The calls are tested at float32 precision, dosages in float64.
-    np.testing.assert_allclose(np.log10(got.p), np.log10(ref.p), rtol=1e-4, atol=1e-6)
-    np.testing.assert_allclose(got.beta, ref.beta, rtol=1e-4, atol=1e-7)
+    # The calls are tested at float32 precision, dosages in float64: the
+    # measured worst is 4.5e-6 relative (M2 Pro, 2026-11-14); 1e-5 is the
+    # CHANGELOG 2.1.0 "about 1e-5" bound, defended here (review F8).
+    np.testing.assert_allclose(np.log10(got.p), np.log10(ref.p), rtol=1e-5, atol=1e-6)
+    np.testing.assert_allclose(got.beta, ref.beta, rtol=1e-5, atol=1e-7)
     np.testing.assert_allclose(got.af, ref.af, rtol=1e-12)
     assert got.extra["dosage"] and np.isnan(got.extra["carrier_families"]).all()
     binary = hratt_step1((y > 0).astype(float), gt, X, trait="binary")

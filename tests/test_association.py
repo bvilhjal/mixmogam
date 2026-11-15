@@ -133,3 +133,38 @@ def test_by_group_options(two_groups, monkeypatch):
         association.gwas_by_group(y, gt, np.arange(gt.n_samples) % 3)
     with pytest.raises(ValueError, match="sample count"):
         association.gwas_by_group(y, gt, groups[1:])
+
+
+def test_by_group_relatedness_is_reindexed_per_group(two_groups):
+    """Full-panel relatedness pairs apply to the group that owns them; they
+    are never reinterpreted as another group's samples (review F1)."""
+    from mixmogam import gwas_by_group
+    from mixmogam._relatedness import Relatedness
+    gt, y, groups = two_groups
+    ctrl = np.flatnonzero(groups == "control")
+    trt = np.flatnonzero(groups == "treated")
+    pairs = (np.array([ctrl[0], trt[0], ctrl[1]]),
+             np.array([ctrl[1], trt[1], trt[2]]),
+             np.array([0.5, 0.5, 0.5]))
+    out = gwas_by_group(y, gt, groups, method="hratt", loco_folds=2,
+                        relatedness=pairs, random_state=1)
+    for label, res in zip(out["groups"], out["results"]):
+        idx = np.flatnonzero(groups == label)
+        pos = np.full(gt.n_samples, -1, dtype=np.int64)
+        pos[idx] = np.arange(idx.size)
+        i, j, r = pairs
+        a, b = pos[i], pos[j]
+        keep = (a >= 0) & (b >= 0)
+        assert keep.sum() == 1  # the within-group pair; the cross pair drops
+        ref = gwas(y[idx], gt.filter_samples(idx), method="hratt", loco_folds=2,
+                   relatedness=(a[keep], b[keep], r[keep]), random_state=1)
+        np.testing.assert_array_equal(res.p, ref.p)
+        assert res.extra["relatedness"]["n_pairs"] == 1
+    rel = Relatedness(gt.n_samples, *pairs, source="test")
+    out2 = gwas_by_group(y, gt, groups, method="hratt", loco_folds=2,
+                         relatedness=rel, random_state=1)
+    for r1, r2 in zip(out["results"], out2["results"]):
+        np.testing.assert_array_equal(r1.p, r2.p)
+    with pytest.raises(ValueError, match="outside 0..n-1"):
+        gwas_by_group(y, gt, groups, method="hratt",
+                      relatedness=([0], [gt.n_samples], [0.5]))

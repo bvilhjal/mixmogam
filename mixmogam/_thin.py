@@ -348,7 +348,7 @@ def _resolve_indices(gt, spec, name, strict):
     raise ValueError(f"{name} must be 'auto', 'hm3', variant indices, a boolean mask or variant IDs")
 
 
-_RANGE = re.compile(r"^(?:chr)?([0-9A-Za-z]+):(\d+)(?:-(\d+))?$", re.IGNORECASE)
+_RANGE = re.compile(r"^(?:chr)?([0-9A-Za-z.]+):(\d+)(?:-(\d+))?$", re.IGNORECASE)
 
 
 def resolve_include(gt, include) -> tuple:
@@ -357,9 +357,10 @@ def resolve_include(gt, include) -> tuple:
     ``include``: variant indices, a boolean mask, or strings, each a
     variant ID or (when no variant has that ID) a region ``chr:pos`` or
     ``chr:start-end`` (inclusive; 'chr1', '1', 'X' and '23' name the same
-    chromosome). IDs and regions that match nothing are counted and
-    reported (with a warning), not an error: lists of known loci rarely
-    match a panel entirely.
+    chromosome; unrecognized contigs, e.g. 'GL000220.1', match by name).
+    IDs and regions that match nothing are counted and reported (with a
+    warning), not an error: lists of known loci rarely match a panel
+    entirely.
     """
     arr = np.asarray(include)
     if arr.dtype.kind not in "USO":
@@ -373,6 +374,8 @@ def resolve_include(gt, include) -> tuple:
     sel = np.isin(ids, np.asarray(items, dtype=str)[is_id]) if items else np.zeros(gt.n_variants, bool)
     chrom = normalize_chromosome(gt.chromosome)
     pos = np.asarray(gt.position, dtype=np.int64)
+    raw = np.asarray(gt.chromosome).astype(str)
+    raw = np.array([s[3:].upper() if s.upper().startswith("CHR") else s.upper() for s in raw])
     unmatched = []
     for item, known in zip(items, is_id):
         if known:
@@ -386,7 +389,10 @@ def resolve_include(gt, include) -> tuple:
         hi = int(m.group(3)) if m.group(3) else lo
         if hi < lo:
             raise ValueError(f"model_snps_include region {item!r} ends before it starts")
-        hit = (chrom == c) & (pos >= lo) & (pos <= hi)
+        # Unrecognized contigs all normalize to -1; match the raw name so a
+        # region on one scaffold cannot select another scaffold's variants.
+        on_chr = (chrom == c) if c >= 0 else (raw == m.group(1).upper())
+        hit = on_chr & (pos >= lo) & (pos <= hi)
         if not hit.any():
             unmatched.append(item)
         sel |= hit

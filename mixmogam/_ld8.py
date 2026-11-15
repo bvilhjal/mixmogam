@@ -82,9 +82,15 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+from contextlib import contextmanager
 from typing import Optional
 
 import numpy as np
+
+try:
+    import fcntl
+except ImportError:  # pragma: no cover - non-POSIX: single-writer use only
+    fcntl = None
 
 __all__ = ["LD_KINDS", "LDCache", "build_blocks", "hardcall_block", "quantize_d8",
            "ld_cache_key", "cover_nbytes", "sample_fingerprints", "reuse_check", "split_parts", "build_split_blocks",
@@ -410,6 +416,26 @@ def _fast_from(arrays: dict, scalars: dict):
                   construction=scalars["construction"])
 
 
+@contextmanager
+def _key_lock(base: str):
+    """Serialize a key's disk writes and reads across threads and processes.
+
+    The 'all' key excludes samples, so two cohorts can write the same key
+    with different payloads; without the lock their fixed-name temp files
+    share inodes and their multi-file publishes interleave (one cohort's
+    payload with another's meta). The lock file is kept: unlinking it would
+    race. No-op where fcntl is unavailable (non-POSIX)."""
+    if fcntl is None:
+        yield
+        return
+    with open(base + ".lock", "a") as fh:
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
 class LDCache:
     """Built LD covers keyed by :func:`ld_cache_key`: in memory, or in
     ``directory``. Dense covers are one ``.npy`` payload (memory-mapped on
@@ -417,7 +443,8 @@ class LDCache:
     ``.npz`` of their arrays (``allow_pickle=False``) plus a ``.json`` of
     their scalars; the build cohort's sample fingerprints and allele means
     are a ``-meta.npz``. Nothing is unpickled. ``hits`` and ``misses`` count
-    lookups."""
+    lookups. Disk writes and reads of one key are serialized by an advisory
+    lock, so concurrent fits sharing a directory cannot mix cohorts."""
 
     def __init__(self, directory: Optional[str] = None, mmap: bool = True):
         self.directory = directory
@@ -447,73 +474,75 @@ class LDCache:
 
     def _load(self, key):
         base = self._base(key)
-        js, mt = base + ".json", base + "-meta.npz"
-        if not (os.path.exists(js) and os.path.exists(mt)):
-            return None
-        with open(js) as fh:
-            layout = json.load(fh)
-        if layout.get("versions") != _versions():
-            return None
-        with np.load(mt, allow_pickle=False) as z:
-            meta = {"fingerprints": z["fingerprints"], "mean": z["mean"],
-                    "covariates": str(z["covariates"]), "n": int(z["n"])}
-        if layout["kind"] == "dense":
-            flat = np.load(base + ".npy", mmap_mode="r" if self.mmap else None, allow_pickle=False)
-            _validate_layout(layout, flat)
-            blocks = [(flat[off : off + k * k].reshape(k, k), np.arange(a, a + k))
-                      for off, k, a in layout["blocks"]]
-        elif layout["kind"] == "fast":
-            blocks = []
-            with np.load(base + ".npz", allow_pickle=False) as z:
-                for i, (sc, a, b) in enumerate(layout["blocks"]):
-                    arr = {f: z[f"b{i}_{f}"] for f in ("payload", "cuts", "factor",
-                                                        "col_start", "col_count")}
-                    F = _fast_from(arr, sc)
-                    if F.m != b - a:
-                        raise ValueError(f"LD cache {key}: FastLD block {i} size mismatch")
-                    blocks.append((F, np.arange(a, b)))
-        else:
-            return None
-        return blocks, meta
+        with _key_lock(base):
+            js, mt = base + ".json", base + "-meta.npz"
+            if not (os.path.exists(js) and os.path.exists(mt)):
+                return None
+            with open(js) as fh:
+                layout = json.load(fh)
+            if layout.get("versions") != _versions():
+                return None
+            with np.load(mt, allow_pickle=False) as z:
+                meta = {"fingerprints": z["fingerprints"], "mean": z["mean"],
+                        "covariates": str(z["covariates"]), "n": int(z["n"])}
+            if layout["kind"] == "dense":
+                flat = np.load(base + ".npy", mmap_mode="r" if self.mmap else None, allow_pickle=False)
+                _validate_layout(layout, flat)
+                blocks = [(flat[off : off + k * k].reshape(k, k), np.arange(a, a + k))
+                          for off, k, a in layout["blocks"]]
+            elif layout["kind"] == "fast":
+                blocks = []
+                with np.load(base + ".npz", allow_pickle=False) as z:
+                    for i, (sc, a, b) in enumerate(layout["blocks"]):
+                        arr = {f: z[f"b{i}_{f}"] for f in ("payload", "cuts", "factor",
+                                                            "col_start", "col_count")}
+                        F = _fast_from(arr, sc)
+                        if F.m != b - a:
+                            raise ValueError(f"LD cache {key}: FastLD block {i} size mismatch")
+                        blocks.append((F, np.arange(a, b)))
+            else:
+                return None
+            return blocks, meta
 
     def put(self, key, blocks, meta: dict) -> None:
         self._mem[key] = (blocks, meta)
         if self.directory is None:
             return
         base = self._base(key)
-        np.savez(base + "-meta.tmp.npz", fingerprints=np.asarray(meta["fingerprints"], np.uint64),
-                 mean=np.asarray(meta["mean"], np.float64), covariates=np.str_(meta["covariates"]),
-                 n=np.int64(meta["n"]))
-        dense = all(isinstance(R, np.ndarray) for R, _ in blocks)
-        if dense and blocks and len({R.dtype for R, _ in blocks}) == 1:
-            dt = blocks[0][0].dtype
-            total = sum(R.size for R, _ in blocks)
-            flat = np.lib.format.open_memmap(base + ".tmp.npy", mode="w+", dtype=dt, shape=(total,))
-            lay, off = [], 0
-            for R, idx in blocks:
-                k = R.shape[0]
-                flat[off : off + k * k] = np.ascontiguousarray(R).reshape(-1)
-                lay.append((off, k, int(idx[0])))
-                off += k * k
-            flat.flush()
-            del flat
-            os.replace(base + ".tmp.npy", base + ".npy")
-            layout = {"versions": _versions(), "kind": "dense", "dtype": str(dt),
-                      "size": int(total), "blocks": lay}
-        else:
-            arrays, lay = {}, []
-            for i, (F, idx) in enumerate(blocks):
-                arr, sc = _fast_arrays(F)
-                for f, v in arr.items():
-                    arrays[f"b{i}_{f}"] = np.asarray(v)
-                lay.append((sc, int(idx[0]), int(idx[-1]) + 1))
-            np.savez(base + ".tmp.npz", **arrays)
-            os.replace(base + ".tmp.npz", base + ".npz")
-            layout = {"versions": _versions(), "kind": "fast", "blocks": lay}
-        os.replace(base + "-meta.tmp.npz", base + "-meta.npz")
-        with open(base + ".json.tmp", "w") as fh:
-            json.dump(layout, fh)
-        os.replace(base + ".json.tmp", base + ".json")
+        with _key_lock(base):
+            np.savez(base + "-meta.tmp.npz", fingerprints=np.asarray(meta["fingerprints"], np.uint64),
+                     mean=np.asarray(meta["mean"], np.float64), covariates=np.str_(meta["covariates"]),
+                     n=np.int64(meta["n"]))
+            dense = all(isinstance(R, np.ndarray) for R, _ in blocks)
+            if dense and blocks and len({R.dtype for R, _ in blocks}) == 1:
+                dt = blocks[0][0].dtype
+                total = sum(R.size for R, _ in blocks)
+                flat = np.lib.format.open_memmap(base + ".tmp.npy", mode="w+", dtype=dt, shape=(total,))
+                lay, off = [], 0
+                for R, idx in blocks:
+                    k = R.shape[0]
+                    flat[off : off + k * k] = np.ascontiguousarray(R).reshape(-1)
+                    lay.append((off, k, int(idx[0])))
+                    off += k * k
+                flat.flush()
+                del flat
+                os.replace(base + ".tmp.npy", base + ".npy")
+                layout = {"versions": _versions(), "kind": "dense", "dtype": str(dt),
+                          "size": int(total), "blocks": lay}
+            else:
+                arrays, lay = {}, []
+                for i, (F, idx) in enumerate(blocks):
+                    arr, sc = _fast_arrays(F)
+                    for f, v in arr.items():
+                        arrays[f"b{i}_{f}"] = np.asarray(v)
+                    lay.append((sc, int(idx[0]), int(idx[-1]) + 1))
+                np.savez(base + ".tmp.npz", **arrays)
+                os.replace(base + ".tmp.npz", base + ".npz")
+                layout = {"versions": _versions(), "kind": "fast", "blocks": lay}
+            os.replace(base + "-meta.tmp.npz", base + "-meta.npz")
+            with open(base + ".json.tmp", "w") as fh:
+                json.dump(layout, fh)
+            os.replace(base + ".json.tmp", base + ".json")
 
     def disk_bytes(self) -> int:
         if self.directory is None:

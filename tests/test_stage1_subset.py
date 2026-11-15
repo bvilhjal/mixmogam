@@ -132,6 +132,52 @@ def test_thinning_ld_samples_and_cap():
     assert kept.size == 50 and np.all(np.isin(kept, full))
 
 
+def test_thinning_ld_rows_are_bit_identical_to_per_sample_arithmetic():
+    """The branchless float32 standardization must equal a per-sample
+    branch loop bit-for-bit (CHANGELOG 2.1.0 'bit-identical rows'; the
+    kept-set tests alone cannot see a 1-ulp row shift, review F7)."""
+    from mixmogam._fast import HAS_NUMBA
+    from mixmogam._thin import _ld_rows
+
+    if not HAS_NUMBA:
+        pytest.skip("the bit-identity claim is about the compiled kernel")
+    rng = np.random.default_rng(7)
+    n, m = 60, 40
+    G = rng.integers(0, 3, size=(n, m)).astype(np.int8)
+    G[rng.random((n, m)) < 0.05] = -1
+    G[:, 5] = 1  # monomorphic
+    gt = Genotypes(PackedCalls.pack(G), chromosome=np.repeat([1, 2], m // 2),
+                   position=np.arange(m) * 100 + 1)
+    idx = np.arange(m)
+
+    def reference(calls):
+        ref = np.empty((m, calls.shape[0]), dtype=np.float32)
+        for j in range(m):
+            col = calls[:, j]
+            total = cnt = 0
+            for v in col:
+                if v >= 0:
+                    total += int(v)
+                    cnt += 1
+            mean = total / max(cnt, 1)
+            dev = {c: (c - mean if c >= 0 else 0.0) for c in (-1, 0, 1, 2)}
+            ss = 0.0
+            for v in col:
+                d = dev[int(v)]
+                ss += d * d
+            sd = np.sqrt(ss / max(cnt, 1))
+            inv = 1.0 / sd if sd > 0 else 1.0
+            lut = np.array([dev[c] * inv if c >= 0 else 0.0 for c in (0, 1, 2)],
+                           dtype=np.float32)
+            ref[j] = np.where(col >= 0, lut[np.maximum(col, 0)], np.float32(0.0))
+        return ref
+
+    for samples in (None, np.sort(rng.choice(n, 25, replace=False))):
+        z, s = _ld_rows(gt, idx, 25 if samples is None else None, samples)
+        calls = G[:s] if samples is None else G[samples]
+        np.testing.assert_array_equal(z, reference(calls))
+
+
 def test_loco_groups_of_subset(panel):
     """The subset keeps the panel's groups and group count (an empty group
     included), and LOCO column g sums over model SNPs off group g only."""

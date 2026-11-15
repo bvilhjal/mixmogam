@@ -119,6 +119,15 @@ From the shell, the same two figures from a written result file:
 mixmogam plot --in gwas.csv --out-prefix gwas   # writes gwas_manhattan.png, gwas_qq.png
 ```
 
+The Manhattan plot draws the genome-wide line at `--alpha` (default 0.05;
+`--no-threshold` omits it), a dotted suggestive line at `--suggestive`
+(default 1e-5; 0 omits it) and annotates the `--label-top` smallest-p
+variants (default 5; 0 omits them); `--title` titles both figures. The API
+takes the same options: `plot_manhattan(result, alpha=..., suggestive=...,
+label_top=...)`. The QQ plot shades a 95% pointwise Beta order-statistic
+band (`plot_qq(..., band=False)` omits it) and annotates lambda_GC
+(`show_lambda=False` omits it).
+
 Every method tests a SNP against a polygenic model built without its
 own chromosome. More than 25 chromosomes are merged into 25 contiguous
 groups (`max_loco_groups`).
