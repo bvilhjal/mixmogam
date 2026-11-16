@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-15-post-2.2.0-review-fixes",
+        "revision": "2026-11-16-research-review-fixes",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -57,7 +57,13 @@ def main():
                            "LaTeX source and displays. The 2.2.0 release and the 14 November "
                            "review fixes (docs/review-2026-11-14.md) changed hashed documentation "
                            "inputs and package code, not the report's LaTeX, PDF or benchmark "
-                           "evidence; this revision refreshes the input hashes."),
+                           "evidence. The 16 November research review (docs/review-2026-11-16.md) "
+                           "edited the LaTeX (REGENIE and LDAK-KVIK attributions, ranges the "
+                           "evidence audit found too narrow, a paragraph and a limitation on "
+                           "relatives, two citations) and the PDF was rebuilt with Tectonic; its "
+                           "package changes (family cross-fit folds by default, the retrospective "
+                           "GLS variance, new warnings) are documented in README.md, docs/ and "
+                           "CHANGELOG.md, not re-benchmarked in the report."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

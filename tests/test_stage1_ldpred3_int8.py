@@ -595,20 +595,22 @@ def test_hardcall_needs_no_private_projection(ldp, monkeypatch):
 def test_ldpred3_relatives_skip_refit_and_apply_kappa_once():
     """Explicit ldpred3-inf + relatives: no LOCO refit (block-exact LOCO
     given shared h2), and λ_g = 1/(κ_g c_X) is applied a single time.
-    Family folds are skipped."""
+    Family folds apply (random folds leak relatives' phenotypes into the
+    scores, block-exact or not); with random folds the refit is n/a."""
     # Same construction as test_model_snps_and_relatedness_with_ldpred3:
     # relatives, but not strong structure (so the LDpred3 gate does not fire).
     G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
     kw = dict(stage1="ldpred3-inf", stage1_kwargs={"block_size": 200})
-    r = _hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "family"},
-               **kw)
+    r = _hratt(y, gt, relatedness=pairs, **kw)
     assert r.extra["stage1"] == "ldpred3-inf"
     assert not r.extra["structure"]["strong"]
     assert r.extra["loco_refit"] is False
-    assert r.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"
-    assert r.extra["crossfit_folds"] == "random"
-    ff = r.extra["relatedness"].get("family_folds") or {}
-    assert ff.get("applied") is False and ff.get("reason") == "n/a (block-exact LOCO)"
+    assert r.extra["crossfit_folds"] == "family"
+    assert r.extra["relatedness"]["crossfit_leak"] == 0.0
+    rnd = _hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "random"},
+                 **kw)
+    assert rnd.extra["crossfit_folds"] == "random" and rnd.extra["loco_refit"] is False
+    assert rnd.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"
     base = _hratt(y, gt, relatedness=pairs, relatedness_correction="none", **kw)
     k, cx = r.extra["relatedness"]["kappa"], r.extra["relatedness"]["c_X"]
     np.testing.assert_allclose(r.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
@@ -648,20 +650,25 @@ def test_auto_picking_inf_reports_actual_loco_refit_not_the_decision():
 
 
 def test_ldpred3_lassosum2_refit_with_relatives():
-    """lassosum2 is not block-exact: relatives auto-refit must run, and
-    extra['loco_refit'] must report the refit that actually ran."""
+    """lassosum2 is not block-exact: with random folds the relatives
+    auto-refit must run, and extra['loco_refit'] must report the refit that
+    actually ran. The default family folds need no refit."""
     G, gt, y, pairs, causal = family_panel(n_fam=60, kids=3, m=3000, n_chrom=4, seed=3)
     kw = dict(stage1="ldpred3-lassosum2", stage1_kwargs={"block_size": 200},
               model_snps_h2_check=False)
-    r = _hratt(y, gt, relatedness=pairs, **kw)
+    rnd = {"crossfit_folds": "random"}
+    r = _hratt(y, gt, relatedness=pairs, relatedness_options=rnd, **kw)
     assert r.extra["stage1"] == "ldpred3-lassosum2"
     assert not r.extra["structure"]["strong"]
     assert r.extra["loco_refit"] is True
     assert r.extra["loco_refit_reason"] == "relatives"
-    off = _hratt(y, gt, relatedness=pairs, relatedness_options={"loco_refit": False}, **kw)
+    off = _hratt(y, gt, relatedness=pairs, relatedness_options={**rnd, "loco_refit": False}, **kw)
     assert off.extra["loco_refit"] is False
     assert not np.allclose(r.f_stat, off.f_stat, rtol=1e-5, atol=1e-5)
-    inf = _hratt(y, gt, relatedness=pairs, stage1="ldpred3-inf",
+    fam = _hratt(y, gt, relatedness=pairs, **kw)
+    assert fam.extra["crossfit_folds"] == "family" and fam.extra["loco_refit"] is False
+    assert "lassosum2_fits" in fam.extra["stage1_info"]
+    inf = _hratt(y, gt, relatedness=pairs, stage1="ldpred3-inf", relatedness_options=rnd,
                  stage1_kwargs={"block_size": 200}, model_snps_h2_check=False)
     assert inf.extra["loco_refit"] is False
     assert inf.extra["loco_refit_reason"] == "n/a (block-exact LOCO)"

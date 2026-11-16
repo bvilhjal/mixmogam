@@ -186,8 +186,13 @@ python benchmarks/ldak_kvik_comparison.py --ldak /path/to/ldak \
   --methods hratt ldak-kvik --seed 20261006 --out NEW_DIRECTORY
 ```
 
-Large BED inputs stay on disk outside Git, with their hashes, phased
-references, seeds and source kept. The HAPNEST simulator resource study lives
+Large BED inputs were kept on the authoring machine outside Git, with their
+hashes, phased references, seeds and source in the archives. Seven of them
+(the n = 50,000 HAPNEST panels of `20261003-hapnest-kvik-n50000`,
+`-n50000-m20000` and `20261006-hapnest-kvik-dev6-n50000`, and the untracked
+n = 100,000 sample-scaling panel) were deleted there on 11 November 2026; the
+reported numbers come from the archived CSVs, and the inputs can be
+regenerated from the recorded seeds and sources. The HAPNEST simulator resource study lives
 in the phensim archive; a provenance-labelled copy of its summary supports the
 report.
 

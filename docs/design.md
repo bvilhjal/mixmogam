@@ -75,9 +75,12 @@ deflation.
   the previous group's optimum (Brent, started from the parabola through its
   three known points), resolving log delta to an absolute 1e-5; the full grid
   is used for every group if the first profile has several maxima. This takes
-  8-13 factorizations per group on the 3,000 x 44,000 benchmark panel. SNPs
+  8-13 factorizations per group on the 3,000 x 44,000 benchmark panel (11-18
+  in the dev5 archive, before the bracket-started Brent search and its 1e-5
+  resolution). SNPs
   are whitened by triangular solves. Cholesky is a parallel BLAS-3 kernel,
-  unlike LAPACK's symmetric eigensolvers (n = 4,000: 0.12 s against 6.4 s),
+  unlike LAPACK's symmetric eigensolvers (n = 4,000: 0.12 s against 6.4 s,
+  a development measurement, not archived),
   and gives log10 p within 1.2e-7 of the eigendecomposition route.
 - `LMM.fit()` returns an `LMFit` that holds its model. The model caches the fit
   without a back reference (`fit_result` binds it on access), so no reference
@@ -248,7 +251,10 @@ The code labels HRATT's steps (1a) structure test, (1b) power alpha and h2,
 (1d) prior, (1e) LOCO scores and (2) tests. The structure test correlates up to 512 evenly spread variants on different
 chromosomes. Structure is strong when n_eff times their mean r^2, less one,
 exceeds 0.1 with a z-score above 3 (n_eff: the Kish size of the working
-weights, less the covariates).
+weights, less the covariates). LDAK's own test (`findrels.c`, commit
+78573c1) asks instead for a two-sided p below 0.001 (|z| > 3.29) under the
+analytic null variance of r^2; mixmogam's z uses an empirical standard
+error.
 
 The prior on each variant's effect is elastic-net: p Laplace + (1 - p)
 N(0, F h2_j / (1 - p)), with h2_j = w_j h2 / sum(w) and
@@ -282,7 +288,8 @@ changed 37-48 calls at 0.05/m in 2 of 3 runs. It is therefore opt-in.
 | conjugate gradients (LOCO, calibration) | relative residual below `cg_tol` (1e-6) | 2,000 | `RuntimeError`, no statistics |
 | variational fit, hold-out | relative change below `cv_tol` (default `vb_tol`, 1e-5) | `vb_max_iter` (100) | `RuntimeWarning`, `cv_converged` false, results returned |
 | variational fit, cross-fit, LOCO, BOLT cross-validation | relative change below `vb_tol` | 100 | as above, `loco_converged` |
-| HRATT lambda, strong structure | fixed point to 1e-10 | 20 | none |
+| HRATT lambda, strong structure | fixed point to 1e-10 | 20 | `RuntimeWarning` when it does not settle, when no variant passes the screen (lambda' is used) or when lambda leaves [0.5, 2] |
+| LDpred3 stage 1 (`ldpred3-fast`, `-lassosum2`) | chains' h2 split R-hat <= 1.1, refits included; lassosum2 KKT violation <= 10x its tolerance | ldpred3's own | `RuntimeWarning`, `cv_converged` / `loco_converged` false |
 
 Binary working probabilities are clipped to [1e-4, 1 - 1e-4] with a warning;
 the no-Numba fallback and a partial Gram cache also warn.
@@ -292,11 +299,28 @@ the no-Numba fallback and a partial Gram cache also warn.
 HRATT's LOCO scores are cross-fitted (`loco_folds=5`). The samples are split
 into five folds, by case status for binary traits. The chosen elastic-net
 model is fitted genome-wide on all but one fold, five fits in one sweep, and a
-sample's score for group g is its own fold's fit without group g's variants,
-as in REGENIE's level 0. Under strong structure each group's model is refitted
+sample's score for group g is its own fold's fit without group g's variants.
+That is REGENIE's design: its level-0 and level-1 predictions are both made
+out of fold, and its LOCO predictor drops the tested chromosome's share of
+the whole-genome fit, an approximation its authors found close to an exact
+LOCO refit (Mbatchou et al. 2021; regenie `src/Data.cpp`). Under strong structure each group's model is refitted
 without its variants instead (five fits per group, `extra["loco_refit"]`).
 Only each fold's held-out samples are predicted; on some BLAS implementations
 changing a product's row count can alter its last bits.
+
+With relatives, folds that split families reopen the leak that cross-fitting
+closes. A sample's score is then fitted on folds that hold its relatives,
+whose phenotypes carry the tested variant through the alleles they share, so
+subtracting the score shrinks effects toward zero, the bias of GRAMMAR
+(Aulchenko et al. 2007); the preprint of Mefford et al. (2020) reports the
+same for cross-validated predictors in simulated pedigrees. kappa_g still
+calibrates the p-values. In simulated families, effects were 6-36% low with
+random folds and <1% low with a fifth of the samples in sib pairs; with
+family folds and with the exact LMM they were within noise of the truth
+(review simulations of 16 November, not archived in this repo). Since 2.3.0
+the folds keep each family whole whenever relatives are supplied or detected
+(`relatedness_options["crossfit_folds"] = "family"`): cross-fitting needs
+independent units, and with relatives those are families.
 
 Each group's score enters with its own least-squares coefficient (logistic for
 binary traits), kept in [0, 1]. This out-of-fold slope shrinks an
@@ -334,13 +358,16 @@ The REML median of 0.10 (up to 1.0) is archived in
 `20261005-hratt-weights-binary` (`null_binary0.01_S0`, `hratt-bin.extra.h2`,
 28 replicates, in-sample scores), as are the 2 separation failures.
 
-Dropping a group's share of a genome-wide fit costs five fits rather than five
-per group. Without structure it matched per-group refits (null lambda_GC
-0.975-1.023 against 0.975-1.018, with the same QTL effects and power). Under
-structure it fails: a genome-wide fit spreads the ancestry signal over every
+Dropping a group's share of a genome-wide fit (REGENIE's approximate LOCO)
+costs five fits rather than five per group. Without structure it matched
+per-group refits (null lambda_GC 0.975-1.023 against 0.975-1.018, with the
+same QTL effects and power; mixmogam's internal simulations, not archived).
+REGENIE validated it with the top principal component among the covariates.
+Under strong structure without PCs it fails: a genome-wide fit spreads the ancestry signal over every
 chromosome, so dropping one chromosome's share leaves ancestry in its
 residual (at Fst 0.15 without principal components, null-chromosome
-lambda_GC 1.5-4.4 split against 0.9-1.1 refitted). HRATT therefore refits
+lambda_GC 1.5-4.4 split against 0.9-1.1 refitted; internal simulations,
+not archived). HRATT therefore refits
 each group under strong structure. "Strong" means the structure test's
 excess (n_eff x the mean r^2 between unlinked SNPs, minus one) is above 0.1
 with z > 3. That excess measures correlation between unlinked SNPs, not the
@@ -380,8 +407,10 @@ new method family. Precedent, with the source each part was checked against:
   structure, else mean-matched to GRAMMAR-Gamma-calibrated ridge statistics
   over SNPs with lambda U < 6 and lambda' T < 6) and weighted linear regression
   for binary step 1: LDAK-KVIK (Hof & Speed 2025), checked against its
-  technical documentation (ldak-kvik.com/docs/technical) and source
-  (github.com/dougspeed/LDAK), not the paper's Methods. The docs write the
+  technical documentation (www.ldak-kvik.com/docs/technical) and source
+  (github.com/dougspeed/LDAK), not the paper's Methods; the technical page
+  does not cover binary traits, whose weighted regression is in the
+  preprint's Online Methods (medRxiv 2024.07.25.24311005). The docs write the
   lambda equation as lambda sum T = lambda' sum U, the reciprocal of their
   own sentence; mixmogam follows the sentence (lambda = lambda' sum T / sum U).
 - Frequency weights: w_j = [f_j (1 - f_j)]^(1 + alpha) of Speed et al.
@@ -394,23 +423,27 @@ new method family. Precedent, with the source each part was checked against:
   shared across components is RHE-mc (Pazokitoroudi et al. 2020); sharing
   the probes across alphas is common random numbers, an implementation
   detail.
-- Out-of-fold whole-genome predictions: REGENIE's level 0 (Mbatchou et al.
-  2021; the level-0 ridge fits predict each held-out fold, regenie
-  `src/Step1_Models.cpp`), and cross-validated in-cohort predictors for
-  mixed models (Mefford et al. 2020).
+- Out-of-fold whole-genome predictions: REGENIE's step 1 (Mbatchou et al.
+  2021; both levels predict held-out folds, and the LOCO predictor drops each
+  chromosome's share of the whole-genome fit, regenie `src/Data.cpp` at
+  65ec67f), and cross-validated in-cohort predictors for mixed models
+  (Mefford et al. 2020).
 - A polygenic score in the association model with a fitted coefficient:
-  PGS-adjusted GWAS (Campos et al. 2023).
+  PGS-adjusted GWAS (Bennett et al. 2021, a leave-one-chromosome-out score
+  as a fixed-effect covariate; Campos et al. 2023), and cross-validated
+  predictors as covariates (Mefford et al. 2020).
 - The relatedness factor: MASTOR's retrospective variance (Jakobsdottir &
   McPeek 2013); BOLT-LMM-inf already reduces the retrospective/prospective
   ratio to one calibration constant estimated on random SNPs (Loh et al.
-  2015). HRATT's kappa_g estimates it per LOCO group. The `"vc"` option imitates fastGWA's sparse-relatedness model
-  (Jiang et al. 2019); pairs come from KING (Manichaikul et al. 2010) or a
+  2015). HRATT's kappa_g estimates it per LOCO group. The `"gls"` correction
+  imitates fastGWA's sparse-relatedness model (Jiang et al. 2019; off-diagonal
+  GRM elements "e.g., those < 0.05" set to zero, which is mixmogam's default
+  threshold of 0.025 on phi), fitted to the LOCO residual rather than the
+  phenotype, and by default tests its GLS-weighted score against MASTOR's
+  retrospective variance; pairs come from KING (Manichaikul et al. 2010) or a
   GCTA sparse GRM (Yang et al. 2011).
-  <!-- TODO(verify): fastGWA's sparse-GRM cut-off (0.05 is commonly quoted)
-  against Jiang et al. 2019 Methods (mixmogam's default 0.025 is on phi, i.e.
-  0.05 on the GRM's 2 phi scale); `"vc"` fits the LOCO residual, not the
-  phenotype. -->
-- `stage1="ldpred3-*"`: LDpred2 and lassosum2 (Privé et al. 2020, 2022).
+- `stage1="ldpred3-*"`: LDpred2 (Privé et al. 2020) and lassosum2 (Privé et
+  al. 2022, *HGG Advances*).
 - The spectral denominator: a heuristic variant of exact eigen-based
   statistics (Kang et al. 2008; Lippert et al. 2011; Svishcheva et al. 2012).
 - Elsewhere: EBIC for stepwise selection (Chen & Chen 2008); polygenic GxE
@@ -419,23 +452,33 @@ new method family. Precedent, with the source each part was checked against:
 
 Plausibly new:
 
-- cross-fitting the LDAK-KVIK elastic-net predictor (LDAK-KVIK builds its
-  final and LOCO predictors "using all samples" and then adds calibration
-  models, `boltbayesr.c` in the LDAK source);
-- a per-group least-squares slope clipped to [0, 1];
-- the retrospective factor estimated per LOCO group rather than once;
-- the structure-conditional switch between dropping a group's share of a
-  genome-wide fit and refitting each group.
+- cross-fitting the LDAK-KVIK elastic-net predictor. LDAK-KVIK builds its
+  final model "using all samples" and its LOCO models as warm-started refits
+  without each chromosome (`quickpred.c` in the LDAK source at 78573c1), then
+  corrects effects with one genome-wide factor, `Effect_Calibration`, applied
+  in step 2 (`singled.c`). Cross-fitting itself is REGENIE's design, so only
+  its use with this predictor is new;
+- a per-group least-squares slope clipped to [0, 1] (fitted coefficients on
+  a polygenic score have precedent; the clip does not);
+- the retrospective factor estimated per LOCO group rather than once. The
+  BOLT-LMM preprint notes that the denominator formally differs by
+  chromosome and uses one because "all are approximately equal" (Loh et al.,
+  bioRxiv 007799);
+- the structure-conditional switch between REGENIE's approximate LOCO
+  (dropping a group's share of a genome-wide fit) and refitting each group.
+  LDAK-KVIK switches other parts of its procedure on the same test.
 
-Only the first has a committed ablation; it shows cross-fitting is an
-alternative to LDAK-KVIK's effect calibration:
+Only the first has a committed ablation; it shows that, in unrelated samples,
+cross-fitting is an alternative to LDAK-KVIK's effect calibration (with
+relatives only when the folds keep families whole, above):
 
 1. Done (`benchmarks/results/20261006-hratt-followups/`, replicated in
    `20261008-hratt-followups-builtin-pcs/`): against in-sample scores
    (`loco_folds=1`, which is HRATT without LDAK-KVIK's effect calibration,
    not LDAK-KVIK) on identical samples, cross-fitting removed the
-   attenuation of unweighted HRATT (in-sample -28% to -36%, cross-fitted
-   -2.0% to +0.9%; -31.8% and -0.6% on 8 October), left power unchanged
+   attenuation of unweighted HRATT (in-sample -28% to -34%, cross-fitted
+   -2.0% to +0.9% without selection on the outcome; -36% and -8.2% with it;
+   -31.8% and -0.6% on 8 October), left power unchanged
    (ratio 0.999-1.009; 1.003, MCSE 0.004 on 8 October) and cost 1.08-1.11
    times the time. Weighted HRATT stayed 5.4% low under selection on the
    outcome. No improvement over LDAK-KVIK, which adds its own effect
@@ -456,8 +499,10 @@ one in one n = 1,500 sample, `20261003T120104Z-sim-study/NOTES.md`):
 4. single-component HE against REML and partitioned randomized HE, for alpha
    and h2;
 5. fitted alpha against alpha = -1 and a fixed alpha;
-6. per-group kappa against a global factor and the `"vc"` component, with
-   close relatives present;
+6. per-group kappa against a global factor and the `"gls"` component, with
+   close relatives present (the 16 November review simulations compared
+   kappa with prospective and retrospective GLS under family folds, outside
+   this repo);
 7. spectral against constant and exact denominators;
 8. elastic net against `ldpred3-inf` and `ldpred3-lassosum2` at matched
    marker sets (so far only an out-of-repo review simulation at n <= 2,000).
@@ -500,7 +545,7 @@ The block-independent model has three accepted consequences:
   Under strong structure after the covariates, an explicit LDpred3 stage 1
   refuses to run, because block-diagonal LD cannot absorb ancestry (null
   lambda_GC 1.2-1.6 without PCs, in simulations at n <= 3,000 and one
-  n = 20,000 seed). Add ancestry PCs to `X` (`--pcs K` on the command line),
+  n = 20,000 seed; internal review runs, not archived). Add ancestry PCs to `X` (`--pcs K` on the command line),
   use `stage1="enet"` or `"auto"`, or pass
   `stage1_kwargs={"allow_strong_structure": True}`.
 - The LD reference is the analysis cohort, shared across folds: a held-out
@@ -541,7 +586,12 @@ variances p_ij (1 - p_ij). Each p_ij is half the genotype count fitted on the
 covariates, as in SPAmix (Ma et al. 2025), with its deviations from the mean
 shrunk by (F - 1) / F. Covariates unrelated to the genotype give rho_j = 1,
 and unweighted quantitative traits reduce to the unweighted statistic with
-normal tails.
+normal tails. The variance assumes that, given the covariates, the weights do
+not depend on the tested genotype. Participation weights from a model that
+includes genotypes or a polygenic score correlated with the variant break it
+at first order: a per-allele participation log odds ratio of -0.1 at a 5%
+allele makes the true null variance 1.18 times the modeled one, and -0.3 makes
+it 1.64 times (exact quadrature, 16 November review, not archived).
 
 In weighted and binary analyses a saddlepoint approximation gives the tail
 above |z| = 2. With covariates it draws each called genotype independently
@@ -566,10 +616,18 @@ variance sum mu (1 - mu) g~^2 trusts fitted probabilities that an in-sample
 LOCO offset overfits when cases are few (lambda_GC 0.55 with HRATT's offsets
 and 50 cases in 5,000).
 
-Quantitative effects are weighted least-squares slopes, binary ones one-step
-log-odds approximations U / J, with null-score standard errors
-sqrt(V / lambda) / J that do not depend on the tail rule. They are not fitted
-logistic MLEs. Binary exports label them `beta_one_step` and `se_null_score`,
+Quantitative effects are weighted least-squares slopes of the LOCO residual,
+multiplied by lambda under strong structure as LDAK-KVIK's step 2 reports
+epsilon_1 = lambda beta-hat (the per-dataset lambda is not in their standard
+errors); with `relatedness=` they are not lambda-scaled, and under `"gls"`
+they are GLS slopes. Binary ones are one-step log-odds approximations U / J,
+with null-score standard errors sqrt(V / lambda) / J that do not depend on the
+tail rule. They are not fitted logistic MLEs: for a rare risk allele and a rare
+outcome U / J tends to e^beta - 1, so larger effects are overstated (for a 5%
+allele at 5% prevalence, 18% above the same model's MLE at odds ratio 1.5 and
+31% at 2; 2-14% at 20% prevalence; 0-3% low at 50%; review simulations
+of 16 November, not archived), and `gwas_by_group` differences between groups
+of different prevalence inherit the bias. Binary exports label them `beta_one_step` and `se_null_score`,
 and posterior probabilities reject them. lambda keeps its rule and multiplies
 the statistic. `denominator="spectral"` is unavailable with weights or binary
 traits, as are `alpha_method="reml"` and `heritability_method="reml"` with
@@ -689,6 +747,13 @@ kinship eigenvectors have smaller denominators. When prospective calibration
 is performed, `calibration_cv` reports the spread of the ratio over the
 calibration SNPs (30 by default). It was 0.5% without structure, 23% at
 simulated F_ST = 0.3 and 13% on *A. thaliana* (spectral: 0.4%, 0.3%, 3%).
+`bolt-inf` and `bolt` warn when it exceeds 5% with the constant denominator
+(HRATT warns through its structure test). In the 16 November review, four
+populations at F_ST 0.2 without PCs gave 0.17, with tail rates at p < 0.01 of
+2.25% in the lowest loading quintile and 0.31% in the highest, but no
+overall inflation; K - 1 PCs brought it to 0.02 (review simulations, not
+archived). Without PCs at F_ST 0.15, `bolt-inf` effects were also 4.8% high
+(MCSE 1.6), against -0.6% for exact.
 
 `denominator="spectral"` replaces the constant using the top-k eigenpairs
 (U_g, L_g) of the SNP's own LOCO kinship:
@@ -709,7 +774,7 @@ gradient against exact by loading quintile, which the spectral denominator
 removed at k = 256 (archive `20261003T120104Z-sim-study`). A full-kinship
 basis is not enough: on *A. thaliana* (5 chromosomes, long-range LD) it left a
 6% error in the top loading quintile, because each SNP's own LD block sits
-inside the full kinship.
+inside the full kinship (a development measurement, not archived).
 
 Null lambda_GC by structure-loading quintile (the share of z_j in the top-10
 kinship eigenvectors), six replicates, from the earlier implementation
@@ -717,7 +782,7 @@ kinship eigenvectors), six replicates, from the earlier implementation
 
 | data | exact LOCO | `bolt-inf` | + spectral | `hratt` (earlier version) | + spectral |
 |---|---|---|---|---|---|
-| simulated, no structure | 0.99-1.02 | 0.99-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
+| simulated, no structure | 0.98-1.02 | 0.98-1.02 | 0.98-1.02 | 1.00-1.04 | 1.00-1.04 |
 | simulated, 4 pops, F_ST 0.3 | 0.92-1.05 | 1.34 → 0.64 | 0.92-1.05 | 1.37 → 0.73 | 1.01-1.12 |
 | *A. thaliana* RegMap | 0.98-1.04 | 1.19 → 0.86 | 0.98-1.04 | 1.16 → 0.85 | 0.97-1.03 |
 
@@ -736,13 +801,14 @@ overall inflation under strong simulated structure.
   correlates 0.92 with the pooled interaction estimate under strong
   structure, with 16% larger standard errors: the per-group fits do not use
   relatedness across groups (one simulation: n = 400, 3 populations,
-  F_ST 0.2).
+  F_ST 0.2; not archived).
 - **Permutations**: GLS-whitened null residuals are rotated into an
   orthonormal residual basis, permuted there and rotated back (Abney 2015);
   whitening alone does not make fitted residual entries exchangeable. All
   permutations share each SNP-block GEMM. `scheme="projected"` reproduces the
   pre-review approximation. Raw-phenotype permutation (v1) gave a 7.6%
-  family-wise error at a nominal 5% under structure.
+  family-wise error at a nominal 5% under structure (an October review
+  simulation, not archived).
 - **MLMM**: forward inclusion with REML refits, backward elimination, and
   selection by EBIC or mBonf on ML likelihoods (Segura et al. 2012). The
   kinship and its eigenbasis are the same in every visited model, so the SNPs

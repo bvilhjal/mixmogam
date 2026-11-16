@@ -77,7 +77,10 @@ fits, while the exact path and BOLT-style inf (mixmogam) converged
 `explained_variance_ratio`, which shows where the spectrum drops off.
 
 Check `extra["cv_converged"]` and `extra["loco_converged"]` before reading any
-HRATT or BOLT-style mixture (mixmogam) statistic. `hratt` always reports both; `bolt` reports them
+HRATT or BOLT-style mixture (mixmogam) statistic. `hratt` always reports both
+(with an LDpred3 stage 1 they are false when a lassosum2 fit stopped above 10x
+its KKT tolerance or a fast chain, refits included, has an h2 split R-hat above
+1.1); `bolt` reports them
 only when the mixture is used (`extra["use_mixture"]`); `exact` and `bolt-inf`
 have no flag because a failed solve raises. The accompanying `RuntimeWarning`
 is shown once per session by default, so test the flags yourself when looping
@@ -135,7 +138,9 @@ groups (`max_loco_groups`).
 Where reported, `calibration_cv` is the spread of the ratio between the exact
 and retrospective test denominators over the calibration SNPs (30 by
 default); a large spread means the two-step methods' proportional-denominator
-approximation is poor. The spectral denominator is itself an approximation,
+approximation is poor. `bolt-inf` and `bolt` warn when it exceeds 5% with the
+constant denominator (0.5% without structure, 2% with K - 1 ancestry PCs,
+13-23% under strong structure without them). The spectral denominator is itself an approximation,
 heuristic with mixture or elastic-net statistics, so prefer the exact path
 when it is feasible (see the [design notes](design.md)). For `method="bolt"`,
 effects and standard errors come from `bolt-inf` even when the mixture
@@ -204,6 +209,16 @@ the run). The default `relatedness_correction="auto"` means `"kappa"` when
 `relatedness=` is given: scores are divided by kappa_g and the covariate
 factor c_X, and lambda is 1. Without `relatedness=` it means `"lambda"` (the
 structure lambda when the structure test is strong, otherwise none).
+`relatedness_correction="gls"` (unweighted quantitative traits) whitens the
+residual with a family covariance fitted to it and, by default, tests the
+whitened score against its variance given the phenotypes, as kappa_g does
+(`relatedness_options["gls_variance"]`: `"retrospective"`, or
+`"prospective"`, the only variance before 2.3.0). In simulated sibships with
+a household effect it gave 1.5-2 times kappa_g's QTL chi-square at the same
+null calibration, also with families ascertained on the trait; the
+prospective variance read conservative (null mean chi-square 0.90) there
+(review simulations, not archived in this repo). It needs one dense inverse
+per related cluster (`max_cluster`, 5,000 samples).
 
 This is the supported path for related samples, and it is required when
 `sample_weights` are also used. Without `relatedness=`, weighted tests in
@@ -227,8 +242,12 @@ Limits:
   is no upper-half structure switch. `"auto"` is reliable without
   population structure. Under structure that MAD is inflated by the gap
   between within- and between-population pairs, so the 4-SD floor can sit
-  above 0.0625 or 0.125 and drop 3rd- or 2nd-degree relatives from Phi; a
-  warning says so. The LOCO-refit trigger still counts pre-floor pairs
+  above 0.0625, 0.125 or even 0.25 and drop 3rd-degree, 2nd-degree or
+  full-sib pairs from Phi (two populations at F_ST 0.08 with PCs: floor
+  0.24-0.26, 14-86% of sib pairs dropped, null lambda_GC +0.05 against a
+  pedigree; review simulations, not archived); a warning names the degree
+  lost. The family cross-fit folds also link KING pairs above the trigger's
+  uncapped n-aware cutoff (about one null pair expected among all pairs). The LOCO-refit trigger still counts pre-floor pairs
   against z = isf(1/N) around max(0, location), with the 0.0884 cap, the
   0.0625 warning and the 1% rule, so a refit can fire even when Phi is
   empty. When relatives are detected but not modeled in Phi, a warning
@@ -273,9 +292,22 @@ Useful `relatedness_options` (defaults in
   (both from review simulations at n = 2,000, not archived under
   `benchmarks/results/`). A supplied pedigree or
   file triggers the refit from a single pair above the threshold.
-- `crossfit_folds`: `"random"` (default) or `"family"` (opt-in: cheaper than
-  the refit, calibrated, but weaker QTL chi-square, 0.66-0.92x the
-  refit's at n = 2,000; simulation estimate from internal review runs, not archived in this repo).
+- `crossfit_folds`: `"family"` (default since 2.3.0) keeps each family
+  (connected pairs above the threshold) in one cross-fit fold and needs no
+  refit; `"random"` (the earlier default) splits families and refits each
+  group. Random folds let each sample's LOCO score read its relatives'
+  phenotypes, which carry the tested variant, so effects shrink toward zero
+  while p-values stay calibrated: 6-36% too small in simulated families,
+  <1% with a fifth of the samples in sib pairs (review simulations, not
+  archived in this repo). `extra["relatedness"]["crossfit_leak"]` measures
+  the exposure (mean squared relatedness to relatives in other folds) and
+  random folds warn above 0.05. With kappa_g, family folds give a weaker
+  QTL chi-square in family-rich panels (0.66-0.92x the random folds' at
+  n = 2,000; internal review runs, not archived); `"gls"` recovers it. Binary
+  traits balance cases across the family folds. When the largest family
+  exceeds n / (2 k) samples, family folds fall back to random folds with
+  a warning; KING noise pairs alone (no evidence of relatives) keep the
+  ordinary random folds.
 - `unrelated_min_phi` / `unrelated_min_n`: the structure test uses a maximal
   set with no pair closer than 3rd degree (phi 0.0442), and falls back to every
   sample if that set is under 100.
@@ -292,7 +324,10 @@ With related samples, binary tests of variants with MAF below about 5% can be
 anti-conservative even after the kappa_g correction: in simulated families,
 null rare variants read 1.2-2.3x the nominal rate at p = 1e-3 (up to about
 3.5x at 1e-4), worst when the carriers sit in one to three families, at
-every minor-allele count (simulation estimate from internal review runs, not archived in this repo). The saddlepoint assumes
+every minor-allele count (simulation estimate from internal review runs, not archived in this repo).
+When whole sibships carry the allele (every sib of two families, a
+pattern Mendelian transmission rarely produces) it reached 3.6x at 1e-3
+and 5x at 1e-4 (review simulations of 16 November, not archived). The saddlepoint assumes
 independent carriers; a minimum allele count does not fix it. Variants with p <
 `relatedness_options["carrier_families_p"]` (1e-4) and MAF < 5% get a
 `carrier_families` column (distinct families among the minor-allele carriers,
@@ -303,7 +338,9 @@ subset, or by gene-dropping through the pedigree.
 HRATT's LOCO predictors are trained on the other folds (`loco_folds=5`), while
 variance components and model selection use the whole trait. In the tested
 scenarios this reduced effect attenuation and case-control separation.
-`loco_folds=1` restores in-sample prediction.
+`loco_folds=1` restores in-sample prediction (with relatives it warns: effects
+were about 0.2 of the truth in simulated sibships). With relatives, the folds
+keep families whole (`crossfit_folds` above).
 
 ## Larger HRATT fits
 
@@ -374,7 +411,8 @@ scratch per sample and block variant: 0.5 GB at 200,000 samples, at most
 keeping the SNP order within each model. Preparation gives the same values at
 every thread count; parallel residual products may change rounding. A whole
 HRATT fit gains little beyond four threads (1.5x at four on an M2 Pro, no more
-at six, slower at eight): the variational products, the residual refresh and
+at six, slower at eight; 14 November efficiency review, not archived in this
+repo): the variational products, the residual refresh and
 HE's alpha selection stay serial, and on CPUs with performance and efficiency
 cores every parallel region waits for the slowest core. Keep step 1 at four
 threads, or at most the number of performance cores; step 2 is parallel

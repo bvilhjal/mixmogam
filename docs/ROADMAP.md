@@ -148,6 +148,35 @@ packing the decoded block); nibble-table and comparison two-bit decoders.
   evaluation was elsewhere (one per group, ~8%); keeping the best factor would
   need a second n x n buffer (200 MB at n = 5,000).
 
+## Statistical decisions (16 November research review)
+
+Not efficiency items, but open after the [research review](review-2026-11-16.md);
+the measurements are in its remediation section.
+
+- **GLS as the default correction for unweighted quantitative traits with
+  relatives (decision).** With family folds and its new retrospective
+  variance, `"gls"` gave 1.5-2 times kappa_g's QTL chi-square at the same
+  null calibration in simulated sibships, also under ascertainment. It is
+  kept opt-in because it needs one dense inverse per related cluster and
+  was validated only in those simulations; kappa_g remains the default.
+- **The GLS family covariance cannot reach sib correlations of 0.5.** s_e I +
+  s_f R with R's 0.5 for sibs bounds the sib correlation below 0.5, so a
+  strong household effect holds s_f at its clip. The retrospective variance
+  stays valid, but the weights are then not efficient; a household
+  component would fit such families.
+- **Binary effects for top hits.** One-step log odds ratios overstate
+  larger effects of rare risk alleles (18-31% at odds ratios 1.5-2, a 5%
+  allele, 5% prevalence). A few Newton steps of the per-group logistic
+  model with the genotype, for variants below a p-value threshold, would
+  report fitted effects where they matter; not implemented.
+- **A family-aware hold-out.** The 90/10 hold-out that chooses the prior is
+  still drawn at random, so held-out samples have relatives in the training
+  part; the choice is a few discrete grid points and no effect bias was
+  traced to it, so it was left.
+- **Exactly zero scores.** HRATT's lambda, kappa and GLS paths report
+  se = NaN (0/0) for a variant whose residual score is exactly zero; only a
+  constructed variant reaches it.
+
 ## Settled
 
 - HRATT's REML builds its deflation basis only under strong structure (the

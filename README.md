@@ -63,13 +63,17 @@ passed two of its seven pre-registered criteria. The
 re-scored the same panels, traits and samples (regenerated from the first run's seeds; the
 genotype hashes match), plus new Fst 0.05 and principal-component cells, with the revised
 2.0.0.dev6 code, and passed five of its own seven pre-registered criteria.
-With cross-fitted scores, unweighted quantitative effects were within 2% of the
-population slopes when there was no selection on the outcome (in-sample scores were
-28-36% low). Weighted effects were 5.4% low under selection on the outcome (Monte Carlo
+With cross-fitted scores, unweighted quantitative effects in these unrelated samples were
+within 2% of the population slopes when there was no selection on the outcome (-2.0% to
++0.9%; in-sample scores were 28-34% low on the same cells and 36% low under selection on
+the outcome). Weighted effects were 5.4% low under selection on the outcome (Monte Carlo
 SE 2.1%; weighted least squares was 4.0% low on the same samples), the criterion's one
 failed cell, and 5.5% low at F_ST 0.05 without principal components (Monte Carlo SE
-2.6%, within-population slopes; not a prespecified cell). Binary one-step effects were within 3%, with
-Monte Carlo SEs of 4-9%. Weighted fits took 1.55 times as long as HRATT-HE, against
+2.6%, within-population slopes; not a prespecified cell). Binary one-step effects were within 3% in
+those cells, with Monte Carlo SEs of 4-9%. A one-step log odds ratio approaches e^beta - 1
+for a rare risk allele and a rare outcome, so it overstates larger effects: for a 5% allele
+at 5% prevalence it was 18% above the fitted logistic effect at odds ratio 1.5 and 31% above
+at 2 (review simulations of 16 November, not archived in this repo). Weighted fits took 1.55 times as long as HRATT-HE, against
 a target of 1.3.
 
 ### Stage-1 model SNPs (large panels)
@@ -135,14 +139,22 @@ If your sample contains relatives, you can pass them: `hratt(..., relatedness=..
 `--relatedness FILE|auto`) takes (i, j, 2 phi) pairs, a pedigree, a KING `.kin0` table, a
 GCTA sparse GRM or `"auto"` (KING-robust, n ≤ 50,000). `"auto"` is meant for
 samples without population structure; no archived benchmark tests it yet. Under structure the 4-SD MAD floor can sit
-above 0.125 and drop 2nd-degree relatives from Phi (the LOCO refit may
+above 0.125, or even above full-sib kinship (0.25), and drop those relatives from Phi (the LOCO refit may
 still fire on pre-floor pairs). In that case supply a pedigree or pairs
 (e.g. KING run within ancestry groups) instead of `"auto"`.
+With relatives, the cross-fitted LOCO scores keep each family in one fold (since 2.3.0):
+folds that split families let each sample's score read its relatives' phenotypes, which
+carry the tested variant, and in simulated families effects were then 6-36% too small
+while p-values stayed calibrated (review simulations, not archived in this repo).
 The default
 `relatedness_correction="auto"` then means `"kappa"`: each statistic is divided by its
 expected null inflation kappa_g (times a covariate factor) instead of applying a global
 lambda. Without `relatedness=`, `"auto"` means `"lambda"`: a single structure lambda when the
-structure test finds strong structure, otherwise none. kappa_g does not correct population
+structure test finds strong structure, otherwise none. For unweighted quantitative traits,
+`relatedness_correction="gls"` whitens the residual within families and tests it against its
+retrospective variance; in simulated sibships it gave 1.5-2 times kappa_g's QTL chi-square at
+the same null calibration, also when families were ascertained on the trait (review
+simulations, not archived). kappa_g does not correct population
 structure, so keep ancestry PCs. The kappa_g correction is new and has no archived
 benchmark yet; check null calibration on your own data before relying on it. Close relatives also make the structure test strong, and PCs
 do not correct them; HRATT's strong-structure warnings say so and point to `relatedness=`. Details and options are in the `hratt`
@@ -151,7 +163,7 @@ docstring (`help(mixmogam.twostep.hratt)`).
 **Warnings and notes.** HRATT compares the subset's HE heritability with the same estimate
 on every variant. That is an extra randomized-HE pass over the whole panel, and it can cost
 more than the stage-1 fit: 2.3 s of a 5.8 s fit on 5,000 x 400,000 with every tenth variant as
-a model SNP. `model_snps_h2_check=False` (`--no-model-snps-h2-check`) skips it, and with it
+a model SNP (14 November efficiency review, not archived in this repo). `model_snps_h2_check=False` (`--no-model-snps-h2-check`) skips it, and with it
 the predicted-inflation warning below. A ratio below 0.85 is only a note in
 `result.extra["model_snps"]["notes"]`, not a warning: HapMap3-like sets sit near 0.7 and are
 calibrated in unrelated samples. HRATT warns, and records the details in
@@ -251,8 +263,8 @@ mixmogam gwas --geno data/cohort --pheno phenotypes.csv --pheno-name trait \
               --mmap --covar pcs.txt --out gwas.tsv.gz
 ```
 
-Genotypes are integral hard calls 0/1/2 with -1 for missing; imputed dosages
-are not supported. PLINK 1 counts BIM A1, recorded as `result.effect_allele`,
+`gwas` and HRATT's step 1 read integral hard calls 0/1/2 with -1 for missing; a
+separate step 2 can test imputed dosages (unweighted quantitative traits). PLINK 1 counts BIM A1, recorded as `result.effect_allele`,
 and the output `af` is that allele's frequency (it can exceed 0.5). VCF/BCF
 and PGEN hard calls load through `Genotypes.load(path)`; BGEN needs an
 explicit hard-call threshold. For repeated analyses, PLINK BED with
@@ -341,17 +353,18 @@ methods you use. Each paper's PMID and lookup URL is in
 | `method="hratt"`: its two-step design | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |
 | HRATT's frequency weights w_j = [f_j(1 − f_j)]^(1+alpha), without LDAK's LD weights (Speed et al.'s GCTA model with free alpha; not LDAK-Thin, which also thins SNPs and fixes alpha = −0.25) | Speed D et al. (2017). Reevaluation of SNP heritability in complex human traits. *Nat Genet* **49**(7). [doi:10.1038/ng.3865](https://doi.org/10.1038/ng.3865) |
 | HRATT's randomized HE (alpha selection, `heritability_method="he"`) | Haseman JK, Elston RC (1972). *Behav Genet* **2**(1). [doi:10.1007/BF01066731](https://doi.org/10.1007/BF01066731); Wu Y, Sankararaman S (2018). A scalable estimator of SNP heritability for biobank-scale data. *Bioinformatics* **34**(13). [doi:10.1093/bioinformatics/bty253](https://doi.org/10.1093/bioinformatics/bty253); Hutchinson MF (1990). *Commun Stat Simul Comput* **19**(2). [doi:10.1080/03610919008812866](https://doi.org/10.1080/03610919008812866); Pazokitoroudi A et al. (2020). RHE-mc. *Nat Commun* **11**. [doi:10.1038/s41467-020-17576-9](https://doi.org/10.1038/s41467-020-17576-9) |
-| HRATT's cross-fitted LOCO scores | Mbatchou J et al. (2021). Computationally efficient whole-genome regression for quantitative and binary traits. *Nat Genet* **53**(7). [doi:10.1038/s41588-021-00870-7](https://doi.org/10.1038/s41588-021-00870-7) |
+| HRATT's cross-fitted LOCO scores, and dropping a chromosome's share of the whole-genome fit (REGENIE's approximate LOCO) | Mbatchou J et al. (2021). Computationally efficient whole-genome regression for quantitative and binary traits. *Nat Genet* **53**(7). [doi:10.1038/s41588-021-00870-7](https://doi.org/10.1038/s41588-021-00870-7) |
 | `trait="binary"` saddlepoint tails | Zhou W et al. (2018). *Nat Genet* **50**(9). [doi:10.1038/s41588-018-0184-y](https://doi.org/10.1038/s41588-018-0184-y); Dey R et al. (2017). *Am J Hum Genet* **101**(1). [doi:10.1016/j.ajhg.2017.05.014](https://doi.org/10.1016/j.ajhg.2017.05.014); Bi W et al. (2020). *Am J Hum Genet* **107**(2). [doi:10.1016/j.ajhg.2020.06.003](https://doi.org/10.1016/j.ajhg.2020.06.003); Ma Y et al. (2025). SPAmix. *Genome Biol* **26**(1). [doi:10.1186/s13059-025-03827-9](https://doi.org/10.1186/s13059-025-03827-9) |
 | `sample_weights=` (participation or inverse-probability weights) | Schoeler T et al. (2023). Participation bias in the UK Biobank distorts genetic associations and downstream analyses. *Nat Hum Behav* **7**(7). [doi:10.1038/s41562-023-01579-9](https://doi.org/10.1038/s41562-023-01579-9) |
 | stepwise MLMM (`mixmogam.stepwise`) | Segura V et al. (2012). An efficient multi-locus mixed-model approach for genome-wide association studies in structured populations. *Nat Genet* **44**(7). [doi:10.1038/ng.2314](https://doi.org/10.1038/ng.2314) |
 | ancestry components (`mixmogam.pca`) | Price AL et al. (2006). Principal components analysis corrects for stratification in genome-wide association studies. *Nat Genet* **38**(8). [doi:10.1038/ng1847](https://doi.org/10.1038/ng1847) |
 | residual-coordinate permutations | Abney M (2015). Permutation testing in the presence of polygenic variation. *Genet Epidemiol* **39**(4). [doi:10.1002/gepi.21893](https://doi.org/10.1002/gepi.21893) |
-| the spectral and streaming LMM solvers | Lippert C et al. (2011). *Nat Methods* **8**(10). [doi:10.1038/nmeth.1681](https://doi.org/10.1038/nmeth.1681); Listgarten J et al. (2012). *Nat Methods* **9**(6). [doi:10.1038/nmeth.2037](https://doi.org/10.1038/nmeth.2037); Svishcheva GR et al. (2012). *Nat Genet* **44**(10). [doi:10.1038/ng.2410](https://doi.org/10.1038/ng.2410); Loya H et al. (2025). *Nat Genet* **57**(2). [doi:10.1038/s41588-024-02044-7](https://doi.org/10.1038/s41588-024-02044-7) |
+| the spectral and streaming LMM solvers | Lippert C et al. (2011). *Nat Methods* **8**(10). [doi:10.1038/nmeth.1681](https://doi.org/10.1038/nmeth.1681); Listgarten J et al. (2012). *Nat Methods* **9**(6). [doi:10.1038/nmeth.2037](https://doi.org/10.1038/nmeth.2037); Svishcheva GR et al. (2012). *Nat Genet* **44**(10). [doi:10.1038/ng.2410](https://doi.org/10.1038/ng.2410) |
+| the variational alternative the report compares with (Quickdraws) | Loya H et al. (2025). *Nat Genet* **57**(2). [doi:10.1038/s41588-024-02044-7](https://doi.org/10.1038/s41588-024-02044-7) |
 | lambda_GC, confounding and mixed-model pitfalls | Yang J et al. (2014). Advantages and pitfalls in the application of mixed-model association methods. *Nat Genet* **46**(2). [doi:10.1038/ng.2876](https://doi.org/10.1038/ng.2876); Sul JH et al. (2018). Population structure in genetic studies: confounding factors and mixed models. *PLoS Genet* **14**(12). [doi:10.1371/journal.pgen.1007309](https://doi.org/10.1371/journal.pgen.1007309) |
 | the bundled *A. thaliana* panel in [`at_data/`](https://github.com/bvilhjal/mixmogam/blob/master/at_data/README.md) | Atwell S et al. (2010). Genome-wide association study of 107 phenotypes in *Arabidopsis thaliana* inbred lines. *Nature* **465**(7298). [doi:10.1038/nature08800](https://doi.org/10.1038/nature08800); Horton MW et al. (2012). *Nat Genet* **44**(2). [doi:10.1038/ng.1042](https://doi.org/10.1038/ng.1042); Baxter I et al. (2008). *PLoS Genet* **4**(2). [doi:10.1371/journal.pgen.1000004](https://doi.org/10.1371/journal.pgen.1000004) |
 | the simulated benchmark panels | Wharrie S et al. (2023). HAPNEST. *Bioinformatics* **39**(9). [doi:10.1093/bioinformatics/btad535](https://doi.org/10.1093/bioinformatics/btad535); Baumdicker F et al. (2022). msprime 1.0. *Genetics* **220**(3). [doi:10.1093/genetics/iyab229](https://doi.org/10.1093/genetics/iyab229); Kelleher J et al. (2016). *PLoS Comput Biol* **12**(5). [doi:10.1371/journal.pcbi.1004842](https://doi.org/10.1371/journal.pcbi.1004842) |
-| `relatedness=` (KING pairs, `"kappa"` and `"vc"` corrections, GCTA sparse GRM input) | Manichaikul A et al. (2010). Robust relationship inference in genome-wide association studies. *Bioinformatics* **26**(22). [doi:10.1093/bioinformatics/btq559](https://doi.org/10.1093/bioinformatics/btq559); Jakobsdottir J, McPeek MS (2013). MASTOR. *Am J Hum Genet* **92**(5). [doi:10.1016/j.ajhg.2013.03.014](https://doi.org/10.1016/j.ajhg.2013.03.014); Jiang L et al. (2019). fastGWA. *Nat Genet* **51**(12). [doi:10.1038/s41588-019-0530-8](https://doi.org/10.1038/s41588-019-0530-8); Yang J et al. (2011). GCTA. *Am J Hum Genet* **88**(1). [doi:10.1016/j.ajhg.2010.11.011](https://doi.org/10.1016/j.ajhg.2010.11.011) |
+| `relatedness=` (KING pairs, `"kappa"` and `"gls"` corrections, GCTA sparse GRM input) | Manichaikul A et al. (2010). Robust relationship inference in genome-wide association studies. *Bioinformatics* **26**(22). [doi:10.1093/bioinformatics/btq559](https://doi.org/10.1093/bioinformatics/btq559); Jakobsdottir J, McPeek MS (2013). MASTOR. *Am J Hum Genet* **92**(5). [doi:10.1016/j.ajhg.2013.03.014](https://doi.org/10.1016/j.ajhg.2013.03.014); Jiang L et al. (2019). fastGWA. *Nat Genet* **51**(12). [doi:10.1038/s41588-019-0530-8](https://doi.org/10.1038/s41588-019-0530-8); Yang J et al. (2011). GCTA. *Am J Hum Genet* **88**(1). [doi:10.1016/j.ajhg.2010.11.011](https://doi.org/10.1016/j.ajhg.2010.11.011) |
 | `stage1="ldpred3-inf"`, `"ldpred3-lassosum2"` | Privé F et al. (2020). LDpred2: better, faster, stronger. *Bioinformatics* **36**(22-23). [doi:10.1093/bioinformatics/btaa1029](https://doi.org/10.1093/bioinformatics/btaa1029); Privé F et al. (2022). Identifying and correcting for misspecifications in GWAS summary statistics and polygenic scores. *HGG Adv* **3**(4). [doi:10.1016/j.xhgg.2022.100136](https://doi.org/10.1016/j.xhgg.2022.100136) |
 | the BOLT-style calibration-marker screen (GRAMMAR chi2 < 5) | Aulchenko YS, de Koning DJ, Haley C (2007). Genomewide rapid association using mixed model and regression. *Genetics* **177**(1). [doi:10.1534/genetics.107.075614](https://doi.org/10.1534/genetics.107.075614) |
 | stochastic Lanczos REML and randomized subspace iteration | Ubaru S, Chen J, Saad Y (2017). *SIAM J Matrix Anal Appl* **38**(4). [doi:10.1137/16M1104974](https://doi.org/10.1137/16M1104974); Halko N, Martinsson PG, Tropp JA (2011). *SIAM Rev* **53**(2). [doi:10.1137/090771806](https://doi.org/10.1137/090771806) |
@@ -366,5 +379,6 @@ permutations, two-kinship fits and Manhattan/QQ plots. The
 reviews ([3 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-03.md),
 [25 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-25.md),
 [29 October](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-10-29.md),
-[14 November](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-11-14.md)) record corrections, measurements and
+[14 November](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-11-14.md),
+[16 November](https://github.com/bvilhjal/mixmogam/blob/master/docs/review-2026-11-16.md)) record corrections, measurements and
 release checks. The Python 2 package remains under the `v1.0-legacy` Git tag.

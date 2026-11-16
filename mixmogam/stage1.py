@@ -359,8 +359,20 @@ def _fit_effects(ldpred3, blocks, beta_std, n_eff, method, h2, fit_kwargs, diag=
             raise ValueError(f"stage1 'ldpred3-inf' takes no fit keywords, got {sorted(fit_kwargs)}")
         return np.asarray(ldpred3.ldpred3_by_blocks(
             blocks, beta_std, n_eff, method="inf", h2=h2), dtype=np.float64)
-    return np.asarray(ldpred3.lassosum2(
-        blocks, beta_std, **fit_kwargs).beta_est, dtype=np.float64)
+    res = ldpred3.lassosum2(blocks, beta_std, **fit_kwargs)
+    if diag is not None:
+        # The selected candidate's KKT check (releases without it report
+        # neither field and count as converged). ldpred3's kkt_tol defaults
+        # to tol.
+        import inspect
+
+        tol = fit_kwargs.get("kkt_tol")
+        if tol is None:
+            tol = fit_kwargs.get("tol", inspect.signature(ldpred3.lassosum2).parameters["tol"].default)
+        diag.append({"converged": bool(getattr(res, "converged", True)),
+                     "max_kkt_violation": float(getattr(res, "max_kkt_violation", np.nan)),
+                     "kkt_tol": float(tol)})
+    return np.asarray(res.beta_est, dtype=np.float64)
 
 
 def _stage1_blocks(lg, order, scale, method, block_size, ld, ld_cache, ld_tile, fast_opt,
@@ -626,7 +638,9 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
             info["s_seq"] = list(fit_kwargs["s_seq"])
 
     c0, t0 = time.process_time(), time.perf_counter()
-    fast_diag = [] if method == "ldpred3-fast" else None
+    # Per-fit convergence records: fast chains (R-hat) and lassosum2 KKT
+    # checks, main fits first, then any leave-group refits.
+    fast_diag = [] if method in ("ldpred3-fast", "ldpred3-lassosum2") else None
     effects = np.zeros((lg.m, len(train_cols)))
     for j, c in enumerate(train_cols):
         blocks = covers[0] if len(covers) == 1 else covers[j]
@@ -648,14 +662,7 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
         effects[order, j] = e  # back to variant index order
     info.update(solve_s=time.perf_counter() - t0, solve_cpu_s=time.process_time() - c0,
                 n_fits=len(train_cols))
-    if fast_diag is not None:
-        info["fast_chains"] = fast_diag
-        rh = [d["rhat_h2"] for d in fast_diag if d.get("rhat_h2") is not None]
-        info["fast_max_rhat_h2"] = float(np.nanmax(rh)) if rh and np.any(np.isfinite(rh)) else None
-        if info["fast_max_rhat_h2"] is not None and info["fast_max_rhat_h2"] > 1.1:
-            import warnings
-            warnings.warn(f"ldpred3-fast: h2 chain split R-hat {info['fast_max_rhat_h2']:.2f} > 1.1; "
-                          "raise burn_in / num_iter", RuntimeWarning, stacklevel=3)
+    n_main = 0 if fast_diag is None else len(fast_diag)
 
     # Held-out candidate score: the fit excluding the hold-out, genome-wide.
     from mixmogam.twostep import _out_of_fold_loco  # late: the patchable seam
@@ -673,8 +680,9 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
     else:
         prediction = _out_of_fold_loco(lg, effects[:, :k], folds)
     info["predict_s"] = time.perf_counter() - t0
-    out = {"mse": mse, "best": 0, "cv_converged": True,
-           "loco_iterations": 0, "loco_converged": True,
+    cv_ok, loco_ok = _ldpred3_convergence(method, fast_diag, n_main, k, used_refit, info)
+    out = {"mse": mse, "best": 0, "cv_converged": cv_ok,
+           "loco_iterations": 0, "loco_converged": loco_ok,
            "cv_grid": [method], "cv_best": method, "stage1_info": info,
            "refit": used_refit}
     out.update(residualize_score(lg, ys, prediction))
@@ -682,6 +690,65 @@ def ldpred3_stage1_scores(st, ys: np.ndarray, h2: float, folds, held,
         out["prediction"] = prediction
     return out
 
+
+
+def _ldpred3_convergence(method, diag, n_main: int, k: int, used_refit: bool,
+                         info: dict) -> tuple:
+    """``(cv_converged, loco_converged)`` of an LDpred3 stage 1 from its
+    per-fit records ``diag``: the main fits (k fold fits, then the hold-out
+    fit at index k), then any leave-group refits. A fast chain counts as
+    converged when its h2 split R-hat is at most 1.1 (or not computable), a
+    lassosum2 fit when its selected candidate's KKT violation is at most 10
+    times the tolerance (ldpred3's own flag uses 1x, and its default stop
+    leaves some fits at 1-1.5x); inf is closed form. The LOCO scores come
+    from the fold fits, or from the refits when ``used_refit``; the hold-out
+    fit decides ``cv_converged``.
+    Records the R-hat / KKT summaries in ``info`` and warns once."""
+    if diag is None:
+        return True, True
+    import warnings
+
+    main, refit = diag[:n_main], diag[n_main:]
+    if method == "ldpred3-fast":
+        def ok(d):
+            r = d.get("rhat_h2")
+            return r is None or not np.isfinite(r) or r <= 1.1
+
+        def max_rhat(ds):
+            rh = [d["rhat_h2"] for d in ds
+                  if d.get("rhat_h2") is not None and np.isfinite(d["rhat_h2"])]
+            return float(max(rh)) if rh else None
+
+        info["fast_chains"] = main
+        info["fast_max_rhat_h2"] = max_rhat(main)
+        if refit:
+            info["fast_refit_chains"] = refit
+            info["fast_max_rhat_h2_refit"] = max_rhat(refit)
+        worst = max((r for r in (info["fast_max_rhat_h2"], info.get("fast_max_rhat_h2_refit"))
+                     if r is not None), default=None)
+        if worst is not None and worst > 1.1:
+            where = " (leave-group refit chains included)" if refit else ""
+            warnings.warn(f"ldpred3-fast: h2 chain split R-hat {worst:.2f} > 1.1{where}; "
+                          "raise burn_in / num_iter", RuntimeWarning, stacklevel=4)
+    else:
+        def ok(d):
+            v = d.get("max_kkt_violation", np.nan)
+            if not np.isfinite(v):
+                return bool(d.get("converged", True))
+            return bool(v <= 10.0 * d.get("kkt_tol", 1e-4))
+
+        kkt = [d["max_kkt_violation"] for d in diag if np.isfinite(d.get("max_kkt_violation", np.nan))]
+        n_bad = sum(not ok(d) for d in diag)
+        info.update(lassosum2_fits=len(diag), lassosum2_not_converged=n_bad,
+                    lassosum2_max_kkt_violation=float(max(kkt)) if kkt else None)
+        if n_bad:
+            worst = "" if not kkt else f" (largest KKT violation {max(kkt):.3g})"
+            warnings.warn(f"ldpred3-lassosum2: {n_bad} of {len(diag)} fits stopped above 10x "
+                          f"their KKT tolerance{worst}; raise max_iter", RuntimeWarning,
+                          stacklevel=4)
+    cv_ok = ok(main[k]) if len(main) > k else all(ok(d) for d in main)
+    loco_ok = all(ok(d) for d in (refit if used_refit else main[:k]))
+    return bool(cv_ok), bool(loco_ok)
 
 
 def _ldpred3_leave_group_scores(ldpred3, lg, covers, order, scale, marg, train_cols, folds,

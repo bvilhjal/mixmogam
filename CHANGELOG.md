@@ -7,8 +7,102 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Version 2.3.0.dev1. The 16 November research review
+([docs/review-2026-11-16.md](docs/review-2026-11-16.md)) found that HRATT
+effects with relatives were biased toward zero; the defaults below change
+results for analyses that pass `relatedness=`.
+
+### Changed
+
+- **Family cross-fit folds are the default with relatives**
+  (`relatedness_options["crossfit_folds"] = "family"`, was `"random"`).
+  Random folds put a sample's relatives in the folds its LOCO score is
+  fitted on; their phenotypes carry the tested variant through the alleles
+  they share, so subtracting the score shrank effects toward zero while
+  kappa_g kept p-values calibrated. In review simulations effects were
+  16-27% low in sibships of four, 28-36% low with both parents genotyped,
+  6% low with every sample in a sib pair and under 1% with a fifth of the
+  samples in sib pairs; with family folds and with the exact LMM they were
+  within noise of the truth. Family folds need no relatives refit (cheaper)
+  and give a lower QTL chi-square with kappa_g in family-rich panels
+  (0.72-0.90x in the same simulations). They follow the refit's evidence
+  rule (a supplied pair, or KING-auto's trigger), so unrelated panels keep
+  their ordinary folds and results; with KING-auto they also link pairs
+  above the trigger's uncapped n-aware cutoff that the noise floor drops
+  from Phi. Binary
+  traits balance cases across the family folds. `"random"` remains as an
+  option and warns when relatives are split
+  (`extra["relatedness"]["crossfit_leak"]` > 0.05).
+- `stage1="ldpred3-inf"` uses family folds too (they were skipped as
+  block-exact LOCO; its random-fold effects were 0.82 of the truth against
+  0.99 with family folds). It still needs no relatives refit.
+- `relatedness_correction="gls"` tests its GLS-weighted score against the
+  score's variance given the phenotypes, sigma^2 b' Phi b, as kappa_g does
+  (MASTOR's construction): `relatedness_options["gls_variance"] =
+  "retrospective"` (new default) or `"prospective"` (z'Pz, the earlier and
+  only variance). In simulated sibships with a household effect the
+  prospective variance was conservative (null mean chi-square 0.90) when the
+  fitted family covariance hit its bound; the retrospective one stayed at
+  1.01, also with families ascertained on the trait, with 1.5-2 times
+  kappa_g's QTL chi-square. Effects (GLS slopes) are unchanged. Step-1 files
+  saved earlier keep the prospective variance.
+- Tests defend the claimed numerical bounds: streamed step-2
+  weighted/binary/GLS comparisons at 3e-12 relative (measured worst
+  9.4e-13) and integer-dosage log10 p / beta at 1e-5 (measured worst
+  4.5e-6), replacing 1e-9 / 1e-4 (review F8). New regression tests: the
+  by-group relatedness re-indexing, the GLS-gamma monomorphic guard, the
+  contig-name region matching, both cache concurrency races (red without
+  the fixes), the thinning kernel's bit-identical rows against a
+  per-sample float32 reference, the CLI `step2 --dosage` wiring and
+  validation, `hm3 build` through the CLI, and the plot CLI's
+  `--suggestive` / `--label-top` wiring (reviews F6, F7, F9).
+- Documented the macOS drop-behind caveat: `MADV_DONTNEED` is advisory
+  there, so mapped scans keep the scanned source's clean pages resident
+  (reclaimable; the write buffer stays chunk-bounded and values are
+  unaffected); Linux drops the pages as documented (review F14).
+- `report/README.md` says to regenerate `report_manifest.json` whenever
+  the PDF **or any hashed input** changes, not only the PDF (review F5);
+  the manifest was regenerated after the 2.2.0 release edited three hashed
+  inputs without refreshing it (review F3). The quickstart documents the
+  plot CLI's `--suggestive`, `--label-top`, `--alpha`, `--no-threshold` and
+  `--title` options (review F10).
+- Documentation from the same review: README, quickstart, design notes and
+  report credit REGENIE for cross-fitting at both levels and for dropping a
+  chromosome's share of the whole-genome fit (its approximate LOCO), which
+  the design notes had listed as plausibly new; LDAK-KVIK's step-1 source is
+  `quickpred.c` (not `boltbayesr.c`) and its effect correction a separate
+  genome-wide factor; Bennett et al. (2021) is cited for PGS-adjusted GWAS;
+  the `"vc"` correction is named `"gls"`, as the code calls it. Effects are
+  documented as lambda-scaled under strong structure; binary one-step
+  effects as overstating larger effects of rare risk alleles (18% at odds
+  ratio 1.5, 31% at 2, for a 5% allele at 5% prevalence) and the bias this
+  puts into `gwas_by_group` differences; KING-auto under structure as able
+  to drop full sibs; whole-sibship rare carriers as reaching 3.6x at 1e-3;
+  weights as assumed independent of the tested genotype; the strong-
+  structure warning as 0.60-1.17 when an environment also follows ancestry.
+  Ranges the evidence audit found too narrow are corrected (binary null
+  rates, the in-sample comparator of the "within 2%" claim, the slope
+  correlation, power ratios), unarchived numbers are labelled, the deleted
+  HAPNEST BED inputs are recorded, and `prive2022` is dated 2021.
+
+### Added
+
+- Warnings: `bolt-inf` and `bolt` when `calibration_cv` exceeds 5% with the
+  constant denominator (HRATT already warned through its structure test);
+  HRATT's lambda when its fixed point does not settle, when no variant
+  passes its screen (lambda' is used instead of dividing by zero), or when
+  lambda falls outside [0.5, 2] (a panel of duplicated samples gave 70).
+  `extra["lambda_converged"]` and `extra["lambda_n_variants"]` record the
+  fixed point.
+
 ### Fixed
 
+- LDpred3 stage 1 no longer reports `cv_converged` / `loco_converged` as
+  always true. lassosum2 fits whose KKT violation exceeds 10 times their
+  tolerance (ldpred3 flags anything above 1x) and ldpred3-fast chains with
+  h2 split R-hat above 1.1 now set them false and warn; the R-hat check
+  includes the leave-group refit chains, which produce the tested scores
+  with relatives and were not checked (`stage1_info["fast_refit_chains"]`).
 - `gwas_by_group` re-indexes in-memory relatedness (a `Relatedness` or
   `(i, j, r)` pairs in full-panel indices) into each group, dropping pairs
   with either sample outside it. Before, the indices were passed through
@@ -32,29 +126,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   scaffold could select another scaffold's variants at the same positions.
   Dotted contig names (`GL000220.1:100-200`) now parse as regions
   (review F4).
-
-### Changed
-
-- Tests defend the claimed numerical bounds: streamed step-2
-  weighted/binary/GLS comparisons at 3e-12 relative (measured worst
-  9.4e-13) and integer-dosage log10 p / beta at 1e-5 (measured worst
-  4.5e-6), replacing 1e-9 / 1e-4 (review F8). New regression tests: the
-  by-group relatedness re-indexing, the GLS-gamma monomorphic guard, the
-  contig-name region matching, both cache concurrency races (red without
-  the fixes), the thinning kernel's bit-identical rows against a
-  per-sample float32 reference, the CLI `step2 --dosage` wiring and
-  validation, `hm3 build` through the CLI, and the plot CLI's
-  `--suggestive` / `--label-top` wiring (reviews F6, F7, F9).
-- Documented the macOS drop-behind caveat: `MADV_DONTNEED` is advisory
-  there, so mapped scans keep the scanned source's clean pages resident
-  (reclaimable; the write buffer stays chunk-bounded and values are
-  unaffected); Linux drops the pages as documented (review F14).
-- `report/README.md` says to regenerate `report_manifest.json` whenever
-  the PDF **or any hashed input** changes, not only the PDF (review F5);
-  the manifest was regenerated after the 2.2.0 release edited three hashed
-  inputs without refreshing it (review F3). The quickstart documents the
-  plot CLI's `--suggestive`, `--label-top`, `--alpha`, `--no-threshold` and
-  `--title` options (review F10).
 
 ## [2.2.0] - 2026-11-14
 

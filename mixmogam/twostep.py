@@ -843,6 +843,26 @@ def _fit_extra(fit) -> dict:
 # ----------------------------------------------------------------------
 
 
+# calibration_cv above which the constant denominator warns: 0.5% without
+# structure, 2% with K - 1 ancestry PCs, 13-23% under strong structure
+# (archive 20261003T081812Z-structure-calibration; review of 16 November);
+# the spectral denominator's own target is 3%.
+_CALIBRATION_CV_WARN = 0.05
+
+
+def _warn_calibration_spread(cv, denominator: str, method: str) -> None:
+    """Warn when one calibration constant cannot fit the calibration SNPs."""
+    if denominator == "constant" and cv is not None and np.isfinite(cv) and cv > _CALIBRATION_CV_WARN:
+        warnings.warn(
+            f"{method}: the prospective/retrospective ratio varies over the calibration SNPs "
+            f"(calibration_cv {cv:.3f} > {_CALIBRATION_CV_WARN}), so one constant cannot calibrate "
+            "every variant: under structure, variants aligned with the leading kinship "
+            "eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 "
+            "across loading quintiles at simulated F_ST 0.3), and effects carry the same error. "
+            "Include ancestry principal components among the covariates, or use "
+            "denominator='spectral'", RuntimeWarning, stacklevel=3)
+
+
 def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              denominator: str = "constant", n_spectral="auto",
              cg_tol: float = 1e-6, slq_tol: float = 1e-6, random_state: int = 0,
@@ -866,6 +886,7 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
     basis = _spectral_basis(st, random_state=random_state)
     fit = fit_variance_components(st, random_state=random_state, basis=basis, slq_tol=slq_tol)
     core = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
+    _warn_calibration_spread(core["cal"]["cv"], denominator, "bolt-inf")
     extra = {"method": "bolt-inf" if denominator == "constant" else "bolt-inf-spectral",
              "denominator": denominator, **_fit_extra(fit),
              "calibration": core["cal"]["c"], "calibration_cv": core["cal"]["cv"],
@@ -938,6 +959,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     i_inf = grid.index((0.5, 0.5)) if (0.5, 0.5) in grid else None
     r2_inf = r2[i_inf] if i_inf is not None else 0.0
     use_mixture = r2_inf > 0 and (r2[best] - r2_inf) > min_cv_gain * r2_inf
+    _warn_calibration_spread(inf["cal"]["cv"], denominator, "bolt")
     extra = {"method": "bolt", "effect_method": "bolt-inf", "denominator": denominator, **_fit_extra(fit),
              "calibration_inf": inf["cal"]["c"], "calibration_cv": inf["cal"]["cv"],
              "calibration_ratios": inf["cal"]["ratios"], "spectral_k": inf["cal"].get("k"),
@@ -1334,7 +1356,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     ``stage1_kwargs["allow_strong_structure"]=True``, which runs with a
     warning); ``"auto"`` keeps the elastic net in both cases, and the
     elastic net itself warns under strong structure (null lambda_GC
-    1.01-1.13 without PCs, in simulations; with ``relatedness`` the lambda
+    1.01-1.13 without PCs, in simulations, and 0.60-1.17 when an
+    environmental effect also followed ancestry, with effects 5-14% low on
+    average; with ``relatedness`` the lambda
     calibration is replaced by kappa_g and the warning is stronger: up to
     ~1.2, and ~1.4-2.9 for LDpred3 stage 1s, also in simulations).
     (Behaviour change from 5fd7806f, where all ran silently; a3c523d6 had
@@ -1468,17 +1492,24 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     does not pull the floor or the trigger cutoff down.
     ``relatedness='auto'`` is reliable without population structure.
     Under structure the MAD can be inflated, the 4-SD floor can sit
-    above 0.0625 or 0.125, and 3rd- or 2nd-degree relatives may drop
-    out of Phi; supply a pedigree or pairs (e.g. KING run within
-    ancestry groups). The LOCO-refit trigger still counts pre-floor
+    above 0.0625, 0.125 or even 0.25, and 3rd-degree, 2nd-degree or
+    full-sib pairs may drop out of Phi (two populations at F_ST 0.08 with
+    PCs: floor 0.24-0.26, 14-86% of sib pairs dropped, null lambda_GC
+    +0.05 against a pedigree; 16 November review simulation); supply a
+    pedigree or pairs (e.g. KING run within ancestry groups). Family
+    cross-fit folds also link KING pairs above the refit trigger's n-aware
+    cutoff before its cap. The LOCO-refit trigger still counts pre-floor
     pairs, so a refit can fire even when Phi is empty; a warning then
     says relatives were detected but not modeled in Phi.
     The structure test is repeated on
     a maximal unrelated set, which then decides the ancestry-PC warning
     (relatives alone trip the all-sample test; both are in
-    ``extra["structure"]``). The cross-fitted LOCO scores are refitted per
-    group (k x groups fits) when there is evidence of relatives, as well as
-    under strong structure (``extra["loco_refit_reason"]``). Evidence is
+    ``extra["structure"]``). Cross-fitting keeps each family in one fold
+    (``relatedness_options["crossfit_folds"]``, below). With random folds
+    the cross-fitted LOCO scores are refitted per group (k x groups fits)
+    when there is evidence of relatives; under strong structure they are
+    refitted with either fold design (``extra["loco_refit_reason"]``).
+    Evidence is
     any supplied pair (pedigree, register, ``.kin0`` / ``.grm.sp`` file or
     arrays) with phi > ``relatedness_threshold``; for ``"auto"`` (KING
     estimated here) at least ``relatedness_options["loco_refit_min_related"]``
@@ -1508,44 +1539,77 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     below 1% the 1.3-3.8x stage-1 cost is not worth it.
     ``extra["relatedness"]["related_fraction"]`` is still the fraction in
     any floor-kept pair.
-    Why the refit:
-    the folds split families, so a genome-wide fit's chromosome-g model SNPs
-    absorb family-shared noise of the test samples' relatives and dropping
-    their share leaves it in the residual (null model SNPs read a mean
-    chi-square of 1.06-1.19 with household c2 = 0.2, rising with n;
-    refitted 0.99-1.04; simulation estimate from internal review runs, not
-    archived in this repo). ``relatedness_options={"loco_refit":
-    False}`` disables this safety rule for research comparisons only (in-model
-    nulls can be inflated; not recommended),
-    ``True`` forces it. ``"crossfit_folds": "family"`` (opt-in; default
-    ``"random"``) instead keeps each family (connected pairs with phi >
-    ``relatedness_threshold``) in one fold, which removes the same leak
-    without the refit's 1.3-3.8x stage-1 CPU (same review-simulation
-    estimate, n = 2,000, not archived): calibrated in the review grid
-    (unlinked 0.999, in-model 1.008), but the families' shared signal stays
-    in the residual, so QTL chi-square is 0.66-0.92x the refit's in
-    family-rich panels (n = 2,000; 0.75x at 10k). Use it only when stage-1
-    CPU binds. When the largest family exceeds n / (2 k) samples the folds
-    cannot balance and it falls back to random folds with the refit, with a
-    warning. An explicit ``ldpred3-inf`` stage 1 keeps block-exact LOCO
-    given the shared genome-wide h2 (the chromosomal subtraction is the
-    leave-chromosome-out fit; in-model null mean chi-square was 1.048
-    without a second refit in the review simulations, next to 1.033 for
-    refitted enet), so the relatives auto-refit and family folds are not
-    applied and ``extra["loco_refit_reason"]`` is ``"n/a (block-exact
-    LOCO)"``. ``ldpred3-lassosum2`` and ``ldpred3-fast`` are not
-    block-exact once hyperparameters are chosen on all chromosomes
-    (lassosum2 in-model null mean chi-square 1.122 without refit in the
-    same simulations); with relatives they use the same auto-refit as
-    the elastic net. The "no in-model leak" wording does not apply to
-    them.
-    ``"gls"`` (opt-in, unweighted quantitative)
-    whitens the residual with a sparse family covariance instead. It gains
-    power (QTL chi-square 15.5 vs 13.9 for kappa in simulated nuclear
-    families with a 5% subset) but is prospective: under families ascertained
-    on the trait with a household effect its null mean chi-square read 1.017
-    (kappa 0.998), so it is never the default. ``"lambda"`` is the behaviour
-    without ``relatedness``, ``"none"`` no correction.
+    Why family folds: folds that split families leak in two ways. (a) A
+    sample's LOCO score is fitted on folds that hold its relatives, so it
+    reads their phenotypes, and these carry the tested variant through the
+    alleles the relatives share. Subtracting the score then removes part of
+    the variant's effect from the trait but not from the genotype, so
+    effects shrink toward zero, the bias of GRAMMAR (Aulchenko et al. 2007);
+    kappa_g corrects the variance, so p-values stay calibrated. In
+    simulated sibships of four, random-fold effects were 0.80-0.84 of the
+    truth (0.73-0.80 with household c2 = 0.25) against 0.97-1.05 with
+    family folds and the exact LMM, and 0.64-0.72 of the exact LMM's with
+    both parents genotyped (h2 0.6, c2 0.2); with a fifth of the samples in
+    sib pairs they were 1% low; binary one-step effects were 8% lower than with
+    family folds (review simulations of 16 November, not archived in this
+    repo). ``extra["relatedness"]["crossfit_leak"]`` is the mean squared
+    relatedness r_ij^2 to relatives in other folds (about 0.6 for sibships
+    of four in random folds, 0.9 with their parents, 0 in family folds), and
+    random folds warn above 0.05. (b) A genome-wide fit's chromosome-g model SNPs absorb
+    family-shared noise of the test samples' relatives, and dropping their
+    share leaves it in the residual (null model SNPs read a mean chi-square
+    of 1.06-1.19 with household c2 = 0.2, rising with n; refitted
+    0.99-1.04; simulation estimate from internal review runs, not archived
+    in this repo). ``"crossfit_folds": "family"`` (the default since 2.3.0)
+    keeps each family (connected pairs with phi > ``relatedness_threshold``)
+    in one fold, which removes both leaks without the refit and its
+    1.3-3.8x stage-1 CPU: calibrated in the review grid (unlinked 0.999,
+    in-model 1.008; review simulations, n = 2,000, not archived). Binary
+    traits also balance cases across the family folds. The families' shared
+    signal stays in the residual, so with kappa_g the QTL chi-square is
+    below that of random folds with the refit (0.66-0.92x in family-rich
+    panels at n = 2,000, 0.75x at 10k; 0.72-0.90x in the 16 November
+    sibships); ``relatedness_correction="gls"`` recovers it (below). ``"random"`` (the default before 2.3.0) splits families and
+    refits each group when there is evidence of relatives; its p-values are
+    calibrated but its effects are not, so use it only when effects are not
+    needed. When the largest family exceeds n / (2 k) samples the family
+    folds cannot balance and fall back to random folds with the refit, with
+    a warning. ``relatedness_options={"loco_refit": False}`` disables the
+    random-fold refit for research comparisons only (in-model nulls can be
+    inflated; not recommended), ``True`` forces it. An explicit
+    ``ldpred3-inf`` stage 1 keeps block-exact LOCO given the shared
+    genome-wide h2 (the chromosomal subtraction is the leave-chromosome-out
+    fit; in-model null mean chi-square was 1.048 without a second refit in
+    the review simulations, next to 1.033 for refitted enet), so it needs no
+    relatives refit (``extra["loco_refit_reason"]`` is ``"n/a (block-exact
+    LOCO)"`` with random folds), but family folds apply to it as to the
+    elastic net: with random folds its effects were 0.82 of the truth
+    against 0.99 with family folds (same 16 November simulations).
+    ``ldpred3-lassosum2`` and ``ldpred3-fast`` are not block-exact once
+    hyperparameters are chosen on all chromosomes (lassosum2 in-model null
+    mean chi-square 1.122 without refit in the same simulations); with
+    random folds and relatives they use the same auto-refit as the elastic
+    net. The "no in-model leak" wording does not apply to them.
+    ``"gls"`` (opt-in, unweighted quantitative) whitens the residual with
+    a sparse family covariance Cov(w) = s_e I + s_f R fitted to it: the
+    score is z'b with b = P w (P the GLS projector off the covariates), and
+    effects are the GLS slopes z'Pw / z'Pz. By default
+    (``relatedness_options["gls_variance"] = "retrospective"``) the score's
+    variance is its variance given the phenotypes, sigma_z^2 b' Phi b, as
+    for kappa_g (MASTOR's construction, Jakobsdottir & McPeek 2013), which
+    holds whatever the phenotype distribution. It gains power: with family
+    folds in simulated sibships of four (household c2 = 0.3, 12 seeds
+    each), QTL chi-square 27.6 against 13.7 for kappa, and 19.6 against
+    13.5 when the families were ascertained on the trait, with null mean
+    chi-square 1.008-1.012 (kappa 1.011-1.015; review simulations of 16
+    November, not archived in this repo). ``"prospective"`` takes z'Pz
+    instead (before 2.3.0 the only variance): it read 0.90 in the same
+    unascertained panels, conservative because sib correlations near 0.5
+    hold s_f at its bound, and 1.017 under ascertainment with a household
+    effect in earlier review runs (kappa 0.998). GLS needs one dense
+    inverse per related cluster (``"max_cluster"``, 5,000 samples), so
+    kappa_g stays the default. ``"lambda"`` is the behaviour without
+    ``relatedness``, ``"none"`` no correction.
 
     The maximal unrelated set of the structure test splits only pairs with
     phi > ``relatedness_options["unrelated_min_phi"]`` (default 0.0442, 3rd
@@ -1571,7 +1635,9 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     normal's) independent-carrier tail: binary nulls read 1.2-2.3x nominal
     at 1e-3 (up to ~3.5x at 1e-4) in every MAC bin in internal review
     simulations (not archived in this repo),
-    worst with carriers in 1-3 families; a MAC floor does not fix it. Each
+    worst with carriers in 1-3 families, and up to 3.6x at 1e-3 and 5x at
+    1e-4 when whole sibships carry (16 November review); a MAC floor does
+    not fix it. Each
     variant with p < ``relatedness_options["carrier_families_p"]`` (1e-4)
     and MAF < ``"carrier_families_max_maf"`` (0.05) gets
     ``extra["carrier_families"]`` (distinct families among its
@@ -1652,7 +1718,10 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     beyond +-|u| (``spa_two_sided="distance"``, as in SAIGE and REGENIE) or
     twice the tail beyond u (``"doubled"``, LDAK's default: half the level
     in each tail of a skewed null). lambda multiplies the statistic.
-    Effects are weighted least-squares slopes. The Huber-White sandwich is
+    Effects are weighted least-squares slopes, multiplied by lambda under
+    strong structure without ``relatedness`` (as LDAK-KVIK's step 2 reports
+    lambda beta-hat; the per-dataset lambda is not in the standard errors).
+    The Huber-White sandwich is
     not used: with heavy-tailed weighted residuals a few samples carry each
     score, and it is anti-conservative for low-frequency variants (design
     notes).
@@ -1805,6 +1874,9 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
             raise ValueError("relatedness_options['loco_refit'] must be 'auto', True or False")
         if rel_opt["crossfit_folds"] not in ("random", "family"):
             raise ValueError("relatedness_options['crossfit_folds'] must be 'random' or 'family'")
+        if rel_opt["gls_variance"] not in ("retrospective", "prospective"):
+            raise ValueError("relatedness_options['gls_variance'] must be 'retrospective' or "
+                             "'prospective'")
         if rel_opt["structure_without_pcs"] not in ("warn", "error"):
             raise ValueError("relatedness_options['structure_without_pcs'] must be 'warn' or 'error'")
         if rel_opt["denominator"] not in ("exact", "gamma"):
@@ -1983,17 +2055,50 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
             rel_info["n_pairs_detected"] = int(close.sum())
             rel_info["n_pairs_modeled"] = int(close.sum())
         rel_info["relatives_evidence"] = bool(evidence)
-        if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1:
-            fam_labels = _family_components(rel, relatedness_threshold)
+        # Family folds replace the relatives refit, so they follow the same
+        # evidence (a supplied pair, or KING-auto's trigger); KING noise
+        # pairs alone keep the ordinary folds, as without relatedness.
+        if rel_opt["crossfit_folds"] == "family" and int(loco_folds) > 1 and evidence:
+            fam_rel = rel
+            if estimated:
+                # KING-auto: the noise floor that fills Phi can sit above
+                # close relatives (to phi ~0.25 under structure); the folds
+                # also link the pre-floor pairs above the trigger's n-aware
+                # cutoff before its 0.0884 cap (about one null pair expected
+                # among all pairs), so that noise pairs cannot chain families
+                # into one component too large for the folds.
+                pre = rel_info.get("king_prefloor") or {}
+                trig_info = rel_info.get("refit_trigger") or {}
+                cut = float(trig_info.get("cutoff_uncapped", trig_info.get("cutoff", np.inf)))
+                if pre.get("i") is not None and np.size(pre["i"]) and np.isfinite(cut):
+                    from mixmogam._relatedness import Relatedness
+
+                    pr = np.asarray(pre["r"], dtype=np.float64)
+                    keep = pr / 2.0 > max(cut, relatedness_threshold)
+                    if keep.any():
+                        uu = rel.upper.tocoo()
+                        fam_rel = Relatedness(n, np.r_[uu.row, np.asarray(pre["i"])[keep]],
+                                              np.r_[uu.col, np.asarray(pre["j"])[keep]],
+                                              np.r_[uu.data, pr[keep]], source="family folds")
+            fam_labels = _family_components(fam_rel, relatedness_threshold)
             largest = int(np.bincount(fam_labels).max())
             rel_info["family_folds"] = {"largest_family": largest}
-            if largest > n / (2 * int(loco_folds)):
+            if largest < 2:
+                # No pair above the threshold: nothing can leak, and the
+                # ordinary folds keep results equal to a run without
+                # relatedness (random and case-stratified draws).
+                fam_labels = None
+                rel_info["family_folds"]["applied"] = False
+            elif largest > n / (2 * int(loco_folds)):
                 warnings.warn(
                     f"relatedness_options['crossfit_folds'] = 'family': the largest family "
                     f"(connected pairs with phi > {relatedness_threshold:g}) has {largest:,} of "
                     f"{n:,} samples, over n / (2 k) = {n / (2 * int(loco_folds)):,.0f}, so whole "
                     "families cannot balance the folds; using random folds (with the LOCO "
-                    "refit) instead", RuntimeWarning, stacklevel=2)
+                    "refit) instead. Random folds put relatives in each other's training "
+                    "folds, which biases effects toward zero (see "
+                    "extra['relatedness']['crossfit_leak']); a stricter "
+                    "relatedness_threshold splits the component", RuntimeWarning, stacklevel=2)
                 fam_labels = None
             family_folds = fam_labels is not None
         if mode is True:
@@ -2004,19 +2109,16 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
             refit, refit_reason = True, "relatives"
     # ldpred3-inf is block-exact given the shared genome-wide h2 (review
     # in-model null mean chi-square 1.048 without a second refit, next
-    # to 1.033 for refitted enet). lassosum2 and fast are not: their
-    # hyperparameters are chosen on all chromosomes (lassosum2 1.122
-    # without refit in the same simulations), so the relatives auto-refit
-    # and family folds apply to them.
+    # to 1.033 for refitted enet), so the relatives auto-refit is not
+    # needed. Family folds still apply: random folds let the fit of a
+    # sample's own fold-out set read its relatives' phenotypes, which carry
+    # the tested variant (effects 0.82 of the truth against 0.99 with
+    # family folds, sibships of four, review simulation of 16 November).
+    # lassosum2 and fast are not block-exact: their hyperparameters are
+    # chosen on all chromosomes (lassosum2 1.122 without refit in the same
+    # simulations), so the relatives auto-refit applies to them as well.
     if _ldpred3_block_exact_loco(stage1):
-        skipped_family = False
-        if family_folds:
-            family_folds, fam_labels = False, None
-            if rel is not None:
-                rel_info["family_folds"] = {"applied": False,
-                                            "reason": "n/a (block-exact LOCO)"}
-            skipped_family = True
-        if refit_reason == "relatives" or skipped_family:
+        if refit_reason == "relatives":
             refit, refit_reason = False, "n/a (block-exact LOCO)"
     if struct["strong"] and (weighted or trait == "binary") and not kappa_on:
         warnings.warn("strong population structure remains after the covariates; the tests of "
@@ -2044,10 +2146,29 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
     folds = None
     if loco_folds > 1:
         if family_folds:
-            folds = _family_folds(fam_labels, int(loco_folds), rng)
+            folds = _family_folds(fam_labels, int(loco_folds), rng,
+                                  strata=st.y_raw if binary else None)
             rel_info["family_folds"]["fold_sizes"] = np.bincount(folds, minlength=int(loco_folds)).tolist()
         else:
             folds = _crossfit_folds(n, int(loco_folds), rng, strata=st.y_raw if binary else None)
+    if rel is not None and folds is not None:
+        leak = _crossfit_leak(rel, folds, relatedness_threshold)
+        rel_info["crossfit_leak"] = leak
+        if not family_folds and leak > _CROSSFIT_LEAK_WARN:
+            warnings.warn(
+                f"random cross-fit folds split families: a sample's relatives in its training "
+                f"folds carry the tested variant into its LOCO score, which biases effects "
+                f"toward zero (mean squared relatedness to relatives in other folds "
+                f"{leak:.3f}; effects were 6-36% low at 0.2-0.9 in simulated families, <1% "
+                f"at 0.04). p-values are not affected. Family folds "
+                f"(relatedness_options['crossfit_folds'] = 'family', the default) avoid it",
+                RuntimeWarning, stacklevel=2)
+    elif rel is not None and int(loco_folds) == 1 and rel_info.get("relatives_evidence"):
+        warnings.warn(
+            "loco_folds=1 with relatives: in-sample LOCO scores read each sample's own and its "
+            "relatives' phenotypes, which carry the tested variant, so effects shrink toward "
+            "zero (about 0.2 of the truth in simulated sibships, 16 November review). Use "
+            "loco_folds >= 2, whose folds keep families whole", RuntimeWarning, stacklevel=2)
     stage1_kwargs = dict(stage1_kwargs or {})
     allow_strong = bool(stage1_kwargs.pop("allow_strong_structure", False))
     ldp_strong = stage1 not in ("enet", "auto") and struct["strong"] and h2 > 0
@@ -2081,11 +2202,16 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
           and not (weighted or trait == "binary")):
         # The refitted elastic net plus the lambda calibration is the best
         # stage 1 without PCs, but not exact: null lambda_GC 1.01-1.13 in the
-        # internal review structure panels (not archived). With kappa_g (no lambda) the
+        # internal review structure panels, and 0.60-1.17 (effects 5-14% low)
+        # when an environmental effect also followed ancestry (16 November
+        # review; lambda inherits the ridge calibration's per-dataset error;
+        # neither archived). With kappa_g (no lambda) the
         # warning above covers it; weighted / binary traits warn above too.
         warnings.warn("strong population structure remains after the covariates: the elastic-net "
                       "stage 1 with the lambda calibration is the most robust choice without PCs, "
-                      "but null lambda_GC still reached 1.01-1.13 in simulations; include "
+                      "but in simulations null lambda_GC still reached 1.01-1.13, and "
+                      "0.60-1.17 with effects 5-14% low when an environmental effect also "
+                      "followed ancestry; include "
                       "ancestry principal components among the covariates. Close relatives "
                       "also make this test strong, and PCs do not correct them: if the samples "
                       "include relatives, pass relatedness= (CLI --relatedness: a pedigree, a "
@@ -2196,8 +2322,13 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
             # to step 1; step 2 takes the GLS scores (and gamma, if needed).
             Wp = st_test.lg.project(resid)
             s_f, s_e = rel.family_vc(Wp)
-            rel_info.update({"kappa": rel.kappa(Wp), "s_f": s_f, "s_e": s_e})
+            rel_info.update({"kappa": rel.kappa(Wp), "s_f": s_f, "s_e": s_e,
+                             "gls_variance": rel_opt["gls_variance"]})
             del Wp
+            # The retrospective GLS variance sigma_z^2 b' Phi b estimates
+            # sigma_z^2 by z'z c_X / n_eff, as kappa_g's does.
+            c_X, trq = covariate_factor(rel, st_test.lg.Q, st_test.n_eff)
+            rel_info.update({"c_X": c_X, "trace_QPhiQ": trq})
         if kap_g is not None:
             rel_info.update({"kappa": kap_g, "c_X": c_X})
         extra["relatedness"] = rel_info
@@ -2303,6 +2434,21 @@ def _hratt_test(state: dict, st: _Setup, gt, n_threads: int = 1, *, rsU=None, U=
                 se_z = np.sqrt(rsU["V"] / lam_j) / rsU["zz"] * sy
             return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
     elif gls is not None:
+        if rel_opt.get("gls_variance", "prospective") == "retrospective":
+            # MASTOR's construction (Jakobsdottir & McPeek 2013): the GLS
+            # score num = z'P w = z'b against its variance given the
+            # phenotypes, sigma_z^2 b'Phi b, with sigma_z^2 = z'z c_X / n_eff
+            # as for kappa_g. Valid whatever the phenotype distribution
+            # (ascertainment, a misfitted family covariance); effects stay
+            # the GLS slopes num / den. Step-1 files written before this
+            # option read as prospective.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                V = st.lg.zz / st.n_eff * c_X * gls["bphib"][st.lg.groups]
+                ok = (V > 0) & (gls["den"] > 0)
+                chi2 = np.where(ok, lam * gls["num"] ** 2 / V, np.nan)
+                beta_z = gls["num"] / gls["den"] * sy
+                se_z = np.where(ok, np.sqrt(V / lam) / gls["den"] * sy, np.nan)
+            return _result(st, gt, chi2, beta_z, se_z, extra, p=p)
         chi2 = lam * gls["chi2"]
         with np.errstate(divide="ignore", invalid="ignore"):
             beta_z = gls["num"] / gls["den"] * sy
@@ -2572,20 +2718,60 @@ def _family_components(rel, threshold: float) -> np.ndarray:
     return connected_components(rel.threshold_phi(threshold).Koff, directed=False)[1]
 
 
-def _family_folds(labels: np.ndarray, k: int, rng) -> np.ndarray:
+def _family_folds(labels: np.ndarray, k: int, rng, strata=None) -> np.ndarray:
     """(v) Cross-fit folds that keep each family (component) whole: largest
     first (random order within a size) into the currently smallest fold.
-    Binary case/control strata are not balanced on top of this."""
+
+    With ``strata`` (binary traits: one label per sample) the families that
+    hold members of the rarest stratum go first, most such members first,
+    each into the fold with the fewest of them so far (then the smallest),
+    so that rare cases spread over the folds as in :func:`_crossfit_folds`;
+    the other families then fill the folds by size. The rarest stratum is
+    taken as there (smallest, then by first member), so swapping case and
+    control labels leaves the folds unchanged."""
     sizes = np.bincount(labels)
     order = rng.permutation(sizes.size)
     order = order[np.argsort(-sizes[order], kind="stable")]
     load = np.zeros(k, dtype=np.int64)
     fold_of = np.empty(sizes.size, dtype=np.int64)
+    if strata is not None:
+        strata = np.asarray(strata)
+        members = [np.flatnonzero(strata == v) for v in np.unique(strata)]
+        members.sort(key=lambda idx: (idx.size, idx[0]))
+        rare = np.bincount(labels[members[0]], minlength=sizes.size)
+        first = order[np.argsort(-rare[order], kind="stable")]
+        first = first[rare[first] > 0]
+        rare_load = np.zeros(k, dtype=np.int64)
+        for c in first:
+            f = int(np.lexsort((load, rare_load))[0])
+            fold_of[c] = f
+            rare_load[f] += rare[c]
+            load[f] += sizes[c]
+        order = order[rare[order] == 0]
     for c in order:
         f = int(np.argmin(load))
         fold_of[c] = f
         load[f] += sizes[c]
     return fold_of[labels]
+
+
+# Mean squared relatedness to relatives in other folds above which random
+# folds warn: effects were < 1% low at 0.04 (a fifth of samples in sib pairs)
+# and 3% low at 0.1 in the 16 November review simulations.
+_CROSSFIT_LEAK_WARN = 0.05
+
+
+def _crossfit_leak(rel, folds: np.ndarray, threshold: float) -> float:
+    """Mean over samples of sum_j r_ij^2 over the relatives j (pairs with
+    phi > ``threshold``) in a different cross-fit fold: the relatives whose
+    phenotypes a sample's LOCO score can read. Random folds score about
+    0.6 for sibships of four (effects ~16-27% low in simulation), family
+    folds 0 up to pairs below the threshold."""
+    u = rel.threshold_phi(threshold).upper.tocoo()
+    if u.nnz == 0:
+        return 0.0
+    other = folds[u.row] != folds[u.col]
+    return float(2.0 * np.sum(u.data[other] ** 2) / rel.n)
 
 
 def _crossfit_folds(n: int, k: int, rng, strata=None) -> np.ndarray:
@@ -2756,6 +2942,11 @@ def _out_of_fold_loco(lg: LocoGenotypes, beta: np.ndarray, folds: np.ndarray) ->
     return out
 
 
+# lambda multiplies every HRATT statistic and effect under strong structure;
+# simulated panels read 0.73-1.44 (16 November review), a duplicated panel 70.
+_LAMBDA_PLAUSIBLE = (0.5, 2.0)
+
+
 def _hratt_lambda(st: _Setup, ys: np.ndarray, U: np.ndarray, h2: float, residual_variance: float,
                   w: np.ndarray, basis, n_calibration: int, denominator: str, n_spectral, cg_tol,
                   rng) -> tuple:
@@ -2792,15 +2983,39 @@ def _hratt_lambda(st: _Setup, ys: np.ndarray, U: np.ndarray, h2: float, residual
         lam_p = 1.0
         cal = {**cal, "cv": sp["cv"], "ratios": sp["ratios"]}
         extra["spectral_k"] = sp["k"]
-    lam = lam_p
+    lam, converged, n_sel = lam_p, False, 0
     for _ in range(20):
         S = (lam * U < 6) & (lam_p * T < 6) & np.isfinite(U) & np.isfinite(T)
-        new = lam_p * float(np.sum(T[S])) / float(np.sum(U[S]))
+        n_sel = int(np.count_nonzero(S))
+        sum_u = float(np.sum(U[S]))
+        if not sum_u > 0:
+            # Nothing to match (no variant passes both screens, or every
+            # passing U is zero): keep the ridge calibration itself.
+            warnings.warn(
+                "HRATT lambda: no variant with a positive statistic passes the calibration "
+                f"screen (lambda U < 6 and lambda' T < 6); using lambda' = {lam_p:.3f}. Check "
+                "for duplicated samples, and include ancestry principal components",
+                RuntimeWarning, stacklevel=3)
+            lam, n_sel = lam_p, 0
+            break
+        new = lam_p * float(np.sum(T[S])) / sum_u
         if abs(new - lam) < 1e-10:
+            converged = True
             break
         lam = new
+    if not converged and n_sel:
+        warnings.warn(f"HRATT lambda: the fixed point did not settle in 20 steps (lambda {lam:.4f})",
+                      RuntimeWarning, stacklevel=3)
+    if not _LAMBDA_PLAUSIBLE[0] <= lam <= _LAMBDA_PLAUSIBLE[1]:
+        warnings.warn(
+            f"HRATT lambda = {lam:.3f} is outside [{_LAMBDA_PLAUSIBLE[0]}, {_LAMBDA_PLAUSIBLE[1]}] "
+            "and multiplies every statistic and effect; the ridge calibration is unreliable "
+            "here (e.g. duplicated samples or strong structure without principal components). "
+            "Include ancestry principal components among the covariates", RuntimeWarning,
+            stacklevel=3)
     extra.update({"lambda_prime": lam_p, "calibration_cv": cal["cv"],
-                  "calibration_ratios": cal["ratios"]})
+                  "calibration_ratios": cal["ratios"], "lambda_converged": bool(converged),
+                  "lambda_n_variants": n_sel})
     return lam, U, extra
 
 

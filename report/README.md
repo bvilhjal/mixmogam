@@ -59,7 +59,7 @@ HRATT runs; any external-program outputs inside them are provenance only.
 | Panel-cost decomposition | `20261025T190534Z-scaling-ladder`, `-t4` | At fixed variants, ten times more samples took HRATT-HE 7.0 times and BOLT-style inf (mixmogam) 17.3 times as long (iteration counts grow too); short-range LD needed fewer HRATT sweeps (4 against 8-10) than HAPNEST's; early-October timings are not comparable (HRATT-HE 27.2 s now against 43.9 s archived, with older code and other host conditions) |
 | Covariates under confounding | `20261025T201718Z-kvik-covariates-small`, `-large` | With three ancestry PCs mixmogam methods converge and agree; without them the variational fits do not converge while exact and BOLT-style inf (mixmogam) stay near calibration |
 | Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, stacked HE-alpha GEMM, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
-| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000, one run per size: both HRATT paths approximately linear in n (local exponents 0.86 and 0.96) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact run only to n = 2,500 (2.1 to 9.8 s; its dense factorizations scale as n^3); in that 26 October run (master `798518e5`, before dev8) single runs at n = 50,000 took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)); the dev8 ladder gives 13.25, 22.94 and 45.10 s |
+| Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000, one run per size: both HRATT paths approximately linear in n (local exponents 0.85 and 0.97) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact run only to n = 2,500 (2.1 to 9.8 s; its dense factorizations scale as n^3); in that 26 October run (master `798518e5`, before dev8) single runs at n = 50,000 took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)); the dev8 ladder gives 13.25, 22.94 and 45.10 s |
 | dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
@@ -117,11 +117,14 @@ Figures and tables must stay beside the LaTeX source. The figure script reads
 the archived CSVs and renders only mixmogam's methods; each `make_*` script
 writes a `*_manifest.json` with its input and output hashes. The earlier
 association results used mixmogam `2.0.0.dev2` at `db232216`, with phensim
-extensions frozen per archive. Large-n BED inputs stay local and out of Git,
-with hashes and generating references and seeds kept.
+extensions frozen per archive. Large-n BED inputs were kept local and out of
+Git, with hashes and generating references and seeds kept; the n = 50,000
+HAPNEST panels were deleted locally on 11 November 2026.
 `make_phensim_figures.py` verifies reused archive files before rendering; its
-HAPNEST step needs those omitted BED inputs, so a public checkout can render
-its phensim figures but cannot finish that step without the local archives.
+HAPNEST step needs those BED inputs, so neither a public checkout nor the
+authoring machine can now finish that step without regenerating them (the
+HAPNEST table reproduces byte-identically from the archived files when the
+missing inputs are skipped; 16 November review).
 The HAPNEST table in this revision was rendered from the archived
 `replicates.csv` files with the reruns' recorded hash checks. After the
 BOLT-style relabel only the generator hash in `hapnest_manifest.json` was

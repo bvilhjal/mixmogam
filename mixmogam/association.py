@@ -288,7 +288,12 @@ def gwas_by_group(y, gt, groups, X: Optional[np.ndarray] = None, method: str = "
     per-group effects b0 and b1 show how an interaction arises: the same
     sign with different sizes, or opposite signs. The difference test
     z = (b1 - b0) / sqrt(se0^2 + se1^2) treats the two estimates as
-    independent, which needs no relatives split across the groups.
+    independent, which needs no relatives split across the groups. The
+    difference inherits any bias the two estimates do not share: binary
+    HRATT's one-step log odds ratios overstate larger effects more at low
+    prevalence (design notes), so two groups of different prevalence differ
+    even when the odds ratio does not (analytically about -0.10 in log odds
+    at odds ratio 2, a 5% allele and prevalence 5% against 20%).
 
     Covariate columns constant within a group (such as the group indicator
     itself) are dropped in that group, where the intercept absorbs them.

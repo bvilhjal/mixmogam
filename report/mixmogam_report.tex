@@ -65,8 +65,8 @@ rejected 12 times too often at $10^{-3}$ for minor allele frequency 1--5\%
 and 26 times at $10^{-4}$ for minor allele frequency $\ge1\%$; cross-fitted LOCO scores
 brought unweighted quantitative effect bias within 2\% without selection on
 the outcome (weighted: about 1\% at $F_{ST}=0$, 5.5\% low at $F_{ST}=0.05$
-without principal components), against 28--36\% attenuation with in-sample
-scores; and covariate-specific genotype
+without principal components), against 28--34\% attenuation with in-sample
+scores on the same cells; and covariate-specific genotype
 distributions with principal components removed inflation from
 ancestry-dependent weights. Two criteria failed: weighted effects under selection on the
 outcome were 5.4\% low (Monte Carlo standard error 2.1\%), and weighted fits
@@ -768,17 +768,21 @@ covariates, estimates the genotype variance given the covariates. For an
 unweighted quantitative trait, $U_j^2/\{\zeta_j\|\mathbf a_g\|^2\}$ is the
 unweighted statistic, and that analysis is unchanged, with normal tails.
 In weighted and binary analyses a saddlepoint approximation replaces the
-normal tail above $|z|=2$ (\code{spa\_threshold}). It treats the genotypes
-as independent draws from the variant's empirical distribution of values
-(at most four, counting the no-call value), with $\mathbf a_g$ fixed: the
-retrospective counterpart of SPACox's empirical-CGF approximation, which
-randomizes the residuals instead \citep{bi2020}. Its shape comes from the
-marginal genotype distribution, not adjusted for covariates, and its scale
-from Equation~\eqref{eq:retro-variance}. The factor $c$ is computed on the
+normal tail above $|z|=2$ (\code{spa\_threshold}). With an intercept-only
+design it treats the genotypes as independent draws from the variant's
+empirical distribution of values (at most four, counting the no-call
+value), with $\mathbf a_g$ fixed: the retrospective counterpart of
+SPACox's empirical-CGF approximation, which randomizes the residuals
+instead \citep{bi2020}. With covariates it draws from the
+covariate-specific distributions described below; its scale comes from
+Equation~\eqref{eq:retro-variance}. The factor $c$ is computed on the
 working model's linear statistic and multiplies the retrospective one, a
 heuristic transfer. Quantitative effects are weighted least-squares
-slopes; binary ones are one-step log odds ratios $U_j/J_j$, with $J_j$ the
-logistic information of the covariate-adjusted genotype. Separation by
+slopes, multiplied by $c$ under strong structure as LDAK-KVIK's step~2
+multiplies its effects by its calibration factor; binary ones are one-step
+log odds ratios $U_j/J_j$, with $J_j$ the logistic information of the
+covariate-adjusted genotype. For a rare risk allele and a rare outcome
+$U_j/J_j$ tends to $e^{\beta}-1$, so larger effects are overstated. Separation by
 the covariates is an error, while per-group null fits that do not converge
 are reported rather than rejected. The spectral denominator is unavailable
 with weights or binary traits, and the other association methods reject
@@ -832,10 +836,12 @@ Heritability on the Pearson scale was overestimated there
 made it worse.
 
 \paragraph{Cross-fitted scores.}
-HRATT follows REGENIE's level~0 \citep{mbatchou2021}:
+HRATT follows REGENIE's step~1 \citep{mbatchou2021}, whose level-0 and
+level-1 predictions are both made out of fold:
 \begin{itemize}
  \item The samples are split into $k$ folds (\code{loco\_folds}, default
- 5), by case status for binary traits.
+ 5), by case status for binary traits; with relatives, each family goes
+ whole to one fold (since 2.3.0, below).
  \item The selected elastic-net model is fitted genome-wide on all but one
  fold, $k$ fits in one sweep.
  \item A sample's score for group $g$ is its own fold's fit without group
@@ -852,8 +858,8 @@ Binary scores with a coefficient above one become fixed offsets. Scores
 that anti-predict, or whose null fit diverges, are dropped for their
 group. Without polygenic variance there are no scores.
 
-Without structure, dropping a group's share of a genome-wide fit matched
-per-group refits in prototypes: null $\lgc$ was 0.975--1.023 against
+Without structure, dropping a group's share of a genome-wide fit,
+REGENIE's approximate LOCO, matched per-group refits in prototypes: null $\lgc$ was 0.975--1.023 against
 0.975--1.018, with the same QTL effects and power. It costs $k$ fits instead
 of $k$ per group. Under structure it fails. A genome-wide fit spreads the
 ancestry signal over every chromosome, so dropping one chromosome's share
@@ -866,6 +872,16 @@ correlation between unlinked SNPs, not a trait's $\chi^2$ inflation, so it
 does not bound what dropping one group's share leaves below the threshold.
 That residual inflation in weakly structured samples has not been
 measured.
+
+With relatives, folds that split families let a sample's score read its
+relatives' phenotypes, which carry the tested variant through the alleles
+they share. Subtracting the score then shrinks effects toward zero, the
+bias of GRAMMAR \citep{aulchenko2007}, while the relatedness correction
+keeps p-values calibrated. In simulations after this report's evidence
+(16 November review, not archived), effects were 6--36\% low in families
+with random folds, under 1\% low with a fifth of the samples in sib
+pairs, and within noise of the truth with whole families in each fold, now
+the default.
 
 \paragraph{Covariate-specific genotype distributions.}
 Equation~\eqref{eq:retro-variance} treats the genotypes as exchangeable
@@ -1673,7 +1689,7 @@ and 26.28 seconds, and 73.57 and 27.20; Section~\ref{sec:dev5-results}
 separates the code effect from the host. HE changed the fitted
 covariance ratio from 0.49543 to 0.51260 and from 0.50125 to 0.52087,
 so the time saving comes with a different estimate. REML also needs more memory: 1.68 and
-1.54 against 1.08 and 1.02 GiB peak RSS.
+1.53 against 1.08 and 1.01 GiB peak RSS.
 
 The independent known-covariance study supports the narrower claim that
 the projected moment equations target their stated coefficients.
@@ -1941,7 +1957,7 @@ $\log_{10}p$. Table~\ref{tab:streaming-scaling} varies the number of markers
 for HRATT-HE at 10{,}000 samples. Peak RSS grows by 0.36 bytes per genotype
 with two-bit calls and 1.14 with int8 calls, against 4.06 with dev5's cache and
 1.26 without it. d51b4c3 runs slightly faster than dev5 with its
-cache, 16.3 against 17.9 seconds at 80{,}000 markers, and needs 40\% less time
+cache, 16.3 against 17.9 seconds at 80{,}000 markers, and needs 39\% less time
 than dev5 without it.
 
 The steps between the two versions are archived separately:
@@ -2019,7 +2035,9 @@ Binary tests had lopsided tails at 1\% and 5\% prevalence
 (Table~\ref{tab:weights-binary}). The saddlepoint p-value adds both tails at
 $\pm|u|$, as SAIGE's does, so a skewed null does not put $\alpha/2$ in each
 tail, which the per-tail criterion required. Two-sided rates were 0.94--1.03
-times nominal at $10^{-3}$ and 0.85--1.22 at $10^{-4}$ in every cell but S4.
+times nominal at $10^{-3}$ and 0.85--1.22 at $10^{-4}$ in the prespecified
+cells at $F_{ST}=0$, and 0.86--1.04 and 0.82--1.22 across every cell but
+S4 (lowest in the weighted $F_{ST}=0.05$ cell).
 Without the saddlepoint the heavier tail reached 46 times nominal at
 $10^{-4}$, and the model-based logistic variance gave $\lgc=0.36$ at 1\%
 prevalence. Two of 30 replicates at 1\% prevalence stopped with a
@@ -2027,8 +2045,8 @@ separation error from the per-group null fit with its in-sample offset;
 with cross-fitted scores none did (Section~\ref{sec:followup-results}).
 
 HRATT's effect estimates were attenuated in every cell: by 32\% without
-selection and by 33--46\% in S1--S3, with correlation 0.997 to the
-population slopes throughout. The in-sample LOCO prediction absorbs part of each QTL's effect.
+selection and by 33--46\% in S1--S3, with correlation 0.991--0.999
+(mean 0.997) to the population slopes across replicates. The in-sample LOCO prediction absorbs part of each QTL's effect.
 p-values are unaffected. Cross-fitted LOCO scores removed the attenuation
 (Section~\ref{sec:followup-results}).
 Excluding the saddlepoint, the weighted paths took 1.32 and 1.28 times as
@@ -2107,8 +2125,10 @@ Cross-fitting removed the attenuation (Table~\ref{tab:followup-effects}):
 \end{itemize}
 
 Power did not change: mean QTL $\chi^2$ was 0.999--1.009 times that of
-in-sample scores. Weighted HRATT exceeded weighted least squares by 1.20 to
-1.29 times, and binary HRATT exceeded logistic regression by 1.04 times.
+in-sample scores in the quantitative cells (binary: 0.995--1.000). Weighted
+HRATT exceeded weighted least squares by 1.20 to 1.29 times in S1--S3
+(1.11--1.29 over every cell), and binary HRATT exceeded logistic regression
+by 1.04 times.
 
 \paragraph{Calibration.}
 Without ancestry-dependent weights every test stayed calibrated
@@ -2415,15 +2435,18 @@ draws Gaussian probes, predate it; HRATT uses Rademacher probes
 \citep{hutchinson1990}. A single pass over the genotypes with one probe set
 shared across components is RHE-mc \citep{pazokitoroudi2020}; sharing the
 probes across exponents is common random numbers.
-Out-of-fold whole-genome predictions are REGENIE's level-0 design
-\citep{mbatchou2021}; cross-validated in-cohort predictors for
-mixed-model association are the subject of \citet{mefford2020}. Adjusting
-association tests for a polygenic score as a covariate, which fits its
-coefficient, was studied by \citet{campos2023}. The relatedness factor is the retrospective variance of MASTOR
+Out-of-fold whole-genome predictions are REGENIE's design, at both of its
+levels, and so is dropping the tested chromosome's share of the
+whole-genome fit, its approximate LOCO \citep{mbatchou2021};
+cross-validated in-cohort predictors for mixed-model association are the
+subject of \citet{mefford2020}. Adjusting association tests for a
+polygenic score as a covariate, which fits its coefficient, was studied by
+\citet{bennett2021} and \citet{campos2023}. The relatedness factor is the retrospective variance of MASTOR
 \citep{jakobsdottir2013}; BOLT-LMM-inf already reduces the
 retrospective/prospective ratio to one constant estimated on random markers
 \citep{loh2015}, and HRATT estimates it per LOCO group. Its optional variance
 component imitates fastGWA's sparse-relatedness model \citep{jiang2019},
+tested by default against MASTOR's retrospective variance,
 and pairs come from KING \citep{manichaikul2010} or a GCTA sparse GRM
 \citep{yang2011}. The \code{ldpred3-*} stage-1 options rest on LDpred2
 and lassosum2 \citep{prive2020,prive2022hgg}. The spectral denominator is a
@@ -2434,21 +2457,23 @@ follows \citet{sul2016}, and BOLT-style calibration markers are screened with
 the GRAMMAR statistic \citep{aulchenko2007}, as in \citet{loh2015}.
 
 Plausibly new are: cross-fitting the LDAK-KVIK elastic-net predictor
-(LDAK-KVIK fits its final and LOCO predictors on all samples and then adds
-calibration models); a per-group least-squares slope clipped to $[0,1]$;
-the retrospective factor estimated per LOCO group rather than once; and a
-structure-conditional switch between dropping a group's share of a
-genome-wide fit and refitting the group.
+(LDAK-KVIK fits its final and LOCO predictors on all samples and corrects
+effects with one genome-wide factor in step~2); a per-group least-squares
+slope clipped to $[0,1]$; the retrospective factor estimated per LOCO group
+rather than once; and a structure-conditional switch between REGENIE's
+approximate LOCO and refitting the group.
 
 Only cross-fitting has a committed ablation
 (Section~\ref{sec:followup-results}). Its comparator is in-sample scores
 on identical samples: that is HRATT without LDAK-KVIK's effect
 calibration, not LDAK-KVIK. Cross-fitting removed the attenuation of
-unweighted HRATT's effects (in-sample $-28\%$ to $-36\%$; cross-fitted
-$-2.0\%$ to $+0.9\%$). It left power unchanged (ratio 0.999 to 1.009)
-and cost 1.08 to 1.11 times the time. Weighted HRATT stayed $5.4\%$ low
-under selection on the outcome. Cross-fitting is therefore an alternative
-to LDAK-KVIK's effect calibration; no improvement over LDAK-KVIK, which
+unweighted HRATT's effects (in-sample $-28\%$ to $-34\%$; cross-fitted
+$-2.0\%$ to $+0.9\%$, without selection on the outcome). It left power
+unchanged (ratio 0.999 to 1.009) and cost 1.08 to 1.11 times the time.
+Weighted HRATT stayed $5.4\%$ low under selection on the outcome.
+Cross-fitting is therefore, in unrelated samples, an alternative to
+LDAK-KVIK's effect calibration (with relatives only when the folds keep
+families whole); no improvement over LDAK-KVIK, which
 adds its own effect calibration, is claimed or tested here. None of the
 other items is shown here to improve power or calibration. The ablations
 still needed are below. Items 2, 5, 6 and 8 have no committed results;
@@ -2464,7 +2489,7 @@ against REML, and one sample of 1,500 for the spectral denominator):
  HE for $a$ and $h^2$;
  \item fitted $a$ against $a=-1$ and a fixed $a$;
  \item the per-group MASTOR factor against a global factor and against the
- \code{"vc"} variance component, with close relatives present;
+ \code{"gls"} variance component, with close relatives present;
  \item the spectral denominator against the constant and exact
  denominators;
  \item elastic-net against \code{ldpred3-inf} and \code{ldpred3-lassosum2}
@@ -2503,6 +2528,10 @@ evidence are these.
  covariates and, being retrospective, differs from SAIGE's model-based
  one \citep{zhou2018}. Rarer outcomes, relatedness and real participation
  weights are untested.
+ \item The relatedness corrections have no archived benchmark. In
+ simulations after this report's evidence, random cross-fit folds made
+ effects 6--36\% too small in families, which the default family folds
+ avoid.
  \item Variational fits did not always converge: in the scale study's
  confounded cell, with or without two PCs; on five RegMap traits whose
  heritability estimate reached its upper bound; and in four of eight Atwell
@@ -2880,6 +2909,12 @@ thaliana} is controlled by a mitochondrial molybdenum transporter (MOT1).
 \emph{PLoS Genet} 4(2):e1000004.
 \href{https://doi.org/10.1371/journal.pgen.1000004}{doi:10.1371/journal.pgen.1000004}
 
+\bibitem[Bennett et~al.(2021)]{bennett2021}
+Bennett D, O'Shea D, Ferguson J, Morris D, Seoighe C (2021). Controlling
+for background genetic effects using polygenic scores improves the power of
+genome-wide association studies. \emph{Sci Rep} 11(1):19571.
+\href{https://doi.org/10.1038/s41598-021-99031-3}{doi:10.1038/s41598-021-99031-3}
+
 \bibitem[Berisa and Pickrell(2016)]{berisa2016}
 Berisa T, Pickrell JK (2016). Approximately independent linkage
 disequilibrium blocks in human populations. \emph{Bioinformatics}
@@ -3051,8 +3086,8 @@ Priv\'e F, Arbel J, Vilhj\'almsson BJ (2020). LDpred2: better, faster,
 stronger. \emph{Bioinformatics} 36(22--23):5424--5431.
 \href{https://doi.org/10.1093/bioinformatics/btaa1029}{doi:10.1093/bioinformatics/btaa1029}
 
-\bibitem[Priv\'e(2022)]{prive2022}
-Priv\'e F (2022). Optimal linkage disequilibrium splitting.
+\bibitem[Priv\'e(2021)]{prive2022}
+Priv\'e F (2021). Optimal linkage disequilibrium splitting.
 \emph{Bioinformatics} 38(1):255--256.
 \href{https://doi.org/10.1093/bioinformatics/btab519}{doi:10.1093/bioinformatics/btab519}
 

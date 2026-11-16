@@ -327,12 +327,13 @@ def test_gls_is_opt_in_and_api_errors(fam):
               relatedness_correction="gls")
 
 
-# Relatives keep the per-group LOCO refit; without
-# it the joint cross-fit leaks into in-model null SNPs (household c2).
+# With random folds, relatives keep the per-group LOCO refit; without it
+# the joint cross-fit leaks into in-model null SNPs (household c2).
 def test_relatives_keep_loco_refit_in_model_nulls_calibrated():
     G, gt, y, pairs, causal = family_panel(seed=0, n_fam=200, kids=4, m=8000, c2=0.3, h2=0.5)
-    on = _run(y, gt, relatedness=pairs)
-    off = _run(y, gt, relatedness=pairs, relatedness_options={"loco_refit": False})
+    rnd = {"crossfit_folds": "random"}
+    on = _run(y, gt, relatedness=pairs, relatedness_options=rnd)
+    off = _run(y, gt, relatedness=pairs, relatedness_options={**rnd, "loco_refit": False})
     assert on.extra["loco_refit"] and on.extra["loco_refit_reason"] == "relatives"
     assert not off.extra["loco_refit"] and off.extra["loco_refit_reason"] is None
     assert not on.extra["structure"]["strong"]  # the unrelated-set test does not fire
@@ -349,8 +350,11 @@ def test_loco_refit_option_and_no_close_pairs():
     b = _run(y, gt, relatedness=far, relatedness_options={"loco_refit": True})
     assert b.extra["loco_refit"] and b.extra["loco_refit_reason"] == "forced"
     few = (np.array([0]), np.array([1]), np.array([0.5]))
-    c = _run(y, gt, relatedness=few)
+    c = _run(y, gt, relatedness=few, relatedness_options={"crossfit_folds": "random"})
     assert c.extra["loco_refit"] and c.extra["loco_refit_reason"] == "relatives"
+    d = _run(y, gt, relatedness=few)  # default family folds: the pair shares a fold, no refit
+    assert d.extra["crossfit_folds"] == "family" and not d.extra["loco_refit"]
+    assert d.extra["relatedness"]["crossfit_leak"] == 0.0
     with pytest.raises(ValueError, match="loco_refit"):
         hratt(y, gt, relatedness=far, relatedness_options={"loco_refit": "yes"})
 
@@ -464,11 +468,12 @@ def test_structure_without_pcs_warns_or_errors():
     assert not any("no covariates" in str(x.message) for x in w)
 
 
-# (i) loco_refit='auto' needs evidence of relatives: supplied pairs count from
-# one pair, KING-auto pairs need >= 1% of samples related.
+# (i) loco_refit='auto' (random folds) needs evidence of relatives: supplied
+# pairs count from one pair, KING-auto pairs need >= 1% of samples related.
 def test_refit_evidence_king_auto_needs_min_related_fraction():
     G, gt, y, pairs, causal = family_panel(seed=7, kids=0, n_fam=300, m=4000, n_causal=100)
     from mixmogam import Genotypes
+    rnd = {"crossfit_folds": "random"}
 
     def twins(k):  # duplicate k samples: k pairs with phi 0.5 that KING finds
         rows = np.r_[np.arange(G.shape[0]), np.arange(k)]
@@ -476,33 +481,41 @@ def test_refit_evidence_king_auto_needs_min_related_fraction():
         return g2, np.r_[y, y[:k] + 0.1], (np.arange(k), G.shape[0] + np.arange(k), np.full(k, 1.0))
 
     g1, y1, p1 = twins(1)  # 2 of 601 related: 0.3%
-    a = _run(y1, g1, relatedness="auto")
+    a = _run(y1, g1, relatedness="auto", relatedness_options=rnd)
     ra = a.extra["relatedness"]
     assert ra["n_pairs_above_threshold"] >= 1 and ra["related_fraction"] < 0.01
     assert not ra["relatives_evidence"] and not a.extra["loco_refit"]
-    b = _run(y1, g1, relatedness=p1)  # the same pair supplied: counts
+    b = _run(y1, g1, relatedness=p1, relatedness_options=rnd)  # the same pair supplied: counts
     assert b.extra["loco_refit"] and b.extra["loco_refit_reason"] == "relatives"
     g10, y10, _ = twins(10)  # 20 of 610: 3.3%
-    c = _run(y10, g10, relatedness="auto")
+    c = _run(y10, g10, relatedness="auto", relatedness_options=rnd)
     assert c.extra["relatedness"]["related_fraction"] >= 0.01
     assert c.extra["loco_refit"] and c.extra["loco_refit_reason"] == "relatives"
     trig = c.extra["relatedness"]["refit_trigger"]
     assert trig["evidence"] and trig["n_pairs"] >= 10 and trig["cutoff"] >= 0.025
     assert "n_expected_null" in trig and trig["n_expected_null"] < 2
     G2, gt2, y2, _, _ = family_panel(seed=8, n_fam=100, kids=2, m=4000, n_causal=100)
-    d = _run(y2, gt2, relatedness="auto")  # nuclear families: KING-auto still refits
+    d = _run(y2, gt2, relatedness="auto", relatedness_options=rnd)  # nuclear families
     assert d.extra["relatedness"]["related_fraction"] > 0.9 and d.extra["loco_refit"]
+    e = _run(y2, gt2, relatedness="auto")  # default: KING-auto families share folds, no refit
+    assert e.extra["crossfit_folds"] == "family" and not e.extra["loco_refit"]
+    assert e.extra["relatedness"]["crossfit_leak"] < 0.01 < d.extra["relatedness"]["crossfit_leak"]
 
 
-# (v) family folds: opt-in, no refit, in-model nulls calibrated
-def test_family_folds_opt_in_calibrated_without_refit():
+# (v) family folds: the default since 2.3.0, no refit, in-model nulls calibrated
+def test_family_folds_default_calibrated_without_refit():
     G, gt, y, pairs, causal = family_panel(seed=0, n_fam=200, kids=4, m=8000, c2=0.3, h2=0.5)
-    r = _run(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "family"})
+    r = _run(y, gt, relatedness=pairs)
     assert r.extra["crossfit_folds"] == "family" and not r.extra["loco_refit"]
     ff = r.extra["relatedness"]["family_folds"]
     assert ff["largest_family"] == 6 and max(ff["fold_sizes"]) - min(ff["fold_sizes"]) <= 6
+    assert r.extra["relatedness"]["crossfit_leak"] == 0.0
     assert _null_mean(r, causal) < 1.02
-    assert _run(y, gt, relatedness=pairs).extra["crossfit_folds"] == "random"
+    with pytest.warns(RuntimeWarning, match="random cross-fit folds split families"):
+        rnd = hratt(y, gt, random_state=1, model_snps_h2_check=False, relatedness=pairs,
+                    relatedness_options={"crossfit_folds": "random"})
+    assert rnd.extra["crossfit_folds"] == "random" and rnd.extra["loco_refit"]
+    assert rnd.extra["relatedness"]["crossfit_leak"] > 0.3
     with pytest.raises(ValueError, match="crossfit_folds"):
         hratt(y, gt, relatedness=pairs, relatedness_options={"crossfit_folds": "kin"})
 
@@ -574,15 +587,17 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
                                                   replace=False))
     # spa_threshold=1e6 disables the saddlepoint so the statistic is the
     # uncorrected retrospective chi-square scaled by 1/(kappa_g c_X) once.
+    rnd = {"crossfit_folds": "random"}  # the relatives refit belongs to random folds
     kap = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
-               stage1="auto", loco_folds=2, spa_threshold=1e6)
+               stage1="auto", loco_folds=2, spa_threshold=1e6, relatedness_options=rnd)
     sel = kap.extra["stage1_selection"]
     assert sel["chosen"] == "enet" and sel["reason"].startswith("sample_weights")
     assert kap.extra.get("stage1", "enet") == "enet"
     assert not kap.extra["structure"]["strong"]
     assert kap.extra["loco_refit"] and kap.extra["loco_refit_reason"] == "relatives"
     base = _run(y, gt, model_snps=sub, relatedness=pairs, relatedness_correction="none",
-                sample_weights=w, stage1="auto", loco_folds=2, spa_threshold=1e6)
+                sample_weights=w, stage1="auto", loco_folds=2, spa_threshold=1e6,
+                relatedness_options=rnd)
     k, cx = kap.extra["relatedness"]["kappa"], kap.extra["relatedness"]["c_X"]
     np.testing.assert_allclose(kap.f_stat, base.f_stat / (k[gt.chromosome - 1] * cx),
                                rtol=1e-10)
@@ -591,10 +606,10 @@ def test_auto_weights_and_relatives_fallback_refit_and_kappa_once():
     # the decision variable, but the statistics would match loco_refit=False.
     forced = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
                   stage1="auto", loco_folds=2, spa_threshold=1e6,
-                  relatedness_options={"loco_refit": True})
+                  relatedness_options={**rnd, "loco_refit": True})
     off = _run(y, gt, model_snps=sub, relatedness=pairs, sample_weights=w,
                stage1="auto", loco_folds=2, spa_threshold=1e6,
-               relatedness_options={"loco_refit": False})
+               relatedness_options={**rnd, "loco_refit": False})
     assert forced.extra["loco_refit"] is True
     assert off.extra["loco_refit"] is False
     np.testing.assert_allclose(kap.f_stat, forced.f_stat, rtol=1e-10)

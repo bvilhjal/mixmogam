@@ -17,14 +17,18 @@ kappa_g = 1 + w_g' offdiag(r) w_g / |w_g|^2. Dividing U by kappa_g is the
 retrospective variance of MASTOR (Jakobsdottir & McPeek 2013) reduced to one
 factor per LOCO group; it replaces lambda.
 
-``"vc"``: a second variance component. Cov(w_g) = s_e I + s_f R with s_f, s_e
-moment-estimated from the pairs (Haseman-Elston on w_g), and the GLS score
-test chi2 = (z'P w_g)^2 / (z'P z), P = V^-1 - V^-1 Q (Q'V^-1 Q)^-1 Q'V^-1
-(fastGWA-like; Jiang et al. 2019). ``denominator="exact"`` computes z'P z per
-variant with the block-diagonal V^-1 (one dense inverse per related
-cluster); ``"gamma"`` uses gamma_g z'(I - QQ')z with gamma_g the mean ratio
-over random calibration variants (GRAMMAR-Gamma style; Svishcheva et al.
-2012), which costs nothing per variant.
+``"gls"``: a second variance component. Cov(w_g) = s_e I + s_f R with s_f,
+s_e moment-estimated from the pairs (Haseman-Elston on w_g), and the GLS
+score z'P w_g = z'b_g, P = V^-1 - V^-1 Q (Q'V^-1 Q)^-1 Q'V^-1 (fastGWA-like;
+Jiang et al. 2019), with effect z'P w_g / z'P z. Its variance is by default
+the retrospective one, sigma^2 b_g' R b_g with sigma^2 = z'z c_X / n_eff (as
+for kappa; MASTOR's construction), which holds whatever the phenotype
+distribution (``gls_variance="retrospective"``); ``"prospective"`` uses
+z'P z, valid only when the fitted covariance is right. ``denominator="exact"``
+computes z'P z per variant with the block-diagonal V^-1 (one dense inverse
+per related cluster); ``"gamma"`` uses gamma_g z'(I - QQ')z with gamma_g the
+mean ratio over random calibration variants (GRAMMAR-Gamma style;
+Svishcheva et al. 2012), which costs nothing per variant.
 """
 
 from __future__ import annotations
@@ -298,7 +302,8 @@ RELATEDNESS_OPTIONS = {"denominator": "exact", "n_gamma": 1000, "max_cluster": 5
                        "unrelated_min_phi": KING_THIRD_DEGREE, "unrelated_min_n": 100,
                        "king_max_abs_f": 0.5, "kinship_variants": None,
                        "kinship_max_model_overlap": 0.1, "structure_without_pcs": "warn",
-                       "loco_refit_min_related": 0.01, "crossfit_folds": "random",
+                       "loco_refit_min_related": 0.01, "crossfit_folds": "family",
+                       "gls_variance": "retrospective",
                        "carrier_families_p": 1e-4, "carrier_families_max": 3,
                        "carrier_families_max_maf": 0.05}
 
@@ -555,8 +560,10 @@ def _king_noise_scale(phi_r, n_variants=None):
     gates passed under LD (n_variants is not m_eff) and underestimated
     σ on unbalanced two-population panels. A two-population mixture
     still inflates the MAD (up to ~2.3× within-population, and more
-    with K ≥ 3), so the 4-SD floor can sit above 0.0625 or 0.125 and
-    drop 3rd- or 2nd-degree pairs from Phi. ``relatedness='auto'`` is
+    with K ≥ 3), so the 4-SD floor can sit above 0.0625, 0.125 or even
+    0.25 and drop 3rd-degree, 2nd-degree or full-sib pairs from Phi (two
+    populations at F_ST 0.08: floor 0.24-0.26 in a 16 November review
+    simulation). ``relatedness='auto'`` is
     reliable without population structure; under structure supply a
     pedigree or pairs (e.g. KING run within ancestry groups).
 
@@ -1094,8 +1101,10 @@ def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact
               gamma=None, cache=None) -> dict:
     """Fix (b): GLS score tests of every variant of ``lg`` against its group's
     column of the projected LOCO residuals ``Wp`` under Cov(w_g) = s_e I + s_f R
-    (see the module docstring). Returns chi2, num (z'P w), den (z'P z) and the
-    per-group fits.
+    (see the module docstring). Returns chi2 (the prospective num^2 / den),
+    num (z'P w), den (z'P z), ``bphib`` (b_g' Phi b_g per group, b_g = P w_g,
+    Phi = I + offdiag(r): the retrospective variance of num is
+    sigma_z^2 b_g' Phi b_g) and the per-group fits.
 
     ``s_f``/``s_e``: the fitted variance components, if already computed
     (:meth:`Relatedness.family_vc` of ``Wp``). ``gamma``: the ``"gamma"``
@@ -1134,4 +1143,11 @@ def gls_stats(lg, Wp: np.ndarray, rel: Relatedness, *, denominator: str = "exact
     with np.errstate(divide="ignore", invalid="ignore"):
         chi2 = num * num / den
     chi2[~(den > 0)] = np.nan
-    return {"chi2": chi2, "num": num, "den": den, "s_f": sf, "s_e": se, "gamma": gamma}
+    if cache is not None and "gls_bphib" in cache:
+        bphib = cache["gls_bphib"]
+    else:
+        bphib = np.einsum("ij,ij->j", b, b) + rel.quad(b)
+        if cache is not None:
+            cache["gls_bphib"] = bphib
+    return {"chi2": chi2, "num": num, "den": den, "bphib": bphib, "s_f": sf, "s_e": se,
+            "gamma": gamma}
