@@ -7,7 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-Version 2.3.0.dev1. The 16 November research review
+## [2.3.0.dev2] - 2026-11-17
+
+### Fixed
+
+- Center validated kernels before EMMAX scaling in `fit_two_kinships`, also
+  used by `scan_gxe(polygenic_gxe=True)`. Scaling alone could make valid
+  continuous-environment interaction kernels indefinite and reject the fit.
+  Raw indefinite kernels still fail. With the fitted intercept, centering
+  preserves REML's projected covariance; ML uses centered kernels too and
+  can change. Caller arrays and standalone `scale_k` are unchanged.
+
+## [2.3.0.dev1] - 2026-11-16
+
+The 16 November research review
 ([docs/review-2026-11-16.md](docs/review-2026-11-16.md)) found that HRATT
 effects with relatives were biased toward zero; the defaults below change
 results for analyses that pass `relatedness=`.

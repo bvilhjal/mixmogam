@@ -322,10 +322,12 @@ def fit_two_kinships(
     get_estimates_3 successor).
 
     Profile the weight in [0, 1], including either component alone, after
-    scaling both kinships to mean diagonal one and mean off-diagonal zero.
-    Both must be positive semidefinite after that scaling (checked first):
-    relationship matrices are, IBS similarity
-    (:func:`~mixmogam.kinship.ibs_kinship`) generally is not.
+    centering both kinships and scaling to mean diagonal one and mean
+    off-diagonal zero. Inputs must be positive semidefinite (checked before
+    centering). With the intercept always fitted here, centering preserves
+    the covariate-projected covariance used by REML and prevents scaling
+    from making a valid interaction kernel indefinite. ML uses the centered
+    covariance too; its likelihood need not equal an uncentered ML fit.
     The best grid interval is refined. Covariance components that cannot
     be distinguished after covariate adjustment raise ValueError.
     ``weight`` is None when the ordinary linear model wins (zero genetic
@@ -338,14 +340,27 @@ def fit_two_kinships(
     if (not isinstance(n_mixtures, (int, np.integer)) or n_mixtures < 3
             or not isinstance(refine_rounds, (int, np.integer)) or refine_rounds < 0):
         raise ValueError("n_mixtures must be >= 3 and refine_rounds >= 0")
-    K1, K2 = scale_k(K1), scale_k(K2)
     Xd = _design_matrix(X, y.size, True)
+    kinships = []
     # Eigenvalues are sufficient for the PSD gate; do not build and retain
     # two eigenvector matrices merely to discard them before the profile.
     for K in (K1, K2):
+        # Reuse LMM's shape, finiteness and symmetry checks. Its private copy
+        # permits in-place centering without modifying caller-owned kernels.
+        K = LMM(y, X=Xd, K=K, add_intercept=False, _validated_design=True).K
         values = linalg.eigvalsh(K, check_finite=False)
         if values[0] < -1e-7 * max(float(np.max(np.abs(values))), 1.0):
             raise ValueError("K must be positive semidefinite")
+        # H K H in O(n^2), without constructing H or multiplying dense
+        # matrices. For centered PSD K, scale_k adds a nonnegative multiple
+        # of 11' and divides by a positive scalar, hence preserves PSD.
+        row_mean = K.mean(axis=1)
+        K -= row_mean[:, None]
+        K -= row_mean[None, :]
+        K += row_mean.mean()
+        kinships.append(scale_k(K))
+    K1, K2 = kinships
+    del kinships, K, values, row_mean
     Q = linalg.qr(Xd, mode="economic")[0]
     projected = []
     for K in (K1, K2):

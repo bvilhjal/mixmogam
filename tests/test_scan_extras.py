@@ -88,6 +88,74 @@ def test_two_kinship_boundary_and_nonidentification():
             fit_two_kinships(y, K1, K)
 
 
+def _continuous_interaction_kernels():
+    from mixmogam.kinship import scale_k
+    rng = np.random.default_rng(1)
+    A = rng.normal(size=(40, 25))
+    A -= A.mean(axis=0)
+    K = scale_k(A @ A.T / 25)
+    E = rng.normal(size=40)
+    E -= E.mean()
+    y = 3 * A[:, 0] + 3 * E * A[:, 1] + rng.normal(size=40)
+    return rng, K, E[:, None] * K * E[None, :], E, y
+
+
+@pytest.mark.parametrize("method", ["reml", "ml"])
+def test_two_kinship_centers_before_scaling_valid_interaction_kernel(method):
+    from mixmogam.kinship import scale_k
+    _, K, KE, E, y = _continuous_interaction_kernels()
+    assert np.linalg.eigvalsh(KE)[0] > -1e-12
+    assert np.linalg.eigvalsh(scale_k(KE))[0] < -1e-4  # previous false rejection
+    originals = K.copy(), KE.copy()
+    H = np.eye(len(y)) - np.ones((len(y), len(y))) / len(y)
+    X = np.column_stack((np.ones(len(y)), E))
+    B = linalg.null_space(X.T)
+    # Independent matrix algebra: centering preserves residual contrasts,
+    # as does the scale denominator (tr(K) - sum(K)/n)/(n-1).
+    for kernel in (K, KE):
+        scale = (np.trace(kernel) - kernel.sum() / len(y)) / (len(y) - 1)
+        np.testing.assert_allclose(B.T @ scale_k(H @ kernel @ H) @ B,
+                                   B.T @ kernel @ B / scale, atol=2e-14)
+    opts = dict(X=E, method=method, n_mixtures=9, refine_rounds=1)
+    actual = fit_two_kinships(y, K, KE, **opts)
+    reference = fit_two_kinships(y, H @ K @ H, H @ KE @ H, **opts)
+    assert actual["ll"] == pytest.approx(reference["ll"], abs=1e-8)
+    np.testing.assert_allclose(actual["var_share"], reference["var_share"], atol=1e-7)
+    np.testing.assert_array_equal(K, originals[0])
+    np.testing.assert_array_equal(KE, originals[1])
+
+
+def test_two_kinship_rejects_indefinite_input_before_centering():
+    _, K, KE, E, y = _continuous_interaction_kernels()
+    # H K_bad H is PSD; centering must not hide the invalid input direction.
+    bad = K - 5 * np.ones_like(K) / len(y)
+    with pytest.raises(ValueError, match="positive semidefinite"):
+        fit_two_kinships(y, bad, KE, X=E)
+
+
+@pytest.mark.parametrize("kind", ["asymmetric", "shape", "nonfinite"])
+def test_two_kinship_validates_kernels_before_centering(kind):
+    _, K, KE, E, y = _continuous_interaction_kernels()
+    if kind == "asymmetric":
+        KE[0, 1] += .1
+    elif kind == "shape":
+        KE = KE[:-1, :-1]
+    else:
+        KE[0, 0] = np.nan
+    with pytest.raises(ValueError, match="symmetric|shape|finite"):
+        fit_two_kinships(y, K, KE, X=E)
+
+
+def test_continuous_polygenic_gxe_matches_direct_gls():
+    rng, K, _, E, y = _continuous_interaction_kernels()
+    gt = Genotypes(rng.binomial(2, .4, size=(len(y), 6)).astype(np.int8))
+    result = scan_gxe(LMM(y, X=E, K=K).fit(), gt, E, polygenic_gxe=True)
+    model = result["model"]
+    expected = [_gls_f(model, model.fit_result, [model.X, g, g * E], [model.X, g])
+                for g in gt.G.T.astype(float)]
+    np.testing.assert_allclose(result["ps"], expected, atol=1e-12, rtol=1e-10)
+
+
 def _gls_f(model, fit, cols_full, cols_null):
     """Direct GLS F test of the extra columns: whitened designs, two lstsq fits."""
     yw = model._apply_inv_sqrt(model.y, fit.delta, np.float64)

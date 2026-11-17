@@ -795,7 +795,11 @@ overall inflation under strong simulated structure.
 
 - **GxE**: the 1-df interaction test is conditional on the SNP main effect,
   with E among the covariates. `polygenic_gxe=True` adds a K * (EE') variance
-  component (Sul et al. 2016). `gwas_by_group` instead runs `gwas` in each of
+  component (Sul et al. 2016). Two-kernel fits validate the raw kernels, then
+  center them before EMMAX scaling. With an intercept this preserves REML's
+  projected covariance and prevents scaling from making valid interaction
+  kernels indefinite. ML also uses centered kernels; its likelihood can
+  change. `gwas_by_group` instead runs `gwas` in each of
   two groups, with variance components fitted per group, and tests b1 - b0
   as a difference of independent estimates. Without GxE its difference
   correlates 0.92 with the pooled interaction estimate under strong

@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-16-research-review-fixes",
+        "revision": "2026-11-17-kernel-centering",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -63,7 +63,10 @@ def main():
                            "relatives, two citations) and the PDF was rebuilt with Tectonic; its "
                            "package changes (family cross-fit folds by default, the retrospective "
                            "GLS variance, new warnings) are documented in README.md, docs/ and "
-                           "CHANGELOG.md, not re-benchmarked in the report."),
+                           "CHANGELOG.md, not re-benchmarked in the report. "
+                           "The 17 November kernel-centering correction (2.3.0.dev2) "
+                           "updates the package and hashed release metadata; the manuscript "
+                           "PDF and its benchmark evidence are unchanged."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

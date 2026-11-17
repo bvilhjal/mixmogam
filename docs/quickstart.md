@@ -552,6 +552,15 @@ after covariate adjustment. `weight=None` with zero shares means the ordinary
 linear model won, with zero genetic variance. The mixture profile does a dense
 eigensolve per candidate weight, so it is meant for small to moderate n.
 
+Input kernels are checked for symmetry, finiteness and positive
+semidefiniteness, then centered before EMMAX scaling. This prevents valid
+continuous-environment kernels `diag(E) @ K @ diag(E)` from becoming
+indefinite during scaling. An intercept is always fitted, so centering
+preserves REML's projected covariance. ML also uses centered kernels;
+its likelihood can differ from an uncentered ML fit. Centering costs
+O(n²) arithmetic without a dense centering matrix. It does not model
+environment-dependent residual variance.
+
 ## Command line
 
 `mixmogam gwas` and `mixmogam pca` (the `mixmogam` command; also
