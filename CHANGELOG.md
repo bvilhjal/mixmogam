@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0.dev3] - 2026-11-18
+
+### Changed
+
+- HRATT reuses identical GLS pair inverses and shares dosage norms across
+  traits with the same sample and covariate layout. At exactly zero prior SNP
+  variance, cross-fitted elastic-net HRATT computes hold-out errors directly
+  and reports zero Gram-cache requirements for the skipped fit.
+- BOLT-inf and HRATT contract calibration solves in small batches. Exact
+  EMMAX decodes variant-major calls one contiguous column at a time with
+  one thread and skips clearing the unused triangle of each Cholesky factor.
+
 ## [2.3.0.dev2] - 2026-11-17
 
 ### Fixed

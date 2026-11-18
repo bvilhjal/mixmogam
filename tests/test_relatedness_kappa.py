@@ -48,6 +48,34 @@ def test_kappa_and_cx_match_brute_force():
     assert abs(cx - (n - 2) / (n - np.trace(Q.T @ Phi @ Q))) < 1e-12
 
 
+@pytest.mark.parametrize("sf", [0.9, -0.5])
+def test_gls_inverse_reuses_identical_pairs_with_the_same_eigenvalue_floor(sf, monkeypatch):
+    from scipy import linalg
+
+    rel = Relatedness(11, [9, 1, 2, 3, 6], [0, 7, 8, 5, 5], [1.2, 1.2, -0.25, 0.5, 0.25])
+    se = 1.0 - sf
+    V = (se + sf) * np.eye(rel.n) + sf * rel.Koff.toarray()
+    expected = np.zeros_like(V)
+    for mem in ([0, 9], [1, 7], [2, 8], [3, 5, 6], [4], [10]):
+        ix = np.ix_(mem, mem)
+        block = V[ix]
+        shift = max(0.0, 1e-3 - np.linalg.eigvalsh(block)[0]) if len(mem) > 1 else 0.0
+        expected[ix] = np.linalg.inv(block + shift * np.eye(len(mem)))
+    invert = linalg.inv
+    sizes = []
+
+    def counted(block, *args, **kwargs):
+        sizes.append(block.shape[0])
+        return invert(block, *args, **kwargs)
+
+    monkeypatch.setattr(linalg, "inv", counted)
+    actual = rel.vinv(sf, se, max_cluster=3)
+    np.testing.assert_allclose(actual.toarray(), expected, rtol=1e-12, atol=0.0)
+    assert sizes == [2, 2, 3]
+    with pytest.raises(ValueError, match="3 samples"):
+        rel.vinv(sf, se, max_cluster=2)
+
+
 # 2. no pairs: kappa = 1 and p identical to correction 'none'
 def test_no_pairs_is_byte_identical_to_none(fam):
     G, gt, y, pairs, causal, sub = fam

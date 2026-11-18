@@ -135,8 +135,9 @@ class CholeskyREML:
         self._work.flat[:: self.n + 1] += math.exp(log_delta)
         self._work_at = None
         try:
-            L = linalg.cholesky(self._fortran_work(), lower=True, overwrite_a=True,
-                                check_finite=False)
+            # Only the lower triangle is used by the likelihood and the scan.
+            L, _ = linalg.cho_factor(self._fortran_work(), lower=True, overwrite_a=True,
+                                     check_finite=False)
         except np.linalg.LinAlgError:
             return None
         self._work_at = log_delta

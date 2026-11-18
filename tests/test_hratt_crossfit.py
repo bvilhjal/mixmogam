@@ -73,8 +73,26 @@ def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binar
         passes.append("all" if rows is None else "held")
         return predict(self, beta, rows=rows)
 
+    def no_fit(*args, **kwargs):
+        pytest.fail("the zero-variance prior fixes every effect at zero")
+
     monkeypatch.setattr(VBEngine, "predict", counted)
+    if mode == "zero_h2":
+        monkeypatch.setattr(VBEngine, "fit", no_fit)
     actual = twostep._hratt_fit_scores(*args, **kwargs)
+    if mode == "zero_h2":
+        G = st.lg.n_groups
+        assert not passes
+        assert actual["cv_converged"] and actual["best"] == 0
+        assert actual["loco_converged"] and actual["loco_iterations"] == 0 and not actual["refit"]
+        assert actual["gram_cache"]["cv"]["required_bytes"] == 0
+        np.testing.assert_allclose(actual["mse"], np.mean(ys[held] ** 2), rtol=1e-15, atol=0.0)
+        np.testing.assert_array_equal(actual["resid"], np.repeat(ys[:, None], G, axis=1))
+        np.testing.assert_array_equal(actual["offset_slope"], np.zeros(G))
+        if binary:
+            np.testing.assert_array_equal(actual["prediction"], np.zeros((n, G)))
+        return
+
     # The hold-out error decodes only the held-out samples; full predictions
     # remain where their values are used (in-sample and refitted scores).
     assert passes == ["held"] + (["held"] * 3 if mode == "refit" else
@@ -101,7 +119,7 @@ def test_scores_skip_only_the_discarded_full_prediction(monkeypatch, mode, binar
     monkeypatch.setattr(VBEngine, "fit", full_fit)
     monkeypatch.setattr(VBEngine, "predict", full_predict)
     expected = twostep._hratt_fit_scores(*args, **kwargs)
-    assert len(passes) == (6 if mode == "refit" else 2 if mode == "zero_h2" else 3)
+    assert len(passes) == (6 if mode == "refit" else 3)
     assert actual.keys() == expected.keys()
     for key in actual:
         if isinstance(actual[key], dict):

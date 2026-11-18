@@ -107,7 +107,8 @@ def test_bolt_inf_computes_one_basis(count_bases):
     assert np.isfinite(res.p).sum() > 100
 
 
-def test_batched_calibration_matches_dense_solves(monkeypatch):
+@pytest.mark.parametrize("n_cal", [1, 9, 10])
+def test_batched_calibration_matches_dense_solves(n_cal, monkeypatch):
     gt, y = _data(seed=5, n=90, m=160)
     seen = {}
     original = twostep._calibrate_inf
@@ -118,9 +119,9 @@ def test_batched_calibration_matches_dense_solves(monkeypatch):
         return cal
 
     monkeypatch.setattr(twostep, "_calibrate_inf", spy)
-    twostep.bolt_inf(y, gt, n_calibration=10, random_state=4, block=64, cg_tol=1e-10)
+    twostep.bolt_inf(y, gt, n_calibration=n_cal, random_state=4, block=64, cg_tol=1e-10)
     st, cal, rs = seen["st"], seen["cal"], seen["rs"]
-    assert (rs["chi2"][cal["snps"]] < 5).all() and len(cal["snps"]) == 10
+    assert (rs["chi2"][cal["snps"]] < 5).all() and len(cal["snps"]) == n_cal
     Z = st.lg.rows(np.arange(st.lg.m))
     for j, d in zip(cal["snps"], cal["d_prosp"]):
         other = st.lg.groups != st.lg.groups[j]

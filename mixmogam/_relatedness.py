@@ -66,6 +66,13 @@ def dropped_degree(floor: float) -> str:
     return ""
 
 
+def _floored_inverse(V: np.ndarray, floor: float) -> np.ndarray:
+    lo = linalg.eigvalsh(V).min()
+    if lo < floor:
+        V += (floor - lo) * np.eye(V.shape[0])
+    return linalg.inv(V)
+
+
 class Relatedness:
     """Off-diagonal relatedness r_ij = 2 phi_ij of related sample pairs.
 
@@ -146,30 +153,42 @@ class Relatedness:
         return sf, tot - sf
 
     def vinv(self, sf: float, se: float, max_cluster: int = 5000) -> sparse.csr_matrix:
-        """Block-diagonal (s_e I + s_f R)^-1, one dense inverse per cluster."""
+        """Block-diagonal (s_e I + s_f R)^-1, sharing identical pair blocks."""
         if self.cluster_sizes.max(initial=1) > max_cluster:
             raise ValueError(f"a related cluster has {int(self.cluster_sizes.max()):,} samples "
                              f"(> {max_cluster:,}); use denominator='gamma' or a stricter threshold")
-        order = np.argsort(self.labels, kind="stable")
-        bounds = np.r_[0, np.flatnonzero(np.diff(self.labels[order])) + 1, self.n]
-        rows, cols, vals = [], [], []
-        single = []
-        for a, b in zip(bounds[:-1], bounds[1:]):
-            mem = order[a:b]
-            if mem.size == 1:
-                single.append(mem[0])
-                continue
-            V = (se + sf) * np.eye(mem.size) + sf * self.Koff[mem][:, mem].toarray()
-            ev = linalg.eigvalsh(V)
-            floor = 1e-3 * (se + sf if se + sf > 0 else 1.0)
-            if ev.min() < floor:
-                V += (floor - ev.min()) * np.eye(mem.size)
-            Vi = linalg.inv(V)
-            rr, cc = np.meshgrid(mem, mem, indexing="ij")
-            rows.append(rr.ravel()); cols.append(cc.ravel()); vals.append(Vi.ravel())
-        if single:
-            s = np.asarray(single)
-            rows.append(s); cols.append(s); vals.append(np.full(s.size, 1.0 / (se + sf)))
+        total = se + sf
+        floor = 1e-3 * (total if total > 0 else 1.0)
+        size = self.cluster_sizes[self.labels]
+        single = np.flatnonzero(size == 1)
+        rows, cols = [single], [single]
+        vals = [np.full(single.size, 1.0 / total) if single.size else np.empty(0)]
+
+        pair_samples = np.flatnonzero(size == 2)
+        if pair_samples.size:
+            # Each two-sample component contributes one upper-triangle edge.
+            pairs = self.upper[pair_samples].tocoo()
+            i, j = pair_samples[pairs.row], pairs.col
+            values, which = np.unique(pairs.data, return_inverse=True)
+            inverses = np.empty((values.size, 2, 2))
+            diag = total * np.eye(2)
+            for k, r in enumerate(values):
+                inverses[k] = _floored_inverse(diag + sf * np.array([[0.0, r], [r, 0.0]]), floor)
+            rows.extend((i, i, j, j))
+            cols.extend((i, j, i, j))
+            vals.extend(inverses[which, a, b] for a, b in ((0, 0), (0, 1), (1, 0), (1, 1)))
+
+        large = np.flatnonzero(size > 2)
+        if large.size:
+            order = large[np.argsort(self.labels[large], kind="stable")]
+            bounds = np.flatnonzero(np.diff(self.labels[order])) + 1
+            for mem in np.split(order, bounds):
+                V = total * np.eye(mem.size) + sf * self.Koff[mem][:, mem].toarray()
+                Vi = _floored_inverse(V, floor)
+                rr, cc = np.meshgrid(mem, mem, indexing="ij")
+                rows.append(rr.ravel())
+                cols.append(cc.ravel())
+                vals.append(Vi.ravel())
         return sparse.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
                                  shape=(self.n, self.n))
 

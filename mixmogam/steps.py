@@ -384,11 +384,17 @@ class _Runner:
             out = [None] * len(self.fits)
             for h, members in enumerate(self.shared):
                 rows = index[h]
-                D = np.array(dos.values[:, a:b] if rows is None else dos.values[rows, a:b],
-                             dtype=np.float64)
+                if rows is None:
+                    D = np.array(dos.values[:, a:b], dtype=np.float64)
+                else:
+                    # Row selection already owns its buffer.
+                    D = dos.values[rows, a:b].astype(np.float64, copy=False)
                 mean, sd = _standardize_dosages(D)
+                groups = groups_all[h][a:b]
+                zz = _dosage_norms(D, self.fits[members[0]]._panel["Q"])
+                bounds = np.r_[0, np.flatnonzero(groups[1:] != groups[:-1]) + 1, groups.size]
                 for k in members:
-                    out[k] = _dosage_test(self.fits[k], D, mean, sd, groups_all[h][a:b], meta,
+                    out[k] = _dosage_test(self.fits[k], D, mean, sd, zz, groups, bounds, meta,
                                           self.caches[k])
                 del D
             yield out
@@ -408,7 +414,29 @@ def _standardize_dosages(D: np.ndarray):
     return mean, sd
 
 
-def _dosage_test(fit: HrattStep1, Z: np.ndarray, mean, sd, groups, meta, cache) -> GwasResult:
+def _dosage_norms(Z: np.ndarray, Q: np.ndarray) -> np.ndarray:
+    C = Z.T @ Q
+    return np.einsum("ij,ij->j", Z, Z) - np.einsum("ij,ij->i", C, C)
+
+
+def _dosage_scores(Z: np.ndarray, Wp: np.ndarray, groups, bounds) -> np.ndarray:
+    """Dot each dosage column with its LOCO residual."""
+    num = np.empty(groups.size)
+    if bounds.size - 1 <= 2 * Wp.shape[1]:
+        for lo, hi in zip(bounds[:-1], bounds[1:]):
+            w = np.ascontiguousarray(Wp[:, groups[lo]])
+            np.einsum("ij,i->j", Z[:, lo:hi], w, out=num[lo:hi])
+    else:
+        # Interleaved chromosomes can leave hundreds of tiny runs. Gather
+        # their residuals in tiles of at most 8 MiB, or one column.
+        width = max(1, (8 * 1024**2) // Wp[:, 0].nbytes)
+        for lo in range(0, groups.size, width):
+            hi = min(lo + width, groups.size)
+            np.einsum("ij,ij->j", Z[:, lo:hi], Wp[:, groups[lo:hi]], out=num[lo:hi])
+    return num
+
+
+def _dosage_test(fit: HrattStep1, Z: np.ndarray, mean, sd, zz, groups, bounds, meta, cache) -> GwasResult:
     """Step 2 of an unweighted quantitative trait for standardized dosage
     rows ``Z`` (n, k): the statistics of :func:`mixmogam.twostep._hratt_test`
     with the values in place of decoded calls."""
@@ -422,9 +450,7 @@ def _dosage_test(fit: HrattStep1, Z: np.ndarray, mean, sd, groups, meta, cache) 
     if "wn" not in cache:
         cache["wn"] = np.einsum("ij,ij->j", state["resid"], state["resid"])
     Wp, wn = cache["Wp"], cache["wn"]
-    C = Z.T @ Q
-    zz = np.einsum("ij,ij->j", Z, Z) - np.einsum("ij,ij->i", C, C)
-    num = np.einsum("ij,ij->j", Z, Wp[:, groups])
+    num = _dosage_scores(Z, Wp, groups, bounds)
     with np.errstate(divide="ignore", invalid="ignore"):
         U = setup.n_eff * num * num / (zz * wn[groups])
     U[~(zz > 0)] = np.nan

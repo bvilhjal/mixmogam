@@ -278,6 +278,46 @@ def test_integer_dosages_give_the_hard_call_statistics(data):
         hratt_step2(binary, dos)
 
 
+def test_interleaved_dosage_tests_share_norms_and_keep_trait_specific_scores(data, monkeypatch):
+    from mixmogam import steps
+
+    _, gt, y, X = data
+    rng = np.random.default_rng(41)
+    pairs = (np.arange(0, 60, 2), np.arange(1, 61, 2), np.full(30, 0.5))
+    fits = [hratt_step1(y, gt, X), hratt_step1(y + rng.normal(size=N), gt, X, relatedness=pairs)]
+    picks = (np.arange(16)[:, None] + np.arange(4) * (M // 4)).ravel()
+    rows = rng.permutation(N)
+    D = rng.uniform(0.0, 2.0, size=(N, picks.size))
+    D[::5, ::3] = np.nan
+    D[:, 2], D[:, 5] = np.nan, 1.0
+    dos = Dosages(D[rows], gt.sample_ids[rows], gt.chromosome[picks], variant_ids=gt.variant_ids[picks])
+
+    def dense_scores(Z, Wp, groups, bounds):
+        return np.einsum("ij,ij->j", Z, Wp[:, groups])
+
+    with monkeypatch.context() as mp:
+        mp.setattr(steps, "_dosage_scores", dense_scores)
+        reference = [hratt_step2(fit, dos) for fit in fits]
+
+    norms = steps._dosage_norms
+    blocks = []
+
+    def count_norms(Z, Q):
+        blocks.append(Z.shape)
+        return norms(Z, Q)
+
+    monkeypatch.setattr(steps, "_dosage_norms", count_norms)
+    got = hratt_step2(fits, dos)
+    assert blocks == [D.shape]
+    np.testing.assert_array_equal(dos.values, D[rows])
+    for observed, expected in zip(got, reference):
+        for field in ("p", "f_stat", "beta", "se", "af"):
+            np.testing.assert_allclose(getattr(observed, field), getattr(expected, field),
+                                       rtol=1e-12, atol=1e-14, err_msg=field)
+        np.testing.assert_array_equal(observed.variant_ids, dos.variant_ids)
+        assert np.isnan(observed.p[[2, 5]]).all()
+
+
 def test_step2_rejects_unknown_chromosomes_missing_samples_and_spectral(data):
     G, gt, y, X = data
     step1 = hratt_step1(y, gt, X)

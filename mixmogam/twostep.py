@@ -542,6 +542,20 @@ def _solve_with_calibration(st: _Setup, delta: float, rhs: np.ndarray, col_group
     return X[:, :r], {"cand": cand, "Z": Zc, "V": X[:, r:]}, info
 
 
+def _calibration_quadratics(Z: np.ndarray, V: np.ndarray, keep: np.ndarray) -> np.ndarray:
+    """Contract up to three accepted rows and their solves at a time."""
+    quad = np.empty(keep.size)
+    lo = 0
+    while lo < keep.size:
+        hi = min(lo + 2, keep.size)
+        if hi + 1 == keep.size:
+            hi += 1  # keep the final row in the same multi-row contraction
+        ix = keep[lo:hi]
+        quad[lo:hi] = np.einsum("ij,ji->i", Z[ix], np.asfortranarray(V[:, ix]))
+        lo = hi
+    return quad
+
+
 def _calibrate_inf(st: _Setup, vg: float, delta: float, rs: dict, n_cal: int, rng,
                    drawn: dict, weights=None, pre=None, tol: float = 1e-6) -> dict:
     """BOLT-LMM-inf calibration constant from exact prospective statistics.
@@ -561,17 +575,19 @@ def _calibrate_inf(st: _Setup, vg: float, delta: float, rs: dict, n_cal: int, rn
         raise ValueError("calibration needs polymorphic SNPs outside the covariate span")
     cand, Zc, V = drawn["cand"], drawn["Z"], drawn["V"]
     keep = np.nonzero(qualifies[cand])[0][:n_cal]
-    sel, Zsel, Vsel = cand[keep], Zc[keep], V[:, keep]
+    sel = cand[keep]
+    quad = _calibration_quadratics(Zc, V, keep)
     short = min(n_cal, int(qualifies.sum())) - sel.size
     if short > 0:
         rest = np.setdiff1d(np.nonzero(qualifies)[0], cand)
         extra = rng.choice(rest, size=min(short, rest.size), replace=False)
         Ze = st.lg.rows(extra)
         Ve, _ = _loco_solve(st, delta, Ze.T, st.lg.groups[extra], weights=weights, tol=tol, pre=pre)
-        sel, Zsel, Vsel = np.r_[sel, extra], np.vstack([Zsel, Ze]), np.hstack([Vsel, Ve])
+        sel = np.r_[sel, extra]
+        quad = np.r_[quad, _calibration_quadratics(Ze, Ve, np.arange(extra.size))]
     order = np.argsort(sel)
-    sel, Zsel, Vsel = sel[order], Zsel[order], Vsel[:, order]
-    d_prosp = vg * np.einsum("ij,ji->i", Zsel, Vsel)
+    sel = sel[order]
+    d_prosp = vg * quad[order]
     d_retro = rs["zz"][sel] / st.n_eff * rs["wnorm2"][sel]
     ratio = d_prosp / d_retro
     c = float(np.mean(ratio))
@@ -2832,7 +2848,7 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     coefficient kept in [0, 1] (``offset_slope``: its out-of-fold
     calibration slope, which shrinks an over-dispersed score but never
     undoes the prior's shrinkage). Without polygenic variance (all ``h2j``
-    zero) there are no scores.
+    zero) every cross-fitted score and every hold-out prediction is zero.
     """
     n, G = st.lg.n, st.lg.n_groups
 
@@ -2852,17 +2868,28 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
                             gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
         _prepare_crossfit_grams(eng, crossfit)
     Pn = len(grid)
-    prior = np.array([prior_row(*g_) for g_ in grid])
-    cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
-                 np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
-                 max_iter=vb_max_iter, tol=vb_tol if cv_tol is None else cv_tol,
-                 _compute_prediction=False)
-    # Only the held-out fitted values are needed: decode just those samples.
-    mse = np.mean((ys[held, None] - eng.predict(cv["beta"], rows=held)) ** 2, axis=0)
+    prior = np.array([prior_row(*g_) for g_ in grid], dtype=np.float64)
+    tol = vb_tol if cv_tol is None else cv_tol
+    if (folds is not None and crossfit is None and Pn and tol > 0
+            and isinstance(vb_max_iter, (int, np.integer)) and vb_max_iter > 0
+            and np.all(h2j == 0.0)):
+        # Every effect is fixed at zero by the prior. Reduce the prediction
+        # errors in the same layout as with a fitted grid.
+        mse = np.mean(np.repeat(ys[held, None], Pn, axis=1) ** 2, axis=0)
+        cv_converged = True
+        gram_cache = {"cv": {"budget_bytes": float(gram_cache_bytes), "required_bytes": 0,
+                             "total_blocks": 0, "cached_blocks": 0, "retained_bytes": 0,
+                             "cached_blocks_before_sweeps": 0, "sweep_gram_builds": 0}}
+    else:
+        cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
+                     np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
+                     max_iter=vb_max_iter, tol=tol, _compute_prediction=False)
+        # Only the held-out fitted values are needed: decode just those samples.
+        mse = np.mean((ys[held, None] - eng.predict(cv["beta"], rows=held)) ** 2, axis=0)
+        cv_converged = cv["converged"]
+        gram_cache = {"cv": cv["gram_cache"]}
+        del cv  # the (m, grid) effects and (n, grid) mask are not needed again
     best = int(np.argmin(mse))
-    cv_converged = cv["converged"]
-    gram_cache = {"cv": cv["gram_cache"]}
-    del cv  # the (m, grid) effects and (n, grid) mask are not needed again
 
     # (1e) LOCO elastic-net scores
     if folds is None:

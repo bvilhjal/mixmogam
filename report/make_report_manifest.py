@@ -39,7 +39,7 @@ def main():
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     manifest = {
-        "revision": "2026-11-17-kernel-centering",
+        "revision": "2026-11-18-efficiency",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -66,7 +66,9 @@ def main():
                            "CHANGELOG.md, not re-benchmarked in the report. "
                            "The 17 November kernel-centering correction (2.3.0.dev2) "
                            "updates the package and hashed release metadata; the manuscript "
-                           "PDF and its benchmark evidence are unchanged."),
+                           "PDF and its benchmark evidence are unchanged. "
+                           "CHANGELOG.md records the 18 November efficiency updates "
+                           "(2.3.0.dev3)."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

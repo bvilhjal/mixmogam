@@ -144,28 +144,35 @@ if HAS_NUMBA:
                             if g[i, j] == -1:
                                 out[j, i] = fill
 
+    @njit(cache=True, inline="always")
+    def _convert_mean_zero_column(g, out, zero_fill, j):
+        n = g.shape[0]
+        total = 0.0
+        count = 0
+        for i in range(n):
+            v = g[i, j]
+            if v != -1:
+                out[j, i] = v
+                total += v
+                count += 1
+            else:
+                out[j, i] = 0.0
+        if not zero_fill and count > 0:
+            fill = total / count
+            if fill != 0.0:
+                for i in range(n):
+                    if g[i, j] == -1:
+                        out[j, i] = fill
+
+    @njit(cache=True)
+    def _convert_mean_zero_columns_serial(g, out, zero_fill):
+        for j in range(g.shape[1]):
+            _convert_mean_zero_column(g, out, zero_fill, j)
+
     @njit(parallel=True, cache=True)
-    def _convert_mean_zero_columns(g: np.ndarray, out: np.ndarray, zero_fill: bool) -> None:
-        """:func:`_convert_mean_zero` with variants in parallel; exact integer
-        sums make the fill values, and so the output, identical."""
-        n, k = g.shape
-        for j in prange(k):
-            total = 0.0
-            count = 0
-            for i in range(n):
-                v = g[i, j]
-                if v != -1:
-                    out[j, i] = v
-                    total += v
-                    count += 1
-                else:
-                    out[j, i] = 0.0
-            if not zero_fill and count > 0:
-                fill = total / count
-                if fill != 0.0:
-                    for i in range(n):
-                        if g[i, j] == -1:
-                            out[j, i] = fill
+    def _convert_mean_zero_columns(g, out, zero_fill):
+        for j in prange(g.shape[1]):
+            _convert_mean_zero_column(g, out, zero_fill, j)
 
     def convert_block(g_int8: np.ndarray, dtype, impute: str, n_threads: int = 1) -> np.ndarray:
         """(n, k) int8 calls -> (k, n) ``dtype`` block with no-calls set by
@@ -177,6 +184,8 @@ if HAS_NUMBA:
             from mixmogam._vb import _numba_thread_limit
             with _numba_thread_limit(min(n_threads, max(g_int8.shape[1], 1))):
                 _convert_mean_zero_columns(g_int8, out, impute == "zero")
+        elif g_int8.strides[0] == g_int8.itemsize:
+            _convert_mean_zero_columns_serial(g_int8, out, impute == "zero")
         else:
             _convert_mean_zero(g_int8, out, impute == "zero")
         return out

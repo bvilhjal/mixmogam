@@ -48,11 +48,13 @@ def test_fused_standardization_matches_numpy(dtype, threads):
 @needs_numba
 @pytest.mark.numba
 @pytest.mark.parametrize("impute", ["mean", "zero"])
-def test_parallel_block_conversion_is_identical(impute):
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_parallel_block_conversion_is_identical(impute, dtype):
     _require_numba_threads(2)
     g = _calls(seed=4)
-    np.testing.assert_array_equal(convert_block(g, np.float32, impute, n_threads=2),
-                                  convert_block(g, np.float32, impute))
+    serial = convert_block(g, dtype, impute)
+    np.testing.assert_array_equal(serial, convert_block(np.ascontiguousarray(g), dtype, impute))
+    np.testing.assert_array_equal(serial, convert_block(g, dtype, impute, n_threads=2))
 
 
 @pytest.fixture(scope="module")
