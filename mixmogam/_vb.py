@@ -27,6 +27,7 @@ from contextlib import contextmanager, ExitStack
 from itertools import islice
 import math
 import os
+import tempfile
 import threading
 from typing import Optional
 import warnings
@@ -605,6 +606,51 @@ def _spinning_workers():
         put(previous)
 
 
+class _GramStore:
+    """Keep a prefix of blocks in RAM and optionally spool the rest, once.
+
+    Write before mapping so a full disk raises a write error during preparation.
+    Array views own the one read-only mapping after the temporary file closes.
+    """
+
+    def __init__(self, ram_blocks, directory):
+        self.ram_blocks = ram_blocks
+        self.directory = directory
+        self.grams, self.coefs, self.on_disk = [], [], []
+        self.file = None
+
+    def append(self, pair):
+        if len(self.grams) < self.ram_blocks:
+            self.grams.append(pair[0])
+            self.coefs.append(pair[1])
+            return
+        if self.file is None:
+            self.file = tempfile.TemporaryFile(dir=self.directory)
+        for array in pair:
+            # Both storage precisions and float64 coefficients stay aligned.
+            self.file.write(bytes(-self.file.tell() % 8))
+            self.on_disk.append((self.file.tell(), array.shape, array.dtype))
+            if array.size:
+                self.file.write(memoryview(np.ascontiguousarray(array)).cast("B"))
+
+    def install(self, engine):
+        disk_bytes = 0
+        if self.file is not None:
+            self.file.flush()
+            mapping = np.memmap(self.file, mode="r", dtype=np.uint8)
+            for j, (offset, shape, dtype) in enumerate(self.on_disk):
+                a = np.ndarray(shape, dtype=dtype, buffer=mapping, offset=offset)
+                (self.grams if j % 2 == 0 else self.coefs).append(a)
+                disk_bytes += a.nbytes
+        engine._disk_bytes = disk_bytes
+        if self.grams:
+            engine._grams, engine._coefs = self.grams, self.coefs
+
+    def close(self):
+        if self.file is not None:
+            self.file.close()
+
+
 class VBEngine:
     """Many Bayesian linear regressions on the same genotype blocks.
 
@@ -619,11 +665,13 @@ class VBEngine:
     gram_cache_bytes : budget for cached per-block Gram matrices (full and
         requested folds, as packed upper triangles in the genotype storage
         precision, with their float64 covariate coefficients). Sub-blocks
-        are cached in order while they fit; the rest are recomputed every
-        sweep, for the folds that fit uses. A later full-data fit reuses the
+        are cached in order while they fit in RAM. A later full-data fit reuses the
         Grams prepared during cross-validation. HRATT's hold-out and
         cross-fitted engines share one budget instead
         (:func:`_prepare_crossfit_grams`).
+    gram_cache_dir : optional existing scratch directory. Overflow blocks
+        are mapped from a temporary file for this fit. With the default
+        None, each sweep recomputes the overflow blocks it needs.
     n_threads : positive integer, default 1
         Numba workers for SNP coordinate sweeps across independent model
         columns. Residual updates and norm reductions remain serial. More
@@ -641,7 +689,7 @@ class VBEngine:
 
     def __init__(self, lg, folds: Optional[np.ndarray] = None, sub_block: int = 128,
                  gram_cache_bytes: float = 1e9, n_threads: int = 1,
-                 _warn_on_partial: bool = False):
+                 _warn_on_partial: bool = False, gram_cache_dir=None):
         self.n_threads = _validate_n_threads(n_threads)
         if not np.isfinite(gram_cache_bytes) or gram_cache_bytes < 0:
             raise ValueError("gram_cache_bytes must be finite and non-negative")
@@ -651,6 +699,8 @@ class VBEngine:
         self.folds = None if folds is None else np.asarray(folds, dtype=np.int64)
         self.n_folds = 0 if self.folds is None else int(self.folds.max()) + 1
         self.gram_cache_bytes = gram_cache_bytes
+        self.gram_cache_dir = gram_cache_dir
+        self._disk_bytes = 0
         self._grams = self._coefs = None
         self._gram_folds = np.empty(0, dtype=np.int64)
         # Whether Gram slot 0 (all samples) is stored; HRATT's joint
@@ -677,6 +727,8 @@ class VBEngine:
                 "cached_blocks": len(self._grams or []),
                 "retained_bytes": sum(g.nbytes + c.nbytes for g, c in
                                       zip(self._grams or [], self._coefs or []))}
+        info["disk_bytes"] = self._disk_bytes
+        info["ram_bytes"] = info["retained_bytes"] - self._disk_bytes
         if self._joint_required_bytes is not None:
             info["joint_required_bytes"] = self._joint_required_bytes
         return info
@@ -684,8 +736,8 @@ class VBEngine:
     def _prepare_grams(self, col_fold):
         """Prepare only the row subsets used by this fit; full data is slot 0.
 
-        Sub-blocks are cached in order while their Grams fit the budget; the
-        remainder are recomputed in each sweep (see :meth:`fit`). An engine
+        Sub-blocks fill the RAM budget in order. The remainder are mapped
+        when a scratch directory is configured, or rebuilt each sweep. An engine
         prepared without slot 0 stores it from the first fit that needs it.
         """
         needed = np.unique(col_fold[col_fold >= 0])
@@ -701,7 +753,7 @@ class VBEngine:
             count = int(np.searchsorted(np.cumsum(sizes), self.gram_cache_bytes, side="right"))
             # Report the cache requirement before the expensive preparation,
             # and never decode a block which cannot be retained.
-            if (self._warn_on_partial and not self._cache_warned
+            if (self.gram_cache_dir is None and self._warn_on_partial and not self._cache_warned
                     and self.gram_cache_bytes > 0 and count < sizes.size):
                 warnings.warn(
                     f"VB Gram cache holds {count} of {sizes.size} sub-blocks; "
@@ -710,16 +762,15 @@ class VBEngine:
                     f"full cache needs {int(sizes.sum())} bytes) if memory permits.",
                     RuntimeWarning, stacklevel=3)
                 self._cache_warned = True
-            grams, coefs = [], []
+            store = _GramStore(count, self.gram_cache_dir)
+            n_build = sizes.size if self.gram_cache_dir is not None else count
             try:
-                for idx, _, Zs in islice(self._subblocks(), count):
-                    G, C = self._gram(Zs, idx, needed)
-                    grams.append(G)
-                    coefs.append(C)
+                for idx, _, Zs in islice(self._subblocks(), n_build):
+                    store.append(self._gram(Zs, idx, needed))
+                store.install(self)
             finally:
+                store.close()
                 self._scratch.clear()
-            if grams:
-                self._grams, self._coefs = grams, coefs
         # Without cached Grams use only this fit's folds, including none for LOCO.
         active = self._gram_folds if self._grams is not None else needed
         gidx = np.zeros(col_fold.size, dtype=np.int64)
@@ -1242,7 +1293,7 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
         n_fit = int(np.searchsorted(fit_bytes, budget - cv_bytes[-1], side="right"))
     required = int(cv_bytes[-1] + fit_bytes[-1]) if sizes.size else 0
     cv._joint_required_bytes = crossfit._joint_required_bytes = required
-    if crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
+    if crossfit.gram_cache_dir is None and crossfit._warn_on_partial and budget > 0 and n_fit < sizes.size:
         warnings.warn(
             f"VB Gram cache holds {n_cv} of {sizes.size} sub-blocks for the hold-out fit and "
             f"{n_fit} for the cross-fitted fits; uncached blocks are recomputed as needed. Increase "
@@ -1250,7 +1301,16 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
             f"full joint cache needs {required} bytes) if memory permits.",
             RuntimeWarning, stacklevel=3)
         cv._cache_warned = crossfit._cache_warned = True
-    grams_cv, coefs_cv, grams_fit, coefs_fit = [], [], [], []
+    cv_store = _GramStore(n_cv, cv.gram_cache_dir)
+    fit_store = _GramStore(n_fit, crossfit.gram_cache_dir)
+    if crossfit.gram_cache_dir is not None:
+        n_fit = n_cv = sizes.size
+
+    def retain(built):
+        for fit, held_out in built:
+            if fit is not None:
+                fit_store.append(fit)
+            cv_store.append(held_out)
 
     def build(b, idx, Zs):
         k = idx.size
@@ -1283,20 +1343,15 @@ def _prepare_crossfit_grams(cv: VBEngine, crossfit: VBEngine) -> None:
                 return build(b, idx, lg._decode(idx, out=local.decoded[: idx.size], n_threads=1))
 
             with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="mixmogam-gram") as pool:
-                built = list(pool.map(work, range(n_cv)))
+                for start in range(0, n_cv, 2 * workers):
+                    retain(pool.map(work, range(start, min(start + 2 * workers, n_cv))))
         else:
-            built = (build(b, idx, Zs)
-                     for b, (idx, _, Zs) in enumerate(islice(crossfit._subblocks(), n_cv)))
-        for fit, held_out in built:
-            if fit is not None:
-                grams_fit.append(fit[0])
-                coefs_fit.append(fit[1])
-            grams_cv.append(held_out[0])
-            coefs_cv.append(held_out[1])
+            retain(build(b, idx, Zs)
+                   for b, (idx, _, Zs) in enumerate(islice(crossfit._subblocks(), n_cv)))
+        cv_store.install(cv)
+        fit_store.install(crossfit)
     finally:
+        cv_store.close()
+        fit_store.close()
         cv._scratch.clear()
         crossfit._scratch.clear()
-    if grams_cv:
-        cv._grams, cv._coefs = grams_cv, coefs_cv
-    if grams_fit:
-        crossfit._grams, crossfit._coefs = grams_fit, coefs_fit

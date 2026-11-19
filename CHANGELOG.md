@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0.dev4] - 2026-11-19
+
+### Changed
+
+- BOLT-style inf accepts a matrix of quantitative phenotypes and shares the
+  spectral basis and REML trace work. HRATT and BOLT mixture fits can spill
+  exact Gram blocks to a scratch directory when the RAM cache fills.
+- HRATT step 2 scores compressed rare PGEN hard calls, reads 8- and 16-bit
+  BGEN dosage integers directly, and retains one binary score workspace per
+  active trait. File output streams even when testing the original fitting panel.
+
+The [paired measurements](benchmarks/results/20261119-scalability/README.md)
+give the panel sizes, numerical agreement, wall times and peak memory.
+
 ## [2.3.0.dev3] - 2026-11-18
 
 ### Changed

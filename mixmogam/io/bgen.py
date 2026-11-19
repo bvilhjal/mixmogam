@@ -5,7 +5,9 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
+import os
 import struct
+import zlib
 
 import numpy as np
 
@@ -38,7 +40,7 @@ def _header(path):
         # input can return a null native genotype pointer and crash upstream.
         if flags & 3 not in (1, 2):
             raise ValueError("BGEN requires zlib or Zstandard compression; recompress uncompressed input")
-    return n, m, bool(flags & (1 << 31))
+    return n, m, bool(flags & (1 << 31)), length + 4, offset + 4, flags & 3
 
 
 def _sample_file(path, n):
@@ -105,7 +107,7 @@ def _checked_reader(path, sample_path, limit, *, metadata=True):
     """The open upstream reader with the checks every BGEN read applies:
     yields (reader, sample IDs, n, the m variants read, their metadata)."""
     path = Path(path)
-    n, total, embedded = _header(path)
+    n, total, embedded, *_ = _header(path)
     try:
         from bgen_reader import open_bgen
     except ImportError as exc:
@@ -145,17 +147,19 @@ def _metadata(reader, start, stop):
 
 
 def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_variants=None,
-                     chunk_bytes=_DOSAGE_READ_BYTES):
+                     chunk_bytes=_DOSAGE_READ_BYTES, backend="auto"):
     """Yield :class:`~mixmogam.genotypes.Dosages` blocks of a BGEN file:
     expected counts of the second listed allele, p(AB) + 2 p(BB), NaN where
     the record marks a call missing, in file order.
 
     The input contract and checks are those of :func:`read_bgen` (layout 2,
     compressed, unphased diploid biallelic records; real or Oxford sample
-    IDs). ``chunk_bytes`` budgets probabilities (default 256 MiB), with
-    one variant as the minimum; ``chunk_variants`` explicitly overrides
-    that size. Masks, conversion scratch and the upstream metadata index
-    need additional memory. Mixmogam builds metadata per block. For
+    IDs). Byte-aligned 8- and 16-bit probabilities are decoded directly.
+    Other precisions use bgen-reader from that variant onward. Select
+    backend="reader" to use bgen-reader throughout. The byte budget covers
+    the dosage tile, or the probability tile for the reader backend. Sample
+    metadata and a variant's compressed and decoded payloads also occupy memory.
+    chunk_variants explicitly sets the tile width. For
     HRATT's step 2 (:func:`mixmogam.steps.hratt_step2`), which tests
     dosages directly instead of thresholded hard calls.
     """
@@ -164,10 +168,19 @@ def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_varian
     if (chunk_variants is not None and (isinstance(chunk_variants, (bool, np.bool_))
             or not isinstance(chunk_variants, (int, np.integer)) or chunk_variants < 1)):
         raise ValueError("chunk_variants must be a positive integer")
+    if backend not in ("auto", "reader"):
+        raise ValueError("dosage backend must be 'auto' or 'reader'")
+    if backend == "auto":
+        yield from _native_dosages(path, sample_path, limit, chunk_variants, chunk_bytes)
+    else:
+        yield from _reader_dosages(path, sample_path, limit, chunk_variants, chunk_bytes)
+
+
+def _reader_dosages(path, sample_path, limit, chunk_variants, chunk_bytes, first=0):
     with _checked_reader(path, sample_path, limit, metadata=False) as (reader, samples, n, m, _):
         step = (block_variants(n, chunk_bytes, bytes_per_call=24) if chunk_variants is None
                 else int(chunk_variants))
-        for start in range(0, m, step):
+        for start in range(first, m, step):
             stop = min(start + step, m)
             meta = _metadata(reader, start, stop)
             probabilities, missing, ploidy = reader.read(
@@ -177,6 +190,149 @@ def iter_bgen_dosages(path, *, sample_path=None, chunk_variants=None, max_varian
                 raise ValueError("BGEN reader returned an unexpected block shape")
             values = _dosages(probabilities, missing, ploidy)
             del probabilities, missing, ploidy
+            yield Dosages._from_validated(values, sample_ids=samples, **meta)
+            del values, meta
+
+
+def _exact_read(fh, size, end):
+    if size < 0 or size > end - fh.tell():
+        raise ValueError("truncated BGEN record")
+    data = fh.read(size)
+    if len(data) != size:
+        raise ValueError("truncated BGEN record")
+    return data
+
+
+def _string(fh, width, end):
+    size = int.from_bytes(_exact_read(fh, width, end), "little")
+    return _exact_read(fh, size, end).decode("utf-8")
+
+
+def _decompressor(compression):
+    if compression == 1:
+        factory, error = zlib.decompressobj, zlib.error
+    else:
+        try:
+            from compression.zstd import ZstdDecompressor, ZstdError
+            factory, error = ZstdDecompressor, ZstdError
+        except ImportError:
+            try:
+                import zstandard
+            except ImportError:
+                return None  # use bgen-reader's native Zstandard library
+
+            def decompress(data, size):
+                try:
+                    frame = zstandard.frame_content_size(data)
+                    if frame >= 0 and frame != size:
+                        raise ValueError("BGEN Zstandard frame size disagrees with its record")
+                    return zstandard.ZstdDecompressor().decompress(data, max_output_size=size,
+                                                                   allow_extra_data=False)
+                except zstandard.ZstdError as exc:
+                    raise ValueError("invalid compressed BGEN block") from exc
+            return decompress
+
+    def decompress(data, size):
+        decoder = factory()
+        try:
+            result = decoder.decompress(data, size + 1)
+        except error as exc:
+            raise ValueError("invalid compressed BGEN block") from exc
+        if not decoder.eof or decoder.unused_data:
+            raise ValueError("invalid compressed BGEN block")
+        return result
+    return decompress
+
+
+def _integer_dosages(raw, n, out):
+    """Two stored integers per diploid sample. The last probability is implicit."""
+    if len(raw) < n + 10:
+        raise ValueError("truncated BGEN genotype block")
+    count, alleles, low, high = struct.unpack_from("<IHBB", raw)
+    if count != n or alleles != 2:
+        raise ValueError("BGEN genotype sample or allele count mismatch")
+    flags = np.frombuffer(raw, np.uint8, count=n, offset=8)
+    if low != 2 or high != 2 or np.any((flags & 63) != 2):
+        raise ValueError("BGEN contains non-diploid genotypes (including missing calls)")
+    phased, bits = raw[8 + n:10 + n]
+    if phased:
+        raise ValueError("phased BGEN probabilities are unsupported")
+    if not 1 <= bits <= 32 or len(raw) != n + 10 + (2 * n * bits + 7) // 8:
+        raise ValueError("invalid BGEN probability width or block length")
+    if bits not in (8, 16):
+        return False
+    pairs = np.frombuffer(raw, np.uint8 if bits == 8 else "<u2", count=2 * n, offset=10 + n)
+    denom = (1 << bits) - 1
+    aa, ab = pairs[::2], pairs[1::2]
+    missing = (flags & 128) != 0
+    # Widen before adding. The numerator 2*(denom-aa-ab)+ab is exact.
+    other = np.subtract(denom, aa, dtype=np.int32)
+    other -= ab
+    if np.any((other < 0) & ~missing):
+        raise ValueError("BGEN contains malformed nonmissing genotype probabilities")
+    other *= 2
+    other += ab
+    np.divide(other, denom, out=out)
+    out[missing] = np.nan
+    return True
+
+
+def _native_dosages(path, sample_path, limit, chunk_variants, chunk_bytes):
+    n, total, embedded, header_end, first, compression = _header(path)
+    decode = _decompressor(compression)
+    if decode is None:
+        yield from _reader_dosages(path, sample_path, limit, chunk_variants, chunk_bytes)
+        return
+    m = total if limit is None else min(total, limit)
+    step = chunk_variants or block_variants(n, chunk_bytes, bytes_per_call=8)
+    with open(path, "rb") as fh:
+        end = os.fstat(fh.fileno()).st_size
+        if first > end:
+            raise ValueError("truncated BGEN header or sample block")
+        if sample_path is not None:
+            samples = _sample_file(sample_path, n)
+        elif embedded:
+            fh.seek(header_end)
+            length, count = struct.unpack("<II", _exact_read(fh, 8, first))
+            sample_end = header_end + length
+            if count != n or length < 8 + 2 * n or sample_end > first:
+                raise ValueError("invalid BGEN sample identifiers block")
+            samples = validate_samples([_string(fh, 2, sample_end) for _ in range(n)])
+            if fh.tell() != sample_end:
+                raise ValueError("BGEN sample block length mismatch")
+        else:
+            raise ValueError("BGEN has no sample identifiers; supply sample_path explicitly")
+        fh.seek(first)
+        for start in range(0, m, step):
+            width = min(step, m - start)
+            meta = allocate_metadata(width)
+            values = np.empty((n, width), dtype=np.float64, order="F")
+            for j in range(width):
+                variant = _string(fh, 2, end)
+                _string(fh, 2, end)  # separate rsID
+                chrom = _string(fh, 2, end)
+                pos, alleles = struct.unpack("<IH", _exact_read(fh, 6, end))
+                if alleles != 2:
+                    raise ValueError("BGEN contains multiallelic records")
+                ref, alt = _string(fh, 4, end), _string(fh, 4, end)
+                if "," in ref or "," in alt:
+                    raise ValueError("BGEN allele labels disagree with biallelic metadata")
+                set_metadata(meta, j, chrom, pos, variant, ref, alt)
+                compressed, size = struct.unpack("<II", _exact_read(fh, 8, end))
+                if not n + 10 <= size <= 9 * n + 10:
+                    raise ValueError("invalid BGEN diploid genotype block size")
+                raw = decode(_exact_read(fh, compressed - 4, end), size)
+                if len(raw) != size:
+                    raise ValueError("BGEN decompressed length mismatch")
+                if not _integer_dosages(raw, n, values[:, j]):
+                    if j:
+                        yield Dosages._from_validated(values[:, :j], sample_ids=samples,
+                                      **{k: v[:j] for k, v in meta.items()})
+                    del values, meta, raw
+                    yield from _reader_dosages(path, sample_path, limit, chunk_variants,
+                                               chunk_bytes, first=start + j)
+                    return
+                del raw
             yield Dosages._from_validated(values, sample_ids=samples, **meta)
             del values, meta
 

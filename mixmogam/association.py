@@ -163,12 +163,13 @@ def gwas(
     dtype=None,
     genome_build: Optional[str] = None,
     **kwargs,
-) -> GwasResult:
+) -> GwasResult | list[GwasResult]:
     """Mixed-model GWAS of phenotype ``y`` on genotypes ``gt``.
 
     Parameters
     ----------
-    y : (n,) complete phenotype
+    y : (n,) complete phenotype, or (n, traits) for BOLT-style inf. Multiple
+        traits return one result per column and share genotype and REML work.
     gt : Genotypes (variants need chromosome labels for LOCO)
     X : covariates (an intercept is always included)
     method : "auto", "exact", "bolt-inf", "bolt" or "hratt" (module docstring)
@@ -195,8 +196,11 @@ def gwas(
     """
     from mixmogam.results import _genome_build
     genome_build = _genome_build(genome_build)
-    y = np.asarray(y, dtype=np.float64).ravel()
-    if y.size != gt.n_samples or y.size == 0:
+    y = np.asarray(y, dtype=np.float64)
+    many = y.ndim == 2 and y.shape[0] == gt.n_samples and y.shape[1] > 1
+    if not many:
+        y = y.ravel()
+    if y.shape[0] != gt.n_samples or y.size == 0:
         raise ValueError("y and genotypes disagree on the sample count or are empty")
     if gt.n_variants == 0:
         raise ValueError("GWAS requires at least one variant after filtering")
@@ -215,7 +219,9 @@ def gwas(
                         f"(binary outcomes, sampling weights, stage-1 options "
                         f"and relatedness), not of method={method!r}")
     if method == "auto":
-        method = "exact" if y.size <= EXACT_N_AUTO else "bolt-inf"
+        method = "exact" if gt.n_samples <= EXACT_N_AUTO else "bolt-inf"
+    if many and method != "bolt-inf":
+        raise ValueError("multiple phenotype columns require method=bolt-inf")
     if method == "exact":
         n_threads = kwargs.pop("n_threads", 1)
         if kwargs:
@@ -252,7 +258,8 @@ def gwas(
             opts["build"] = b
             kwargs["model_snps_options"] = opts
     result = fn(y, gt, X, max_loco_groups=max_loco_groups, block=block, **kwargs)
-    result.genome_build = genome_build
+    for trait_result in (result if many else [result]):
+        trait_result.genome_build = genome_build
     return result
 
 

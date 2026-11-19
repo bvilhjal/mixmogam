@@ -153,9 +153,13 @@ def _metadata(pvar, start, stop, autosomes):
     return meta
 
 
-def _calls(reader, start, stop, n):
-    block = np.empty((stop - start, n), dtype=np.int8)
-    reader.read_range(start, stop, block, allele_idx=1)
+def _calls(reader, start, stop, n, *, indices=None):
+    count = stop - start if indices is None else len(indices)
+    block = np.empty((count, n), dtype=np.int8)
+    if indices is None:
+        reader.read_range(start, stop, block, allele_idx=1)
+    else:
+        reader.read_list(np.asarray(indices, dtype=np.uint32), block, allele_idx=1)
     if np.any((block != -9) & ((block < 0) | (block > 2))):
         raise ValueError("PGEN returned an invalid biallelic hard call")
     block[block == -9] = -1

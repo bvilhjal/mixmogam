@@ -21,14 +21,14 @@ filesets share a prefix. All sample and variant rows retain their order.
 | PLINK 2 PGEN/PVAR/PSAM | PVAR ALT | Stored hard calls; diploid autosomes/PAR only; `pgenlib`; `.pvar.zst` also needs `zstandard` |
 | VCF, `.vcf.gz` or BGZF VCF | ALT | Diploid GT, phased or unphased; NumPy only |
 | BCF | ALT | Same GT contract; `pysam` |
-| BGEN layout 2 (1.2/1.3) | Second listed allele | Zlib/Zstandard-compressed unphased diploid probabilities; explicit hard-call threshold; `bgen-reader` |
+| BGEN layout 2 (1.2/1.3) | Second listed allele | Compressed, unphased diploid biallelic probabilities. Hard calls require a threshold and `bgen-reader`. Step 2 reads 8- and 16-bit dosages directly. |
 | EIGENSTRAT GENO/SNP/IND | First SNP allele column | Text calls 0/1/2/9; optional paired allele columns |
 | PLINK TPED/TFAM | First sorted allele | Biallelic allele pairs; legacy mixmogam dosage rows warn |
 | mixmogam HDF5 | Stored `allele1` | v2 layout and legacy v1; `h5py`; not arbitrary HDF5 schemas |
 
-Install PGEN/BCF readers with `pip install -e ".[formats]"`; BGEN and HDF5
-use the separate `bgen` and `hdf5` extras (BGEN's upstream package pulls in
-dataframe dependencies). VCF, PGEN and BGEN readers build packed output
+Install PGEN/BCF readers with `pip install -e ".[formats]"`. The `bgen`
+extra installs the upstream BGEN reader and `hdf5` installs HDF5 support.
+VCF, PGEN and BGEN hard-call readers build packed output
 directly when asked. VCF makes two sequential passes to size the output and
 PGEN/BGEN read bounded blocks; for repeated VCF analyses, convert once to
 BED.
@@ -38,7 +38,12 @@ and consume each block before requesting the next. BED maps its calls;
 PGEN, VCF/BCF and thresholded BGEN yield bounded hard-call blocks with
 per-block metadata (BED retains the full BIM). `iter_vcf`, `iter_pgen`
 and `iter_bgen` are also available from their reader modules. The CLI
-`step2` uses these iterators and passes `--chunk-mb` to the readers;
+`step2` streams these formats and passes `--chunk-mb` to the readers.
+For PGEN hard calls, `hratt_step2(fit, "chr1.pgen", out="chr1.tsv")`
+also accepts a fileset prefix or a sequence of paths. Giving the reader a
+path preserves access to the file's sparse hard calls. Eligible quantitative
+fits score those records directly. All results retain file order.
+
 `Genotypes.load` still constructs a whole-file container. The budget covers
 call buffers, with one complete variant as the minimum; parser scratch,
 metadata and native file indexes are additional. Legacy EIGENSTRAT, TPED
@@ -54,7 +59,17 @@ sets the rest missing. This discards probability information. HRATT's step 2
 can test expected dosages instead: `mixmogam.io.bgen.iter_bgen_dosages(path)`
 yields `Dosages` blocks of p(AB) + 2 p(BB) for the second listed allele (NaN
 when the record marks a call missing), and `mixmogam step2 --dosage` reads
-BGEN that way (unweighted quantitative traits). BGEN's allele order does not establish
+BGEN that way (unweighted quantitative traits). The default `backend="auto"`
+decodes 8- and 16-bit integers directly. Zlib uses Python's standard library.
+Zstandard can use `compression.zstd` on Python 3.14 or the `zstandard`
+package. If neither is available, the file uses `bgen-reader`. Other bit
+widths use `bgen-reader` from the first such record onward. To use the
+upstream reader for the whole file, pass `backend="reader"`. With
+`chunk_bytes`, the direct reader budgets 8 bytes per sample and variant for
+the output tile. The upstream reader budgets 24 for its probability tile.
+Each also needs sample metadata and per-record scratch.
+
+BGEN's allele order does not establish
 reference/alternate status, and its variant identifier is kept rather than
 replaced by the rsID field.
 
@@ -63,7 +78,7 @@ applied automatically. PGEN does not record per-call ploidy; its reader
 therefore requires diploid autosomes/PAR and respects PVAR `##chrSet` for
 non-human chromosome sets. Previously recoded haploid calls cannot be
 recovered. BGEN requires real embedded sample IDs or an explicit Oxford
-`.sample` file in genotype row order. Its upstream reader creates a
+`.sample` file in genotype row order. Only the upstream reader creates a
 metadata cache next to the input and initially scans the full file.
 Uncompressed BGEN is rejected because the upstream backend can crash on it;
 recompress it first.

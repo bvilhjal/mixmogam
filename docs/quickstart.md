@@ -116,7 +116,26 @@ result.plot_manhattan(savepath="manhattan.png")
 result.plot_qq(savepath="qq.png")
 ```
 
-From the shell, the same two figures from a written result file:
+For quantitative traits observed in the same people, pass one phenotype per
+column. Align every column and the covariates to the genotype sample order
+and use the same complete sample set for all columns.
+
+```python
+import numpy as np
+
+height_result, bmi_result = gwas(
+    np.column_stack((height, bmi)), gt, X=X, method="bolt-inf", trait_batch_size=8,
+)
+```
+
+The fit shares genotype moments, the spectral basis and REML trace probes.
+Each trait retains its own REML stopping point, LOCO solves and calibration.
+`trait_batch_size` (default 8) bounds the number of phenotype Lanczos vectors
+processed together. Each batch advances the shared probe vectors again.
+Results arrive in column order. A single column returns
+one `GwasResult`, as does a one-dimensional phenotype.
+
+To plot Manhattan and QQ figures from a written result file, run
 
 ```sh
 mixmogam plot --in gwas.csv --out-prefix gwas   # writes gwas_manhattan.png, gwas_qq.png
@@ -190,7 +209,8 @@ only the command line moves `auto` to HRATT when `--trait`, `--weights`, `--stag
 | Keyword | Accepted by |
 |---|---|
 | `n_threads` | `exact`, `hratt` |
-| `gram_cache_bytes`, `vb_tol`, `vb_max_iter` | `bolt`, `hratt` |
+| `trait_batch_size` | `bolt-inf` |
+| `gram_cache_bytes`, `gram_cache_dir`, `vb_tol`, `vb_max_iter` | `bolt`, `hratt` |
 | `cv_tol`, `he_probes`, `alpha_method`, `heritability_method`, `cv_fraction` | `hratt` |
 
 ## Relatives
@@ -367,18 +387,21 @@ print(result.extra["cv_converged"], result.extra["loco_converged"])
 128-variant blocks, one budget shared by HRATT's hold-out and cross-fitted
 fits. A block takes about 200 KB plus 8 KB per covariate column (the
 intercept counts), so 1 GB holds about 620,000 variants with an intercept
-only and about 440,000 with ten principal components. If a partial-cache
-warning appears and RAM permits, raise it (for example, `4 * 1024**3`).
-Uncached blocks are rebuilt on every sweep with the same arithmetic, and the
-cross-fit reuses the budget freed by the hold-out fit, so the cache size never
-changes the fitted model.
+only and about 440,000 with ten principal components. By default each sweep
+rebuilds blocks that exceed the RAM budget. Set `gram_cache_dir` to an
+existing writable scratch directory to compute the overflow blocks once and
+read them from temporary files for the rest of the fit. Both modes use the
+same stored precision and fit the same model. BOLT-style mixture accepts
+the same options. For example, add `--gram-cache-mb 512 --gram-cache-dir
+/scratch` to a `mixmogam gwas --method hratt` command when that directory
+has space for the overflow blocks. The CLI budget is in MiB.
 
-The warning reports the exact bytes needed before Gram preparation starts.
-`extra["gram_cache"]` records `cv` and `loco` cache requirements, retained
-bytes, cached/total blocks and `sweep_gram_builds` (including blocks added
-on the first sweep). `joint_required_bytes` is the peak cache requirement
-for HRATT's two engines together; it excludes genotype pages, fitted effects,
-residuals and numerical scratch. For five folds, 128-variant blocks,
+For each fitted stage, `result.extra["gram_cache"]` reports `ram_bytes`,
+`disk_bytes`, cached and total blocks, and `sweep_gram_builds` (including
+blocks added on the first sweep). HRATT's `joint_required_bytes` counts
+the arrays needed to retain the hold-out and cross-fit caches together.
+The OS page cache, genotype pages, fitted effects, residuals and solver
+scratch also use memory. For five folds, 128-variant blocks,
 float32 Grams and eleven covariate columns, the joint cache is approximately
 2,252 bytes per model SNP: about 3.25 GB for 1.44M SNPs. Larger budgets
 avoid repeated Gram products; they do not remove the genotype passes
@@ -461,7 +484,6 @@ block (`mixmogam.steps`):
 
 ```python
 from mixmogam.genotypes import Genotypes
-from mixmogam.io import iter_genotypes
 from mixmogam.io.bgen import iter_bgen_dosages
 from mixmogam.steps import HrattStep1, hratt_step1, hratt_step2
 
@@ -472,9 +494,9 @@ step1.save("height.npz")  # arrays and JSON, no pickles
 step1 = HrattStep1.load("height.npz")
 calls = (Genotypes.load_plink(f"chr{c}", mmap=True) for c in range(1, 23))
 hratt_step2(step1, calls, n_threads=8, out="height.tsv.gz")
-# PGEN and VCF/BCF also stream without constructing a whole-file call array.
-calls = (block for c in range(1, 23) for block in iter_genotypes(f"chr{c}.pgen"))
-hratt_step2(step1, calls, n_threads=8, out="height_pgen.tsv.gz")
+# Pass PGEN paths directly to score compressed rare variants.
+pgen_files = [f"chr{c}.pgen" for c in range(1, 23)]
+hratt_step2(step1, pgen_files, chunk_bytes=32 * 1024**2, out="height_pgen.tsv.gz")
 dosages = (block for c in range(1, 23) for block in iter_bgen_dosages(f"chr{c}.bgen"))
 hratt_step2(step1, dosages, n_threads=8, out="height_imputed.tsv.gz")
 ```
@@ -483,11 +505,21 @@ hratt_step2(step1, dosages, n_threads=8, out="height_imputed.tsv.gz")
 `hratt_step2` selects step 1's samples from each file (by ID, any order),
 maps each chromosome to step 1's LOCO group (variants on other chromosomes
 are an error) and tests every variant: hard calls give `hratt`'s statistics
-for the same variants, and in the fitting process `hratt_step2(step1, hm3)`
-is `hratt` itself. With `out=` the results are written as each block is
-tested (one path per step 1); without it they are returned. A list of step
+for the same variants. With `out=` the results are written as each block is
+tested (one path per step 1). This also works on the original fitting
+object, where the blocks reuse its prepared moments. Without `out=` the
+function returns the results in memory. A list of step
 1s is tested in one read of the files, sharing the standardized blocks of
 traits fitted on the same samples and covariates.
+
+With PGEN hard calls, passing a path or prefix lets the reader score a rare
+record from its list of samples differing from the common homozygote.
+This requires the `fast` extra and compatible unweighted, quantitative
+float32 fits with no relatedness correction. Dense records and other fits
+use the ordinary scorer. Passing blocks from `mixmogam.io.iter_genotypes`
+also works for PGEN and VCF/BCF. Binary scans fit each group's null logistic
+coefficients once per trait and retain one score workspace at a time. The
+saved predictions still scale with samples times LOCO groups.
 
 The CLI uses the same streamed readers for BED, PGEN, VCF/BCF and BGEN;
 `--chunk-mb` controls input blocks as well as step-2 blocks. It is a working
@@ -495,6 +527,13 @@ buffer budget, not a process RAM limit: metadata, native indexes, decoded
 scratch and saved LOCO state are additional. One full variant is the
 minimum. EIGENSTRAT, TPED and HDF5 still use whole-file readers. Use `out=`
 for a large scan; collecting returned blocks/results retains them in RAM.
+When the fitting panel is also the target, one command saves the fit and
+writes its association results in blocks.
+
+```sh
+mixmogam gwas --geno hm3 --mmap --pheno traits.txt --pheno-name height \
+    --save-step1 height.npz --out height.tsv.gz --chunk-mb 32
+```
 
 At 500,000 samples and 10M variants, even two-bit hard calls occupy 1.25 TB.
 Fit step 1 on a separately prepared model panel, then scan the full panel

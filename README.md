@@ -12,7 +12,7 @@ single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
 BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
 ([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
-Version 2.3.0.dev3. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+Version 2.3.0.dev4. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 
@@ -26,6 +26,14 @@ Version 2.3.0.dev3. Changes are in the [changelog](https://github.com/bvilhjal/m
 
 Throughout these docs, *BOLT-style inf* and *BOLT-style mixture* mean mixmogam's
 `bolt-inf` and `bolt`, never the BOLT-LMM program.
+
+For several quantitative traits measured in the same people, pass a complete
+samples-by-traits matrix to `gwas(Y, gt, X, method="bolt-inf")`. Two or more
+columns return a list of results in column order. One column returns a single
+result. Genotype preparation, the spectral basis and REML trace
+probes are shared. Each trait keeps its own convergence check, LOCO solves and
+calibration. `trait_batch_size` controls how many phenotype vectors enter a
+Lanczos pass together (default 8).
 
 New here? Jump to [Install](#install) and the [Quickstart](#quickstart); the HRATT
 and large-panel options below can wait until you need them.
@@ -174,6 +182,14 @@ calibrated in unrelated samples. HRATT warns, and records the details in
 - HapMap3 matching kept under half of the map's variants on a chromosome that has variants.
 - `"auto"` keeps more than 80% of the variants.
 
+For elastic-net HRATT or BOLT-style mixture fits with limited RAM, set
+`gram_cache_bytes` and pass an existing scratch directory as `gram_cache_dir`
+(CLI `--gram-cache-mb` in MiB and `--gram-cache-dir`). Blocks beyond the RAM
+budget go to temporary files, then each sweep reads their exact packed Gram
+matrices. The files live for the fit. `result.extra["gram_cache"]` reports
+RAM bytes, mapped bytes and Gram rebuilds for each fitting stage. The byte
+budget covers retained arrays. Solver scratch and the OS page cache also use memory.
+
 ### Biobank scale: step 1 once, step 2 per file
 
 `hratt` fits step 1 and tests the same panel in one call. For large cohorts, fit step 1 once
@@ -200,8 +216,19 @@ hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.g
   and writes results as it goes. The CLI streams BED, PGEN, VCF/BCF and BGEN input;
   Python exposes these readers as `mixmogam.io.iter_genotypes`. `--chunk-mb`
   budgets input and testing buffers (default 256 MiB), with one variant as the minimum.
+  It also controls writes from `gwas --save-step1 --out` on the fitting panel.
   Metadata, native indexes, decoded scratch and the n x groups LOCO residuals need
   additional memory. Legacy EIGENSTRAT, TPED and HDF5 inputs still load whole files.
+- Pass PGEN paths or prefixes directly to `hratt_step2` for compressed rare-variant
+  scoring. The CLI selects this path automatically. With the `fast` extra,
+  unweighted quantitative fits can share it when they use the default float32
+  genotype precision, the same sample and covariate layout and LOCO groups,
+  and no relatedness correction. Other fits and dense records use the ordinary
+  hard-call scorer. Binary scans keep one active group's score workspace per trait.
+- The BGEN dosage reader decodes 8- and 16-bit probabilities directly, including
+  missing calls. Other widths use `bgen-reader` from that record onward. Zlib
+  uses the standard library. Zstandard uses Python 3.14's `compression.zstd`,
+  the `zstandard` package, or the upstream reader. [BGEN layout 2 specification](https://www.chg.ox.ac.uk/~gav/bgen_format/spec/latest.html)
 - Hard calls get the statistics `hratt` gives the same variants. Dosages
   (`mixmogam.io.bgen.iter_bgen_dosages`, or `Dosages` blocks) are tested for unweighted
   quantitative traits with the lambda or kappa_g correction; binary, weighted and GLS tests
@@ -217,8 +244,9 @@ hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.g
 
 These storage paths do not establish practical runtime at 500K samples by 10M variants:
 the packed calls alone occupy 1.25 TB and step 1 still makes repeated passes over its
-model panel. See the [resource guidance](docs/quickstart.md#biobank-scale-hratt-in-two-steps)
-and inspect `extra["gram_cache"]` for cache requirements and repeated Gram construction.
+model panel. The [quickstart](docs/quickstart.md#biobank-scale-hratt-in-two-steps)
+covers panel selection and memory budgets. The [scalability measurements](benchmarks/results/20261119-scalability/README.md)
+include a streamed 500,000-sample scan over 1,024 variants.
 
 ## Install
 
@@ -235,7 +263,7 @@ python -m pip install -e ".[fast,formats,bgen,plot,hdf5,dataframe,test,lint]"
 ```
 
 Python >= 3.10. Every extra is optional: `fast` adds Numba and threadpoolctl,
-`formats` PGEN/BCF readers, `bgen` BGEN probability input, `plot` matplotlib,
+`formats` PGEN/BCF readers, `bgen` the upstream reader for BGEN hard calls and dosage fallback, `plot` matplotlib,
 `hdf5` h5py for legacy storage, `dataframe` pandas for `to_dataframe()`,
 `test` pytest and `lint` ruff.
 

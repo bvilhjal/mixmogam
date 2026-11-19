@@ -464,3 +464,39 @@ def test_he_alpha_tracks_reml(small):
     assert he["alpha"] in (-1.0, -0.5, 0.0)
     reml = fit_variance_components(st).pseudo_heritability
     assert he["h2_he"][0] == pytest.approx(reml, abs=0.15)
+
+
+@pytest.mark.parametrize("slq_tol, batch_size", [(0.0, 2), (1e-6, 8)])
+def test_bolt_inf_shares_null_fit_and_preserves_each_trait(slq_tol, batch_size, monkeypatch):
+    from mixmogam import Genotypes, gwas, twostep
+
+    rng = np.random.default_rng(8391)
+    n, m = 178, 361
+    G = rng.binomial(2, rng.uniform(.05, .45, m), size=(n, m)).astype(np.int8)
+    G[rng.random(G.shape) < .005] = -1
+    gt = Genotypes(G, chromosome=1 + np.arange(m) % 4, packed=True)
+    X = rng.normal(size=(n, 2))
+    Y = rng.normal(size=(n, 3)) + G[:, :8] @ rng.normal(size=(8, 3)) * [.1, .6, 1.2]
+    opts = dict(method="bolt-inf", slq_tol=slq_tol, random_state=141, genome_build="GRCh38")
+    ref = [gwas(y, gt, X, **opts) for y in Y.T]
+    calls = []
+    original = twostep._spectral_basis
+    def basis(*args, **kwargs):
+        calls.append(1)
+        return original(*args, **kwargs)
+    monkeypatch.setattr(twostep, "_spectral_basis", basis)
+    out = gwas(Y, gt, X, trait_batch_size=batch_size, **opts)
+    assert len(calls) == 1 and len(out) == Y.shape[1]
+    for a, b in zip(ref, out):
+        for key in ("p", "f_stat", "beta", "se", "af"):
+            np.testing.assert_allclose(getattr(a, key), getattr(b, key), rtol=2e-5, atol=3e-8)
+        for key in ("delta", "pseudo_heritability", "calibration_ratios", "calibration_cv"):
+            np.testing.assert_allclose(a.extra[key], b.extra[key], rtol=2e-6, atol=2e-8)
+        assert a.extra["cg_iterations"] == b.extra["cg_iterations"]
+        assert a.genome_build == b.genome_build == "GRCh38"
+    with pytest.raises(ValueError, match="residual variation"):
+        gwas(np.column_stack([Y[:, 0], X[:, 1]]), gt, X, **opts)
+    with pytest.raises(ValueError, match="positive integer"):
+        gwas(Y, gt, X, trait_batch_size=0, **opts)
+    with pytest.raises(ValueError, match="multiple phenotype"):
+        gwas(Y, gt, X, method="hratt")

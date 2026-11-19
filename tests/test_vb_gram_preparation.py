@@ -124,15 +124,15 @@ def test_gram_matches_numpy_gathers_exactly(dtype, q, weighted, packed):
     assert not eng._scratch  # gather buffers end with the preparation
 
 
-def _pair(lg, budget, n_threads=1, warn=False, module=_vb):
+def _pair(lg, budget, n_threads=1, warn=False, module=_vb, directory=None):
     rng = np.random.default_rng(29)
     cv_folds = np.ones(lg.n, dtype=np.int64)
     cv_folds[rng.choice(lg.n, lg.n // 10, replace=False)] = 0
     folds = rng.permutation(lg.n) % 5
     cv = module.VBEngine(lg, folds=cv_folds, gram_cache_bytes=budget, n_threads=n_threads,
-                         _warn_on_partial=warn)
+                         _warn_on_partial=warn, gram_cache_dir=directory)
     crossfit = module.VBEngine(lg, folds=folds, gram_cache_bytes=budget, n_threads=n_threads,
-                               _warn_on_partial=warn)
+                               _warn_on_partial=warn, gram_cache_dir=directory)
     module._prepare_crossfit_grams(cv, crossfit)
     return cv, crossfit
 
@@ -385,3 +385,42 @@ def test_gram_workers_respect_the_scratch_budget(monkeypatch):
     assert _vb._gram_workers(8, 128, lg, 50) == 3
     assert _vb._gram_workers(1, 128, lg, 50) == 1
     assert _vb._gram_workers(8, 128, lg, 1) == 1
+
+
+@pytest.mark.parametrize("q, budget, threads", [(0, 0, 1), (3, 52000, 2)])
+def test_gram_spill_matches_memory_and_can_change_slots(tmp_path, q, budget, threads):
+    lg = _problem(q=q, n=79, m=513)
+    reference = _pair(lg, 1e9)
+    stores = _pair(lg, budget, n_threads=threads, directory=tmp_path)
+    def equal(ref, store):
+        assert len(store._grams) == len(ref._grams)
+        for g, c, gr, cr in zip(store._grams, store._coefs, ref._grams, ref._coefs):
+            np.testing.assert_array_equal(g, gr)
+            np.testing.assert_array_equal(c, cr)
+    for ref, store in zip(reference, stores):
+        equal(ref, store)
+    infos = [eng._cache_info(eng._gram_folds.size) for eng in stores]
+    assert sum(i["ram_bytes"] for i in infos) <= budget
+    assert sum(i["disk_bytes"] for i in infos) > 0
+    for i in infos:
+        assert i["disk_bytes"] + i["ram_bytes"] == i["required_bytes"]
+    # A later full-data fit needs another Gram slot. Its views must own the
+    # replacement mapping and keep the same coefficients as a fresh RAM build.
+    for eng in (reference[1], stores[1]):
+        eng._prepare_grams(np.array([-1, 0]))
+    equal(reference[1], stores[1])
+    del stores, eng, store
+    assert not list(tmp_path.iterdir())
+
+
+def test_spill_failure_releases_partial_files(tmp_path, monkeypatch):
+    lg = _problem(n=71, m=300)
+    original = _vb._GramStore.append
+    def fail_second(self, pair):
+        if self.on_disk:
+            raise OSError("simulated write failure")
+        original(self, pair)
+    monkeypatch.setattr(_vb._GramStore, "append", fail_second)
+    with pytest.raises(OSError, match="simulated write failure"):
+        _pair(lg, 0, directory=tmp_path)
+    assert not list(tmp_path.iterdir())

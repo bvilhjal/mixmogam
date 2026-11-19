@@ -228,13 +228,14 @@ def worker(case, methods):
 
     def keep_offsets(function):
         def run(prediction, s, sy):
-            kept["offsets"] = function(prediction, s, sy)
-            return kept["offsets"]
+            offset = function(prediction, s, sy)
+            kept.setdefault("offsets", []).append(offset)
+            return offset
         return run
 
     def keep_stats(function):
-        def run(st, W, retrospective=False):
-            out = function(st, W, retrospective=retrospective)
+        def run(st, W, retrospective=False, **options):
+            out = function(st, W, retrospective=retrospective, **options)
             if retrospective:
                 kept["stats"] = (st, W, out)
             return out
@@ -270,7 +271,7 @@ def worker(case, methods):
             variants = weighted_variants(*kept["stats"], res.extra["lambda"])
         elif method in ("hratt-bin", "hratt-bin-w"):
             variants = binary_variants(y, gt, X, w if method == "hratt-bin-w" else None, res,
-                                       kept["offsets"])
+                                       np.column_stack(kept["offsets"]))
         np.savez_compressed(case / f"{method}.npz", p=res.p, beta=res.beta,
                             variant_ids=res.variant_ids.astype(str), **variants)
         record[method] = {"seconds": seconds, "spa_seconds": spa_seconds,

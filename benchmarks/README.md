@@ -7,6 +7,15 @@ which question each driver answers and what its evidence can support; read it
 before adding a driver or quoting a number. `python benchmarks/index.py`
 lists the archives.
 
+The [19 November scalability measurements](results/20261119-scalability/README.md)
+compare sparse and dense PGEN scoring, shared and independent BOLT-style inf
+fits, Gram storage, binary scan memory and BGEN dosage readers.
+
+Run `python benchmarks/mailman_products.py --tall --out timings.json` to
+compare repeated finite-alphabet Gram products with packed BLAS on 65,537
+samples. Omitting `--tall` uses 8,193 samples. The JSON includes encoding
+cost, RHS width, paired timings and relative product error.
+
 Several older drivers (`ldak_kvik_comparison.py`, `ldak_kvik_reference.py`,
 `kvik_scale.py`, `scaling_ladder.py`, `hratt_he_comparison.py`,
 `hratt_thread_scaling.py` and `hratt_weights_binary.py`) also ran an external
@@ -17,7 +26,7 @@ below keep `--ldak`: `kvik_scale.py` refuses a `--methods` list without
 `ldak-kvik`, and `scaling_ladder.py` and `ldak_kvik_comparison.py` hash or run
 the binary that `--ldak` names.
 
-The current numbers are in the
+The manuscript's numbers are in the
 [29 October evidence bundle](results/20261029-report-evidence/README.md): the
 dev8 sample-size ladder to 100,000, paired 50,000-sample fits, 308
 scale-study fits and the Atwell controls, with non-converged fits recorded.

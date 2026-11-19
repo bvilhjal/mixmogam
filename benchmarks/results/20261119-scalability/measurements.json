@@ -1,0 +1,1529 @@
+{
+  "environment": {
+    "base_commit": "52d57957de72ec12908c62ee5264a9bbe0022974",
+    "cpu": "Apple M2 Pro",
+    "physical_ram_bytes": 17179869184,
+    "host": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+    "python": "3.14.6",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "numba": "0.66.0",
+    "pgenlib": "0.94.1",
+    "thread_settings": {
+      "OPENBLAS_NUM_THREADS": 1,
+      "OMP_NUM_THREADS": 1,
+      "MKL_NUM_THREADS": 1,
+      "VECLIB_MAXIMUM_THREADS": 1,
+      "NUMBA_NUM_THREADS": 4
+    },
+    "power_guard": "benchmarks/_harness.power_state passed before measurement"
+  },
+  "bgen_environment": {
+    "python": "3.10.20",
+    "numpy": "2.2.6",
+    "bgen-reader": "4.0.9",
+    "cbgen": "1.0.6"
+  },
+  "input_sha256": {
+    "dense-control.pgen": "374c113735f942a66d68ef1c7de1c371b51aa68700e484df72e940158c7ff4d3",
+    "dense-control.psam": "24dbbc57055273e3daf248de9119284657858ae0ed0b0c2eda150715a7a93221",
+    "dense-control.pvar": "a62820d0a68ee55f4863d6f596bc81bc0840d66f75ea196e4f68fd16918836b0",
+    "highn-step1.npz": "767f250c22ef46eca66b682eca159d033a2011c557cdc11b26dbd03b10fe4451",
+    "highn.pgen": "5002a117b73056a5ec7227208b97b17fb461ae42aa0a7e1fa20f33ca83624077",
+    "highn.psam": "e70e3504be99fd4443710126ed44daba77c9eb152243c1a8119fc06b6cee2ce3",
+    "highn.pvar": "59c1466491f2289f7410cda3598fbe5b8b117ad5c0adac7d9731154fb4722beb",
+    "mixed-control.pgen": "4d6ddd8677d50b91aeebc4f87bf068d7f09eea3a5d224478bc971258d25ca136",
+    "mixed-control.psam": "24dbbc57055273e3daf248de9119284657858ae0ed0b0c2eda150715a7a93221",
+    "mixed-control.pvar": "a62820d0a68ee55f4863d6f596bc81bc0840d66f75ea196e4f68fd16918836b0",
+    "sparse-panel.pgen": "58e6143589f389547aeb930eb35c05726a189d8fd2bb898979d5d5ba74d4614e",
+    "sparse-panel.psam": "24dbbc57055273e3daf248de9119284657858ae0ed0b0c2eda150715a7a93221",
+    "sparse-panel.pvar": "a62820d0a68ee55f4863d6f596bc81bc0840d66f75ea196e4f68fd16918836b0",
+    "step1-0-0.npz": "07125087ddb47a66974d30932097b3f95b44fedd5973999676f14db71b3d1876",
+    "step1-0-1.npz": "a0456cf00e35e6995377937183c9d638bf20a053c11bb24df879c35e58449fc4",
+    "step1-0-2.npz": "498eacbe6cf62fbb80487a353b87c32ab319954672bb59f4d25583742bd57066",
+    "step1-0-3.npz": "276f8488d72a9ec1de73244f81964d2e3309382a82506b19760e8ba5db867022",
+    "step1-1-0.npz": "fc29c1da1a556532605fc770c47a79f0b03717ffde95e54a8d5960f6e641f716",
+    "step1-1-1.npz": "ff648bdefb4ddbfe2455699d319ba91911e2de1897586d456bec6189eff29b6d",
+    "step1-1-2.npz": "1b2245c841df67bfcd630c2736ead841dbea40deef38ace7708d65e1273ab638",
+    "step1-1-3.npz": "8c98392e8850b466d251f646bec669086c42f09f7f61adb13e68e69c0ee7ced8"
+  },
+  "pgen": [
+    {
+      "task": "sparse-panel",
+      "mode": "native",
+      "rep": 0,
+      "seconds": 0.04172804101835936,
+      "max_p": 8.215650382226158e-15
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "packed",
+      "rep": 0,
+      "seconds": 0.2551300000050105,
+      "max_p": 0.0
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "int8",
+      "rep": 0,
+      "seconds": 0.27275245799683034,
+      "max_p": 0.0
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "packed",
+      "rep": 1,
+      "seconds": 0.25391037500230595,
+      "max_p": 0.0
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "int8",
+      "rep": 1,
+      "seconds": 0.2686752920271829,
+      "max_p": 0.0
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "native",
+      "rep": 1,
+      "seconds": 0.04195379203883931,
+      "max_p": 8.215650382226158e-15
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "int8",
+      "rep": 2,
+      "seconds": 0.2676415420137346,
+      "max_p": 0.0
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "native",
+      "rep": 2,
+      "seconds": 0.04272708302596584,
+      "max_p": 8.215650382226158e-15
+    },
+    {
+      "task": "sparse-panel",
+      "mode": "packed",
+      "rep": 2,
+      "seconds": 0.2599141669925302,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "native",
+      "rep": 0,
+      "seconds": 0.16507029201602563,
+      "max_p": 6.8833827526759706e-15
+    },
+    {
+      "task": "mixed-control",
+      "mode": "packed",
+      "rep": 0,
+      "seconds": 0.2704960000119172,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "int8",
+      "rep": 0,
+      "seconds": 0.293152459023986,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "packed",
+      "rep": 1,
+      "seconds": 0.2743651659693569,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "int8",
+      "rep": 1,
+      "seconds": 0.29450187500333413,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "native",
+      "rep": 1,
+      "seconds": 0.15510162495775148,
+      "max_p": 6.8833827526759706e-15
+    },
+    {
+      "task": "mixed-control",
+      "mode": "int8",
+      "rep": 2,
+      "seconds": 0.2753693329868838,
+      "max_p": 0.0
+    },
+    {
+      "task": "mixed-control",
+      "mode": "native",
+      "rep": 2,
+      "seconds": 0.1695574169862084,
+      "max_p": 6.8833827526759706e-15
+    },
+    {
+      "task": "mixed-control",
+      "mode": "packed",
+      "rep": 2,
+      "seconds": 0.28925058396998793,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "native",
+      "rep": 0,
+      "seconds": 0.25458624999737367,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "packed",
+      "rep": 0,
+      "seconds": 0.25817724998341873,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "int8",
+      "rep": 0,
+      "seconds": 0.2720309169963002,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "packed",
+      "rep": 1,
+      "seconds": 0.2521022920263931,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "int8",
+      "rep": 1,
+      "seconds": 0.2681621669908054,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "native",
+      "rep": 1,
+      "seconds": 0.2560550000052899,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "int8",
+      "rep": 2,
+      "seconds": 0.27068095898721367,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "native",
+      "rep": 2,
+      "seconds": 0.25943783298134804,
+      "max_p": 0.0
+    },
+    {
+      "task": "dense-control",
+      "mode": "packed",
+      "rep": 2,
+      "seconds": 0.2616583750350401,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "native",
+      "rep": 0,
+      "seconds": 0.5129069579998031,
+      "max_p": 3.0753177782116836e-14
+    },
+    {
+      "task": "highn-file",
+      "mode": "packed",
+      "rep": 0,
+      "seconds": 1.7765048330184072,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "int8",
+      "rep": 0,
+      "seconds": 1.6496649999753572,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "packed",
+      "rep": 1,
+      "seconds": 1.8326866250135936,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "int8",
+      "rep": 1,
+      "seconds": 1.6389725420158356,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "native",
+      "rep": 1,
+      "seconds": 0.565227999992203,
+      "max_p": 3.0753177782116836e-14
+    },
+    {
+      "task": "highn-file",
+      "mode": "int8",
+      "rep": 2,
+      "seconds": 1.687740124994889,
+      "max_p": 0.0
+    },
+    {
+      "task": "highn-file",
+      "mode": "native",
+      "rep": 2,
+      "seconds": 0.6076555000036024,
+      "max_p": 3.0753177782116836e-14
+    },
+    {
+      "task": "highn-file",
+      "mode": "packed",
+      "rep": 2,
+      "seconds": 1.9055877500213683,
+      "max_p": 0.0
+    }
+  ],
+  "bolt": [
+    {
+      "task": "bolt",
+      "mode": "independent",
+      "rep": 0,
+      "seconds": 1.1942008750047535,
+      "full": 69,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "batch",
+      "rep": 0,
+      "seconds": 0.6802462500054389,
+      "full": 22,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "batch",
+      "rep": 1,
+      "seconds": 0.6860351249924861,
+      "full": 22,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "independent",
+      "rep": 1,
+      "seconds": 1.1923149169888347,
+      "full": 69,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "independent",
+      "rep": 2,
+      "seconds": 1.1915111670386977,
+      "full": 69,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "batch",
+      "rep": 2,
+      "seconds": 0.6619779579923488,
+      "full": 22,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "batch",
+      "rep": 3,
+      "seconds": 0.6776370420120656,
+      "full": 22,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    },
+    {
+      "task": "bolt",
+      "mode": "independent",
+      "rep": 3,
+      "seconds": 1.2433057500165887,
+      "full": 69,
+      "loco": 54,
+      "stops": [
+        8,
+        9,
+        12,
+        16
+      ],
+      "warnings": [
+        "bolt-inf: the prospective/retrospective ratio varies over the calibration SNPs (calibration_cv 0.053 > 0.05), so one constant cannot calibrate every variant: under structure, variants aligned with the leading kinship eigenvectors read inflated and the rest deflated (null lambda_GC 1.34 -> 0.64 across loading quintiles at simulated F_ST 0.3), and effects carry the same error. Include ancestry principal components among the covariates, or use denominator='spectral'"
+      ],
+      "delta": {
+        "p": 0,
+        "f_stat": 0,
+        "beta": 0,
+        "se": 0,
+        "af": 0,
+        "calibration": 0,
+        "calibration_ratios": 0,
+        "calibration_cv": 0,
+        "delta": 0,
+        "pseudo_heritability": 0,
+        "vg": 0,
+        "ve": 0,
+        "log10p": 0
+      }
+    }
+  ],
+  "gram": [
+    {
+      "task": "gram",
+      "mode": "partial",
+      "rep": 0,
+      "seconds": 0.560108375037089,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 46,
+          "retained_bytes": 1990144,
+          "disk_bytes": 0,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 46,
+          "sweep_gram_builds": 10
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 10,
+          "retained_bytes": 1958400,
+          "disk_bytes": 0,
+          "ram_bytes": 1958400,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 10,
+          "sweep_gram_builds": 190
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "ram",
+      "rep": 0,
+      "seconds": 0.3548134159645997,
+      "cache": {
+        "cv": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 0,
+          "ram_bytes": 2076672,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 0,
+          "ram_bytes": 9400320,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "spill",
+      "rep": 0,
+      "seconds": 0.36540791601873934,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 86528,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 9400320,
+          "ram_bytes": 0,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "ram",
+      "rep": 1,
+      "seconds": 0.3543333330308087,
+      "cache": {
+        "cv": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 0,
+          "ram_bytes": 2076672,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 0,
+          "ram_bytes": 9400320,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "spill",
+      "rep": 1,
+      "seconds": 0.37302812497364357,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 86528,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 9400320,
+          "ram_bytes": 0,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "partial",
+      "rep": 1,
+      "seconds": 0.5628358750254847,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 46,
+          "retained_bytes": 1990144,
+          "disk_bytes": 0,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 46,
+          "sweep_gram_builds": 10
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 10,
+          "retained_bytes": 1958400,
+          "disk_bytes": 0,
+          "ram_bytes": 1958400,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 10,
+          "sweep_gram_builds": 190
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "spill",
+      "rep": 2,
+      "seconds": 0.37579445797018707,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 86528,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 9400320,
+          "ram_bytes": 0,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "partial",
+      "rep": 2,
+      "seconds": 0.5534469170379452,
+      "cache": {
+        "cv": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 46,
+          "retained_bytes": 1990144,
+          "disk_bytes": 0,
+          "ram_bytes": 1990144,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 46,
+          "sweep_gram_builds": 10
+        },
+        "loco": {
+          "budget_bytes": 2000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 10,
+          "retained_bytes": 1958400,
+          "disk_bytes": 0,
+          "ram_bytes": 1958400,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 10,
+          "sweep_gram_builds": 190
+        }
+      },
+      "iterations": 5
+    },
+    {
+      "task": "gram",
+      "mode": "ram",
+      "rep": 2,
+      "seconds": 0.3567588330479339,
+      "cache": {
+        "cv": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 2076672,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 2076672,
+          "disk_bytes": 0,
+          "ram_bytes": 2076672,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        },
+        "loco": {
+          "budget_bytes": 100000000.0,
+          "required_bytes": 9400320,
+          "total_blocks": 48,
+          "cached_blocks": 48,
+          "retained_bytes": 9400320,
+          "disk_bytes": 0,
+          "ram_bytes": 9400320,
+          "joint_required_bytes": 11476992,
+          "cached_blocks_before_sweeps": 48,
+          "sweep_gram_builds": 0
+        }
+      },
+      "iterations": 5
+    }
+  ],
+  "bgen": [
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 0,
+      "mode": "reader",
+      "seconds": 0.29664362501353025,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 0,
+      "mode": "auto",
+      "seconds": 0.10581916698720306,
+      "max_error": 0.0
+    },
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 1,
+      "mode": "auto",
+      "seconds": 0.10866449994500726,
+      "max_error": 0.0
+    },
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 1,
+      "mode": "reader",
+      "seconds": 0.3043084999662824,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 2,
+      "mode": "reader",
+      "seconds": 0.30393758398713544,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 8,
+      "n": 8192,
+      "m": 768,
+      "rep": 2,
+      "mode": "auto",
+      "seconds": 0.10503379203146324,
+      "max_error": 0.0
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 0,
+      "mode": "reader",
+      "seconds": 0.40181066596414894,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 0,
+      "mode": "auto",
+      "seconds": 0.1541810409980826,
+      "max_error": 0.0
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 1,
+      "mode": "auto",
+      "seconds": 0.15231833403231576,
+      "max_error": 0.0
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 1,
+      "mode": "reader",
+      "seconds": 0.39218916703248397,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 2,
+      "mode": "reader",
+      "seconds": 0.3899168749921955,
+      "max_error": 2.220446049250313e-16
+    },
+    {
+      "bits": 16,
+      "n": 8192,
+      "m": 768,
+      "rep": 2,
+      "mode": "auto",
+      "seconds": 0.1594189999741502,
+      "max_error": 0.0
+    }
+  ],
+  "mailman": [
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 4,
+      "width": 1,
+      "encode": 0.013098832976538688,
+      "bytes": 4211202,
+      "packed": [
+        0.003675082989502698,
+        0.0036591250100173056,
+        0.003696666972246021
+      ],
+      "mailman": [
+        0.0041722499881871045,
+        0.004156625014729798,
+        0.0041592500056140125
+      ],
+      "relative_error": 4.3246786038818686e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 4,
+      "width": 8,
+      "encode": 0.013098832976538688,
+      "bytes": 4211202,
+      "packed": [
+        0.0056600000243633986,
+        0.005747708957642317,
+        0.005770790972746909
+      ],
+      "mailman": [
+        0.014294375025201589,
+        0.014422999985981733,
+        0.014248458028305322
+      ],
+      "relative_error": 1.562957182848318e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 4,
+      "width": 48,
+      "encode": 0.013098832976538688,
+      "bytes": 4211202,
+      "packed": [
+        0.008926333975978196,
+        0.00942316697910428,
+        0.008850124955642968
+      ],
+      "mailman": [
+        0.08302558300783858,
+        0.08333654201123863,
+        0.08374937501503155
+      ],
+      "relative_error": 1.3855251075663165e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 4,
+      "width": 140,
+      "encode": 0.013098832976538688,
+      "bytes": 4211202,
+      "packed": [
+        0.018226125044748187,
+        0.018788541958201677,
+        0.018057582958135754
+      ],
+      "mailman": [
+        0.24751408398151398,
+        0.247768624976743,
+        0.24828400003025308
+      ],
+      "relative_error": 1.5128696373039108e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 5,
+      "width": 1,
+      "encode": 0.010665000008884817,
+      "bytes": 3359130,
+      "packed": [
+        0.0036609999951906502,
+        0.0036262909998185933,
+        0.003714249993208796
+      ],
+      "mailman": [
+        0.0039619169547222555,
+        0.003930707986000925,
+        0.003875166003126651
+      ],
+      "relative_error": 4.331107637415974e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 5,
+      "width": 8,
+      "encode": 0.010665000008884817,
+      "bytes": 3359130,
+      "packed": [
+        0.005713791004382074,
+        0.005695917003322393,
+        0.005658208974637091
+      ],
+      "mailman": [
+        0.012622499954886734,
+        0.012685208988841623,
+        0.012652333010919392
+      ],
+      "relative_error": 1.5622197427389893e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 5,
+      "width": 48,
+      "encode": 0.010665000008884817,
+      "bytes": 3359130,
+      "packed": [
+        0.008753833011724055,
+        0.00908483297098428,
+        0.00868724996689707
+      ],
+      "mailman": [
+        0.07481816702056676,
+        0.07448629097780213,
+        0.07503920799354091
+      ],
+      "relative_error": 1.3720205566811508e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 5,
+      "width": 140,
+      "encode": 0.010665000008884817,
+      "bytes": 3359130,
+      "packed": [
+        0.018810166977345943,
+        0.018122582987416536,
+        0.018039916991256177
+      ],
+      "mailman": [
+        0.22364608402131125,
+        0.22275954199722037,
+        0.22245358297368512
+      ],
+      "relative_error": 1.5124027074089635e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 6,
+      "width": 1,
+      "encode": 0.01052191702183336,
+      "bytes": 2802006,
+      "packed": [
+        0.0036404170095920563,
+        0.003627792000770569,
+        0.003666832984890789
+      ],
+      "mailman": [
+        0.004694624978583306,
+        0.004693833994679153,
+        0.004733457986731082
+      ],
+      "relative_error": 4.4577247917417225e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 6,
+      "width": 8,
+      "encode": 0.01052191702183336,
+      "bytes": 2802006,
+      "packed": [
+        0.0057225420023314655,
+        0.005780458042863756,
+        0.00578108400804922
+      ],
+      "mailman": [
+        0.01472612499492243,
+        0.01483937498414889,
+        0.014721791027113795
+      ],
+      "relative_error": 1.548115116542823e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 6,
+      "width": 48,
+      "encode": 0.01052191702183336,
+      "bytes": 2802006,
+      "packed": [
+        0.009709541976917535,
+        0.00967425003182143,
+        0.008976208977401257
+      ],
+      "mailman": [
+        0.08615454100072384,
+        0.08467700000619516,
+        0.08502800000132993
+      ],
+      "relative_error": 1.3726907788280912e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 8193,
+      "m": 1025,
+      "digits": 6,
+      "width": 140,
+      "encode": 0.01052191702183336,
+      "bytes": 2802006,
+      "packed": [
+        0.018355582957156003,
+        0.018785291991662234,
+        0.018083292001392692
+      ],
+      "mailman": [
+        0.24742929200874642,
+        0.24870641698362306,
+        0.24870666698552668
+      ],
+      "relative_error": 1.5131799972040004e-06,
+      "meets_tolerance": true
+    }
+  ],
+  "mailman-tall": [
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 4,
+      "width": 1,
+      "encode": 0.019712999986950308,
+      "bytes": 8519810,
+      "packed": [
+        0.010563582996837795,
+        0.010563249990809709,
+        0.011007166001945734
+      ],
+      "mailman": [
+        0.007838834018912166,
+        0.007753707992378622,
+        0.007960709044709802
+      ],
+      "relative_error": 6.222799032414506e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 4,
+      "width": 8,
+      "encode": 0.019712999986950308,
+      "bytes": 8519810,
+      "packed": [
+        0.025336042046546936,
+        0.026109250029549003,
+        0.025089040980674326
+      ],
+      "mailman": [
+        0.031809667008928955,
+        0.03175070905126631,
+        0.03181108395801857
+      ],
+      "relative_error": 4.47600115264739e-06,
+      "meets_tolerance": false
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 4,
+      "width": 48,
+      "encode": 0.019712999986950308,
+      "bytes": 8519810,
+      "packed": [
+        0.040226500015705824,
+        0.04048179095843807,
+        0.04045816697180271
+      ],
+      "mailman": [
+        0.18206591700436547,
+        0.1816380419768393,
+        0.18350416602334008
+      ],
+      "relative_error": 3.707931148704992e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 4,
+      "width": 140,
+      "encode": 0.019712999986950308,
+      "bytes": 8519810,
+      "packed": [
+        0.0924044160055928,
+        0.10011487500742078,
+        0.09593770798528567
+      ],
+      "mailman": [
+        0.5514265410020016,
+        0.550893375009764,
+        0.5539068750222214
+      ],
+      "relative_error": 4.371502197477234e-06,
+      "meets_tolerance": false
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 5,
+      "width": 1,
+      "encode": 0.01803633401868865,
+      "bytes": 6815848,
+      "packed": [
+        0.010797334020026028,
+        0.01102587505010888,
+        0.010672375035937876
+      ],
+      "mailman": [
+        0.006763625016901642,
+        0.006381832994520664,
+        0.00643974996637553
+      ],
+      "relative_error": 5.699347190197858e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 5,
+      "width": 8,
+      "encode": 0.01803633401868865,
+      "bytes": 6815848,
+      "packed": [
+        0.026166707975789905,
+        0.02788712497567758,
+        0.029218834009952843
+      ],
+      "mailman": [
+        0.026730542012955993,
+        0.026802708045579493,
+        0.02805162500590086
+      ],
+      "relative_error": 4.724828307343109e-06,
+      "meets_tolerance": false
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 5,
+      "width": 48,
+      "encode": 0.01803633401868865,
+      "bytes": 6815848,
+      "packed": [
+        0.04562458302825689,
+        0.04085087502608076,
+        0.0399650419712998
+      ],
+      "mailman": [
+        0.16205908299889416,
+        0.1566900840261951,
+        0.15582412498770282
+      ],
+      "relative_error": 3.735340330214884e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 5,
+      "width": 140,
+      "encode": 0.01803633401868865,
+      "bytes": 6815848,
+      "packed": [
+        0.09175499994307756,
+        0.09473204100504518,
+        0.09373625001171604
+      ],
+      "mailman": [
+        0.4720658330479637,
+        0.4727002910221927,
+        0.4756845000083558
+      ],
+      "relative_error": 4.334976574773086e-06,
+      "meets_tolerance": false
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 6,
+      "width": 1,
+      "encode": 0.017449459002818912,
+      "bytes": 5636182,
+      "packed": [
+        0.010492250032257289,
+        0.010774124995805323,
+        0.010383374989032745
+      ],
+      "mailman": [
+        0.005749208037741482,
+        0.005484458000864834,
+        0.005507166963070631
+      ],
+      "relative_error": 6.150678749865543e-07,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 6,
+      "width": 8,
+      "encode": 0.017449459002818912,
+      "bytes": 5636182,
+      "packed": [
+        0.025344875000882894,
+        0.02652349998243153,
+        0.025153167021926492
+      ],
+      "mailman": [
+        0.023760917014442384,
+        0.02374445798341185,
+        0.023537542030680925
+      ],
+      "relative_error": 4.507002935296139e-06,
+      "meets_tolerance": false
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 6,
+      "width": 48,
+      "encode": 0.017449459002818912,
+      "bytes": 5636182,
+      "packed": [
+        0.04128325002966449,
+        0.04167024994967505,
+        0.044787124963477254
+      ],
+      "mailman": [
+        0.14565445802873,
+        0.1456608750158921,
+        0.14806016703369096
+      ],
+      "relative_error": 3.7544253290577934e-06,
+      "meets_tolerance": true
+    },
+    {
+      "n": 65537,
+      "m": 257,
+      "digits": 6,
+      "width": 140,
+      "encode": 0.017449459002818912,
+      "bytes": 5636182,
+      "packed": [
+        0.09414216701406986,
+        0.09382433298742399,
+        0.09151341702090576
+      ],
+      "mailman": [
+        0.43591412500245497,
+        0.4350636249873787,
+        0.4346852079615928
+      ],
+      "relative_error": 4.375782235866099e-06,
+      "meets_tolerance": false
+    }
+  ],
+  "binary": [
+    {
+      "rep": 0,
+      "version": "before",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.30010279203997925,
+      "peak_bytes": 391610368,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184718
+    },
+    {
+      "rep": 1,
+      "version": "before",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.2822730829939246,
+      "peak_bytes": 395329536,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184718
+    },
+    {
+      "rep": 2,
+      "version": "before",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.28569370799232274,
+      "peak_bytes": 394870784,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184718
+    },
+    {
+      "rep": 0,
+      "version": "after",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.2236213330179453,
+      "peak_bytes": 241909760,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184725
+    },
+    {
+      "rep": 1,
+      "version": "after",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.21116299997083843,
+      "peak_bytes": 232210432,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184725
+    },
+    {
+      "rep": 2,
+      "version": "after",
+      "n": 32768,
+      "groups": 22,
+      "covariate_columns": 11,
+      "active_groups": 1,
+      "seconds": 0.22347283299313858,
+      "peak_bytes": 231899136,
+      "null_converged": true,
+      "offset_sd": 0.020616856166184725
+    }
+  ]
+}

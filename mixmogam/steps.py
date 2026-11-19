@@ -24,6 +24,7 @@ rounding of the stored calls (~1e-7 relative).
 from __future__ import annotations
 
 from dataclasses import fields, replace
+from os import PathLike
 import json
 import warnings
 from types import SimpleNamespace
@@ -161,7 +162,7 @@ def hratt_step1(y, gt, X=None, **options) -> HrattStep1:
 
 
 def hratt_step2(step1, genotypes, *, n_threads: int = 1, chunk_bytes: float = CHUNK_BYTES,
-                out=None, genome_build: Optional[str] = None):
+                out=None, genome_build: Optional[str] = None, packed: bool = True):
     """Test variants against a fitted step 1 (HRATT's step 2).
 
     ``step1``: a :class:`HrattStep1` (or a list of them: several traits,
@@ -174,6 +175,10 @@ def hratt_step2(step1, genotypes, *, n_threads: int = 1, chunk_bytes: float = CH
     ``chunk_bytes`` of storage (a memory-mapped bed file is read once, with
     drop-behind), so memory is bounded by one block and the per-sample
     arrays, whatever the number of variants.
+
+    A PGEN path or prefix (also within an iterable) reads compressed rare
+    hard calls directly for compatible quantitative fits. Other records
+    use the ordinary hard-call scan. The ``packed`` option selects their storage.
 
     Hard calls get the statistics of :func:`~mixmogam.twostep.hratt`.
     Dosages are tested for unweighted quantitative traits with the lambda or
@@ -200,22 +205,22 @@ def hratt_step2(step1, genotypes, *, n_threads: int = 1, chunk_bytes: float = CH
         if len(paths) != len(fits):
             raise ValueError("out needs one path per step 1")
     # The step-1 panel itself, in the fitting process: hratt()'s exact pass.
-    if (isinstance(genotypes, Genotypes) and all(f._cache is not None and f._cache["gt"] is genotypes
-                                                for f in fits)):
+    if (paths is None and isinstance(genotypes, Genotypes)
+            and all(f._cache is not None and f._cache["gt"] is genotypes for f in fits)):
         from mixmogam.twostep import _hratt_test
 
         results = [finish(_hratt_test(f._state, f._cache["st_test"], genotypes, n_threads,
                                       rsU=f._cache["rsU"], U=f._cache["U"],
                                       cache=dict(f._cache["test"]))) for f in fits]
-        return _finish(results, paths, single)
-    sources = [genotypes] if isinstance(genotypes, (Genotypes, Dosages)) else genotypes
+        return results[0] if single else results
+    sources = [genotypes] if isinstance(genotypes, (Genotypes, Dosages, str, PathLike)) else genotypes
     runner = _Runner(fits, n_threads, float(chunk_bytes))
     written = 0
     parts = [[] for _ in fits]
     with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
+        warnings.simplefilter("once")
         for source in sources:
-            for block in runner.blocks(source):
+            for block in runner.blocks(source, packed=packed):
                 for k, res in enumerate(block):
                     finish(res)
                     if paths is None:
@@ -237,14 +242,6 @@ def hratt_step2(step1, genotypes, *, n_threads: int = 1, chunk_bytes: float = CH
     return results[0] if single else results
 
 
-def _finish(results, paths, single):
-    if paths is None:
-        return results[0] if single else results
-    for res, path in zip(results, paths):
-        res.write_csv(path)
-    return {"variants": len(results[0]), "out": paths}
-
-
 class _Runner:
     """Step 2's block loop. Each block of a source is read once; step 1s
     fitted on the same samples, covariates, row scale and LOCO groups share
@@ -258,6 +255,7 @@ class _Runner:
         self.n_threads = _validate_n_threads(n_threads)
         self.chunk_bytes = max(chunk_bytes, 1.0)
         self.caches = [{} for _ in fits]
+        self.pgen_scores = None
         self.shared = []  # lists of fit indices
         for k, f in enumerate(fits):
             for members in self.shared:
@@ -308,13 +306,16 @@ class _Runner:
                              "test only the chromosomes step 1 was fitted on")
         return np.array([self.group_of[h][k] for k in keys], dtype=np.int64)[inverse.ravel()]
 
-    def blocks(self, source):
-        if isinstance(source, Dosages):
+    def blocks(self, source, *, packed=True):
+        if isinstance(source, (str, PathLike)):
+            from mixmogam._pgen_score import pgen_blocks
+            yield from pgen_blocks(self, source, packed)
+        elif isinstance(source, Dosages):
             yield from self._dosage_blocks(source)
         elif isinstance(source, Genotypes):
             yield from self._call_blocks(source)
         else:
-            raise TypeError("genotypes must be Genotypes, Dosages or an iterable of them")
+            raise TypeError("genotypes must be Genotypes, Dosages, a PGEN path or an iterable of these")
 
     def _call_blocks(self, gt):
         from mixmogam._loco import LocoGenotypes
@@ -353,10 +354,16 @@ class _Runner:
                     variant_ids=gt.variant_ids[a:b],
                     allele1=None if gt.allele1 is None else gt.allele1[a:b],
                     allele2=None if gt.allele2 is None else gt.allele2[a:b])
+                moments = None
+                if rows is None and head._cache is not None and head._cache["gt"] is gt:
+                    trained = head._cache["st_test"].lg
+                    trained._check_source()
+                    moments = (trained.mean[a:b], trained.sd[a:b],
+                               trained._projection[a:b], trained.zz[a:b])
                 lg = LocoGenotypes(sub, groups_all[h][a:b], head._panel["Q"],
                                    block=head._panel["block"], dtype=head._panel["dtype"],
                                    n_threads=self.n_threads, row_scale=head._setup.s,
-                                   n_groups=head._panel["n_groups"])
+                                   n_groups=head._panel["n_groups"], moments=moments)
                 for k in members:
                     f = self.fits[k]
                     out[k] = _hratt_test(f._state, replace(f._setup, lg=lg), sub, self.n_threads,

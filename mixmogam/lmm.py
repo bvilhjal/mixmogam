@@ -201,6 +201,10 @@ def _reml_grid(theta, mass, deltas, p, y_top_coef, lam_d) -> tuple[np.ndarray, n
     return ll, 0.5 * (p * s3 / s1 - tr_inv)
 
 
+_REML_NGRID, _REML_LO, _REML_HI, _REML_TOL = 100, -10.0, 10.0, 1e-6
+_SLQ_PROBES, _SLQ_STEPS, _SLQ_DEFLATE = 48, 24, 128
+
+
 class LMM:
     """Linear mixed model y = X beta + u + e, u ~ N(0, vg K), e ~ N(0, ve I).
 
@@ -312,11 +316,12 @@ class LMM:
         """Map coefficients of Q back to the user's X = Q R coordinates."""
         return linalg.solve_triangular(self._design_r, coefficients, check_finite=False)
 
-    def _residualized_y(self) -> np.ndarray:
+    def _residualized_y(self, y=None) -> np.ndarray:
+        y = self.y if y is None else y
         Q = self.resid_projector
-        residual = self.y - Q @ (Q.T @ self.y)
+        residual = y - Q @ (Q.T @ y)
         # Reject projection roundoff as evidence of residual variation.
-        if linalg.norm(residual) <= 10 * np.finfo(float).eps * linalg.norm(self.y):
+        if linalg.norm(residual) <= 10 * np.finfo(float).eps * linalg.norm(y):
             raise ValueError("phenotype has no residual variation after covariate adjustment")
         return residual
 
@@ -572,13 +577,18 @@ class LMM:
         that the fit on grid ``deltas`` (refinement ``tol``) would return
         from the rules so far has converged (:meth:`_fit_variance_components`).
         """
+        op, lam, vectors, Z, rng = self._slq_common(probes, deflate, basis)
+        y_rest, coef, stop = self._slq_target(self.y, lam, vectors, method, stop_tol, deltas, tol)
+        rules = lanczos_quadrature_batch(op, np.column_stack([y_rest, Z]), steps, stop)
+        return self._slq_evaluators(method, rules, lam, coef, probes, steps, deflate, rng)
+
+    def _slq_common(self, probes, deflate, basis):
+        """The deflated operator and trace starts depend only on the cohort."""
         rng = np.random.default_rng(self.random_state)
         op = self._reml_op()
         Q = self.resid_projector
-        y_proj = self.y - Q @ (Q.T @ self.y)
 
         has_kinship = self.K is not None or self._kop is not None
-        d = 0
         lam_d = np.empty(0)
         U_d = np.empty((self.n, 0))
         if deflate > 0 and has_kinship:
@@ -594,25 +604,25 @@ class LMM:
             # near-degenerate bulk boundary. Directions inside the tight
             # bulk are left to the quadrature, which handles them well.
             lam_d, U_d = _separated_extremes(lam_d, U_d)
-            d = lam_d.size
 
         def op_defl(x):
             c = U_d.T @ x
             return op(x) - U_d @ (lam_d[:, None] * c if c.ndim == 2 else lam_d * c)
 
-        y_top_coef = U_d.T @ y_proj
-        y_rest = y_proj - U_d @ y_top_coef
-        # the y rule and the trace probes share every operator pass: one
-        # batched Lanczos run instead of 1 + probes sequential ones (same
-        # probes, same rules up to rounding)
         def project_bulk(x):
             x = x - Q @ (Q.T @ x)
             return x - U_d @ (U_d.T @ x)
 
         Z = rademacher_probes(self.n, probes, rng, pre=project_bulk)
+        return op_defl, lam_d, U_d, Z, rng
+
+    def _slq_target(self, y, lam_d, U_d, method, stop_tol, deltas, tol):
+        y_proj = self._residualized_y(y)
+        y_top_coef = U_d.T @ y_proj
+        y_rest = y_proj - U_d @ y_top_coef
         p = self.n - self.q
         stop = None
-        if method == "reml" and stop_tol > 0 and Z.shape[1] > 0:
+        if method == "reml" and stop_tol > 0:
             # After pass j the j-step rules give the h2 a j-step run would
             # fit (to rounding). Stop once it moved less than stop_tol twice
             # running, and only while each of the last three fits found a
@@ -642,9 +652,47 @@ class LMM:
                 (h0, b0), (h1, b1), (h2, b2) = checks[-3:]
                 return b0 and b1 and b2 and abs(h2 - h1) < stop_tol and abs(h1 - h0) < stop_tol
 
-        rules = lanczos_quadrature_batch(op_defl, np.column_stack([y_rest, Z]), steps, stop)
-        y_rule, tr_rules = rules[0], rules[1:]
+        return y_rest, y_top_coef, stop
 
+    def _reml_many(self, Y, basis, stop_tol, batch_size):
+        """One probe set for all traits. Freeze each trait's rules at its own stop."""
+        if not np.isfinite(stop_tol) or stop_tol < 0:
+            raise ValueError("slq_tol must be a nonnegative number")
+        grid = np.exp(np.linspace(_REML_LO, _REML_HI, _REML_NGRID + 1))
+        op, lam, vectors, Z, rng = self._slq_common(_SLQ_PROBES, _SLQ_DEFLATE, basis)
+
+        def run_batch(block):
+            targets = [self._slq_target(y, lam, vectors, "reml", stop_tol, grid, _REML_TOL)
+                       for y in block.T]
+            width = len(targets)
+            saved = [None] * width
+
+            def stop(j, rules_at):
+                if j < _SLQ_MIN_STEPS - 2:
+                    return False
+                all_rules = rules_at()
+                traces = all_rules[width:]
+                for k, (_, _, check) in enumerate(targets):
+                    if saved[k] is None:
+                        rules = [all_rules[k], *traces]
+                        if check(j, lambda: rules):
+                            saved[k] = rules
+                return all(r is not None for r in saved)
+
+            starts = np.column_stack([*(t[0] for t in targets), Z])
+            final = lanczos_quadrature_batch(op, starts, _SLQ_STEPS, stop if stop_tol else None)
+            for k, (_, coef, _) in enumerate(targets):
+                rules = saved[k] if saved[k] is not None else [final[k], *final[width:]]
+                pack = self._slq_evaluators("reml", rules, lam, coef, _SLQ_PROBES, _SLQ_STEPS,
+                                            _SLQ_DEFLATE, rng)
+                yield self._optimize_variances("reml", "slq", grid, _REML_TOL, *pack)
+
+        for i in range(0, Y.shape[1], batch_size):
+            yield from run_batch(Y[:, i:i + batch_size])
+
+    def _slq_evaluators(self, method, rules, lam_d, y_top_coef, probes, steps, deflate, rng):
+        y_rule, tr_rules = rules[0], rules[1:]
+        d, p = lam_d.size, self.n - self.q
         def s1_at(delta):
             top = float(np.sum(y_top_coef**2 / (lam_d + delta))) if d else 0.0
             return top + y_rule.apply(lambda t: 1.0 / (np.maximum(t, 0.0) + delta))
@@ -663,7 +711,7 @@ class LMM:
         if method == "ml":
             lam_k = np.empty(0)
             U_k = None
-            if deflate > 0 and has_kinship:
+            if deflate > 0 and (self.K is not None or self._kop is not None):
                 lam_k, U_k = randomized_eigh_op(
                     self._kdot,
                     self.n,
@@ -751,15 +799,15 @@ class LMM:
     def fit(
         self,
         method: str = "reml",
-        ngrids: int = 100,
-        llim: float = -10.0,
-        ulim: float = 10.0,
-        tol: float = 1e-6,
+        ngrids: int = _REML_NGRID,
+        llim: float = _REML_LO,
+        ulim: float = _REML_HI,
+        tol: float = _REML_TOL,
         recompute: bool = False,
         solver: str = "auto",
-        slq_probes: int = 48,
-        slq_steps: int = 24,
-        slq_deflate: int = 128,
+        slq_probes: int = _SLQ_PROBES,
+        slq_steps: int = _SLQ_STEPS,
+        slq_deflate: int = _SLQ_DEFLATE,
         slq_tol: float = 1e-6,
     ) -> LMFit:
         """Fit variance components on the null (covariates-only) model.
@@ -837,15 +885,15 @@ class LMM:
     def _fit_variance_components(
         self,
         method: str = "reml",
-        ngrids: int = 100,
-        llim: float = -10.0,
-        ulim: float = 10.0,
-        tol: float = 1e-6,
+        ngrids: int = _REML_NGRID,
+        llim: float = _REML_LO,
+        ulim: float = _REML_HI,
+        tol: float = _REML_TOL,
         recompute: bool = False,
         solver: str = "auto",
-        slq_probes: int = 48,
-        slq_steps: int = 24,
-        slq_deflate: int = 128,
+        slq_probes: int = _SLQ_PROBES,
+        slq_steps: int = _SLQ_STEPS,
+        slq_deflate: int = _SLQ_DEFLATE,
         slq_tol: float = 1e-6,
         deflation_basis: Optional[tuple[np.ndarray, np.ndarray]] = None,
     ) -> _VarianceFit:
@@ -896,6 +944,9 @@ class LMM:
         else:
             raise ValueError(f"unknown solver {solver!r}; use 'exact' or 'slq'")
 
+        return self._optimize_variances(method, solver, deltas, tol, ll_at, dll_at, s1_at)
+
+    def _optimize_variances(self, method, solver, deltas, tol, ll_at, dll_at, s1_at):
         lls = np.array([ll_at(d) for d in deltas])
         dlls = np.array([dll_at(d) for d in deltas])
         opt_delta, opt_ll, used_newton = self._refine_delta(
@@ -909,7 +960,7 @@ class LMM:
             raise ValueError("variance fit failed: phenotype must have residual variation")
 
         return _VarianceFit(method, opt_delta, vg, ve, opt_ll,
-                            1.0 / (1.0 + opt_delta), ngrids, used_newton, solver)
+                            1.0 / (1.0 + opt_delta), len(deltas) - 1, used_newton, solver)
 
     def _operator_trace(self) -> float:
         """trace(K) of the streaming operator (exact when it exposes one)."""

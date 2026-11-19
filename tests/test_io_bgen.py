@@ -3,7 +3,6 @@
 import struct
 import sys
 from types import SimpleNamespace
-import zlib
 
 import numpy as np
 import pytest
@@ -152,25 +151,11 @@ def test_bgen_missing_dependency(tmp_path, monkeypatch):
 
 
 def _binary_fixture(path, compressed):
-    # BGEN layout 2 as specified by Oxford; no production writer is used.
-    def string(s, size):
-        data = s.encode()
-        return struct.pack("<" + size, len(data)) + data
-
-    sample_data = b"".join(string(s, "H") for s in ["sB", "sA", "sC", "sD", "sE"])
-    samples = struct.pack("<II", 8 + len(sample_data), 5) + sample_data
-    compression = 2 if compressed == "zstd" else int(compressed)
-    header = struct.pack("<IIII4sI", 20 + len(samples), 20, 1, 5, b"bgen", 8 | (1 << 31) | compression)
-    identifying = (string("chip1", "H") + string("rs1", "H") + string("chr01", "H")
-                   + struct.pack("<IH", 101, 2) + string("A", "I") + string("T", "I"))
-    # N=5, K=2, min/max ploidy=2, per-sample ploidy/missing flags,
-    # unphased, 8 bits; last genotype probability is implicit.
-    probabilities = struct.pack("<IHBB", 5, 2, 2, 2) + bytes([2, 2, 2, 2, 130, 0, 8])
-    probabilities += bytes([255, 0, 0, 255, 0, 0, 100, 100, 0, 0])
-    compress = (pytest.importorskip("zstandard").ZstdCompressor().compress
-                if compressed == "zstd" else zlib.compress)
-    block = struct.pack("<I", len(probabilities)) + compress(probabilities) if compressed else probabilities
-    path.write_bytes(header + samples + identifying + struct.pack("<I", len(block)) + block)
+    from .bgen_fixture import write_bgen
+    record = ("chip1", "chr01", 101, "A", "T", 8, [[255, 0], [0, 255], [0, 0],
+              [100, 100], [0, 0]], [2, 2, 2, 2, 130])
+    write_bgen(path, ["sB", "sA", "sC", "sD", "sE"], [record],
+               "zstd" if compressed == "zstd" else "zlib" if compressed else None)
 
 
 @pytest.mark.parametrize("compressed", [False, True, "zstd"])
@@ -237,7 +222,7 @@ def test_bgen_dosage_stream_budget_metadata_and_validation(fake_bgen, monkeypatc
         return metadata(m)
 
     monkeypatch.setattr(module, "allocate_metadata", bounded_metadata)
-    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5)
+    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5, backend="reader")
     a, b = list(stream)
     assert sizes == [1, 1] and reader.closed
     assert a.sample_ids is b.sample_ids
@@ -245,8 +230,69 @@ def test_bgen_dosage_stream_budget_metadata_and_validation(fake_bgen, monkeypatc
                                 [[0, 2], [1, 0], [2, 1.1], [0.9, 0.5], [np.nan, 0.11]])
     reader.ploidy = reader.ploidy.copy()
     reader.ploidy[0, 1] = 1
-    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5)
+    stream = iter_bgen_dosages(path, chunk_bytes=24 * 5, backend="reader")
     next(stream)
     with pytest.raises(ValueError, match="non-diploid"):
         next(stream)
     assert reader.closed
+
+
+@pytest.mark.parametrize("bits", [8, 16])
+@pytest.mark.parametrize("compression", ["zlib", "zstd"])
+def test_integer_dosages_known_alleles_missing_and_sample_order(tmp_path, bits, compression):
+    from .bgen_fixture import write_bgen
+
+    path = tmp_path / "test.bgen"
+    denom = 2**bits - 1
+    pairs = [[denom, 0], [0, denom], [0, 0], [denom-2, 1], [0, 0]]
+    record = ("v", "chr2", 42, "AT", "A", bits, pairs, [2, 2, 2, 2, 130])
+    samples = ["sZ", "sA", "sC", "sD", "sE"]
+    write_bgen(path, samples, [record] * 3, compression)
+    blocks = list(iter_bgen_dosages(path, chunk_bytes=8*len(samples), max_variants=2))
+    assert [b.n_variants for b in blocks] == [1, 1]
+    assert blocks[0].sample_ids is blocks[1].sample_ids
+    for block in blocks:
+        np.testing.assert_array_equal(block.sample_ids, samples)
+        np.testing.assert_allclose(block.values[:, 0], [0, 1, 2, 3/denom, np.nan], atol=0)
+        assert block.allele1.tolist() == ["A"] and block.allele2.tolist() == ["AT"]
+        assert block.variant_ids.tolist() == ["v"] and block.chromosome.tolist() == ["chr2"]
+
+
+@pytest.mark.parametrize("damage, error", [("nonmissing", "malformed"), ("missing_haploid", "diploid"),
+                                            ("truncated", "truncated"), ("corrupt", "compressed"),
+                                            ("duplicate", "unique")])
+def test_native_dosage_rejects_bad_records(tmp_path, damage, error):
+    from .bgen_fixture import write_bgen
+
+    path = tmp_path / "bad.bgen"
+    flags = [2, 129 if damage == "missing_haploid" else 130]
+    pairs = [[65535, int(damage == "nonmissing")], [0, 0]]
+    samples = ["x", "x" if damage == "duplicate" else "y"]
+    write_bgen(path, samples, [("v", "1", 9, "A", "C", 16, pairs, flags)])
+    if damage == "truncated":
+        path.write_bytes(path.read_bytes()[:-1])
+    elif damage == "corrupt":
+        raw = path.read_bytes()
+        path.write_bytes(raw[:-1] + bytes([raw[-1] ^ 31]))
+    with pytest.raises(ValueError, match=error):
+        list(iter_bgen_dosages(path))
+
+
+def test_mixed_width_switch_and_external_samples(tmp_path):
+    pytest.importorskip("bgen_reader")
+    from .bgen_fixture import write_bgen
+
+    path = tmp_path / "mixed.bgen"
+    records = [(f"v{b}", "2", j, "C", "T", b, [[1, 7], [2**b-1, 0], [0, 0]], [2, 2, 130])
+               for j, b in enumerate((8, 12, 16, 32))]
+    write_bgen(path, ["a", "b", "c"], records, embedded=False)
+    samples = tmp_path / "cohort.sample"
+    samples.write_text("ID_1 ID_2\n0 0\nf z\nf a\nf k\n")
+    def run(backend):
+        blocks = list(iter_bgen_dosages(path, sample_path=samples, chunk_variants=3, backend=backend))
+        np.testing.assert_array_equal(np.concatenate([b.variant_ids for b in blocks]),
+                                      [r[0] for r in records])
+        for b in blocks:
+            np.testing.assert_array_equal(b.sample_ids, ["z", "a", "k"])
+        return np.column_stack([b.values for b in blocks])
+    np.testing.assert_allclose(run("auto"), run("reader"), rtol=0, atol=3e-16)

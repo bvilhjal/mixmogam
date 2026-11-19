@@ -149,18 +149,24 @@ def test_cli_step2_streams_input_before_testing(data, tmp_path, monkeypatch, for
                 calls[calls < 0] = -9
                 writer.append_biallelic(calls)
     sizes = []
-    read = io.iter_genotypes
+    if format == "pgen":
+        import mixmogam._pgen_score as scorer
+        source, name = scorer, "pgen_blocks"
+    else:
+        source, name = io, "iter_genotypes"
+    read = getattr(source, name)
 
     def bounded(*args, **kwargs):
         for block in read(*args, **kwargs):
-            sizes.append(block.n_variants)
-            assert block.n_variants <= 37
+            count = len(block[0]) if format == "pgen" else block.n_variants
+            sizes.append(count)
+            assert count <= 37
             yield block
 
     def forbidden(*args, **kwargs):
         raise AssertionError("step 2 loaded a whole file")
 
-    monkeypatch.setattr(io, "iter_genotypes", bounded)
+    monkeypatch.setattr(source, name, bounded)
     monkeypatch.setattr(io, "read_genotypes", forbidden)
     out = tmp_path / "result.tsv"
     assert main(["step2", "--step1", str(fit), "--geno", str(path), "--packed",
@@ -174,10 +180,10 @@ def test_cli_step2_streams_input_before_testing(data, tmp_path, monkeypatch, for
     assert "gram_cache" in HrattStep1.load(fit).extra
 
 
-def test_cli_step2_dosage_wiring(data, tmp_path, monkeypatch):
+def test_cli_step2_dosage_wiring(data, tmp_path):
     """--dosage streams BGEN dosages through the CLI and its validation is
     CLI-only wiring: the underlying paths are tested elsewhere (review F6)."""
-    import struct
+    from .bgen_fixture import write_bgen
 
     G, gt, y, X = data
     k = 80
@@ -191,38 +197,15 @@ def test_cli_step2_dosage_wiring(data, tmp_path, monkeypatch):
                   allele1=gt.allele1[:k], allele2=gt.allele2[:k])
     ref = hratt_step2(step1, dos)
 
-    calls = G[:, :k]
-    probs = np.zeros((N, k, 3))
-    for c in (0, 1, 2):
-        probs[calls == c, c] = 1.0
-    missing = calls < 0
-    probs[missing] = 0.0
-
-    class Reader:
-        nsamples, nvariants = N, k
-        samples = gt.sample_ids
-        nalleles = np.full(k, 2)
-        ncombinations = np.full(k, 3)
-        phased = np.zeros(k, dtype=bool)
-        allele_ids = np.array(["A,C"] * k)
-        ids = gt.variant_ids[:k]
-        chromosomes = gt.chromosome[:k].astype(str)
-        positions = gt.position[:k]
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            pass
-
-        def read(self, index, **kwargs):
-            return (probs[index].copy(), missing[index].copy(),
-                    np.full(probs[index].shape[:2], 2, dtype=np.int32))
-
+    records = []
+    for j in range(k):
+        calls = G[:, j]
+        probs = 255 * np.column_stack([calls == 0, calls == 1])
+        flags = np.where(calls < 0, 130, 2).astype(np.uint8)
+        records.append((gt.variant_ids[j], gt.chromosome[j], gt.position[j], gt.allele2[j],
+                        gt.allele1[j], 8, probs, flags))
     path = tmp_path / "d.bgen"
-    path.write_bytes(struct.pack("<IIII4sI", 20, 20, k, N, b"bgen", 9 | (1 << 31)))
-    monkeypatch.setitem(sys.modules, "bgen_reader",
-                        SimpleNamespace(open_bgen=lambda *a, **k_: Reader()))
+    write_bgen(path, gt.sample_ids, records)
     out = tmp_path / "dos.tsv"
     assert main(["step2", "--step1", str(fit), "--geno", str(path), "--dosage",
                  "--chunk-mb", str(20 * N * 8 / 1024**2), "--out", str(out)]) == 0
@@ -342,7 +325,7 @@ def test_step1_file_holds_no_pickles(data, tmp_path):
     assert loaded.loco_groups == step1.loco_groups
 
 
-def test_cli_save_step1_and_step2_match_gwas(data, tmp_path):
+def test_cli_save_step1_and_step2_match_gwas(data, tmp_path, monkeypatch):
     G, gt, y, X = data
     write_plink(gt, str(tmp_path / "panel"))
     for c in (1, 2, 3, 4):
@@ -354,8 +337,15 @@ def test_cli_save_step1_and_step2_match_gwas(data, tmp_path):
     common = ["--geno", str(tmp_path / "panel"), "--mmap", "--pheno", str(tmp_path / "pheno.txt")]
     assert main(["gwas", *common, "--pheno-name", "t1", "--method", "hratt",
                  "--out", str(tmp_path / "ref.tsv")]) == 0
+    writes = []
+    write = GwasResult.write_csv
+    def record(self, *args, **kwargs):
+        writes.append(len(self))
+        return write(self, *args, **kwargs)
+    monkeypatch.setattr(GwasResult, "write_csv", record)
     assert main(["gwas", *common, "--pheno-name", "t1", "--save-step1", str(tmp_path / "t1.npz"),
-                 "--out", str(tmp_path / "both.tsv")]) == 0
+                 "--out", str(tmp_path / "both.tsv"), "--chunk-mb", "0.02"]) == 0
+    assert max(writes) < M and sum(writes) == M
     assert (tmp_path / "ref.tsv").read_bytes() == (tmp_path / "both.tsv").read_bytes()
     assert main(["gwas", *common, "--pheno-name", "t2", "--save-step1",
                  str(tmp_path / "t2.npz")]) == 0
@@ -498,7 +488,7 @@ def test_bgen_dosages_are_expected_counts(tmp_path, monkeypatch):
 
     monkeypatch.setitem(sys.modules, "bgen_reader",
                         SimpleNamespace(open_bgen=lambda *a, **k: Reader()))
-    blocks = list(module.iter_bgen_dosages(path, chunk_variants=2))
+    blocks = list(module.iter_bgen_dosages(path, chunk_variants=2, backend="reader"))
     assert [b.n_variants for b in blocks] == [2, 1] and len(reads) == 2
     values = np.hstack([b.values for b in blocks])
     want = probs[:, :, 1] + 2 * probs[:, :, 2]
@@ -519,3 +509,77 @@ def test_gwas_and_split_api_agree_through_gwas(data):
     """gwas(method='hratt') stays hratt(): the split is internal."""
     G, gt, y, X = data
     _assert_same(gwas(y, gt, X, method="hratt", block=4096), hratt(y, gt, X))
+
+
+def test_pgen_sparse_and_dense_scores_share_order_and_rank_decisions(data, tmp_path, monkeypatch):
+    pg = pytest.importorskip("pgenlib")
+    pytest.importorskip("numba")
+    from mixmogam.io.pgen import iter_pgen
+    import mixmogam._pgen_score as scorer
+
+    _, gt, y, X = data
+    rng = np.random.default_rng(784)
+    n = gt.n_samples
+    rare = np.zeros(n, dtype=np.int8)
+    rare[:3] = 1
+    fitted = rng.permutation(n)[:-15]
+    train = gt.filter_samples(fitted)
+    design = np.column_stack([X, rare])[fitted]
+    opts = dict(heritability_method="he", random_state=17)
+    fits = [hratt_step1(t[fitted], train, design, **opts) for t in (y, y + 0.3*X[:, 0])]
+    calls = np.column_stack([rare, rng.binomial(2, .4, n), 2-rare, rare, rare, 0*rare,
+                             rng.binomial(2, .25, n), rare]).astype(np.int8)
+    calls[11:16, [2]] = -9
+    calls[20:23, 3] = 2
+    calls[15:18, 4] = -9
+    calls[:, -1] = -9
+    chrom = 1 + np.arange(calls.shape[1]) % 3
+    path = tmp_path / "target"
+    order = rng.permutation(n)
+    path.with_suffix(".psam").write_text("#IID\n" + "\n".join(gt.sample_ids[order]) + "\n")
+    path.with_suffix(".pvar").write_text("#CHROM POS ID REF ALT\n" + "".join(
+        f"{c} {j+1} v{j} A C\n" for j,c in enumerate(chrom)))
+    with pg.PgenWriter(bytes(path.with_suffix(".pgen")), n, variant_ct=calls.shape[1]) as writer:
+        for col in calls.T:
+            writer.append_biallelic(col[order])
+    count = []
+    moments = scorer._moments
+    def recorded(rows, *args):
+        count.append(len(rows))
+        return moments(rows, *args)
+    monkeypatch.setattr(scorer, "_moments", recorded)
+    budget = 5 * n
+    for packed in (False, True):
+        expected = hratt_step2(fits, iter_pgen(path, packed=packed, chunk_bytes=budget),
+                               chunk_bytes=budget)
+        observed = hratt_step2(fits, path, packed=packed, chunk_bytes=budget)
+        for actual, ref in zip(observed, expected):
+            for key in ("p", "beta", "se", "f_stat", "af"):
+                np.testing.assert_allclose(getattr(actual, key), getattr(ref, key),
+                                           rtol=3e-9, atol=1e-12, equal_nan=True)
+            for key in ("variant_ids", "chromosome", "position", "effect_allele", "other_allele"):
+                np.testing.assert_array_equal(getattr(actual, key), getattr(ref, key))
+    assert count and max(count) < n // 4
+    # A weighted test must retain its variance, SPA and missing-call semantics.
+    weighted = hratt_step1(y[fitted], train, design, sample_weights=1+np.abs(y[fitted]), **opts)
+    before = len(count)
+    expected = hratt_step2(weighted, iter_pgen(path, chunk_bytes=budget), chunk_bytes=budget)
+    _assert_same(hratt_step2(weighted, path, chunk_bytes=budget), expected)
+    assert len(count) == before
+
+
+def test_streamed_output_bounds_the_original_panel(data, tmp_path, monkeypatch):
+    _, gt, y, X = data
+    fit = hratt_step1(y, gt, X, heritability_method="he")
+    want = hratt_step2(fit, gt)
+    writes = []
+    write = GwasResult.write_csv
+    def record(self, *args, **kwargs):
+        writes.append(len(self))
+        return write(self, *args, **kwargs)
+    monkeypatch.setattr(GwasResult, "write_csv", record)
+    out = tmp_path / "out.tsv"
+    row = (gt.n_samples + 3)//4 if gt.packed else gt.n_samples
+    assert hratt_step2(fit, gt, chunk_bytes=17*row, out=out)["variants"] == len(want)
+    assert max(writes) == 17 and sum(writes) == len(want)
+    _assert_same(GwasResult.read_csv(out), want, rtol=1e-11)

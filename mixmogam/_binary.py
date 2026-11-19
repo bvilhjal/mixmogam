@@ -108,35 +108,73 @@ def group_null_fits(y, X, offsets, weights=None, free_offset: bool = False) -> l
     covariates, or the fixed-offset fit diverges as well. In-sample offsets
     have a fixed coefficient of one.
     """
-    fits = []
-    for g in range(offsets.shape[1]):
-        o = offsets[:, g]
-        if not free_offset:
-            fit = null_logistic(y, X, weights=weights, offset=o)
-            fits.append({"mu": fit["mu"], "converged": fit["converged"]})
-            continue
-        resid = o - X @ linalg.lstsq(X, o, lapack_driver="gelsy")[0]
-        fit, design, slope = None, X, 0.0
-        if float(resid @ resid) > 1e-20 * max(float(o @ o), np.finfo(float).tiny):
-            Xo = np.column_stack([X, o])
+    return [_group_null(y, X, offsets[:, g], weights, free_offset)
+            for g in range(offsets.shape[1])]
+
+
+def _group_null(y, X, o, weights, free_offset):
+    if not free_offset:
+        fit = null_logistic(y, X, weights=weights, offset=o)
+        return {"mu": fit["mu"], "converged": fit["converged"], "gamma": fit["gamma"]}
+    resid = o - X @ linalg.lstsq(X, o, lapack_driver="gelsy")[0]
+    fit, design, slope = None, X, 0.0
+    if float(resid @ resid) > 1e-20 * max(float(o @ o), np.finfo(float).tiny):
+        Xo = np.column_stack([X, o])
+        try:
+            fit = null_logistic(y, Xo, weights=weights)
+        except ValueError:
+            fit = None
+        if fit is not None and 0.0 < fit["gamma"][-1] <= 1.0:
+            design, slope = Xo, float(fit["gamma"][-1])
+        elif fit is None or fit["gamma"][-1] > 1.0:  # at most the score itself
             try:
-                fit = null_logistic(y, Xo, weights=weights)
+                fit, slope = null_logistic(y, X, weights=weights, offset=o), 1.0
             except ValueError:
                 fit = None
-            if fit is not None and 0.0 < fit["gamma"][-1] <= 1.0:
-                design, slope = Xo, float(fit["gamma"][-1])
-            elif fit is None or fit["gamma"][-1] > 1.0:  # at most the score itself
-                try:
-                    fit, slope = null_logistic(y, X, weights=weights, offset=o), 1.0
-                except ValueError:
-                    fit = None
-            else:
-                fit = None
-        if fit is None:
-            fit, slope = null_logistic(y, X, weights=weights), 0.0
-        fits.append({"mu": fit["mu"], "converged": fit["converged"], "slope": slope,
-                     "dropped": slope == 0.0, "X": design})
-    return fits
+        else:
+            fit = None
+    if fit is None:
+        fit, slope = null_logistic(y, X, weights=weights), 0.0
+    return {"mu": fit["mu"], "gamma": fit["gamma"], "converged": fit["converged"],
+            "slope": slope, "dropped": slope == 0.0, "X": design}
+
+
+class LocoNulls:
+    """Small fitted logistic models. Reconstruct one group's sample vectors on demand."""
+
+    def __init__(self, y, X, prediction, s, sy, weights, crossfit):
+        self.y, self.X, self.prediction = y, X, prediction
+        self.factor = sy if s is None else sy / np.asarray(s, dtype=np.float64)
+        self.w = 1.0 if weights is None else weights
+        self.models = []
+        self.norms = np.empty(prediction.shape[1])
+        variance = 0.0
+        for g in range(prediction.shape[1]):
+            offset = loco_offsets(prediction[:, g:g + 1], s, sy)[:, 0]
+            fit = _group_null(y, X, offset, weights, crossfit)
+            mu = fit.pop("mu")
+            fit["augmented"] = fit.pop("X", X) is not X
+            resid = self.w * (y - mu)
+            self.norms[g] = resid @ resid
+            self.models.append(fit)
+            variance += np.var(offset)
+        self.offset_sd = float(np.sqrt(variance / len(self.models)))
+
+    def __getitem__(self, g):
+        model = self.models[g]
+        design = self.X
+        if model["augmented"]:
+            design = np.column_stack([design, self.prediction[:, g] * self.factor])
+            eta = design @ model["gamma"]
+        else:
+            eta = design @ model["gamma"]
+            if model.get("slope", 1.0) != 0.0:
+                eta += self.prediction[:, g] * self.factor  # fixed coefficient of one
+        return {"mu": expit(eta), "X": design}
+
+    def residual(self, g):
+        return self.w * (self.y - self[g]["mu"])
+
 
 
 def score_pass(lg, y, X, fits, weights=None, s=None, Q=None, cache=None) -> dict:
@@ -155,57 +193,54 @@ def score_pass(lg, y, X, fits, weights=None, s=None, Q=None, cache=None) -> dict
     rows are decoded
     row-scaled (z~ = s z), so sample-side vectors are divided by s and
     squared-tile weights by s^2. ``cache`` (a dict) keeps the per-group
-    sample-side matrices, which depend on the fits alone, for later calls on
-    further variants of the same samples.
+    sample-side matrices of the most recent group for later calls on
+    further variants of the same samples. With compact LOCO nulls the
+    residual columns in A are accessed as A(group).
     """
-    if cache is not None and "score_groups" in cache:
-        groups, A, A2, Q = cache["score_groups"]
-        return _score_scan(lg, groups, A, A2, Q, X.shape)
+    from mixmogam.twostep import _ancestry_moments, _ancestry_ratio
+
+    cache = {} if cache is None else cache
     n, q = X.shape
-    w = np.ones(n) if weights is None else np.asarray(weights, dtype=np.float64)
-    inv_s = np.ones(n) if s is None else 1.0 / np.asarray(s, dtype=np.float64)
-    inv_v = inv_s * inv_s
-    if Q is None:
-        Q = linalg.qr(X, mode="economic")[0]
-    basis = Q * inv_s[:, None]  # z Q_X from scaled rows
-    groups = []
-    for fit in fits:
-        mu = fit["mu"]
-        Xg = fit.get("X", X)  # the group's design (with a fitted score column)
+    if "binary_design" not in cache:
+        if Q is None:
+            Q = linalg.qr(X, mode="economic")[0]
+        inv_s = np.ones(n) if s is None else 1.0 / np.asarray(s, dtype=np.float64)
+        basis = Q if s is None else Q * inv_s[:, None]
+        cache["binary_design"] = (Q, inv_s, inv_s * inv_s, basis)
+    Q, inv_s, inv_v, basis = cache["binary_design"]
+    w = 1.0 if weights is None else weights
+    A = (fits.residual if isinstance(fits, LocoNulls)
+         else np.column_stack([w * (y - f["mu"]) for f in fits]))
+
+    def prepare(g):
+        fit = fits[g]
+        mu, Xg = fit["mu"], fit.get("X", X)
         resid = w * (y - mu)
         W = w * mu * (1.0 - mu)
-        side = np.column_stack([resid * inv_s, (Xg * W[:, None]) * inv_s[:, None], basis])
-        sq = np.column_stack([W, np.ones(n)]) * inv_v[:, None]
-        groups.append({"side": side, "sq": sq, "M": linalg.inv((Xg * W[:, None]).T @ Xg),
-                       "Xr": Xg.T @ resid, "q": Xg.shape[1]})
-    A = np.column_stack([w * (y - fit["mu"]) for fit in fits])
-    A2 = A * A
-    from mixmogam.twostep import _ancestry_moments
-    for g, G_ in enumerate(groups):  # sums of the closed-form ancestry ratio
-        G_["ancestry"] = _ancestry_moments(Q, A2[:, g])
-    if cache is not None:
-        cache["score_groups"] = (groups, A, A2, Q)
-    return _score_scan(lg, groups, A, A2, Q, X.shape)
+        XW = Xg * W[:, None]
+        a2 = resid * resid
+        return (np.column_stack([resid * inv_s, XW * inv_s[:, None]]),
+                np.column_stack([W * inv_v, inv_v]), linalg.inv(XW.T @ Xg),
+                Xg.T @ resid, a2, _ancestry_moments(Q, a2))
 
-
-def _score_scan(lg, groups, A, A2, Q, shape) -> dict:
-    """The per-variant pass of :func:`score_pass`."""
-    from mixmogam.twostep import _ancestry_ratio
-
-    n, q = shape
     m = lg.m
     U, J, zvar, rho = np.zeros(m), np.zeros(m), np.zeros(m), np.zeros(m)
     tile = max(1, (16 * 1024**2) // max(8 * n, 1))
     for idx, g, Z64 in lg.wide_slices(tile):
-        G_ = groups[g]
-        qg = G_["q"]
-        P = Z64 @ G_["side"]  # z'r, H = X'Wz, Q_X'z (per row)
-        S = (Z64 * Z64) @ G_["sq"]  # sum W z^2, sum z^2
-        zr, H, cu = P[:, 0], P[:, 1:1 + qg], P[:, 1 + qg:]
-        MH = H @ G_["M"]  # rows: (M H_j)'
-        U[idx] = zr - MH @ G_["Xr"]
+        if cache.get("binary_group") != g:
+            cache.pop("binary_side", None)
+            cache["binary_side"] = prepare(g)
+            cache["binary_group"] = g
+        side, sq, M, Xr, a2, ancestry = cache["binary_side"]
+        P = Z64 @ side
+        cu = Z64 @ basis
+        S = (Z64 * Z64) @ sq
+        zr, H = P[:, 0], P[:, 1:]
+        MH = H @ M
+        U[idx] = zr - MH @ Xr
         J[idx] = S[:, 0] - np.einsum("ij,ij->i", MH, H)
         zvar[idx] = (S[:, 1] - np.einsum("ij,ij->i", cu, cu)) / (n - q)
-        rho[idx] = _ancestry_ratio(cu, S[:, 1], Q, lg.mean[idx], lg.sd[idx], A2[:, g],
-                                   moments=G_["ancestry"])
+        rho[idx] = _ancestry_ratio(cu, S[:, 1], Q, lg.mean[idx], lg.sd[idx], a2,
+                                   moments=ancestry)
+        del side, sq, M, Xr, a2, ancestry
     return {"U": U, "J": J, "zvar": zvar, "rho": rho, "A": A}

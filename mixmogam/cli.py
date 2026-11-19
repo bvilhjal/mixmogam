@@ -112,6 +112,8 @@ def _parser() -> argparse.ArgumentParser:
                       help="variants forced into the model SNPs (with --model-snps): one per line, a "
                            "variant ID or a region chr:pos or chr:start-end; kept out of their own "
                            "chromosome's LOCO scores like every model SNP")
+    gwas.add_argument("--gram-cache-dir", help="scratch directory for VB Gram blocks beyond the RAM budget")
+    gwas.add_argument("--gram-cache-mb", type=float, help="VB Gram cache RAM budget in MiB")
     gwas.add_argument("--no-model-snps-h2-check", action="store_true",
                       help="skip the subset-vs-all-variants HE h2 check (one extra panel pass)")
     gwas.add_argument("--model-snps-stream", choices=("off", "on", "auto"),
@@ -155,6 +157,8 @@ def _parser() -> argparse.ArgumentParser:
     gwas.add_argument("--max-loco-groups", type=int, default=25)
     gwas.add_argument("--out", "-o", help="summary-statistic .csv or .tsv (optional .gz); "
                                            "required unless --save-step1 is given")
+    gwas.add_argument("--chunk-mb", type=float,
+                      help="step-2 block size in MiB with --save-step1 and --out (default 256)")
     gwas.add_argument("--save-step1", metavar="FILE",
                       help="hratt (implies --method hratt): save step 1 (LOCO residuals and "
                            "calibration) to FILE (.npz) for 'mixmogam step2'; with --out the "
@@ -281,6 +285,11 @@ def _cmd_gwas(args) -> int:
     from mixmogam.io.phenofile import read_phenotypes
     from mixmogam.pca import principal_components
 
+    if args.chunk_mb is not None:
+        if args.save_step1 is None or args.out is None:
+            raise ValueError("--chunk-mb on gwas applies to --save-step1 with --out")
+        if not np.isfinite(args.chunk_mb) or args.chunk_mb <= 0:
+            raise ValueError("--chunk-mb must be finite and positive")
     if args.binary_coding == "1/2" and args.trait != "binary":
         raise ValueError("--binary-coding 1/2 requires --trait binary")
     if args.out is None and args.save_step1 is None:
@@ -362,6 +371,13 @@ def _cmd_gwas(args) -> int:
         raise ValueError(f"--n-threads applies to the exact and hratt methods, not {method}")
     if args.random_state is not None and method != "exact":
         kwargs["random_state"] = args.random_state
+    if args.gram_cache_dir is not None or args.gram_cache_mb is not None:
+        if method not in ("hratt", "bolt"):
+            raise ValueError("Gram cache options require --method hratt or bolt")
+        if args.gram_cache_dir is not None:
+            kwargs["gram_cache_dir"] = args.gram_cache_dir
+        if args.gram_cache_mb is not None:
+            kwargs["gram_cache_bytes"] = args.gram_cache_mb * 1024**2
     if args.trait is not None:
         kwargs["trait"] = args.trait
     if args.stage1 != "enet":
@@ -451,7 +467,7 @@ def _cmd_gwas(args) -> int:
             raise ValueError("--kinship-variants needs --relatedness")
         kwargs["relatedness_options"] = {"kinship_variants": args.kinship_variants}
     if args.save_step1 is not None:
-        from mixmogam.steps import hratt_step1, hratt_step2
+        from mixmogam.steps import CHUNK_BYTES, hratt_step1, hratt_step2
 
         import inspect
 
@@ -465,12 +481,14 @@ def _cmd_gwas(args) -> int:
               f"to {args.save_step1}")
         if args.out is None:
             return 0
-        result = hratt_step2(step1, panel, n_threads=args.n_threads,
-                             genome_build=args.genome_build)
+        budget = CHUNK_BYTES if args.chunk_mb is None else args.chunk_mb * 1024**2
+        summary = hratt_step2(step1, panel, n_threads=args.n_threads, out=args.out,
+                              chunk_bytes=budget, genome_build=args.genome_build)
+        info = step1.extra.get("model_snps")
     else:
         result = gwas(y, subset, X=X, method=method, max_loco_groups=args.max_loco_groups,
                       genome_build=args.genome_build, **kwargs)
-    info = result.extra.get("model_snps")
+        info = result.extra.get("model_snps")
     if info is not None:
         opts = info.get("options") or {}
         if "log" in opts:
@@ -482,8 +500,12 @@ def _cmd_gwas(args) -> int:
             c = info["h2_check"]
             print(f"stage 1: HE h2 {c['h2_he_subset']:.3f} on the model SNPs, "
                   f"{c['h2_he_full']:.3f} on every variant (ratio {c['ratio']:.2f})")
-    result.write_csv(args.out)
-    print(f"wrote {len(result)} variants for {result.n} samples to {args.out}")
+    if args.save_step1 is None:
+        result.write_csv(args.out)
+        count, n = len(result), result.n
+    else:
+        count, n = summary["variants"], step1.n
+    print(f"wrote {count} variants for {n} samples to {args.out}")
     return 0
 
 
@@ -507,16 +529,21 @@ def _cmd_step2(args) -> int:
                 yield from iter_bgen_dosages(path, sample_path=args.sample,
                                             chunk_bytes=args.chunk_mb * 1024**2)
             else:
-                from mixmogam.io import iter_genotypes
+                from mixmogam.io import _resolve, iter_genotypes
 
-                yield from iter_genotypes(path, format=args.geno_format, packed=args.packed,
+                prefix, fmt = _resolve(path, args.geno_format, args.mmap,
+                                       args.hard_call_threshold, args.sample)
+                if fmt == "pgen":
+                    yield prefix
+                    continue
+                yield from iter_genotypes(path, format=fmt, packed=args.packed,
                                           mmap=args.mmap, chunk_bytes=args.chunk_mb * 1024**2,
                                           hard_call_threshold=args.hard_call_threshold,
                                           sample_path=args.sample)
 
     with closing(sources()) as blocks:
         summary = hratt_step2(fits, blocks, n_threads=args.n_threads,
-                              chunk_bytes=args.chunk_mb * 1024**2, out=args.out,
+                              chunk_bytes=args.chunk_mb * 1024**2, out=args.out, packed=args.packed,
                               genome_build=args.genome_build)
     print(f"wrote {summary['variants']:,} variants for {len(fits)} trait(s) to "
           f"{', '.join(map(str, args.out))}")

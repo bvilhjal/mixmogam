@@ -189,10 +189,11 @@ boundary. The Gaussian calculation also avoids division by tiny v.
   SNPs move.
   - Gram matrices are shared across fits, prepared only for the requested
     folds, computed in float64 and stored in the genotype precision as packed
-    upper triangles (the only part the sweeps read). Blocks are cached in
-    order up to a 1e9-byte budget and the rest recomputed each sweep. BOLT and
-    HRATT expose the budget as `gram_cache_bytes` and warn when the cache is
-    partial.
+    upper triangles (the only part the sweeps read). BOLT-style mixture and
+    HRATT keep blocks in order up to `gram_cache_bytes` (default 1e9).
+    With an existing `gram_cache_dir`, overflow blocks and their covariate
+    coefficients are written once and mapped read-only for the fit.
+    Without a scratch directory each sweep rebuilds the blocks outside the budget.
   - When the folds partition the samples (cross-fitting, BOLT-LMM's
     cross-validation), the all-sample Gram is the sum of the fold Grams, taken
     from fold-sorted samples. The different summation order changes float32
@@ -202,8 +203,9 @@ boundary. The Gaussian calculation also avoids division by tiny v.
     and cross-fitted Grams in one pass, from the cross-fit folds' products,
     their sum and one product over the hold-out. They share one budget that
     caches every hold-out Gram first; neither stores the all-sample Gram, which
-    neither reads. Once the hold-out cache is released, the cross-fit fills the
-    freed budget with first-sweep Grams in block order. With `loco_folds=1`
+    neither reads. In RAM-only mode, once the hold-out cache is released, the
+    cross-fit fills the freed budget with first-sweep Grams in block order.
+    With disk overflow, all blocks are available from preparation. With `loco_folds=1`
     both fits share one engine and one cache, which keeps the all-sample Gram.
   - Residuals accumulate in float64. The optional Numba coordinate loop
     sweeps one model column at a time along contiguous Gram rows, and every
@@ -211,6 +213,13 @@ boundary. The Gaussian calculation also avoids division by tiny v.
     columns keep residuals and updates column-major; wider fits (BOLT-LMM's
     90-column cross-validation, HRATT's strong-structure refit) stay
     sample-major.
+- **Multiple BOLT-style inf phenotypes.** With a common sample set and
+  covariate design, the genotype moments, spectral basis and stochastic
+  trace quadrature depend only on the genotypes, design and random seed.
+  All batches use the same probes. Within a batch the traits share each
+  trace quadrature calculation. Each trait uses the rule at its own REML
+  stopping point, followed by its own LOCO solves and prospective calibration.
+  `trait_batch_size` bounds the simultaneous phenotype Lanczos vectors.
 - **Default variance fitting**: deflated stochastic Lanczos quadrature REML on
   the operator, with at most 24 Lanczos steps and 48 Rademacher probes. A pass
   over the genotypes costs about the same for 1 to 64 columns, and the
@@ -654,9 +663,11 @@ groups), lambda, kappa_g and c_X, the scale sy, the covariate basis and row
 scale, and the relatedness pairs. Every step-2 statistic is a function of one
 variant's calls and these, so any partition of the variants gives the same
 values: `mixmogam.steps` saves the state and streams genotype files through
-step 2 in blocks. Quantities that depend only on the samples (projected
-residuals, the binary null fits and their score-pass matrices, the GLS
-covariance inverses) are prepared once per run. On 14 configurations
+step 2 in blocks. Quantitative tests reuse projected residuals and GLS
+covariance inverses. Binary scans fit the null logistic coefficients once
+per LOCO group. They reconstruct score workspaces from the coefficients
+and predictions as groups are visited, retaining one workspace per trait.
+The saved predictions occupy one value per sample and group. On 14 configurations
 (quantitative, HE with a model-SNP subset, weighted, binary, kappa_g, GLS
 with both denominators, strong structure) the split gave `hratt`'s values
 bitwise on the same panel, and after saving, shuffling samples, adding
@@ -677,6 +688,16 @@ scale) and accumulates the product in float64, parallel over variants, so
 no decoded rows are written and every thread count gives the same values.
 They differ from the decoded-row product only in summation order (~1e-16
 relative).
+
+A PGEN record can encode a common homozygote and a list of exceptions.
+For compatible unweighted quantitative fits, the direct scorer sums each
+covariate and each trait's projected residual once across samples. A variant
+starts with the common homozygote's contribution and adjusts only the listed
+samples, including missing calls. It uses the same float32 lookup values for
+scores as the dense scan. Dense records, nearly rank-deficient projections
+and scores near numerical zero use the ordinary hard-call kernel to preserve
+its handling of undefined statistics. The reader restores file order when
+a block contains both representations.
 
 ### Optional HRATT parallelism and memory budgets
 

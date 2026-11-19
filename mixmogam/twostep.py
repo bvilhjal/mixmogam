@@ -440,7 +440,7 @@ def _genotype_spa(st: _Setup, A: np.ndarray, idx: np.ndarray, U: np.ndarray, V: 
     lam_all = lam
     for g in np.unique(groups):
         lam = float(lam_all[g]) if lam_vec else lam_all
-        a = np.ascontiguousarray(A[:, g])
+        a = np.ascontiguousarray(A(g) if callable(A) else A[:, g])
         a2 = float(a @ a)
         sel = np.flatnonzero(groups == g)
         # Keep per-sample probability and genotype tiles bounded.
@@ -882,7 +882,7 @@ def _warn_calibration_spread(cv, denominator: str, method: str) -> None:
 def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
              denominator: str = "constant", n_spectral="auto",
              cg_tol: float = 1e-6, slq_tol: float = 1e-6, random_state: int = 0,
-             block: int = 4096) -> GwasResult:
+             block: int = 4096, trait_batch_size: int = 8) -> GwasResult | list[GwasResult]:
     """BOLT-style inf (mixmogam): infinitesimal mixed-model association with LOCO, after BOLT-LMM-inf.
 
     Steps 1a-1b of Loh et al. (2015): variance components on all SNPs (not
@@ -896,11 +896,40 @@ def bolt_inf(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 3
     ``denominator="spectral"`` (mixmogam extension, not BOLT-LMM) replaces
     the proportional denominator by a structure-aware one; see
     :func:`_inf_core`.
+    A samples-by-traits matrix with multiple columns returns one result per
+    column. The traits share a design, genotype moments, spectral basis and
+    trace probes. trait_batch_size limits simultaneous phenotype Lanczos
+    vectors (default 8). Each trait retains its own stopping rule, LOCO
+    solves and calibration. A fixed integer seed reproduces the probes and
+    calibration SNP draws of separate calls.
     """
-    rng = np.random.default_rng(random_state)
-    st = _setup(y, gt, X, max_loco_groups, block)
+    y = np.asarray(y, dtype=np.float64)
+    many = y.ndim == 2 and y.shape[0] == gt.n_samples and y.shape[1] > 1
+    if (isinstance(trait_batch_size, (bool, np.bool_))
+            or not isinstance(trait_batch_size, (int, np.integer)) or trait_batch_size < 1):
+        raise ValueError("trait_batch_size must be a positive integer")
+    if not np.isfinite(y).all():
+        raise ValueError("y contains NaN or infinite values")
+    st = _setup(y[:, 0] if many else y, gt, X, max_loco_groups, block)
     basis = _spectral_basis(st, random_state=random_state)
+    if many:
+        model = LMM(st.y, X=st.X, K=basis["op"], add_intercept=False, random_state=random_state,
+                    _validated_design=True)
+        fits = list(model._reml_many(y, (basis["values"], basis["vectors"]), slq_tol,
+                                     trait_batch_size))
+        results = []
+        for target, fit in zip(y.T, fits):
+            setup = replace(st, y=target, y_raw=target, y_p=st.lg.project(target))
+            results.append(_bolt_inf_result(setup, gt, fit, basis, n_calibration, random_state,
+                                            cg_tol, denominator, n_spectral))
+        return results
     fit = fit_variance_components(st, random_state=random_state, basis=basis, slq_tol=slq_tol)
+    return _bolt_inf_result(st, gt, fit, basis, n_calibration, random_state, cg_tol,
+                            denominator, n_spectral)
+
+
+def _bolt_inf_result(st, gt, fit, basis, n_calibration, random_state, cg_tol, denominator, n_spectral):
+    rng = np.random.default_rng(random_state)
     core = _inf_core(st, fit, n_calibration, rng, cg_tol, denominator, n_spectral, basis=basis)
     _warn_calibration_spread(core["cal"]["cv"], denominator, "bolt-inf")
     extra = {"method": "bolt-inf" if denominator == "constant" else "bolt-inf-spectral",
@@ -916,7 +945,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
          denominator: str = "constant", n_spectral="auto",
          grid=BOLT_GRID, n_folds: int = 5, min_cv_gain: float = 0.01,
          ld_window_bp: int = 1_000_000, vb_max_iter: int = 100, vb_tol: float = 1e-5,
-         gram_cache_bytes: float = 1e9, cg_tol: float = 1e-6, slq_tol: float = 1e-6,
+         gram_cache_bytes: float = 1e9, gram_cache_dir=None, cg_tol: float = 1e-6, slq_tol: float = 1e-6,
          random_state: int = 0, block: int = 4096) -> GwasResult:
     """BOLT-LMM: Gaussian-mixture (non-infinitesimal) association with LOCO.
 
@@ -935,8 +964,10 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
     statistic is calibrated by matching LD Score regression intercepts to
     BOLT-LMM-inf. Effects and standard errors come from that infinitesimal
     fit even when the mixture supplies the p-values, as in BOLT-LMM.
-    ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
-    cache warns because the remaining matrices are rebuilt every sweep.
+    ``gram_cache_bytes`` budgets the blocks kept in RAM. Set ``gram_cache_dir``
+    to an existing scratch directory to map overflow blocks for this fit.
+    Otherwise sweeps recompute them. Each fitted stage reports ``ram_bytes``,
+    ``disk_bytes`` and ``sweep_gram_builds`` in ``extra["gram_cache"]``.
     ``slq_tol`` is :func:`bolt_inf`'s.
 
     ``denominator="spectral"`` (mixmogam extension, heuristic for the
@@ -957,7 +988,7 @@ def bolt(y, gt, X=None, *, max_loco_groups: int = 25, n_calibration: int = 30,
 
     # Step 2a: cross-validated choice of (f2, p)
     folds = rng.permutation(n) % n_folds
-    eng = VBEngine(st.lg, folds=folds, gram_cache_bytes=gram_cache_bytes,
+    eng = VBEngine(st.lg, folds=folds, gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir,
                    _warn_on_partial=True)
     P = len(grid) * n_folds
     col_fold = np.tile(np.arange(n_folds), len(grid))
@@ -1288,7 +1319,7 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
           spa_threshold: float = 2.0, spa_two_sided: str = "distance",
           random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
           block: int = 4096, n_threads: int = 1,
-          gram_cache_bytes: float = 1e9, model_snps=None,
+          gram_cache_bytes: float = 1e9, gram_cache_dir=None, model_snps=None,
           model_snps_options: Optional[dict] = None, model_snps_include=None,
           model_snps_h2_check: bool = True, model_snps_stream=None,
           relatedness=None, relatedness_threshold: float = 0.025,
@@ -1419,11 +1450,13 @@ def hratt(y, gt, X=None, *, trait: str = "quantitative", sample_weights=None,
     in 32 runs. With ``stage1="auto"`` this fit also gives the hold-out
     error compared with LDpred3's.
 
-    ``gram_cache_bytes`` bounds retained per-block Gram matrices; a partial
-    cache warns because the remaining matrices are rebuilt every sweep.
-    With cross-fitted scores it is one budget shared by the hold-out and
-    cross-fitted fits, whose caches are prepared together in one pass (the
-    hold-out fit's first) and are both held during the hold-out fit: at
+    ``gram_cache_bytes`` budgets the blocks kept in RAM. An existing scratch
+    directory passed as ``gram_cache_dir`` stores overflow in temporary
+    mappings for this fit. Otherwise sweeps recompute those blocks.
+    Each stage reports ``ram_bytes``, ``disk_bytes`` and ``sweep_gram_builds``
+    in ``extra["gram_cache"]``. With cross-fitted scores the hold-out and
+    cross-fitted fits share one RAM budget. Their caches are prepared
+    together in one pass and both are held during the hold-out fit. At
     5,000 samples x 400,000 variants about 0.65 GB, of which the cross-fit
     keeps 0.54 GB.
 
@@ -1789,7 +1822,7 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
                   spa_threshold: float = 2.0, spa_two_sided: str = "distance",
                   random_state: int = 0, stage1: str = "enet", stage1_kwargs: Optional[dict] = None,
                   block: int = 4096, n_threads: int = 1,
-                  gram_cache_bytes: float = 1e9, model_snps=None,
+                  gram_cache_bytes: float = 1e9, gram_cache_dir=None, model_snps=None,
                   model_snps_options: Optional[dict] = None, model_snps_include=None,
                   model_snps_h2_check: bool = True, model_snps_stream=None,
                   relatedness=None, relatedness_threshold: float = 0.025,
@@ -2238,7 +2271,7 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
         # structure after the covariates (see the gates above).
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=refit,
-                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
+                                   gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir, cv_tol=cv_tol)
         scores["stage1_selection"] = {"heldout_mse_enet": float(np.min(scores["mse"])),
                                       "heldout_mse_ldpred3": float("nan"), "chosen": "enet",
                                       "reason": ("sample_weights" if weighted else
@@ -2248,7 +2281,7 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
     elif stage1 == "auto" and h2 > 0:
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=refit,
-                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
+                                   gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir, cv_tol=cv_tol)
         alt = ldpred3_stage1_scores(st, ys, h2, folds, held, method="ldpred3-inf",
                                     keep_prediction=binary, refit=False,
                                     **(stage1_kwargs or {}))
@@ -2263,7 +2296,7 @@ def _hratt_stage1(y, gt, X=None, *, trait: str = "quantitative", sample_weights=
     elif stage1 == "enet" or stage1 == "auto":  # auto without polygenic variance
         scores = _hratt_fit_scores(st, ys, h2j, s2e, grid, held, n_threads, vb_max_iter, vb_tol,
                                    keep_prediction=binary, folds=folds, refit=refit,
-                                   gram_cache_bytes=gram_cache_bytes, cv_tol=cv_tol)
+                                   gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir, cv_tol=cv_tol)
         scores["stage1_name"] = "enet"
     else:
         scores = ldpred3_stage1_scores(st, ys, h2, folds, held, method=stage1,
@@ -2820,7 +2853,7 @@ def _ldpred3_block_exact_loco(stage1) -> bool:
 def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, grid, held,
                       n_threads: int, vb_max_iter: int, vb_tol: float,
                       keep_prediction: bool = False, folds=None, refit: bool = False,
-                      gram_cache_bytes: float = 1e9, cv_tol: Optional[float] = None) -> dict:
+                      gram_cache_bytes: float = 1e9, gram_cache_dir=None, cv_tol: Optional[float] = None) -> dict:
     """(1d)-(1e) Hold-out choice of the elastic-net prior, then the LOCO fits.
 
     Returns the LOCO residuals (``resid``), the chosen grid index ``best``
@@ -2860,12 +2893,12 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
     cv_folds = np.ones(n, dtype=np.int64)
     cv_folds[held] = 0  # fold 0 is held out; fold 1 is never held out
     eng = VBEngine(st.lg, folds=cv_folds, n_threads=n_threads,
-                   gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
+                   gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir, _warn_on_partial=True)
     crossfit = None
     if folds is not None and np.any(h2j > 0):
         # Both fits' Grams from one pass over the genotypes, within one budget
         crossfit = VBEngine(st.lg, folds=folds, n_threads=n_threads,
-                            gram_cache_bytes=gram_cache_bytes, _warn_on_partial=True)
+                            gram_cache_bytes=gram_cache_bytes, gram_cache_dir=gram_cache_dir, _warn_on_partial=True)
         _prepare_crossfit_grams(eng, crossfit)
     Pn = len(grid)
     prior = np.array([prior_row(*g_) for g_ in grid], dtype=np.float64)
@@ -2879,7 +2912,7 @@ def _hratt_fit_scores(st: _Setup, ys: np.ndarray, h2j: np.ndarray, s2e: float, g
         cv_converged = True
         gram_cache = {"cv": {"budget_bytes": float(gram_cache_bytes), "required_bytes": 0,
                              "total_blocks": 0, "cached_blocks": 0, "retained_bytes": 0,
-                             "cached_blocks_before_sweeps": 0, "sweep_gram_builds": 0}}
+                             "ram_bytes": 0, "disk_bytes": 0, "cached_blocks_before_sweeps": 0, "sweep_gram_builds": 0}}
     else:
         cv = eng.fit(np.repeat(ys[:, None], Pn, axis=1), np.zeros(Pn, dtype=np.int64),
                      np.full(Pn, -1), PRIOR_ENET, prior, np.full(Pn, s2e), snp_scale=h2j,
@@ -3067,29 +3100,25 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     variance, 1.04 with this one). Effects are one-step log odds ratios
     U / J per counted allele, with null-score uncertainty sqrt(V/lambda)/J.
     """
-    from mixmogam._binary import group_null_fits, loco_offsets, score_pass
+    from mixmogam._binary import LocoNulls, score_pass
 
     y = st.y_raw
     if cache is not None and "binary_fits" in cache:
-        fits, off_sd = cache["binary_fits"], cache["offset_sd"]
+        fits = cache["binary_fits"]
     else:
-        offsets = loco_offsets(prediction, st.s, sy)
         try:
-            fits = group_null_fits(y, st.X_raw, offsets, weights=st.w, free_offset=crossfit)
+            fits = LocoNulls(y, st.X_raw, prediction, st.s, sy, st.w, crossfit)
         except ValueError as exc:
             if crossfit:
                 raise
             raise ValueError(f"{exc}; with in-sample LOCO scores (loco_folds=1) the offset can nearly "
                              "separate rare cases; use loco_folds >= 2") from None
-        off_sd = float((offsets - offsets.mean(axis=0)).std())
-        del offsets
         if cache is not None:
-            cache["binary_fits"], cache["offset_sd"] = fits, off_sd
-    del prediction
+            cache["binary_fits"] = fits
     sp = score_pass(st.lg, y, st.X_raw, fits, weights=st.w, s=st.s, Q=st.Q_raw, cache=cache)
     U, J, A = sp["U"], sp["J"], sp["A"]
     w = np.ones(y.size) if st.w is None else st.w
-    V = sp["zvar"] * np.einsum("ij,ij->j", A, A)[st.lg.groups] * sp["rho"]
+    V = sp["zvar"] * fits.norms[st.lg.groups] * sp["rho"]
     valid = (J > 0) & (V > 0) & (st.lg.zz > 0)
     lam_spa = lam
     lam_j = lam
@@ -3102,7 +3131,8 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
         if cache is not None and "binary_kappa" in cache:
             kap, c_X, trq = cache["binary_kappa"]
         else:
-            kap = _kappa_guard(rel.kappa(A), kappa_floor)
+            kap = _kappa_guard(np.array([rel.kappa(A(g)[:, None])[0]
+                                         for g in range(len(fits.models))]), kappa_floor)
             c_X, trq = covariate_factor(rel, st.Q_raw, st.n_eff)
             if cache is not None:
                 cache["binary_kappa"] = (kap, c_X, trq)
@@ -3121,11 +3151,11 @@ def _hratt_binary_step2(st: _Setup, gt, prediction, sy, lam, spa_threshold, n_th
     extra.update({"n_cases": int(y.sum()),
                   "n_controls": int(y.size - y.sum()),
                   "prevalence": float(np.sum(w * y) / np.sum(w)),
-                  "null_converged": bool(all(f["converged"] for f in fits)),
-                  "mu0_clipped": st.mu0_clipped, "offset_sd": off_sd,
+                  "null_converged": bool(all(f["converged"] for f in fits.models)),
+                  "mu0_clipped": st.mu0_clipped, "offset_sd": fits.offset_sd,
                   "spa_threshold": float(spa_threshold), "spa_two_sided": two_sided,
                   "n_spa": n_spa, "effect_method": "one-step-logistic"})
     if crossfit:
-        extra.update({"offset_slope": np.array([f["slope"] for f in fits]),
-                      "offsets_dropped": int(sum(f["dropped"] for f in fits))})
+        extra.update({"offset_slope": np.array([f["slope"] for f in fits.models]),
+                      "offsets_dropped": int(sum(f["dropped"] for f in fits.models))})
     return _result(st, gt, chi2, beta_z, se_z, extra, p=p)

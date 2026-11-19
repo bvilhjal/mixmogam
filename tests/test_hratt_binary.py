@@ -259,21 +259,23 @@ def test_step_two_without_polygenic_offsets_is_the_dense_logistic_scan(binary_pr
 def test_weighted_binary_gwas_matches_a_dense_scan_with_its_offsets(binary_problem, monkeypatch,
                                                                     loco_folds):
     G, gt, y, X, w, _ = binary_problem
-    captured = {}
+    columns = []
     original = _binary.loco_offsets
 
     def record(prediction, s, sy):
-        captured["offsets"] = original(prediction, s, sy)
-        return captured["offsets"]
+        offset = original(prediction, s, sy)
+        columns.append(offset)
+        return offset
 
     monkeypatch.setattr(_binary, "loco_offsets", record)
     res = gwas(y, gt, X, method="hratt", trait="binary", sample_weights=w, loco_folds=loco_folds,
                **BINARY)
     assert res.extra["lambda"] == 1.0 and res.extra["h2"] > 0
-    assert np.ptp(captured["offsets"]) > 0
+    offsets = np.column_stack(columns)
+    assert np.ptp(offsets) > 0
     Xd = np.column_stack([np.ones(y.size), X])
     groups = np.repeat(np.arange(5), gt.n_variants // 5)
-    dense = dense_scan(G, y, Xd, w / w.mean(), captured["offsets"], groups, free=loco_folds > 1)
+    dense = dense_scan(G, y, Xd, w / w.mean(), offsets, groups, free=loco_folds > 1)
     p, beta = dense[0], dense[1]
     np.testing.assert_allclose(res.p, p, rtol=1e-4)
     np.testing.assert_allclose(res.beta, beta, rtol=1e-4, atol=1e-7)
@@ -517,3 +519,29 @@ def test_ancestry_ratio_closed_form_matches_per_sample_sums():
     assert np.all(rho[-50:] == 1.0)
     shared = twostep._ancestry_moments(Q, a2)
     np.testing.assert_array_equal(twostep._ancestry_ratio(cu, zz, Q, mean, sd, a2, moments=shared), rho)
+
+
+def test_streamed_binary_nulls_only_prepare_the_active_group(binary_problem, monkeypatch):
+    from mixmogam._loco import LocoGenotypes
+
+    _, gt, y, X, w, _ = binary_problem
+    st = twostep._setup(y, gt, X, 25, 128, trait="binary", sample_weights=w)
+    rng = np.random.default_rng(924)
+    prediction = rng.normal(size=(gt.n_samples, st.lg.n_groups)) * .1
+    nulls = _binary.LocoNulls(y, st.X_raw, prediction, st.s, 1.0, st.w, True)
+    assert all(model["gamma"].size <= st.X_raw.shape[1] + 1 for model in nulls.models)
+    observed = []
+    get = _binary.LocoNulls.__getitem__
+    def tracked(self, g):
+        observed.append(g)
+        return get(self, g)
+    monkeypatch.setattr(_binary.LocoNulls, "__getitem__", tracked)
+    cache = {}
+    for group in (1, 1, 3):
+        ids = np.flatnonzero(st.lg.groups == group)[:4]
+        test = gt.variant_mask(ids)
+        lg = LocoGenotypes(test, st.lg.groups[ids], st.lg.Q, n_groups=st.lg.n_groups,
+                           row_scale=st.s)
+        result = score_pass(lg, y, st.X_raw, nulls, weights=st.w, s=st.s, Q=st.Q_raw, cache=cache)
+        assert callable(result["A"])
+    assert observed == [1, 3] and cache["binary_group"] == 3

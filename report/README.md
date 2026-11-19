@@ -28,6 +28,9 @@ covariate basis and fixed-seed stochastic traces) and the mixture and
 elastic-net posterior means (see the changelog), and these measurements
 have not been rerun since.
 
+For the changes in 2.3.0.dev4, the [19 November scalability measurements](../benchmarks/results/20261119-scalability/README.md)
+give paired timings, numerical agreement and binary scan memory on synthetic panels.
+
 Each result keeps the package version it ran with. The earlier phensim,
 HE/REML and 20,000-variant results are 2.0.0.dev6 reruns on the archived
 inputs (the cross-fitted 20,000-variant fits again on 7 October, after their

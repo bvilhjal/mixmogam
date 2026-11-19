@@ -5,7 +5,7 @@ that it is not proposed again. The 26 October speed changes and their
 measurements are in the CHANGELOG and
 `benchmarks/results/20261026-hratt-speed-review`.
 
-## Where the time goes now
+## 26 October profiles
 
 One thread, cProfile of one fit (cProfile inflates small calls, so shares are
 indicative); seconds before and after the speed changes. Profiles and the
@@ -26,6 +26,19 @@ Decoding (`decode_table`, 3.8-6.7 s of the profiles, called from the rows
 above) is near its floor, 0.16 ns per call from variant-major int8 and 0.2 ns
 from two-bit calls.
 
+## 19 November scalability measurements
+
+Compressed PGEN scoring, multi-phenotype BOLT-style inf, on-disk Gram
+overflow, streamed fitting-panel output, direct BGEN dosage decoding and
+one active binary score workspace per trait shipped in 2.3.0.dev4.
+Sparse PGEN records now bypass the dense moments pass for eligible fits.
+The general dense moments pass and sharing HRATT stage 1 across traits
+remain open. The Mailman product experiment helped at one right-hand side
+and lost time on wider products, so it remains a benchmark. The measurements
+use synthetic panels on warm storage. Scanning a real chromosome larger than
+RAM from cold storage remains unmeasured.
+[Workloads, timings and numerical checks](../benchmarks/results/20261119-scalability/README.md)
+
 ## Biobank scale (14 November review)
 
 A scalability review found the kernels flat in n but the layer around them
@@ -44,7 +57,7 @@ Open, by expected gain:
   threads, 3x over one thread). A BLAS projection of decoded tiles would be
   several times faster but gives up per-variant bit-identity across blocks,
   storage and thread counts, which the step-2 equivalence relies on.
-- **Stage 1 per trait.** Each trait still prepares the model panel's moments
+- **HRATT stage 1 per trait.** Each trait still prepares the model panel's moments
   and builds its Grams. Traits with the same samples, covariates and folds
   could share both, but the folds and hold-out are drawn after trait-dependent
   random draws; they would need their own seed stream first.

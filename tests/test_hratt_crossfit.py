@@ -321,19 +321,21 @@ def test_separating_scores_are_dropped_and_fixed_offsets_raise():
 def test_rare_binary_outcomes_run_with_cross_fitted_scores(panel, monkeypatch):
     _, gt, y, _ = panel
     rare = (y > np.quantile(y, 0.985)).astype(np.float64)  # 23 cases in 1500
-    captured = {}
+    columns = []
     original = _binary.loco_offsets
 
     def record(prediction, s, sy):
-        captured["offsets"] = original(prediction, s, sy)
-        return captured["offsets"]
+        offset = original(prediction, s, sy)
+        columns.append(offset)
+        return offset
 
     monkeypatch.setattr(_binary, "loco_offsets", record)
     res = twostep.hratt(rare, gt, trait="binary", **FAST)
     assert res.extra["null_converged"] and res.extra["offsets_dropped"] == 0
     assert np.all(np.isfinite(res.p) & (res.p > 0) & (res.p <= 1))
     # No sample's own outcome enters its offset: cases do not stand out.
-    o = captured["offsets"] - captured["offsets"].mean(axis=0)
+    offsets = np.column_stack(columns)
+    o = offsets - offsets.mean(axis=0)
     assert np.abs(o[rare == 1].mean(axis=0)).max() < 3.0 * o.std(axis=0).max()
 
 
