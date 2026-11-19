@@ -41,13 +41,20 @@ def main():
     pdfinfo = subprocess.check_output(["pdfinfo", str(pdf)], text=True)
     pages = int(re.search(r"^Pages:\s+(\d+)", pdfinfo, re.MULTILINE).group(1))
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    scalability_path = REPORT / "scalability_display_manifest.json"
+    scalability = json.loads(scalability_path.read_text())
     manifest = {
-        "revision": "2026-11-19-scalability",
+        "revision": "2026-11-19-scalability-report",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
         "benchmark_package_version": "2.0.0.dev8",
         "benchmark_commit": "d550c41212fb4eca72858893d7ef7c6b89d4398a",
+        "scalability_benchmark": {
+            "implementation_version": scalability["implementation_version"],
+            "implementation_commit": scalability["implementation_commit"],
+            "manifest": str(scalability_path.relative_to(ROOT)),
+        },
         "revision_state": ("integrate/stage1 report sources: external-program comparisons "
                            "removed, mixmogam's BOLT-style methods labelled as such and comparative "
                            "claims audited. The report's evidence is the archived benchmarks above; "
@@ -71,9 +78,11 @@ def main():
                            "updates the package and hashed release metadata; the manuscript "
                            "PDF and its benchmark evidence are unchanged. "
                            "CHANGELOG.md records the 18 November efficiency updates "
-                           "(2.3.0.dev3). The 19 November scalability measurements "
-                           "(2.3.0.dev4) cover streamed scans, Gram storage and "
-                           "multi-trait BOLT-style inf in benchmarks/results/20261119-scalability/."),
+                           "(2.3.0.dev3). The 19 November manuscript revision "
+                           "(2.3.0.dev5) adds the sparse score identity and Section 4.15. "
+                           "Its new table and two figures use the paired 2.3.0.dev4 measurements, "
+                           "whose source and hashes are in the scalability benchmark manifest. "
+                           "The earlier empirical studies retain their original benchmark versions."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),
                    "tables": len(re.findall(r"\\begin\{table\}", tex))

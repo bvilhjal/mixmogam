@@ -28,8 +28,19 @@ covariate basis and fixed-seed stochastic traces) and the mixture and
 elastic-net posterior means (see the changelog), and these measurements
 have not been rerun since.
 
-For the changes in 2.3.0.dev4, the [19 November scalability measurements](../benchmarks/results/20261119-scalability/README.md)
-give paired timings, numerical agreement and binary scan memory on synthetic panels.
+Section 4.15 reports the 19 November scalability study of 2.3.0.dev4.
+Starting from a saved HRATT fit, the scan of 1,024 variants in 500,000
+samples took 0.565 s with direct PGEN scoring and 1.650 s with the faster
+dense reader, including TSV output. Table 24 gives the synthetic panel
+sizes and paired timings for PGEN, multi-phenotype BOLT-style inf, Gram
+storage and BGEN. Figure 6 shows where direct PGEN scoring and Mailman
+products gain or lose time. Figure 7 shows BOLT operator passes, Gram
+rebuilds and binary peak memory.
+[Repetition records and reproduction commands](../benchmarks/results/20261119-scalability/README.md)
+
+[![Figure 6. Measured speed ratios by PGEN sparsity and Mailman product width.](figures/scalability_products.png)](figures/scalability_products.pdf)
+
+[![Figure 7. Genotype passes, Gram rebuilds and binary scan memory.](figures/scalability_work.png)](figures/scalability_work.pdf)
 
 Each result keeps the package version it ran with. The earlier phensim,
 HE/REML and 20,000-variant results are 2.0.0.dev6 reruns on the archived
@@ -64,6 +75,7 @@ HRATT runs; any external-program outputs inside them are provenance only.
 | Speed branch and its review | `20261026-hratt-speed-review` | Nine changes (Gram packing and joint build, column-major narrow fits, compiled corrections, one-pass preparation, held-out predict, stacked HE-alpha GEMM, adaptive Lanczos `slq_tol`, `cv_tol`, spinning workers): 16-configuration equivalence with no decision changed, full suite green, paired A/B 1.33-1.64x |
 | Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000, one run per size: both HRATT paths approximately linear in n (local exponents 0.85 and 0.97) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact run only to n = 2,500 (2.1 to 9.8 s; its dense factorizations scale as n^3); in that 26 October run (master `798518e5`, before dev8) single runs at n = 50,000 took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)); the dev8 ladder gives 13.25, 22.94 and 45.10 s |
 | dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
+| 2.3.0.dev4 scalability | [`20261119-scalability`](../benchmarks/results/20261119-scalability/README.md) | Paired compute and reader comparisons on warm synthetic panels, binary peak RSS and numerical checks. Cold chromosome scans and genome-wide fits at 500,000 samples remain open. |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -98,7 +110,18 @@ The manuscript and its generated displays cover mixmogam's own methods only.
 Historical benchmark archives are kept unchanged for provenance; external-program
 runs inside them are not used.
 
-From the repository root, with matplotlib and Tectonic available:
+From the repository root, regenerate the November table and figures with
+Matplotlib, then rebuild the PDF with the checked-in historical displays.
+
+```sh
+python report/make_scalability_displays.py
+(cd report && tectonic mixmogam_report.tex)
+python report/make_report_manifest.py
+```
+
+To regenerate earlier displays from their own archives, use the following
+scripts with matplotlib available. The HAPNEST input requirements are
+documented below.
 
 ```sh
 python report/make_figures.py
@@ -110,10 +133,6 @@ python report/make_weights_binary_tables.py
 python report/make_followup_tables.py
 python report/make_atwell_table.py
 python report/make_dev8_benchmark_tables.py
-cd report
-tectonic mixmogam_report.tex
-cd ..
-python report/make_report_manifest.py
 ```
 
 Figures and tables must stay beside the LaTeX source. The figure script reads

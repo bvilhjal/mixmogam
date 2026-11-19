@@ -26,7 +26,7 @@ below keep `--ldak`: `kvik_scale.py` refuses a `--methods` list without
 `ldak-kvik`, and `scaling_ladder.py` and `ldak_kvik_comparison.py` hash or run
 the binary that `--ldak` names.
 
-The manuscript's numbers are in the
+The manuscript's October sample-size, calibration and RegMap results are in the
 [29 October evidence bundle](results/20261029-report-evidence/README.md): the
 dev8 sample-size ladder to 100,000, paired 50,000-sample fits, 308
 scale-study fits and the Atwell controls, with non-converged fits recorded.

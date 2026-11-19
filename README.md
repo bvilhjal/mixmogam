@@ -12,7 +12,7 @@ single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
 BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
 ([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
-Version 2.3.0.dev4. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+Version 2.3.0.dev5. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 

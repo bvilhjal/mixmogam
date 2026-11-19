@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0.dev5] - 2026-11-19
+
+### Changed
+
+- The [research report](report/README.md) now explains the sparse score
+  calculation and reports paired timings, numerical agreement and process
+  memory from the 2.3.0.dev4 scalability study. Table 24 and Figures 6 and 7
+  are generated from the archived repetitions. This is a documentation release.
+
 ## [2.3.0.dev4] - 2026-11-19
 
 ### Changed

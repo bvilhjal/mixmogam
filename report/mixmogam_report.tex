@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{14 November 2026\\\small Historical studies retain their original
-versions; the new benchmarks use 2.0.0.dev8}
+\date{19 November 2026\\\small October benchmark reruns used 2.0.0.dev8.
+November scalability measurements used 2.3.0.dev4.}
 
 \begin{document}
 \maketitle
@@ -74,7 +74,10 @@ took 1.55 times as long as HRATT-HE against a target of 1.3. On the
 \emph{Arabidopsis thaliana} RegMap panel every method found six of seven
 known major genes; none found MOT1 on the prespecified raw scale, so the
 check failed (an exploratory log-scale rerun ranked MOT1 first). At 100,000 samples and 20,000 markers, 2.0.0.dev8 took a
-median 25.84 seconds for HRATT-HE and 101.77 for mixmogam's BOLT-style infinitesimal path. Apart from the RegMap check all evidence is simulated, the new
+median 25.84 seconds for HRATT-HE and 101.77 for mixmogam's BOLT-style infinitesimal path.
+Starting from a saved fit, HRATT in 2.3.0.dev4 scored and wrote 1,024 mostly
+sparse variants in 500,000 samples in 0.565 seconds on warm storage,
+compared with 1.650 seconds with dense decoding. Apart from the RegMap check all evidence is simulated, the
 timings come from one workstation, and some variational fits did not
 converge: in confounded simulations, with or without two PCs, and in the
 RegMap check on traits whose heritability estimate reached its upper bound.
@@ -192,6 +195,10 @@ Prespecified simulation on the same samples, with $F_{ST}=0.05$ cells with
 and without principal components; 660 cases; the principal-component cells
 rerun with the built-in components (130 cases) & Five of seven criteria
 passed; weighted effects 5.4\% low under selection on the outcome. \\
+Scalability, 2.3.0.dev4 & Paired timings and numerical agreement for
+streamed scores, shared fits and dosage decoding
+(Section~\ref{sec:scalability}). & Synthetic panels on warm storage.
+The 500,000-sample scan tests 1,024 markers from a saved fit. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -236,9 +243,13 @@ the resulting mean diagonal. An intercept absorbs the constant-matrix
 shift in the residual subspace. The raw, unrescaled matrix is used in
 the new experiment in Section~\ref{sec:newdesign}.
 
-The current input contract is diploid hard calls $0,1,2$, with $-1$ for
-missing values. Minor allele
-count is measured in allele copies. Sample identifiers must align
+Model fitting takes diploid hard calls $0,1,2$, with $-1$ for missing
+values. A saved HRATT fit can also test imputed dosages for unweighted
+quantitative traits with scalar or relatedness $\kappa_g$ calibration.
+For a biallelic BGEN record with alleles $A,B$, the dosage counts $B$ as
+$P(AB)+2P(BB)$. The scan centres dosages and scales them by the observed
+standard deviation, assigning zero after centring to missing values.
+Minor allele count on hard calls is measured in allele copies. Sample identifiers must align
 uniquely; silently intersecting phenotype and genotype rows in different
 orders changes the scientific problem. PLINK effect-allele orientation,
 missingness, and identifier preservation are therefore part of the
@@ -543,8 +554,13 @@ gives these identities and their interpretation.
 The computational changes first remove work whose result is already
 available. Variational fitting caches requested fold-specific Gram matrices
 as packed triangles in the genotype storage precision, block by block under
-a shared $10^9$-byte default budget. HRATT's cross-fit cache can expand after
-the hold-out cache is released. It reuses full-block Gram matrices for LOCO
+a shared $10^9$-byte default RAM budget. By default each sweep rebuilds
+blocks outside the budget. With a scratch directory, elastic-net HRATT
+and BOLT-style mixture write each overflow block once per preparation
+and map its stored values for later sweeps.
+The budget covers retained arrays. Solver workspaces and the operating
+system's file cache also use memory. HRATT's in-memory cross-fit cache can
+expand after the hold-out cache is released. It reuses full-block Gram matrices for LOCO
 and reuses final predictions. A persistent matrix-product workspace replaces repeated
 allocations. Residual updates retain float64 accumulation while preparing
 the next matrix-product input in the genotype storage precision, float32
@@ -715,6 +731,30 @@ default reads a reference LD-score table; its \code{--LDscoresUseChip}
 option estimates them from the analysed SNPs) stream each chromosome through a sliding
 position window and hold only its widest window, rather than every
 projected genotype at four bytes each.
+
+\begin{samepage}
+In a PGEN hard-call scan, a rare variant can be stored as the exceptions
+to one common homozygote. Let $z_{\star j}$ be the standardized value of
+that homozygote at marker $j$, and let $E_j$ index the samples whose
+stored calls differ from it, including missing calls. For a vector
+$\mathbf a$ indexed by sample, equation~\eqref{eq:sparse-score} writes
+the product in terms of these exceptions.
+\begin{equation}
+ \mathbf z_j^\top\mathbf a
+ = z_{\star j}\sum_{i=1}^n a_i
+ + \sum_{i\in E_j}(z_{ij}-z_{\star j})a_i .
+ \label{eq:sparse-score}
+\end{equation}
+\end{samepage}
+Here $a_i$ can be a covariate value or a projected LOCO residual. Its
+sum over samples is needed only once per vector. Missing calls have
+$z_{ij}=0$. The direct scorer handles unweighted quantitative HRATT fits
+at the default float32 genotype precision without a relatedness correction.
+Traits sharing samples, covariates and LOCO groups can share each exception
+list. Dense records, near-singular projections and scores near numerical zero use the ordinary
+hard-call calculation, preserving its treatment of undefined statistics.
+Step 2 can write each output block as it finishes, including when it tests
+the panel used for fitting.
 
 \subsection{Case-control outcomes and sampling weights}
 \label{sec:weights-binary}
@@ -2312,7 +2352,7 @@ converged with matching iteration counts. Initial cross-fit allocations
 were partial, but the new implementation can expand the cache after the
 hold-out fit releases its allocation; final occupancy was not measured.
 The restricted-cache run used a corrected archived benchmark driver,
-because the repository driver passes the cache option under the wrong
+because the driver at the time passed the cache option under the wrong
 keyword. It used the default cross-fitting configuration.
 
 \begin{table}[htbp]
@@ -2363,6 +2403,109 @@ in-tree driver did not record these fields, but its exploratory follow-up
 stages unconverged in five of the eight scans
 (Section~\ref{sec:atwell-results}): four of eight now, against five of eight
 then, on the same phenotypes with different code.
+
+\FloatBarrier
+
+\subsection{Sparse scores, shared phenotype fits and disk-backed Gram blocks}
+\label{sec:scalability}
+
+We timed three operations in the code shipped as 2.3.0.dev4
+(Table~\ref{tab:scalability}). PGEN scans start from a saved HRATT fit, the
+BOLT-style inf and HRATT-HE rows include the whole fit, and BGEN rows
+measure decoding and collecting dosages. Each pair used the same synthetic
+input on an Apple M2 Pro with 16~GiB RAM and warm storage. We rotated
+or alternated execution order after warm-up. The requested BLAS thread
+limit was one.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Median wall times on warm storage. The reference uses the faster
+ dense PGEN reader, separate BOLT-style inf fits, recomputed Grams or the
+ upstream BGEN reader, respectively. Each median uses three runs per path,
+ or four for BOLT-style inf. The ratio divides the reference median by the
+ new median.}
+ \label{tab:scalability}
+ \begin{tabular}{@{}lrrrrr@{}}
+ \toprule
+ Workload & Samples & Markers & Reference (s) & New (s) & Ratio \\
+ \midrule
+ \tabinput{tables/scalability.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+Figure~\ref{fig:scalability-products} shows how the gain depends on the
+input. For PGEN we compared direct scoring with both packed and byte-per-call
+blocks. Equation~\eqref{eq:sparse-score} reduced wall time sixfold with
+98\% sparse records. The two medians differed by less than 1\% on the
+common-marker control. At 500,000 samples, 992 of the 1,024 records were sparse. The
+timer included writing all results to TSV and excluded fitting the 24-marker
+training panel. Alleles, marker order and finite-value masks agreed.
+The largest absolute $p$-value difference over the PGEN comparisons was
+$3.08\times10^{-14}$.
+
+We also grouped six variant calls into patterns for a kinship product,
+using the Mailman algorithm of \citet{liberty2009}. Encoding 65,537
+samples and 257 markers took 17.4~ms once. One subsequent product took
+5.51~ms for one right-hand side (packed BLAS, 10.49~ms) and 145.66~ms
+for 48 (packed BLAS, 41.67~ms). At 8 and 140 right-hand sides the
+relative Frobenius error exceeded the experiment's $4\times10^{-6}$
+tolerance. The solver therefore retains packed BLAS.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\textwidth]{figures/scalability_products.pdf}
+ \caption{The benefit of a compressed representation depends on sparsity
+ and on the number of vectors in a product. Open circles give individual
+ reference-to-new time ratios for three paired repetitions. Diamonds divide
+ the two median times. The dashed line marks equal time. In A, all panels
+ have 16,385 samples, 4,096 markers and four traits. Each panel uses its
+ faster dense reader as reference. In B, packed BLAS is the reference on
+ 65,537 samples and 257 markers. Times exclude one-time pattern encoding.
+ Daggers identify relative product errors above $4\times10^{-6}$.}
+ \label{fig:scalability-products}
+\end{figure}
+
+Figure~\ref{fig:scalability-work} shows which operations were saved.
+BOLT-style inf used the same genotype moments and spectral basis for four
+quantitative traits on the same samples and covariates. Within a batch
+(up to eight traits by default), traits also shared the Lanczos trace
+products. Full-genotype operator
+passes fell from 69 to 22. Both routes used 54 LOCO passes and stopped REML
+at 8, 9, 12 and 16 iterations for the four traits. The checked association
+outputs, variance components and calibration ratios matched exactly.
+The same trait triggered the calibration warning in both fits.
+
+For HRATT-HE, a 2,000,000-byte RAM budget required 200 Gram rebuilds
+during the variational sweeps. Writing the overflow blocks to scratch
+reduced this to zero. Keeping every block in RAM took 0.355~s. All three
+fits converged and gave identical effects, standard errors and $p$-values.
+In a separate binary HRATT score test, median process peak RSS fell from
+376.58 to 221.45~MiB across three fresh processes per version. The test
+used supplied predictions for 32,768 samples and 22 groups, eleven design
+columns and two tested markers in one group. The new path retains each
+group's fitted logistic coefficients and constructs one group's score
+workspace at a time. The predictions still occupy one value per sample
+and group.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\textwidth]{figures/scalability_work.pdf}
+ \caption{Work and memory in three fixed workloads. A counts full-genotype
+ and LOCO operator passes for four quantitative phenotypes. Counts agreed
+ in all four repetitions. B compares two ways to use a 2,000,000-byte RAM
+ budget with a full RAM cache. Parentheses count Gram blocks rebuilt
+ during sweeps. C gives process peak RSS for a binary score scan testing
+ one of 22 fitted groups. Circles in B and C are three measured runs per
+ setting. Lines span their observed range and diamonds mark medians.}
+ \label{fig:scalability-work}
+\end{figure}
+
+The BGEN comparison used zlib-compressed diploid biallelic records and a
+warm \code{bgen-reader} metadata index. Direct decoding of 8- and 16-bit
+probabilities matched the second-allele dosages calculated from the stored
+integers. The largest absolute difference from those expectations for the
+upstream reader was $2.22\times10^{-16}$.
 
 \FloatBarrier
 
@@ -2516,8 +2659,10 @@ evidence are these.
  \item The larger workloads are single synthetic realizations on one
  workstation, often with one phenotype. Repeated timings measure
  computational variability, not variation across populations.
- \item There is no validation in human multi-ancestry cohorts, at
- biobank scale, or with imputed dosages; the input contract is hard calls.
+ \item The 500,000-sample timing covers a warm step-2 scan of 1,024 markers.
+ A full genome-wide fit at that sample size and a cold scan of a chromosome
+ larger than RAM remain unmeasured. Human multi-ancestry calibration and
+ the effect of imputation uncertainty on association tests also remain open.
  \item Case-control outcomes and sampling weights are supported only by
  HRATT (Section~\ref{sec:weights-binary}) and were tested in simulations
  of unrelated samples with independent markers
@@ -2678,17 +2823,26 @@ near decision thresholds. HRATT's case-control and weighted tests need
 external validation at prevalence below 1\%, with related samples, real
 participation weights and SAIGE and REGENIE as comparators. A scalability
 claim should state the validated data size, hardware, resource limits
-and failure boundary.
+and failure boundary. For the streamed scan in Section~\ref{sec:scalability},
+the next measurement is a real chromosome larger than RAM, read once cold
+and again warm, with sparse-record fraction, bytes read and peak RSS
+recorded. Time step 1 separately on the intended genome-wide model panel.
 
 \section*{Data, software, and reproducibility}
 
 The repository is available at
 \url{https://github.com/bvilhjal/mixmogam}. Earlier report sections describe
-package version 2.0.0.dev6 and the unreleased changes after it; the new
-benchmark section identifies 2.0.0.dev8 and its commit. Version 2.0.2.dev1
+package version 2.0.0.dev6 and the changes after it. The October reruns
+(Section~\ref{sec:dev8-reruns}) used 2.0.0.dev8 at \code{d550c412}.
+The November scalability study (Section~\ref{sec:scalability}) measured
+the implementation shipped in 2.3.0.dev4 at \code{3e6c1cb1}. Its
+\href{https://github.com/bvilhjal/mixmogam/tree/3e6c1cb167d9c8b0867c7b727b17e24679a996c3/benchmarks/results/20261119-scalability}{archived repetitions, input hashes and timing sources}
+include the 2.3.0.dev3 binary reference and instructions to regenerate the
+synthetic inputs. Version 2.0.2.dev1
 (3 November) later changed REML/SLQ fitting (the REML covariate basis and
 fixed-seed stochastic traces) and the mixture and elastic-net posterior
-means; none of the results here has been rerun with it. The known-covariance experiment uses baseline commit
+means. The October calibration results retain their original versions.
+The known-covariance experiment uses baseline commit
 \code{729c8532}. Its self-contained driver is
 \code{benchmarks/}\allowbreak\code{denominator\_geometry.py}, with results, source snapshot,
 and manifest in \code{20261003-}\allowbreak\code{manuscript-}\allowbreak\code{geometry} beneath
@@ -2724,10 +2878,12 @@ commands, logs, diagnostics and resource measurements accompany its results.
 The separate \code{report/}\allowbreak\code{make\_phensim\_figures.py}
 renders mixmogam's results from it without rerunning any association test.
 
-The workload extensions are listed in the report evidence map. Large BED
-files remain local, with hashes, phased references and generating sources
-retained in their archives. HAPNEST resource summaries here link to full
-phensim source/reference archives. The simulation-only and association
+The workload extensions are listed in the report evidence map. Their
+archives retain hashes, phased references and generating sources. The
+50,000-sample HAPNEST BED panels were removed from local storage on
+11 November. Repeating those fits requires regenerating the inputs.
+HAPNEST resource summaries here link to full phensim source/reference
+archives. The simulation-only and association
 measurements must not be combined into a claim about the cost of a
 whole-genome analysis at 100,000 samples.
 
@@ -3014,6 +3170,12 @@ Kelleher J, Etheridge AM, McVean G (2016). Efficient coalescent
 simulation and genealogical analysis for large sample sizes.
 \emph{PLoS Comput Biol} 12(5):e1004842.
 \href{https://doi.org/10.1371/journal.pcbi.1004842}{doi:10.1371/journal.pcbi.1004842}
+
+\bibitem[Liberty and Zucker(2009)]{liberty2009}
+Liberty E, Zucker SW (2009). The Mailman algorithm: A note on
+matrix--vector multiplication. \emph{Information Processing Letters}
+109(3):179--182.
+\href{https://doi.org/10.1016/j.ipl.2008.09.028}{doi:10.1016/j.ipl.2008.09.028}
 
 \bibitem[Lippert et~al.(2011)]{lippert2011}
 Lippert C, Listgarten J, Liu Y, et~al. (2011). FaST linear mixed models
