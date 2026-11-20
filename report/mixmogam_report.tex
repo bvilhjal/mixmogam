@@ -38,8 +38,8 @@
 numerical foundations, calibration diagnostics\\
 and research directions for mixmogam}
 \author{mixmogam contributors}
-\date{19 November 2026\\\small October benchmark reruns used 2.0.0.dev8.
-November scalability measurements used 2.3.0.dev4.}
+\date{20 November 2026\\\small October reruns used 2.0.0.dev8.
+The November scalability study used 2.3.0.dev4 and its rerun 2.3.0.dev5.}
 
 \begin{document}
 \maketitle
@@ -73,11 +73,14 @@ outcome were 5.4\% low (Monte Carlo standard error 2.1\%), and weighted fits
 took 1.55 times as long as HRATT-HE against a target of 1.3. On the
 \emph{Arabidopsis thaliana} RegMap panel every method found six of seven
 known major genes; none found MOT1 on the prespecified raw scale, so the
-check failed (an exploratory log-scale rerun ranked MOT1 first). At 100,000 samples and 20,000 markers, 2.0.0.dev8 took a
-median 25.84 seconds for HRATT-HE and 101.77 for mixmogam's BOLT-style infinitesimal path.
-Starting from a saved fit, HRATT in 2.3.0.dev4 scored and wrote 1,024 mostly
-sparse variants in 500,000 samples in 0.565 seconds on warm storage,
-compared with 1.650 seconds with dense decoding. Apart from the RegMap check all evidence is simulated, the
+check failed (an exploratory log-scale rerun ranked MOT1 first).
+At 100,000 samples and 20,000 markers, the 2.3.0.dev5 rerun gave median
+times of 25.88 seconds for HRATT-HE and 102.47 for mixmogam's BOLT-style
+infinitesimal path, with median process peaks of 2.52 and 3.68~GiB.
+Starting from a saved fit, direct PGEN scoring wrote results for 1,024
+mostly sparse variants in 500,000 samples in 0.564 seconds on warm storage.
+Its median process peak in separate runs was 477~MiB.
+Apart from the RegMap check all evidence is simulated, the
 timings come from one workstation, and some variational fits did not
 converge: in confounded simulations, with or without two PCs, and in the
 RegMap check on traits whose heritability estimate reached its upper bound.
@@ -199,6 +202,10 @@ Scalability, 2.3.0.dev4 & Paired timings and numerical agreement for
 streamed scores, shared fits and dosage decoding
 (Section~\ref{sec:scalability}). & Synthetic panels on warm storage.
 The 500,000-sample scan tests 1,024 markers from a saved fit. \\
+Matched rerun, 2.3.0.dev5 & Wall time and peak resident memory on the
+sample ladder, standard workloads and three PGEN readers
+(Section~\ref{sec:rerun-memory}). & One host. Three memory repetitions
+per PGEN reader and for two methods at 100,000 samples. \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -2509,6 +2516,77 @@ upstream reader was $2.22\times10^{-16}$.
 
 \FloatBarrier
 
+\subsection{Process peak memory in the November rerun}
+\label{sec:rerun-memory}
+
+We repeated selected October benchmarks and the scalability comparisons
+(Sections~\ref{sec:dev8-reruns} and~\ref{sec:scalability}) with 2.3.0.dev5.
+We verified the input hashes and measured process peak resident set size
+(RSS) with \code{wait4}. Each sample-ladder fit ran in a fresh process,
+including input loading, with one requested thread on the Apple M2 Pro.
+Figure~\ref{fig:rerun-peak-rss} fixes the marker count at 20,000. At
+50,000 samples, the three two-step peaks were 1.46~GiB for HRATT-HE,
+1.75~GiB for HRATT-REML and 2.00~GiB for BOLT-style inf. At 100,000,
+HRATT-REML peaked at 3.10~GiB in one fit (46.92~s). Over three repeats
+HRATT-HE took a median 25.88~s and peaked at 2.52~GiB (2.49--2.54),
+and BOLT-style inf took 102.47~s and peaked at 3.68~GiB (3.45--3.72).
+Each method reproduced its own full $p$-value array across the repeats.
+The ladder kept the October finite-value masks and Bonferroni discoveries
+at every size. The largest absolute change in $\log_{10} p$ was 0.00692
+for HRATT-REML at 2,500 samples.
+
+\begin{figure}[htbp]
+ \centering
+ \includegraphics[width=\textwidth]{figures/rerun_peak_rss.pdf}
+ \caption{Process peak RSS for the 20,000-variant sample-size ladder
+ in 2.3.0.dev5. Each point is one fresh fit, except the HRATT-HE and
+ BOLT-style inf points at 100,000 samples. Those points are medians
+ of three fresh fits, with bars spanning their observed minima and
+ maxima. Exact LOCO was run through 2,500 samples.}
+ \label{fig:rerun-peak-rss}
+\end{figure}
+
+\FloatBarrier
+
+Peak RSS also depends on the panel width and the fit. On the separate
+5,000-by-400,000 panel, HRATT-HE used 2.91~GiB for the mixed trait and
+3.05~GiB for the pure null. The respective BOLT-style inf peaks were
+2.36 and 2.38~GiB. Both methods recovered eight of the ten simulated
+large-effect variants and had about 5.06\% of $p$-values below 0.05 on
+the single pure-null panel. A dense scan with 2,000 samples and 100,000
+variants peaked at 3.86~GiB in float32 and 4.21~GiB in float64, including
+simulation and setup. On RegMap, all four methods again recovered the
+same six controls, and the same four HRATT scans flagged non-convergence.
+
+\begin{table}[htbp]
+ \centering\small
+ \caption{Three reader paths for the same HRATT step-2 scan of 1,024
+ PGEN records in 500,000 samples. Timing is the median of three warm scans.
+ Memory peaks and ranges come from three separate fresh processes per
+ reader, including startup, loading the saved fit and writing TSV.}
+ \label{tab:rerun-pgen-rss}
+ \begin{tabular}{@{}lrrr@{}}
+ \toprule
+ Reader & Median wall time (s) & Median peak (MiB) & Range (MiB) \\
+ \midrule
+ \tabinput{tables/rerun_pgen_rss.tex}
+ \bottomrule
+ \end{tabular}
+\end{table}
+
+Table~\ref{tab:rerun-pgen-rss} uses the same 16~MiB chunk budget and
+saved 24-marker HRATT fit for all three paths. Of the 1,024 PGEN
+records, 992 were sparse. Direct scoring used 17\% less process peak RSS
+than byte-per-call decoding and 18\% less than packed decoding. The
+paired scan checks again gave a maximum absolute $p$-value difference
+of $3.08\times10^{-14}$. The binary score experiment in
+Section~\ref{sec:scalability} went from 387.4~MiB in dev3 to 242.4~MiB in
+dev5 in the rerun, a 37.4\% reduction. These peaks measure a saved-fit
+scan and a fixed binary score workload, respectively. A cold chromosome
+scan and a genome-wide step-1 fit at 500,000 samples remain to be measured.
+
+\FloatBarrier
+
 \section{Discussion}
 
 \subsection{The central distinction is between geometry and inference}
@@ -2838,8 +2916,14 @@ The November scalability study (Section~\ref{sec:scalability}) measured
 the implementation shipped in 2.3.0.dev4 at \code{3e6c1cb1}. Its
 \href{https://github.com/bvilhjal/mixmogam/tree/3e6c1cb167d9c8b0867c7b727b17e24679a996c3/benchmarks/results/20261119-scalability}{archived repetitions, input hashes and timing sources}
 include the 2.3.0.dev3 binary reference and instructions to regenerate the
-synthetic inputs. Version 2.0.2.dev1
-(3 November) later changed REML/SLQ fitting (the REML covariate basis and
+synthetic inputs. The rerun (Section~\ref{sec:rerun-memory}) used
+2.3.0.dev5 at \code{99925b2a}. The
+\href{https://github.com/bvilhjal/mixmogam/tree/master/benchmarks/results/20261119-dev5-rerun}{rerun evidence bundle}
+keeps the timing and memory records, input hashes and repeatability
+checks. The figure and table can be rebuilt from that bundle with
+\code{make\_rerun\_displays.py}.
+Version 2.0.2.dev1
+(3 November) changed REML/SLQ fitting (the REML covariate basis and
 fixed-seed stochastic traces) and the mixture and elastic-net posterior
 means. The October calibration results retain their original versions.
 The known-covariance experiment uses baseline commit

@@ -1,0 +1,96 @@
+[
+  {
+    "cell": "scan-reference",
+    "benchmark": "scan_vs_reference",
+    "n": 2000,
+    "m": 10000,
+    "fit_s": 0.6019171249936335,
+    "scan_new_s": 0.13328229199396446,
+    "scan_reference_full_s": 16.808377080014907,
+    "speedup_vs_v1_style": 126.11110469780978,
+    "dtype": "float32",
+    "process_wall_seconds": 5.6941736249718815,
+    "peak_rss_bytes": 1018298368
+  },
+  {
+    "cell": "scan-f32-500",
+    "benchmark": "scan_n500_m100000_float32",
+    "n": 500,
+    "m": 100000,
+    "scan_s": 0.18149670801358297,
+    "snps_per_s": 550974.1807136035,
+    "dtype": "float32",
+    "process_wall_seconds": 4.233351500006393,
+    "peak_rss_bytes": 1559003136
+  },
+  {
+    "cell": "scan-f32-2000",
+    "benchmark": "scan_n2000_m100000_float32",
+    "n": 2000,
+    "m": 100000,
+    "scan_s": 1.262432124989573,
+    "snps_per_s": 79212.17942772643,
+    "dtype": "float32",
+    "process_wall_seconds": 15.470476958027575,
+    "peak_rss_bytes": 4148445184
+  },
+  {
+    "cell": "scan-f64-2000",
+    "benchmark": "scan_n2000_m100000_float64",
+    "n": 2000,
+    "m": 100000,
+    "scan_s": 3.3483338749501854,
+    "snps_per_s": 29865.59994752248,
+    "dtype": "float64",
+    "process_wall_seconds": 17.28755974996602,
+    "peak_rss_bytes": 4522393600
+  },
+  {
+    "cell": "permutations",
+    "benchmark": "permutations_batched",
+    "n": 1500,
+    "m": 5000,
+    "n_perm": 500,
+    "total_s": 0.22427291702479124,
+    "perm_snps_per_s": 11147132.84673445,
+    "threshold_05": 1.0211754586430142e-05,
+    "process_wall_seconds": 2.411072749993764,
+    "peak_rss_bytes": 601686016
+  },
+  {
+    "cell": "threads-1",
+    "benchmark": "thread_scaling_1t",
+    "n": 2000,
+    "m": 20000,
+    "kinship_s": 0.5444,
+    "fit_s": 0.5708,
+    "scan_s": 0.4108,
+    "blas_threads_requested": 1,
+    "process_wall_seconds": 7.157980749965645,
+    "peak_rss_bytes": 1227128832
+  },
+  {
+    "cell": "threads-2",
+    "benchmark": "thread_scaling_2t",
+    "n": 2000,
+    "m": 20000,
+    "kinship_s": 0.3501,
+    "fit_s": 0.5543,
+    "scan_s": 0.2689,
+    "blas_threads_requested": 2,
+    "process_wall_seconds": 6.4612245419994,
+    "peak_rss_bytes": 1221902336
+  },
+  {
+    "cell": "threads-4",
+    "benchmark": "thread_scaling_4t",
+    "n": 2000,
+    "m": 20000,
+    "kinship_s": 0.3304,
+    "fit_s": 0.5569,
+    "scan_s": 0.2481,
+    "blas_threads_requested": 4,
+    "process_wall_seconds": 6.217839416989591,
+    "peak_rss_bytes": 1166622720
+  }
+]

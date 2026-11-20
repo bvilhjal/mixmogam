@@ -546,6 +546,11 @@ panel still incurs every required disk pass. The dense exact method needs
 workspaces. These storage fixes do not establish validated runtime or
 calibration at 500K by 10M.
 
+In the November benchmark, one trait and 1,024 variants at 500,000 samples
+used a median 477 MiB of process memory with direct PGEN scoring. The file
+had 992 sparse records. The scan loaded a saved HRATT step-1 fit, used a
+16 MiB chunk budget and wrote TSV. [Measurements](../benchmarks/results/20261119-dev5-rerun/README.md#500000-sample-pgen-scan)
+
 Dosages are standardized like calls (mean and population SD over the observed
 values, missing values at the mean) and tested in float64; integer dosages
 reproduce the hard-call statistics to about 1e-5. They are tested for

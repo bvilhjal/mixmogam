@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.3.0.dev6] - 2026-11-20
+
+### Changed
+
+- The [research report](report/README.md) and README use the November rerun
+  of 2.3.0.dev5. Figure 8 shows peak RSS across the sample-size ladder and
+  Table 25 compares the three PGEN scoring paths at 500,000 samples. The
+  [evidence bundle](benchmarks/results/20261119-dev5-rerun/README.md) records
+  the timings, memory, input hashes and numerical checks. This is a
+  documentation release.
+
 ## [2.3.0.dev5] - 2026-11-19
 
 ### Changed

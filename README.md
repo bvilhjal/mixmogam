@@ -12,7 +12,7 @@ single fits on one 1,000 x 20,000 panel, the fallback took 4.8 times as long for
 BOLT-style inf, 68 times for HRATT-HE and 187 times for BOLT-style mixture
 ([measurements](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/scale-study/measurements.csv)).
 
-Version 2.3.0.dev5. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
+Version 2.3.0.dev6. Changes are in the [changelog](https://github.com/bvilhjal/mixmogam/blob/master/CHANGELOG.md), the methods in the
 [design notes](https://github.com/bvilhjal/mixmogam/blob/master/docs/design.md), and the evidence in the
 [research report](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md).
 
@@ -245,8 +245,9 @@ hratt_step2(HrattStep1.load("height.npz"), files, n_threads=8, out="height.tsv.g
 These storage paths do not establish practical runtime at 500K samples by 10M variants:
 the packed calls alone occupy 1.25 TB and step 1 still makes repeated passes over its
 model panel. The [quickstart](docs/quickstart.md#biobank-scale-hratt-in-two-steps)
-covers panel selection and memory budgets. The [scalability measurements](benchmarks/results/20261119-scalability/README.md)
-include a streamed 500,000-sample scan over 1,024 variants.
+covers panel selection and memory budgets. Starting from a saved HRATT fit,
+direct PGEN scoring wrote results for 1,024 variants in 500,000 samples at a
+median process peak of 477 MiB. [Scan protocol and reader comparison](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261119-dev5-rerun/README.md#500000-sample-pgen-scan)
 
 ## Install
 
@@ -306,30 +307,26 @@ threads, two-bit storage and memory budgets for large HRATT fits, and
 
 ## Performance
 
-On one simulated 100,000 x 20,000 founder-block panel, three balanced-order repetitions of
-HRATT-HE and BOLT-style inf gave the times below (2.0.0.dev8, one requested thread, Apple
-M2 Pro; the Accelerate thread pool itself could not be observed). They have not been rerun
-since 2.0.2.dev1 changed REML/SLQ fitting and the mixture and elastic-net posterior
-means (see the changelog), so read them as indicative for
-the current version:
+The November rerun used 2.3.0.dev5 on an Apple M2 Pro. Table 1 summarizes
+three fresh-process fits per method on one simulated 100,000 × 20,000
+founder-block panel. The fits requested one thread. The Accelerate thread
+pool size was unavailable to the measurement tool.
 
-| Method | Median wall time | Median peak RSS |
-|---|---:|---:|
-| HRATT-HE | 25.84 s | 2.49 GiB |
-| BOLT-style inf (mixmogam) | 101.77 s | 3.60 GiB |
+**Table 1. Wall time and process peak RSS at 100,000 samples.**
 
-Each method reproduced its own p-values exactly across repetitions. In the
-20,000-variant sample-size ladder (one run per method and size, the same panel
-within each size), HRATT-HE took 3.27 s at 5,000 samples and 25.75 s at
-100,000, against 4.00 s and 102.20 s for BOLT-style inf (mixmogam) and 4.13 s and
-47.07 s for HRATT-REML. At 1,000 and 2,500 samples BOLT-style inf (mixmogam) was
-quicker (2.03 and 2.60 s against 2.57 and 2.77 s), and at 2,500 the default
-`exact` path took 9.45 s. These compare mixmogam's own methods on one host;
-no external program is compared. The
-[evidence bundle](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261029-report-evidence/README.md) has
-the ladder, a longer-range-LD panel, 400,000- and 800,000-variant fits and the
-measurement details. (Its tables also keep an external program's timings for
-provenance; they are not part of this documentation.)
+| Method | Median wall time | Median peak RSS | Observed peaks |
+|---|---:|---:|---:|
+| HRATT-HE | 25.88 s | 2.52 GiB | 2.49–2.54 GiB |
+| BOLT-style inf (mixmogam) | 102.47 s | 3.68 GiB | 3.45–3.72 GiB |
+
+Each method reproduced its own p-values exactly across the repetitions.
+HRATT-REML took 46.92 s and peaked at 3.10 GiB in its single fit at that size.
+On the separate 5,000 × 400,000 panel, peak RSS across the mixed and pure-null
+traits was 2.91–3.05 GiB for HRATT-HE and 2.36–2.38 GiB for BOLT-style inf.
+The dense 2,000 × 100,000 benchmark peaked at 4.21 GiB with float64 input and
+3.86 GiB with float32, including simulation and setup.
+[Full rerun records](https://github.com/bvilhjal/mixmogam/blob/master/benchmarks/results/20261119-dev5-rerun/README.md) ·
+[Research report and memory curve](https://github.com/bvilhjal/mixmogam/blob/master/report/README.md)
 
 ## Interpretation and limitations
 
@@ -375,7 +372,7 @@ methods you use. Each paper's PMID and lookup URL is in
 
 | If you use | Cite |
 |---|---|
-| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.2.0 |
+| the software itself | [CITATION.cff](https://github.com/bvilhjal/mixmogam/blob/master/CITATION.cff), version 2.3.0.dev6 |
 | `method="exact"` (EMMAX with an exact REML refit per LOCO group) | Kang HM et al. (2008). Efficient control of population structure in model organism association mapping. *Genetics* **178**(3). [doi:10.1534/genetics.107.080101](https://doi.org/10.1534/genetics.107.080101); Kang HM et al. (2010). Variance component model to account for sample structure in genome-wide association studies. *Nat Genet* **42**(4). [doi:10.1038/ng.548](https://doi.org/10.1038/ng.548) |
 | `method="bolt-inf"` or `method="bolt"` | Loh PR et al. (2015). Efficient Bayesian mixed-model analysis increases association power in large cohorts. *Nat Genet* **47**(3). [doi:10.1038/ng.3190](https://doi.org/10.1038/ng.3190) |
 | `method="hratt"`: its two-step design | Hof JP, Speed D (2025). LDAK-KVIK performs fast and powerful mixed-model association analysis of quantitative and binary phenotypes. *Nat Genet* **57**(9). [doi:10.1038/s41588-025-02286-z](https://doi.org/10.1038/s41588-025-02286-z). HRATT is inspired by, and is not, LDAK-KVIK |

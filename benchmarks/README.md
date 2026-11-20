@@ -7,6 +7,12 @@ which question each driver answers and what its evidence can support; read it
 before adding a driver or quoting a number. `python benchmarks/index.py`
 lists the archives.
 
+The 19–20 November rerun used 2.3.0.dev5 on the archived inputs. It includes
+the standard scans, the 20,000-variant sample-size ladder through 100,000
+samples, the 400,000-variant panel, the Atwell controls and the paired
+scalability cases. A fresh-process follow-up measured peak RSS for each of
+the three 500,000-sample PGEN scoring paths. [Rerun evidence](results/20261119-dev5-rerun/README.md)
+
 The [19 November scalability measurements](results/20261119-scalability/README.md)
 compare sparse and dense PGEN scoring, shared and independent BOLT-style inf
 fits, Gram storage, binary scan memory and BGEN dosage readers.

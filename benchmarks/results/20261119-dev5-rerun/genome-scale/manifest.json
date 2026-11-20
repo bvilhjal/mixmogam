@@ -1,0 +1,114 @@
+{
+  "started_utc": "2026-11-19T21:28:39.449745+00:00",
+  "commit": "99925b2ab25b4ecf36b1fa159c9a16aacb156a3a",
+  "prior_commit": "d550c41212fb4eca72858893d7ef7c6b89d4398a",
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37486691)\t47%; AC attached; not charging present: true\n",
+    "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+  },
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "load_average": [
+      3.10302734375,
+      2.69140625,
+      2.70849609375
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 1,
+    "mixmogam": "2.3.0.dev5",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/src/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev9",
+    "phensim_path": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/src/phensim/__init__.py",
+    "phensim_git": null
+  },
+  "max_load": 5,
+  "seed": 0,
+  "ldak": "/Users/au507860/bin/ldak63",
+  "ldak_sha256": "8e6fd8469dead25e0e4ffc3fbf4b5ed7e50c8088b444ff7c1e7734ba12b2b6ef",
+  "driver_sha256": "01deeb711015b23b8831f479bd2c1c695947a12e5d5c211d61c206b3c6e28e52",
+  "worker_sha256": "6deae6a0b9c450468f5d4b599c1bcc05e060f85b2fbaeef8afd7cf12bb9d40a8",
+  "cases": [
+    {
+      "label": "mixed-nopc",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-scale-dev8/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/genome-scale/mixed-nopc/panel",
+        "provenance": "regenerated and matched by SHA-256",
+        "sha256": {
+          "geno.fam": "b77e9e5e8ca2cfc8c04c913e67bbf0f2b8bfdd02712c7e9bd40e54d53d0a3e62",
+          "geno.bed": "7e274e73adcd0cccc0048de5a0e5dd6c862dc88cdf8be4da687ab9f283f4e598",
+          "geno.bim": "0786765f5144b6b9a90dcddb7f935ce27a16bee344d5473fcf334f3ca5f4fd0d"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "11281ea91638c4cbb069c24893876fde979ea5c3ea6373fd439c3c554e1d1fa6",
+        "qtl.npy": "7f2626292068e010bd56cbfcefeff4cfb28b328261dffcf6dcbfc18673976f9c",
+        "null.npy": "084f7833eca43cec3baadf269e0d158997719e4a10fc007233ab5552a844706b"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "ff5013fe6769a02ac5dcce3b8cefab5a1c47f38a0f06d621ce175e8879b9b60b",
+        "hratt-he": "b323017d47aef42b2e65361c3a469d0a9f21c66c99766accaa20735cfc5f1188",
+        "bolt-inf": "466c1cb2d3b0cd13413dac87381e3a07644c284988e92db0b2ddd3f64079b0f1"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "bolt-inf"
+      ],
+      "n": 5000,
+      "m": 400000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "null-nopc",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-scale-dev8/null-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/genome-scale/null-nopc/panel",
+        "provenance": "regenerated and matched by SHA-256",
+        "sha256": {
+          "geno.fam": "b77e9e5e8ca2cfc8c04c913e67bbf0f2b8bfdd02712c7e9bd40e54d53d0a3e62",
+          "geno.bed": "7e274e73adcd0cccc0048de5a0e5dd6c862dc88cdf8be4da687ab9f283f4e598",
+          "geno.bim": "0786765f5144b6b9a90dcddb7f935ce27a16bee344d5473fcf334f3ca5f4fd0d"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "ceb01118ab5d009b7f61002f80f9b353042d64b48662da2e348a6f3055482d07",
+        "qtl.npy": "e734dac55ea9fbbe782af2d8c02c3c5992131906228afb2aaaf137d6f3ed74db",
+        "null.npy": "00c90467533ed1fb666b6c203d592be8da735ee6f19e58d792b20f45cab0d56f"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "ed4dc2e88d2c465e95f5d225c00d324192638d9afe4129f8300976b1f6269987",
+        "hratt-he": "6cc361dc494f72e30fdb6f7369b2835da17603475ac2fccb8454ba14fa499248",
+        "bolt-inf": "0a9f7e57d6741fd81c5cc08ee8bedcdebcf489467b772b27d00da8a214f74b7a"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "bolt-inf"
+      ],
+      "n": 5000,
+      "m": 400000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    }
+  ],
+  "measurements": 6,
+  "finished_utc": "2026-11-19T21:32:47.284316+00:00"
+}

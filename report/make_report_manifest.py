@@ -20,13 +20,15 @@ def main():
     version_text = (ROOT / "mixmogam/__init__.py").read_text()
     version = re.search(r'^__version__ = "([^"]+)"', version_text, re.MULTILINE).group(1)
     inputs = [ROOT / name for name in (
-        "CHANGELOG.md", "README.md", "benchmarks/README.md", "benchmarks/DESIGN.md",
+        "CHANGELOG.md", "CITATION.cff", "README.md", "benchmarks/README.md", "benchmarks/DESIGN.md",
         "mixmogam/__init__.py",
         "benchmarks/results/20261029-report-evidence/README.md",
         "benchmarks/results/20261029-report-evidence/manifest.json",
         "benchmarks/results/20261119-scalability/README.md",
         "benchmarks/results/20261119-scalability/measurements.json",
         "benchmarks/results/20261119-scalability/timing_sources.zip",
+        "benchmarks/results/20261119-dev5-rerun/README.md",
+        "benchmarks/results/20261119-dev5-rerun/manifest.json",
         "report/README.md", "report/mixmogam_report.tex", "report/references.json",
         "report/report_manifest_20261017.json",
     )]
@@ -43,8 +45,10 @@ def main():
     parent = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     scalability_path = REPORT / "scalability_display_manifest.json"
     scalability = json.loads(scalability_path.read_text())
+    rerun_path = REPORT / "rerun_display_manifest.json"
+    rerun = json.loads(rerun_path.read_text())
     manifest = {
-        "revision": "2026-11-19-scalability-report",
+        "revision": "2026-11-20-benchmark-rerun-report",
         "recorded_at_utc": datetime.datetime.now(datetime.timezone.utc).isoformat(),
         "package_version": version,
         "parent_commit": parent,
@@ -54,6 +58,11 @@ def main():
             "implementation_version": scalability["implementation_version"],
             "implementation_commit": scalability["implementation_commit"],
             "manifest": str(scalability_path.relative_to(ROOT)),
+        },
+        "benchmark_rerun": {
+            "package_version": rerun["package_version"],
+            "commit": rerun["benchmark_code_commit"],
+            "manifest": str(rerun_path.relative_to(ROOT)),
         },
         "revision_state": ("integrate/stage1 report sources: external-program comparisons "
                            "removed, mixmogam's BOLT-style methods labelled as such and comparative "
@@ -82,6 +91,8 @@ def main():
                            "(2.3.0.dev5) adds the sparse score identity and Section 4.15. "
                            "Its new table and two figures use the paired 2.3.0.dev4 measurements, "
                            "whose source and hashes are in the scalability benchmark manifest. "
+                           "The 20 November manuscript revision (2.3.0.dev6) adds Section 4.16 "
+                           "with the matched 2.3.0.dev5 rerun and the three-reader PGEN peak RSS study. "
                            "The earlier empirical studies retain their original benchmark versions."),
         "pdf": {"path": str(pdf.relative_to(ROOT)), "sha256": sha256(pdf), "pages": pages},
         "counts": {"figures": len(re.findall(r"\\begin\{figure\}", tex)),

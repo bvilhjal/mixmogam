@@ -1,0 +1,94 @@
+{
+  "run_id": "20261119T213249Z",
+  "argv": [
+    "atwell_controls.py",
+    "--out",
+    "atwell"
+  ],
+  "mixmogam": "2.3.0.dev5",
+  "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+  "numpy": "2.4.6",
+  "scipy": "1.18.0",
+  "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+  "machine": "arm64",
+  "threads": {
+    "OPENBLAS_NUM_THREADS": "1",
+    "OMP_NUM_THREADS": "1",
+    "MKL_NUM_THREADS": "1",
+    "VECLIB_MAXIMUM_THREADS": "1",
+    "NUMBA_NUM_THREADS": "1"
+  },
+  "inputs": {
+    "at_data/at_genotypes.zip": {
+      "sha256": "5715a48a0705ac71c14b4c42ead7512edee11333b9c1acfe36a5062845d1940f",
+      "bytes": 161037077
+    },
+    "at_data/199_phenotypes.csv": {
+      "sha256": "31d5471931df732860012573fbc0c34667c5455d450b07eeb929a6d59c2c18f8",
+      "bytes": 358808
+    },
+    "at_data/gene_annotations.zip": {
+      "sha256": "bc4c2f431eeff8f088a8f2da3192251895334ae619d1b4be4876736c17cc6a10",
+      "bytes": 23331452
+    },
+    "benchmarks/atwell_controls_plan.md": {
+      "sha256": "5406a53d8d94ce5cf3ddb7db2800825f5d11334f4d8ac1c8a780f48db99689f9",
+      "bytes": 3572
+    }
+  },
+  "source": {
+    "original_root": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/src",
+    "snapshot": "atwell/source",
+    "git": null,
+    "sha256": {
+      "mixmogam/__init__.py": "f133c866308188399de55a1b710f66c116091bf10e0a972815afa5779576f604",
+      "mixmogam/__main__.py": "d0984dc3646da29d1c706ba1c849c9deacc2a3ea27e65bfc2d8d7e62a932f450",
+      "mixmogam/_binary.py": "b123731ad3a4b661a4c44f65e75f12caa58242202f74cfb37044cf6b8982c59b",
+      "mixmogam/_cg.py": "f6bc44567a8cfb1cc89a5e196ddeb1413cedb6709bb653054a3ebe7ee9d5cc49",
+      "mixmogam/_chol.py": "de7ba51d7820ed16324787f846c83496f30c16ef740dd11dfa5397e42d047dbc",
+      "mixmogam/_fast.py": "7e327104770b562536d1bbd98609c1ff3dbd3e9f6c0e6beaf02a07dad6f6f737",
+      "mixmogam/_he.py": "857c7bff681cd2ec0ff618bf06451b5c6b3b6b5d1283551f2c2bd78802e4bbe7",
+      "mixmogam/_hm3.py": "77071936b8f27e0687df043dd8cd90c43ccd0b87cd98a20d6d6d333d771332e1",
+      "mixmogam/_ld8.py": "e840514de38aac504f5906b319630bac38b2866ccbe3d6d82edd0311e1cc1051",
+      "mixmogam/_loco.py": "c6b3b9aa6bd4038cefa850f9a7770dca0e3d035a6cf2f2b9be2fd251bbdb7ed5",
+      "mixmogam/_packed.py": "20c36e43995340fbc4fa73c93f9245afc20a1bc6925c4598e0812afd2f23df34",
+      "mixmogam/_pgen_score.py": "6a96ecc4e01bb64f6dee5d22e6d4d6b0e0475212c8a1ded1b2cc53ccd7d01772",
+      "mixmogam/_relatedness.py": "b5cd4338935c6c0eb609c94b75516126708f4a72226288ddb9ace0f24d4d676c",
+      "mixmogam/_slq.py": "9d480404484eab7ffa4c3bfa1aceb5fd4b5f95a4eeb799a9398637d5de2989e2",
+      "mixmogam/_spa.py": "59fcf7881abd497dd9ad72a35bff74fb6b3e07be949886f3ceb4172551454ca6",
+      "mixmogam/_standardize.py": "45f4a6535e99116eab2247d4bc8449dbd04eca91f0714efd1780991b08434fe8",
+      "mixmogam/_stream.py": "466b6d25358358f219bbe6d2a0357eed80f79b2ecb98a2c609f2d67025d5cca7",
+      "mixmogam/_thin.py": "23c9a9c7ef3067e8cc6f9a3f701e3d25ce7c59e960f20c9ac6bfd69a2477b3b9",
+      "mixmogam/_vb.py": "8411333abf2c7d132e446a6fad9421b801881111d36d85a5acba18dbf35d9eb2",
+      "mixmogam/association.py": "f98e014080630513b6b3dd56aaf9c25b7e750008371c8879c87630178db2365a",
+      "mixmogam/cli.py": "3a3cba1748ec501632d0b5fc1c91060e238b02ed189c27e4f7fa88e109418778",
+      "mixmogam/genotypes.py": "5a79423e8902c58c4963f9b83716b93aa3ba098b863593007f518690170881ea",
+      "mixmogam/io/__init__.py": "f3e5e48f70136a0f387a25fe39583d87326843a941a58d07c7131957b819b00a",
+      "mixmogam/io/_hardcalls.py": "ea47483c65fe3221dd7621f69c96bc07fd614e6a789c616847a84da7783ad81f",
+      "mixmogam/io/bgen.py": "223463eb6188cf63d321fc65135886ff38e786fb9bfb17eb2a9a92fa1bbd6fa7",
+      "mixmogam/io/covariates.py": "3470064bb72fee6e9ea8e3e21c67432bc05afe9bf4e8c9334a09207e27ab2792",
+      "mixmogam/io/eigenstrat.py": "aa6ab66145d4d34c09a8b80d1b0889f27925908a6c9c10b0d4d6bdb7f1568d2b",
+      "mixmogam/io/hdf5.py": "1b632d8bf51dcd758bd2e7e625c3b98b7d4ce9bcf65fc44fb36d1b3da110eccd",
+      "mixmogam/io/pgen.py": "a482d18407e7ca3a3584accdf7943e8715e177de7bac29aca308fd9e87919be8",
+      "mixmogam/io/phenofile.py": "e86c489c5b40e1b56f190718307cabede3fa7e04c9e66a2a59f3517d6e64fd1b",
+      "mixmogam/io/plink.py": "a60c79a0560ac8e874bfc9121da3aee589a73c54abd2c449706e2f4f11acd2ca",
+      "mixmogam/io/regmap.py": "8455bd64df78a7a281dd2d16ac10b5dda6ec7e8ff28ef28da1961a3dada52389",
+      "mixmogam/io/vcf.py": "53c7e2ed36ac18a96081a7d06043fc8f435c1f076894dd93be91c5e8f14085c1",
+      "mixmogam/kinship.py": "6d7570032440dd63075c8aae52fabf5ae50e2d94f0e22c87ce32a8b744130144",
+      "mixmogam/ldscore.py": "5ee5920dc65cde527c86a96460ee30f2376d1e548cbd23bfc9653cb3b4cffdfc",
+      "mixmogam/lmm.py": "663c65be66d859d00b39488ac9060040eba8fc0e4937ca2c99242d9859ecf72f",
+      "mixmogam/pca.py": "603456ea22a8f562ed0738a3fd5d92dccc5db679490595cecddf15ed79792b75",
+      "mixmogam/phenotypes.py": "316f7fcbed889560b5357e441c57f87824c6e2a2fde6aeb30cccf5696c8fce63",
+      "mixmogam/plotting.py": "792776f1bbba389cedb7938f9979ccc36150b6582d0401a24e432f9c779fb8db",
+      "mixmogam/results.py": "08f13baf4a9f7f39daa750d4104213f32afc0e6df7d2037d3228cf7aa96750b7",
+      "mixmogam/scan.py": "335256932c83354ad5d40e85e1539b105f3757ac1b209bc2a33978dc5938fae4",
+      "mixmogam/simulate.py": "2198016a75ea4c2c3e28818ac60c38a15c3b7118e920886ea641d673a2b2df68",
+      "mixmogam/stage1.py": "1de049462cb3397c3582470563d9ff662c6a22848060be4af0d9f8a987d59bc6",
+      "mixmogam/steps.py": "3b0c82652ecdc5a41c6bd4c8f01c57fdabeddfde450d94b4f79aafa969c50af4",
+      "mixmogam/stepwise.py": "073b38723e7e712f34325c9fae2c0b0327779872e1529a29da3662480ee0a7d5",
+      "mixmogam/twostep.py": "141c5c59abf0a7e0bc2407efa9795321315b1179da545e145bf806af3c0bb31e",
+      "pyproject.toml": "948b71ee5ec8b1eb56bc341aff3b3c3c759754ed4d7a7e77c04132e89b3b9b34",
+      "README.md": "18c27e62b34db6689764d0f14754527bf3315cd150cc36ee5d7cd475ea61bdae"
+    }
+  }
+}

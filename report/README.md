@@ -25,8 +25,7 @@ holds the selected raw measurements, per-fit convergence diagnostics and
 source and input identities. The 2.0.0 and 2.0.1 releases did not change the
 estimators measured there; 2.0.2.dev1 changed REML/SLQ fitting (the REML
 covariate basis and fixed-seed stochastic traces) and the mixture and
-elastic-net posterior means (see the changelog), and these measurements
-have not been rerun since.
+elastic-net posterior means (see the changelog).
 
 Section 4.15 reports the 19 November scalability study of 2.3.0.dev4.
 Starting from a saved HRATT fit, the scan of 1,024 variants in 500,000
@@ -41,6 +40,16 @@ rebuilds and binary peak memory.
 [![Figure 6. Measured speed ratios by PGEN sparsity and Mailman product width.](figures/scalability_products.png)](figures/scalability_products.pdf)
 
 [![Figure 7. Genotype passes, Gram rebuilds and binary scan memory.](figures/scalability_work.png)](figures/scalability_work.pdf)
+
+Section 4.16 reports the rerun with 2.3.0.dev5. At 100,000 samples and
+20,000 variants, three fresh fits gave median peaks of 2.52 GiB for
+HRATT-HE and 3.68 GiB for BOLT-style inf (mixmogam). The single HRATT-REML
+fit peaked at 3.10 GiB. Table 25 compares peak RSS across three PGEN
+readers for the 500,000-sample scan from a saved fit. Direct scoring took
+0.564 s in the timing runs and peaked at a median 477 MiB in the separate
+memory runs. [Rerun evidence](../benchmarks/results/20261119-dev5-rerun/README.md)
+
+[![Figure 8. Peak resident memory for the 20,000-variant sample-size ladder.](figures/rerun_peak_rss.png)](figures/rerun_peak_rss.pdf)
 
 Each result keeps the package version it ran with. The earlier phensim,
 HE/REML and 20,000-variant results are 2.0.0.dev6 reruns on the archived
@@ -76,6 +85,7 @@ HRATT runs; any external-program outputs inside them are provenance only.
 | Sample-size scaling | `20261026T161500Z-kvik-sample-scaling` | Fixed m = 20,000, n = 1,000 to 50,000, one run per size: both HRATT paths approximately linear in n (local exponents 0.85 and 0.97) with bounded sweep counts, BOLT-style inf (mixmogam) superlinear (1.21; CG iterations 10 to 22), exact run only to n = 2,500 (2.1 to 9.8 s; its dense factorizations scale as n^3); in that 26 October run (master `798518e5`, before dev8) single runs at n = 50,000 took 13.6 s (HRATT-HE), 24.2 s (HRATT-REML) and 47.0 s (BOLT-style inf (mixmogam)); the dev8 ladder gives 13.25, 22.94 and 45.10 s |
 | dev8 package reruns | [`20261029-report-evidence`](../benchmarks/results/20261029-report-evidence/README.md) | Compact copied evidence for the 100K sample ladder and repetitions, paired 50K HRATT fits, scale/calibration and Atwell reruns; full inputs and worker output remain local |
 | 2.3.0.dev4 scalability | [`20261119-scalability`](../benchmarks/results/20261119-scalability/README.md) | Paired compute and reader comparisons on warm synthetic panels, binary peak RSS and numerical checks. Cold chromosome scans and genome-wide fits at 500,000 samples remain open. |
+| 2.3.0.dev5 benchmark rerun | [`20261119-dev5-rerun`](../benchmarks/results/20261119-dev5-rerun/README.md) | Timings, process peak RSS and numerical checks on the matched synthetic workloads and Atwell panel. Table 25 uses separate fresh-process RSS measurements. |
 | Development release validation | `20261003-release-dev4`, `20261004-release-dev5` | Test suites, installed package checks and document verification for each release |
 | Historical structure scan | `20261003T081812Z-structure-calibration` | Diagnostic patterns from the earlier implementation |
 | Historical environmental and LD-block experiments | `20261003T122520Z-sim-study` | QTL-free blocks contain polygenic effects; their detections are not a strict-null false-positive rate |
@@ -115,6 +125,7 @@ Matplotlib, then rebuild the PDF with the checked-in historical displays.
 
 ```sh
 python report/make_scalability_displays.py
+python report/make_rerun_displays.py
 (cd report && tectonic mixmogam_report.tex)
 python report/make_report_manifest.py
 ```
@@ -160,7 +171,7 @@ exactly.
 `report_manifest.json` hashes the delivered PDF, its current inputs and the
 evidence manifest (pages are counted with `pdfinfo`). It does not update
 itself, so regenerate it whenever the PDF or any hashed input changes
-(README.md, CHANGELOG.md, `mixmogam/__init__.py`, the report and benchmark
+(README.md, CHANGELOG.md, CITATION.cff, `mixmogam/__init__.py`, the report and benchmark
 READMEs/DESIGN, the `make_*.py` generators, the sub-manifests, and the
 tables/figures the LaTeX inputs).
 `report_manifest_20261017.json` is the previous revision's manifest, kept

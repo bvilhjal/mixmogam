@@ -1,0 +1,302 @@
+{
+  "started_utc": "2026-11-19T21:11:07.448902+00:00",
+  "commit": "99925b2ab25b4ecf36b1fa159c9a16aacb156a3a",
+  "prior_commit": "d550c41212fb4eca72858893d7ef7c6b89d4398a",
+  "power_state": {
+    "battery": "Now drawing from 'AC Power'\n -InternalBattery-0 (id=37486691)\t54%; AC attached; not charging present: true\n",
+    "settings": "AC Power:\n Sleep On Power Button 1\n lowpowermode         0\n standby              1\n ttyskeepawake        1\n hibernatemode        3\n powernap             1\n hibernatefile        /var/vm/sleepimage\n displaysleep         60\n womp                 1\n networkoversleep     0\n sleep                0\n tcpkeepalive         1\n disksleep            10\n"
+  },
+  "environment": {
+    "python": "3.14.6 | packaged by conda-forge | (main, Jul 24 2026, 16:05:26) [Clang 20.1.8 ]",
+    "python_executable": "/Users/au507860/anaconda3/envs/ldpred3-accelerate/bin/python",
+    "platform": "macOS-27.2.1-arm64-arm-64bit-Mach-O",
+    "machine": "arm64",
+    "numpy": "2.4.6",
+    "scipy": "1.18.0",
+    "threads": {
+      "OPENBLAS_NUM_THREADS": "1",
+      "OMP_NUM_THREADS": "1",
+      "MKL_NUM_THREADS": "1",
+      "VECLIB_MAXIMUM_THREADS": "1",
+      "NUMBA_NUM_THREADS": "1"
+    },
+    "load_average": [
+      1.998046875,
+      2.62109375,
+      2.791015625
+    ],
+    "numba": "0.66.0",
+    "numba_threads": 1,
+    "mixmogam": "2.3.0.dev5",
+    "mixmogam_path": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/src/mixmogam/__init__.py",
+    "phensim": "1.0.0.dev9",
+    "phensim_path": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/src/phensim/__init__.py",
+    "phensim_git": null
+  },
+  "max_load": 5,
+  "seed": 0,
+  "ldak": "/Users/au507860/bin/ldak63",
+  "ldak_sha256": "8e6fd8469dead25e0e4ffc3fbf4b5ed7e50c8088b444ff7c1e7734ba12b2b6ef",
+  "driver_sha256": "01deeb711015b23b8831f479bd2c1c695947a12e5d5c211d61c206b3c6e28e52",
+  "worker_sha256": "6deae6a0b9c450468f5d4b599c1bcc05e060f85b2fbaeef8afd7cf12bb9d40a8",
+  "cases": [
+    {
+      "label": "n1000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n1000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n1000/panel",
+        "provenance": "archived",
+        "sha256": {
+          "geno.fam": "c557583b76bbae77147af510bb13721014a3abadcf5dc988f707494cdc45858d",
+          "geno.bed": "e5a1a080eb1b41a0425d3f7138f64af4f77ad1931d1441f70bdb0360275af46e",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "cb8dc16b9edc3966a61b2fa2e15b3ad85c0e5286187f05a660531f462093392a",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "c56bef1d2c02b193feae6e14034050d21dd27ad44a247f253cc6b9ab98e11b86",
+        "exact": "ddc04f348303610358b27a20586e05822f6575851bba6fdbd46ebd162c814c6d",
+        "hratt-he": "47e15a731681817e9815edd818246f5cc11484bdf8a3d7cca44d1f6f471d0046",
+        "hratt-reml": "a6906328b75ebd7af09eca0ff2bcc6e177e62c3682507daa4676242f22b21f2b",
+        "bolt-inf": "7582c23237363936599780cf5e59ffef0e3b6f1a847eb2da288a37ee85a74748"
+      },
+      "order": [
+        "ldak-kvik",
+        "exact",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 1000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n2500",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n2500/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n2500/panel",
+        "provenance": "archived",
+        "sha256": {
+          "geno.fam": "504bf01f1b2639101508c3b3f354809e38fcad05a2c8d664177097947a6a9418",
+          "geno.bed": "10b3bb356df66756f41921a0059a6a4514673f39a688931025a819b9fd693ba0",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "19e5d760d3dafadedd7b174da4c349ffa6450419239e4cd9dbc1ace6053d7440",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "e5405ee3e8e1cca8fbe2655bbb5ae5fcdb2090700b584b5d06e08e4d3bca4974",
+        "exact": "b9ac22af85515ccae5d3f46fc7d181fce1950fda38d4b4e9be6a379cb2f3b812",
+        "hratt-he": "526f3e968984d65b1cb7de082211e6d04736ae7ef792a367427dc0a8ba062e76",
+        "hratt-reml": "6d43a4b141150542227b3a55d267f8eb2ee8c487b6a65455dcae36ff12d76135",
+        "bolt-inf": "503768e4c2969309db03f947b16015e684ffbcfbaae889e47eb0dee251f86df3"
+      },
+      "order": [
+        "ldak-kvik",
+        "exact",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 2500,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n5000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n5000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n5000/panel",
+        "provenance": "archived",
+        "sha256": {
+          "geno.fam": "b77e9e5e8ca2cfc8c04c913e67bbf0f2b8bfdd02712c7e9bd40e54d53d0a3e62",
+          "geno.bed": "af456fb7c84721dda345633b7098e2bc3350f7b003b3cf6c3837ddb98d163be0",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "adf1ea8ebe68c294efcdbd3a1f1d3fa5e7c323e57a6097f2739f29c44dd58b4b",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "bd58b6faee06cadc66ddbd08715ddbc2562d7afa024a16f21d1e22a314aedfe3",
+        "hratt-he": "e829e8755171da55c04fca44103e0048089cf50644d65a0e5587caec2a4bed05",
+        "hratt-reml": "8602fe470634beb2a175743ffae677374d492a71dfbf3dc39ae872b1f5467732",
+        "bolt-inf": "3de2179856b7afb681deb66e170aa54c3bfc33740b7ad06cf6c982e0cb3e976b"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 5000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n10000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n10000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n10000/panel",
+        "provenance": "archived",
+        "sha256": {
+          "geno.fam": "cc7b8bf69f27fea2cb58f66aaeef61c6160bc608cd1bd7d3d3229897ed865318",
+          "geno.bed": "abfa003e5537d96cdb7fa20e7bf832511a28ebfe02424486547051c180006eb7",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "b23a23a6c97bb13322e6f05330324a4a0f36016666a6fb05cd627ac6cdd7c500",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "e8bff63fea42a98f0b2d2abecb4e3145624fb4246787e882fc6728666a5cb08e",
+        "hratt-he": "f29ce1202206b64420ea8049e883c25a81b2161ed1719fc963b8c483d656b021",
+        "hratt-reml": "7a766dd2fa3d410aa87c6f6d1049c4bf32384e600af00b38f7019ea8a70f919d",
+        "bolt-inf": "b1debbdf4c84980a2cbcaa40b5f0b5520d270706895396f31d2d7e952414346b"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 10000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n20000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n20000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n20000/panel",
+        "provenance": "archived",
+        "sha256": {
+          "geno.fam": "7f55dcf36a81da8444df6cd1719f529283bb337002d9080520282a8b4941de10",
+          "geno.bed": "d305aba01346bd772c997d6a61fc47df4a1a81770209c757b162c5c4480bec4e",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "1f29a7a234cb14c9945a0e8639d6ab96bc41b3d5f11774f1bd59c15622493806",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "7b17deff73e8c322409d12c8ce20d2e75ce325961244a228ebe96dca6ab6e80f",
+        "hratt-he": "0d5927a4644a4816df0fa0693fac51613f8fe5e4df423fc50e72e8721e00fac8",
+        "hratt-reml": "031f94eedabc5b22f23242a7864e2a14cadac64ec36f881b9458c5247793717f",
+        "bolt-inf": "b8654fd1bcec32c0572f9f51967520067f1833471a3a5250cca73f52105a6585"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 20000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n50000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n50000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/sample-ladder/n50000/panel",
+        "provenance": "regenerated and matched by SHA-256",
+        "sha256": {
+          "geno.fam": "cf810451991b0bbef2e8d82e49c241ec7b24ca5c42f6d4d9883da7210696735b",
+          "geno.bed": "552b26dae86cb7a4b68cdc887cac0757306c388c8c48ad5e783536dc42b20616",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "37b4f4ad2cea6347ed25be42c8a770be2104f2e1bde40e163d1cf5db11b0a67d",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "6da7da412702635620a59fdebdf5476947dc62444b19a5adc097fec5f8001c01",
+        "hratt-he": "c36ebe6dabc29ac36aee4c0281fe71e819aa65c167f8a487a832a4475b86e1a2",
+        "hratt-reml": "670d3050e3d2135c267ee30703a53d5a1b31d7dbc68e59d75f1096f63c9813e2",
+        "bolt-inf": "7845e19f3322a457c7fa458053c41deb6f3c5fe896a0b1b0bbe439c38bbab803"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 50000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    },
+    {
+      "label": "n100000",
+      "reference": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261029-kvik-sample-scaling-dev8/n100000/mixed-nopc",
+      "panel": {
+        "source": "/Users/au507860/REPOS/mixmogam/benchmarks/results/20261119T210650Z-dev5-rerun.beVZVG/sample-ladder/n100000/panel",
+        "provenance": "regenerated and matched by SHA-256",
+        "sha256": {
+          "geno.fam": "00bf570d6c8d47ec43c494594fc8bb620d638bed176630d3aebdbfb6ce337c75",
+          "geno.bed": "4cb6d1a11f42ac9abcd2c7a7274b46cf44d0ea8d9675b11e9568720d23078bb1",
+          "geno.bim": "5213ad000ea0022e8e39448f6ae9a1052efe7da1421559945814a14e749c6404"
+        }
+      },
+      "input_sha256": {
+        "phenotype.txt": "f2504941d7fadb2922da41c3945bfd082015d0303d0b56448470cc1c6c8c5001",
+        "qtl.npy": "9192fd8c48f1c776657966927ea63a21835b2a3659b9ccbe0861f7a69b1bc7a6",
+        "null.npy": "07ca17675165d1ddc59a9967698a64aa03a27fd451bb3e6e3875f58837d33291"
+      },
+      "historical_result_sha256": {
+        "ldak-kvik": "22d8e03c75f6b5c5cc6c28f496b6e7a3161b2e2068f4a723143ac6f221dccd64",
+        "hratt-he": "0f9c4b289d746bebfc52ecfd647ef48315196fd5b514c736887295a48c656928",
+        "hratt-reml": "6fb5f7fdd4fa8c713702d11c3f24019896a4b50699aae693e8874c3b70e272af",
+        "bolt-inf": "61652f709095bb16d28bc94bd34f108eb702c693279bbd12420fa001c5747745"
+      },
+      "order": [
+        "ldak-kvik",
+        "hratt-he",
+        "hratt-reml",
+        "bolt-inf"
+      ],
+      "n": 100000,
+      "m": 20000,
+      "nchr": 20,
+      "kind": "blocks",
+      "block_size": 100,
+      "seed": 20261028
+    }
+  ],
+  "measurements": 30,
+  "finished_utc": "2026-11-19T21:20:09.088361+00:00"
+}
